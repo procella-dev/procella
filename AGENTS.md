@@ -163,11 +163,12 @@ Strata is a self-hosted Pulumi backend written in Go. It implements the Pulumi S
 - **pgx v5** (Postgres driver)
 - **golangci-lint v2** (consolidated linting + formatting — gofumpt, goimports as formatters; gosec, govet, revive, etc. as linters)
 - **Pulumi SDK v3.225.1** (apitype definitions)
+- **React 19 + Vite 7 + TailwindCSS v4** (web UI in `web/`)
 
 ### Directory Structure
 
 ```
-cmd/strata/main.go          # Server entrypoint, route registration
+cmd/strata/main.go          # Server entrypoint, route registration, SPA mount
 internal/
   app/app.go                 # App struct (Start/Stop lifecycle)
   auth/service.go            # Authenticator interface, DevAuthenticator
@@ -179,18 +180,20 @@ internal/
   http/
     server.go                # HTTP server lifecycle
     encode/                  # WriteJSON, WriteError helpers
-    handlers/                # HTTP handlers (stack, user, health, capabilities)
+    handlers/                # HTTP handlers (stack, user, update, health, capabilities, crypto)
     middleware/               # Auth, CORS, Gzip, Logging, PulumiAccept, Recovery, RequestID
+    spa/                     # SPA handler — serves embedded React app with index.html fallback
   stacks/
-    service.go               # Service interface (6 methods)
+    service.go               # Service interface (7 methods)
     postgres.go              # PostgreSQL implementation
     errors.go                # Sentinel errors
   updates/                   # Update lifecycle (Phase 3) + State ops (Phase 4) + Resilience (Phase 5)
-    service.go               # Service interface (13 methods incl. CancelUpdate)
+    service.go               # Service interface (18 methods incl. GetUpdateEvents)
     postgres.go              # PostgreSQL implementation
     nop.go                   # NopService stub
     errors.go                # Sentinel errors
     gc_worker.go             # Orphan GC with pg advisory locks for cluster-safety
+    delta.go                 # Delta checkpoint apply logic
   checkpoints/               # Checkpoint storage (Phase 3)
   events/                    # Event ingestion (Phase 3)
   crypto/                    # Encrypt/decrypt (Phase 4)
@@ -199,6 +202,10 @@ internal/
     aes.go                   # AES-256-GCM with HKDF per-stack key derivation
     aes_test.go              # 6 unit tests
   storage/blobs/             # Blob storage (local + S3)
+web/                         # React SPA (Vite + React 19 + TailwindCSS v4)
+  embed.go                   # go:embed dist/* for Go binary embedding
+  dist/                      # Built assets (committed for go:embed)
+  src/                       # React source (api client, pages, components)
 e2e/                         # E2E acceptance tests (build tag: e2e)
 .github/workflows/ci.yml    # CI: check + e2e jobs
 ```
