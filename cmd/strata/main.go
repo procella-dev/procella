@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -22,9 +23,11 @@ import (
 	httpserver "github.com/strata-iac/strata/internal/http"
 	"github.com/strata-iac/strata/internal/http/handlers"
 	"github.com/strata-iac/strata/internal/http/middleware"
+	"github.com/strata-iac/strata/internal/http/spa"
 	"github.com/strata-iac/strata/internal/stacks"
 	"github.com/strata-iac/strata/internal/storage/blobs"
 	"github.com/strata-iac/strata/internal/updates"
+	"github.com/strata-iac/strata/web"
 )
 
 func main() {
@@ -130,6 +133,14 @@ func main() {
 		r.Post("/api/stacks/{org}/{project}/{stack}/update/{updateID}/renew_lease", updateHandler.RenewLease)
 		r.Post("/api/stacks/{org}/{project}/{stack}/update/{updateID}/complete", updateHandler.CompleteUpdate)
 	})
+
+	// Serve the React SPA for all non-API routes.
+	distFS, err := fs.Sub(web.DistFS, "dist")
+	if err != nil {
+		logger.Error("failed to load embedded web assets", "error", err)
+		os.Exit(1)
+	}
+	router.NotFound(spa.Handler(distFS).ServeHTTP)
 
 	gcWorker := updates.NewGCWorker(dbPool, logger)
 

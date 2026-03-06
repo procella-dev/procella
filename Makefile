@@ -3,7 +3,7 @@ GO := $(MISE_EXEC) go
 GOLANGCI_LINT := $(MISE_EXEC) golangci-lint
 GOVULNCHECK := $(MISE_EXEC) govulncheck
 
-.PHONY: dev deps down build go-build fmt lint lint-fix vuln test e2e check check-all
+.PHONY: dev deps down build go-build web fmt lint lint-fix vuln test e2e check check-all
 
 dev:
 	docker compose --profile dev up --build
@@ -16,6 +16,9 @@ down:
 
 build:
 	docker build -t strata:dev .
+
+web:
+	cd web && npm ci && npm run build
 
 go-build:
 	$(GO) build ./...
