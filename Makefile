@@ -3,7 +3,7 @@ GO := $(MISE_EXEC) go
 GOLANGCI_LINT := $(MISE_EXEC) golangci-lint
 GOVULNCHECK := $(MISE_EXEC) govulncheck
 
-.PHONY: dev deps down build go-build web fmt lint lint-fix vuln test e2e e2e-cluster examples check check-all cluster cluster-down
+.PHONY: dev deps down build go-build web fmt lint lint-fix vuln test e2e e2e-cluster examples check check-all cluster cluster-down docs-dev docs-build
 
 dev:
 	docker compose --profile dev up --build
@@ -62,3 +62,9 @@ examples:
 check: lint vuln go-build test
 
 check-all: check e2e
+
+docs-dev:
+	cd docs && npm run dev
+
+docs-build:
+	cd docs && npm run build

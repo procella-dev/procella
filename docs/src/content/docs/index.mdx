@@ -1,0 +1,32 @@
+---
+title: Strata Documentation
+description: Self-hosted Pulumi backend — own your infrastructure state.
+template: splash
+hero:
+  tagline: A self-hosted Pulumi backend. Full CLI compatibility, multi-tenant auth, and horizontal scaling — on your infrastructure.
+  actions:
+    - text: Get Started
+      link: /getting-started/introduction/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/strata-iac/strata
+      icon: external
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+<CardGrid stagger>
+  <Card title="Full CLI Compatibility" icon="rocket">
+    `pulumi login`, `pulumi up`, `pulumi stack export` — every Pulumi CLI command works against Strata without modification.
+  </Card>
+  <Card title="Multi-Tenant Auth" icon="setting">
+    Dev mode with static tokens for local development. Descope access keys with tenant RBAC for production multi-tenancy.
+  </Card>
+  <Card title="Horizontal Scaling" icon="bars">
+    Stateless Go binary behind Caddy. All shared state in PostgreSQL. S3-compatible blob storage. Deploy N replicas with zero coordination.
+  </Card>
+  <Card title="Encryption at Rest" icon="approve-check">
+    AES-256-GCM with HKDF per-stack key derivation. Secrets are encrypted before they reach storage.
+  </Card>
+</CardGrid>

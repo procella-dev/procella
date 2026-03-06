@@ -16,6 +16,11 @@
 # Data (dev blobs)
 /data/
 
+# Docs site build artifacts
+docs/node_modules/
+docs/dist/
+docs/.astro/
+
 # Dolt database files (added by bd init)
 .dolt/
 *.db
