@@ -215,21 +215,13 @@ func (s *PostgresService) PatchCheckpointVerbatim(ctx context.Context, org, proj
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// Use ON CONFLICT for idempotency based on sequence number.
 	if _, err = tx.Exec(ctx, `
 		INSERT INTO checkpoints (stack_id, update_id, version, sequence_number, deployment, is_invalid)
 		VALUES ($1, $2::uuid, $3, $4, $5, false)
 		ON CONFLICT (update_id, sequence_number) WHERE sequence_number > 0
 		DO NOTHING
 	`, stackID, updateID, req.Version, req.SequenceNumber, req.UntypedDeployment); err != nil {
-		// The ON CONFLICT may not work with our schema — fall back to simple insert.
-		// Try without the conflict clause for now.
-		if _, err2 := tx.Exec(ctx, `
-			INSERT INTO checkpoints (stack_id, update_id, version, sequence_number, deployment, is_invalid)
-			VALUES ($1, $2::uuid, $3, $4, $5, false)
-		`, stackID, updateID, req.Version, req.SequenceNumber, req.UntypedDeployment); err2 != nil {
-			return fmt.Errorf("insert verbatim checkpoint: %w", err2)
-		}
+		return fmt.Errorf("insert verbatim checkpoint: %w", err)
 	}
 
 	if _, err = tx.Exec(ctx, `
@@ -342,13 +334,23 @@ func (s *PostgresService) CompleteUpdate(ctx context.Context, org, project, stac
 
 	ct, err := tx.Exec(ctx, `
 		UPDATE updates SET status = $1, completed_at = now(), lease_token = NULL, lease_expires_at = NULL
-		WHERE id = $2::uuid AND stack_id = $3
+		WHERE id = $2::uuid AND stack_id = $3 AND status IN ('not started', 'requested', 'running')
 	`, string(req.Status), updateID, stackID)
 	if err != nil {
 		return fmt.Errorf("complete update: %w", err)
 	}
+
 	if ct.RowsAffected() == 0 {
-		return ErrUpdateNotFound
+		var exists bool
+		if err = tx.QueryRow(ctx, `
+			SELECT EXISTS(SELECT 1 FROM updates WHERE id = $1::uuid AND stack_id = $2)
+		`, updateID, stackID).Scan(&exists); err != nil {
+			return fmt.Errorf("check update existence: %w", err)
+		}
+		if !exists {
+			return ErrUpdateNotFound
+		}
+		return nil
 	}
 
 	// Clear the stack's current operation.
@@ -562,8 +564,18 @@ func (s *PostgresService) CancelUpdate(ctx context.Context, org, project, stack,
 	if err != nil {
 		return fmt.Errorf("cancel update: %w", err)
 	}
+
 	if ct.RowsAffected() == 0 {
-		return ErrUpdateNotFound
+		var exists bool
+		if err = tx.QueryRow(ctx, `
+			SELECT EXISTS(SELECT 1 FROM updates WHERE id = $1::uuid AND stack_id = $2)
+		`, updateID, stackID).Scan(&exists); err != nil {
+			return fmt.Errorf("check update existence: %w", err)
+		}
+		if !exists {
+			return ErrUpdateNotFound
+		}
+		return nil
 	}
 
 	if _, err = tx.Exec(ctx, `
