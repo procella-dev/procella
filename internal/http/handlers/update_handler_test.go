@@ -23,6 +23,7 @@ type mockUpdateService struct {
 	renewLeaseFn              func(ctx context.Context, org, project, stack, updateID string, req apitype.RenewUpdateLeaseRequest) (*apitype.RenewUpdateLeaseResponse, error)
 	completeUpdateFn          func(ctx context.Context, org, project, stack, updateID string, req apitype.CompleteUpdateRequest) error
 	validateUpdateTokenFn     func(ctx context.Context, org, project, stack, updateID, token string) error
+	exportStackFn             func(ctx context.Context, org, project, stack string) (*apitype.UntypedDeployment, error)
 }
 
 func (m *mockUpdateService) CreateUpdate(ctx context.Context, org, project, stack string, kind apitype.UpdateKind, req apitype.UpdateProgramRequest) (*apitype.UpdateProgramResponse, error) {
@@ -55,6 +56,13 @@ func (m *mockUpdateService) CompleteUpdate(ctx context.Context, org, project, st
 
 func (m *mockUpdateService) ValidateUpdateToken(ctx context.Context, org, project, stack, updateID, token string) error {
 	return m.validateUpdateTokenFn(ctx, org, project, stack, updateID, token)
+}
+
+func (m *mockUpdateService) ExportStack(ctx context.Context, org, project, stack string) (*apitype.UntypedDeployment, error) {
+	if m.exportStackFn != nil {
+		return m.exportStackFn(ctx, org, project, stack)
+	}
+	return nil, nil
 }
 
 func newUpdateTestRouter(svc updates.Service) *chi.Mux {

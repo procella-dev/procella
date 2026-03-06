@@ -87,6 +87,7 @@ func main() {
 		r.Get("/api/stacks/{org}/{project}/{stack}", stackHandler.GetStack)
 		r.Delete("/api/stacks/{org}/{project}/{stack}", stackHandler.DeleteStack)
 		r.Post("/api/stacks/{org}/{project}/{stack}/rename", stackHandler.RenameStack)
+		r.Get("/api/stacks/{org}/{project}/{stack}/export", updateHandler.ExportStack)
 		r.Post("/api/stacks/{org}/{project}/{stack}/update", updateHandler.CreateUpdateFor("update"))
 		r.Post("/api/stacks/{org}/{project}/{stack}/preview", updateHandler.CreateUpdateFor("preview"))
 		r.Post("/api/stacks/{org}/{project}/{stack}/refresh", updateHandler.CreateUpdateFor("refresh"))

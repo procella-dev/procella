@@ -44,3 +44,7 @@ func (s *NopService) CompleteUpdate(_ context.Context, _, _, _, _ string, _ apit
 func (s *NopService) ValidateUpdateToken(_ context.Context, _, _, _, _, _ string) error {
 	return nil
 }
+
+func (s *NopService) ExportStack(_ context.Context, _, _, _ string) (*apitype.UntypedDeployment, error) {
+	return nil, nil
+}

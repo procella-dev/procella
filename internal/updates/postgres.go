@@ -396,6 +396,35 @@ func (s *PostgresService) ValidateUpdateToken(ctx context.Context, org, project,
 	return nil
 }
 
+func (s *PostgresService) ExportStack(ctx context.Context, org, project, stack string) (*apitype.UntypedDeployment, error) {
+	stackID, err := s.findStackID(ctx, org, project, stack)
+	if err != nil {
+		return nil, err
+	}
+
+	var deployment json.RawMessage
+	err = s.db.QueryRow(ctx, `
+		SELECT deployment FROM checkpoints
+		WHERE stack_id = $1 AND deployment IS NOT NULL
+		ORDER BY version DESC, created_at DESC
+		LIMIT 1
+	`, stackID).Scan(&deployment)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return &apitype.UntypedDeployment{
+				Version:    3,
+				Deployment: json.RawMessage(`{"manifest":{"time":"0001-01-01T00:00:00Z","magic":"","version":""},"resources":null}`),
+			}, nil
+		}
+		return nil, fmt.Errorf("query latest checkpoint: %w", err)
+	}
+
+	return &apitype.UntypedDeployment{
+		Version:    3,
+		Deployment: deployment,
+	}, nil
+}
+
 // findStackID looks up a stack by org/project/stack, returning the stack UUID.
 func (s *PostgresService) findStackID(ctx context.Context, org, project, stack string) (string, error) {
 	var stackID string

@@ -31,4 +31,7 @@ type Service interface {
 
 	// ValidateUpdateToken validates the lease token for an update.
 	ValidateUpdateToken(ctx context.Context, org, project, stack, updateID, token string) error
+
+	// ExportStack returns the latest deployment/state for a stack.
+	ExportStack(ctx context.Context, org, project, stack string) (*apitype.UntypedDeployment, error)
 }

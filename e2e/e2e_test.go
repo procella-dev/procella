@@ -249,7 +249,7 @@ func truncateDB(t *testing.T) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, err := dbPool.Exec(ctx, `TRUNCATE stacks, projects, organization_members, api_tokens, organizations, users CASCADE`)
+	_, err := dbPool.Exec(ctx, `TRUNCATE checkpoints, update_events, updates, stacks, projects, organization_members, api_tokens, organizations, users CASCADE`)
 	if err != nil {
 		t.Fatalf("truncate database: %v", err)
 	}

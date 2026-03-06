@@ -173,6 +173,21 @@ func (h *UpdateHandler) CompleteUpdate(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// ExportStack handles GET /api/stacks/{org}/{project}/{stack}/export.
+func (h *UpdateHandler) ExportStack(w http.ResponseWriter, r *http.Request) {
+	org := chi.URLParam(r, "org")
+	project := chi.URLParam(r, "project")
+	stack := chi.URLParam(r, "stack")
+
+	deployment, err := h.updates.ExportStack(r.Context(), org, project, stack)
+	if err != nil {
+		h.writeUpdateError(w, err)
+		return
+	}
+
+	encode.WriteJSON(w, http.StatusOK, deployment)
+}
+
 func (h *UpdateHandler) writeUpdateError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, updates.ErrUpdateNotFound), errors.Is(err, updates.ErrStackNotFound):
