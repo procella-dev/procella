@@ -1,6 +1,5 @@
 MISE_EXEC := mise exec --
 GO := $(MISE_EXEC) go
-GOFUMPT := $(MISE_EXEC) gofumpt
 GOLANGCI_LINT := $(MISE_EXEC) golangci-lint
 GOVULNCHECK := $(MISE_EXEC) govulncheck
 
@@ -22,7 +21,7 @@ go-build:
 	$(GO) build ./...
 
 fmt:
-	$(GOFUMPT) -w .
+	$(GOLANGCI_LINT) run --fix ./...
 
 lint:
 	$(GOLANGCI_LINT) run ./...

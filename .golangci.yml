@@ -1,12 +1,8 @@
-run:
-  timeout: 5m
+version: "2"
 
 linters:
   enable:
     # bugs & correctness
-    - errcheck
-    - govet
-    - staticcheck
     - bodyclose
     - durationcheck
     - errname
@@ -17,15 +13,13 @@ linters:
     - sqlclosecheck
 
     # style & consistency
-    - gofumpt
-    - goimports
+    - misspell
     - revive
     - unconvert
     - unparam
     - usestdlibvars
     - wastedassign
     - whitespace
-    - misspell
 
     # security
     - gosec
@@ -38,86 +32,109 @@ linters:
     - gocognit
     - nestif
 
-linters-settings:
-  gofumpt:
-    extra-rules: true
+  settings:
+    cyclop:
+      max-complexity: 20
 
-  revive:
+    errcheck:
+      check-type-assertions: true
+      check-blank: false
+
+    gocognit:
+      min-complexity: 20
+
+    gosec:
+      excludes:
+        - G104 # duplicate of errcheck
+        - G703 # false positive on self-created temp files in blob storage
+      config:
+        global:
+          audit: true
+
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+        - shadow
+
+    misspell:
+      locale: US
+
+    nestif:
+      min-complexity: 5
+
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+          arguments:
+            - checkPrivateReceivers
+        - name: if-return
+        - name: increment-decrement
+        - name: var-naming
+        - name: var-declaration
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: indent-error-flow
+        - name: errorf
+        - name: empty-block
+        - name: superfluous-else
+        - name: unused-parameter
+        - name: unreachable-code
+        - name: redefines-builtin-id
+
+    staticcheck:
+      checks:
+        - all
+
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
     rules:
-      - name: blank-imports
-      - name: context-as-argument
-      - name: context-keys-type
-      - name: dot-imports
-      - name: error-return
-      - name: error-strings
-      - name: error-naming
-      - name: exported
-        arguments:
-          - "checkPrivateReceivers"
-      - name: if-return
-      - name: increment-decrement
-      - name: var-naming
-      - name: var-declaration
-      - name: range
-      - name: receiver-naming
-      - name: time-naming
-      - name: unexported-return
-      - name: indent-error-flow
-      - name: errorf
-      - name: empty-block
-      - name: superfluous-else
-      - name: unused-parameter
-      - name: unreachable-code
-      - name: redefines-builtin-id
-
-  cyclop:
-    max-complexity: 20
-
-  gocognit:
-    min-complexity: 20
-
-  nestif:
-    min-complexity: 5
-
-  gosec:
-    excludes:
-      - G104 # duplicate of errcheck
-    config:
-      global:
-        audit: true
-
-  errcheck:
-    check-type-assertions: true
-    check-blank: false
-
-  govet:
-    enable-all: true
-    disable:
-      - fieldalignment
-      - shadow
-
-  misspell:
-    locale: US
-
-  staticcheck:
-    checks:
-      - "all"
+      # Test files can be more relaxed
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
+          - cyclop
+          - gocognit
+      # Allow unused params in interface stubs/nop implementations
+      - path: nop\.go
+        linters:
+          - revive
+          - unused-parameter
+      # internal/ packages named after stdlib (crypto, http) are standard Go practice
+      - path: internal/(crypto|http)/
+        linters:
+          - revive
+        text: "var-naming.*conflict with Go standard library"
+    paths:
+      - vendor
 
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
-  exclude-dirs:
-    - vendor
-  exclude-rules:
-    # Test files can be more relaxed
-    - path: _test\.go
-      linters:
-        - errcheck
-        - gosec
-        - cyclop
-        - gocognit
-    # Allow unused params in interface stubs/nop implementations
-    - path: nop\.go
-      linters:
-        - unused-parameter
-        - revive
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+  settings:
+    gofumpt:
+      extra-rules: true
+  exclusions:
+    generated: lax
+    paths:
+      - vendor
