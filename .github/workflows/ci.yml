@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Lint & Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-${{ runner.os }}-${{ hashFiles('go.sum') }}
+          restore-keys: go-${{ runner.os }}-
+      - run: mise exec -- make check
+
+  e2e:
+    name: E2E Acceptance Tests
+    runs-on: ubuntu-latest
+    needs: [check]
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: strata
+          POSTGRES_PASSWORD: strata
+          POSTGRES_DB: strata
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U strata"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-${{ runner.os }}-${{ hashFiles('go.sum') }}
+          restore-keys: go-${{ runner.os }}-
+      - uses: pulumi/setup-pulumi@v6
+      - name: Run E2E tests
+        env:
+          STRATA_DATABASE_URL: postgres://strata:strata@localhost:5432/strata?sslmode=disable
+        run: mise exec -- go test -race -count=1 -tags=e2e -timeout=5m -v ./e2e/...
