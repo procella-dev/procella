@@ -55,4 +55,7 @@ type Service interface {
 
 	// GetLatestUpdate returns the most recent update for a stack.
 	GetLatestUpdate(ctx context.Context, org, project, stack string) (*apitype.UpdateInfo, error)
+
+	// GetUpdateEvents returns engine events for an update with continuation token pagination.
+	GetUpdateEvents(ctx context.Context, org, project, stack, updateID string, continuationToken *string) (*apitype.GetUpdateEventsResponse, error)
 }

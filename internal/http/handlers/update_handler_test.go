@@ -31,6 +31,7 @@ type mockUpdateService struct {
 	patchCheckpointDeltaFn    func(ctx context.Context, org, project, stack, updateID string, req apitype.PatchUpdateCheckpointDeltaRequest) error
 	listUpdatesFn             func(ctx context.Context, org, project, stack string, page, pageSize int) ([]apitype.UpdateInfo, error)
 	getLatestUpdateFn         func(ctx context.Context, org, project, stack string) (*apitype.UpdateInfo, error)
+	getUpdateEventsFn         func(ctx context.Context, org, project, stack, updateID string, continuationToken *string) (*apitype.GetUpdateEventsResponse, error)
 }
 
 func (m *mockUpdateService) CreateUpdate(ctx context.Context, org, project, stack string, kind apitype.UpdateKind, req apitype.UpdateProgramRequest) (*apitype.UpdateProgramResponse, error) {
@@ -121,6 +122,13 @@ func (m *mockUpdateService) GetLatestUpdate(ctx context.Context, org, project, s
 	return nil, updates.ErrUpdateNotFound
 }
 
+func (m *mockUpdateService) GetUpdateEvents(ctx context.Context, org, project, stack, updateID string, continuationToken *string) (*apitype.GetUpdateEventsResponse, error) {
+	if m.getUpdateEventsFn != nil {
+		return m.getUpdateEventsFn(ctx, org, project, stack, updateID, continuationToken)
+	}
+	return &apitype.GetUpdateEventsResponse{Events: []apitype.EngineEvent{}}, nil
+}
+
 func newUpdateTestRouter(svc updates.Service) *chi.Mux {
 	h := NewUpdateHandler(svc)
 	r := chi.NewRouter()
@@ -129,6 +137,7 @@ func newUpdateTestRouter(svc updates.Service) *chi.Mux {
 	r.Get("/api/stacks/{org}/{project}/{stack}/export/{version}", h.ExportStackVersion)
 	r.Post("/api/stacks/{org}/{project}/{stack}/import", h.ImportStack)
 	r.Get("/api/stacks/{org}/{project}/{stack}/update/{updateID}", h.GetUpdateStatus)
+	r.Get("/api/stacks/{org}/{project}/{stack}/update/{updateID}/events", h.GetUpdateEvents)
 	r.Post("/api/stacks/{org}/{project}/{stack}/update", h.CreateUpdateFor("update"))
 	r.Post("/api/stacks/{org}/{project}/{stack}/preview", h.CreateUpdateFor("preview"))
 	r.Post("/api/stacks/{org}/{project}/{stack}/refresh", h.CreateUpdateFor("refresh"))
@@ -895,5 +904,113 @@ func TestGetLatestUpdate_NotFound(t *testing.T) {
 
 	if rr.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestGetUpdateEvents_Empty(t *testing.T) {
+	t.Parallel()
+	svc := &mockUpdateService{
+		getUpdateEventsFn: func(_ context.Context, _, _, _, _ string, ct *string) (*apitype.GetUpdateEventsResponse, error) {
+			if ct != nil {
+				t.Errorf("expected nil continuation token, got %s", *ct)
+			}
+			return &apitype.GetUpdateEventsResponse{Events: []apitype.EngineEvent{}}, nil
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/stacks/test-org/test-project/dev/update/uid-abc/events", nil)
+	rr := httptest.NewRecorder()
+	newUpdateTestRouter(svc).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp apitype.GetUpdateEventsResponse
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Events) != 0 {
+		t.Fatalf("expected 0 events, got %d", len(resp.Events))
+	}
+	if resp.ContinuationToken != nil {
+		t.Errorf("expected nil continuation token, got %v", *resp.ContinuationToken)
+	}
+}
+
+func TestGetUpdateEvents_WithEvents(t *testing.T) {
+	t.Parallel()
+	svc := &mockUpdateService{
+		getUpdateEventsFn: func(_ context.Context, _, _, _, _ string, _ *string) (*apitype.GetUpdateEventsResponse, error) {
+			token := "42"
+			return &apitype.GetUpdateEventsResponse{
+				Events: []apitype.EngineEvent{
+					{Sequence: 1, Timestamp: 1000},
+					{Sequence: 2, Timestamp: 1001},
+				},
+				ContinuationToken: &token,
+			}, nil
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/stacks/test-org/test-project/dev/update/uid-abc/events", nil)
+	rr := httptest.NewRecorder()
+	newUpdateTestRouter(svc).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	var resp apitype.GetUpdateEventsResponse
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Events) != 2 {
+		t.Fatalf("expected 2 events, got %d", len(resp.Events))
+	}
+	if resp.Events[0].Sequence != 1 {
+		t.Errorf("expected first event sequence 1, got %d", resp.Events[0].Sequence)
+	}
+	if resp.ContinuationToken == nil || *resp.ContinuationToken != "42" {
+		t.Errorf("expected continuation token '42', got %v", resp.ContinuationToken)
+	}
+}
+
+func TestGetUpdateEvents_NotFound(t *testing.T) {
+	t.Parallel()
+	svc := &mockUpdateService{
+		getUpdateEventsFn: func(context.Context, string, string, string, string, *string) (*apitype.GetUpdateEventsResponse, error) {
+			return nil, updates.ErrUpdateNotFound
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/stacks/test-org/test-project/dev/update/uid-abc/events", nil)
+	rr := httptest.NewRecorder()
+	newUpdateTestRouter(svc).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestGetUpdateEvents_WithContinuationToken(t *testing.T) {
+	t.Parallel()
+	var gotToken *string
+	svc := &mockUpdateService{
+		getUpdateEventsFn: func(_ context.Context, _, _, _, _ string, ct *string) (*apitype.GetUpdateEventsResponse, error) {
+			gotToken = ct
+			return &apitype.GetUpdateEventsResponse{Events: []apitype.EngineEvent{}}, nil
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/stacks/test-org/test-project/dev/update/uid-abc/events?continuationToken=100", nil)
+	rr := httptest.NewRecorder()
+	newUpdateTestRouter(svc).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if gotToken == nil || *gotToken != "100" {
+		t.Fatalf("expected continuation token '100', got %v", gotToken)
 	}
 }

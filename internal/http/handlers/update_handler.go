@@ -315,6 +315,26 @@ func (h *UpdateHandler) GetLatestUpdate(w http.ResponseWriter, r *http.Request) 
 	}{Info: *info})
 }
 
+func (h *UpdateHandler) GetUpdateEvents(w http.ResponseWriter, r *http.Request) {
+	org := chi.URLParam(r, "org")
+	project := chi.URLParam(r, "project")
+	stack := chi.URLParam(r, "stack")
+	updateID := chi.URLParam(r, "updateID")
+
+	var continuationToken *string
+	if ct := r.URL.Query().Get("continuationToken"); ct != "" {
+		continuationToken = &ct
+	}
+
+	resp, err := h.updates.GetUpdateEvents(r.Context(), org, project, stack, updateID, continuationToken)
+	if err != nil {
+		h.writeUpdateError(w, err)
+		return
+	}
+
+	encode.WriteJSON(w, http.StatusOK, resp)
+}
+
 func (h *UpdateHandler) CancelUpdate(w http.ResponseWriter, r *http.Request) {
 	org := chi.URLParam(r, "org")
 	project := chi.URLParam(r, "project")

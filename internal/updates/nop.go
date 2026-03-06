@@ -76,3 +76,7 @@ func (s *NopService) ListUpdates(_ context.Context, _, _, _ string, _, _ int) ([
 func (s *NopService) GetLatestUpdate(_ context.Context, _, _, _ string) (*apitype.UpdateInfo, error) {
 	return nil, ErrUpdateNotFound
 }
+
+func (s *NopService) GetUpdateEvents(_ context.Context, _, _, _, _ string, _ *string) (*apitype.GetUpdateEventsResponse, error) {
+	return &apitype.GetUpdateEventsResponse{Events: []apitype.EngineEvent{}}, nil
+}

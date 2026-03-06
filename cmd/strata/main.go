@@ -111,6 +111,7 @@ func main() {
 		r.Post("/api/stacks/{org}/{project}/{stack}/encrypt", cryptoHandler.Encrypt)
 		r.Post("/api/stacks/{org}/{project}/{stack}/decrypt", cryptoHandler.Decrypt)
 		r.Get("/api/stacks/{org}/{project}/{stack}/update/{updateID}", updateHandler.GetUpdateStatus)
+		r.Get("/api/stacks/{org}/{project}/{stack}/update/{updateID}/events", updateHandler.GetUpdateEvents)
 		r.Post("/api/stacks/{org}/{project}/{stack}/update/{updateID}/cancel", updateHandler.CancelUpdate)
 		r.Post("/api/stacks/{org}/{project}/{stack}/update", updateHandler.CreateUpdateFor("update"))
 		r.Post("/api/stacks/{org}/{project}/{stack}/preview", updateHandler.CreateUpdateFor("preview"))

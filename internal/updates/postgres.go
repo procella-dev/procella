@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -779,7 +780,71 @@ func buildUpdateInfo(kind, status string, version int, configJSON, metaJSON json
 	return info
 }
 
-const statusCancelled = "cancelled" //nolint:misspell // matches DB enum value
+const (
+	statusCancelled = "cancelled" //nolint:misspell // matches DB enum value
+	eventsPageSize  = 500
+)
+
+func (s *PostgresService) GetUpdateEvents(ctx context.Context, org, project, stack, updateID string, continuationToken *string) (*apitype.GetUpdateEventsResponse, error) {
+	stackID, err := s.findStackID(ctx, org, project, stack)
+	if err != nil {
+		return nil, err
+	}
+
+	var exists bool
+	if err := s.db.QueryRow(ctx, `
+		SELECT EXISTS(SELECT 1 FROM updates WHERE id = $1::uuid AND stack_id = $2)
+	`, updateID, stackID).Scan(&exists); err != nil {
+		return nil, fmt.Errorf("check update existence: %w", err)
+	}
+	if !exists {
+		return nil, ErrUpdateNotFound
+	}
+
+	afterSequence := 0
+	if continuationToken != nil && *continuationToken != "" {
+		if parsed, err := strconv.Atoi(*continuationToken); err == nil {
+			afterSequence = parsed
+		}
+	}
+
+	rows, err := s.db.Query(ctx, `
+		SELECT event_data FROM update_events
+		WHERE update_id = $1::uuid AND sequence > $2
+		ORDER BY sequence ASC
+		LIMIT $3
+	`, updateID, afterSequence, eventsPageSize+1)
+	if err != nil {
+		return nil, fmt.Errorf("query update events: %w", err)
+	}
+	defer rows.Close()
+
+	events := make([]apitype.EngineEvent, 0, eventsPageSize)
+	for rows.Next() {
+		var eventData json.RawMessage
+		if err := rows.Scan(&eventData); err != nil {
+			return nil, fmt.Errorf("scan event: %w", err)
+		}
+		var event apitype.EngineEvent
+		if err := json.Unmarshal(eventData, &event); err != nil {
+			return nil, fmt.Errorf("unmarshal event: %w", err)
+		}
+		events = append(events, event)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate events: %w", err)
+	}
+
+	resp := &apitype.GetUpdateEventsResponse{}
+	if len(events) > eventsPageSize {
+		events = events[:eventsPageSize]
+		lastSeq := strconv.Itoa(events[len(events)-1].Sequence)
+		resp.ContinuationToken = &lastSeq
+	}
+	resp.Events = events
+
+	return resp, nil
+}
 
 func statusToUpdateResult(status string) apitype.UpdateResult {
 	switch status {
