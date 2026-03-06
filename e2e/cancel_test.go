@@ -86,14 +86,14 @@ func TestCancelAlreadyCancelled(t *testing.T) {
 		fmt.Sprintf("/api/stacks/%s/cancel-twice-project/dev/update/%s/cancel", devOrgLogin, createResp.UpdateID),
 		"").Body.Close()
 
-	// Second cancel should return 404 (already cancelled — not in active status).
+	// Second cancel should return 200 (idempotent — already cancelled).
 	secondResp := env.httpDo("POST",
 		fmt.Sprintf("/api/stacks/%s/cancel-twice-project/dev/update/%s/cancel", devOrgLogin, createResp.UpdateID),
 		"")
 	defer secondResp.Body.Close()
 
-	if secondResp.StatusCode != 404 {
-		t.Fatalf("expected 404 for second cancel, got %d", secondResp.StatusCode)
+	if secondResp.StatusCode != 200 {
+		t.Fatalf("expected 200 for idempotent second cancel, got %d", secondResp.StatusCode)
 	}
 }
 
