@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "server",
+  "dolt_database": "strata",
+  "project_id": "740269e3-1b02-461c-9d22-a85e52ae2820"
+}
