@@ -148,3 +148,97 @@ For more details, see README.md and docs/QUICKSTART.md.
 - If push fails, resolve and retry until it succeeds
 
 <!-- END BEADS INTEGRATION -->
+
+## Project Architecture
+
+### Overview
+
+Strata is a self-hosted Pulumi backend written in Go. It implements the Pulumi Service API so that `pulumi login`, `pulumi stack init`, `pulumi up`, etc. work against it.
+
+### Tech Stack
+
+- **Go 1.25.7** (via mise — ALL tool invocations must use `mise exec --`)
+- **PostgreSQL 17** (metadata, state)
+- **chi v5** (HTTP router)
+- **pgx v5** (Postgres driver)
+- **golangci-lint** (consolidated linting — 29 linters including gosec, gofumpt, govet)
+- **Pulumi SDK v3.225.1** (apitype definitions)
+
+### Directory Structure
+
+```
+cmd/strata/main.go          # Server entrypoint, route registration
+internal/
+  app/app.go                 # App struct (Start/Stop lifecycle)
+  auth/service.go            # Authenticator interface, DevAuthenticator
+  config/config.go           # Config from env vars (STRATA_*)
+  db/
+    connect.go               # pgxpool connection
+    migrate.go               # Embedded SQL migrations
+    migrations/              # SQL files (0001_initial.up.sql, etc.)
+  http/
+    server.go                # HTTP server lifecycle
+    encode/                  # WriteJSON, WriteError helpers
+    handlers/                # HTTP handlers (stack, user, health, capabilities)
+    middleware/               # Auth, CORS, Gzip, Logging, PulumiAccept, Recovery, RequestID
+  stacks/
+    service.go               # Service interface (6 methods)
+    postgres.go              # PostgreSQL implementation
+    errors.go                # Sentinel errors
+  updates/                   # Update lifecycle (Phase 3)
+    service.go               # Service interface
+    repository.go            # Repository interface
+  checkpoints/               # Checkpoint storage (Phase 3)
+  events/                    # Event ingestion (Phase 3)
+  crypto/                    # Encrypt/decrypt (Phase 4)
+  storage/blobs/             # Blob storage (local + S3)
+e2e/                         # E2E acceptance tests (build tag: e2e)
+.github/workflows/ci.yml    # CI: check + e2e jobs
+```
+
+### Key Patterns
+
+- **Accept interfaces, return structs** — service interfaces defined where used
+- **NopService pattern** — stub implementations for unimplemented phases
+- **PulumiAccept middleware** — ALL `/api/` requests require `Accept: application/vnd.pulumi+8`
+- **DevAuthenticator** — `Authorization: token <STRATA_DEV_AUTH_TOKEN>` for dev mode
+- **Transactions** — CreateStack, RenameStack use pgx transactions
+- **Auto-create** — CreateStack auto-creates org + project via INSERT ON CONFLICT DO NOTHING
+
+### Pulumi Update Lifecycle Protocol (Phase 3)
+
+The sequence the CLI follows during `pulumi up`:
+
+1. **CreateUpdate**: `POST /api/stacks/{org}/{project}/{stack}/{kind}` (kind = update|preview|refresh|destroy)
+   - Auth: `Authorization: token <api-token>`
+   - Req: `apitype.UpdateProgramRequest` → Resp: `apitype.UpdateProgramResponse` (contains `updateID`)
+2. **StartUpdate**: `POST /api/stacks/{org}/{project}/{stack}/update/{updateID}`
+   - Auth: `Authorization: token <api-token>`
+   - Req: `apitype.StartUpdateRequest` → Resp: `apitype.StartUpdateResponse` (contains lease `token`, `version`, `tokenExpiration`)
+3. **Execution** (all use `Authorization: update-token <lease-token>`):
+   - `PATCH .../checkpoint` — `PatchUpdateCheckpointRequest` (standard)
+   - `PATCH .../checkpointverbatim` — `PatchUpdateVerbatimCheckpointRequest` (preserves JSON)
+   - `POST .../events/batch` — `EngineEventBatch`
+   - `POST .../renew_lease` — `RenewUpdateLeaseRequest` → `RenewUpdateLeaseResponse`
+4. **CompleteUpdate**: `POST .../complete` — `CompleteUpdateRequest` {status: succeeded|failed|cancelled}
+
+### Quality Gates
+
+```bash
+make check      # lint → vuln → build → test (unit only)
+make e2e         # E2E tests (requires postgres + pulumi CLI)
+make check-all   # check + e2e
+```
+
+### Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| STRATA_LISTEN_ADDR | :8080 | Server listen address |
+| STRATA_DATABASE_URL | (required) | PostgreSQL connection string |
+| STRATA_AUTH_MODE | dev | Auth mode (dev or descope) |
+| STRATA_DEV_AUTH_TOKEN | (required in dev) | Dev auth token |
+| STRATA_DEV_USER_LOGIN | dev-user | Dev user login name |
+| STRATA_DEV_ORG_LOGIN | dev-org | Dev org login name |
+| STRATA_BLOB_BACKEND | local | Blob storage (local or s3) |
+| STRATA_BLOB_LOCAL_PATH | ./data/blobs | Local blob path |

@@ -60,11 +60,12 @@ func main() {
 
 	authenticator := auth.NewDevAuthenticator(cfg)
 	stacksService := stacks.NewPostgresService(dbPool)
-	updatesService := updates.NewNopService()
+	updatesService := updates.NewPostgresService(dbPool)
 	checkpointsService := checkpoints.NewNopService()
 	eventsService := events.NewNopService()
 	cryptoService := crypto.NewNopService()
 	stackHandler := handlers.NewStackHandler(stacksService)
+	updateHandler := handlers.NewUpdateHandler(updatesService)
 
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID)
@@ -86,6 +87,21 @@ func main() {
 		r.Get("/api/stacks/{org}/{project}/{stack}", stackHandler.GetStack)
 		r.Delete("/api/stacks/{org}/{project}/{stack}", stackHandler.DeleteStack)
 		r.Post("/api/stacks/{org}/{project}/{stack}/rename", stackHandler.RenameStack)
+		r.Post("/api/stacks/{org}/{project}/{stack}/update", updateHandler.CreateUpdateFor("update"))
+		r.Post("/api/stacks/{org}/{project}/{stack}/preview", updateHandler.CreateUpdateFor("preview"))
+		r.Post("/api/stacks/{org}/{project}/{stack}/refresh", updateHandler.CreateUpdateFor("refresh"))
+		r.Post("/api/stacks/{org}/{project}/{stack}/destroy", updateHandler.CreateUpdateFor("destroy"))
+		r.Post("/api/stacks/{org}/{project}/{stack}/update/{updateID}", updateHandler.StartUpdate)
+	})
+
+	router.Group(func(r chi.Router) {
+		r.Use(middleware.PulumiAccept)
+		r.Use(middleware.UpdateAuth(updatesService))
+		r.Patch("/api/stacks/{org}/{project}/{stack}/update/{updateID}/checkpoint", updateHandler.PatchCheckpoint)
+		r.Patch("/api/stacks/{org}/{project}/{stack}/update/{updateID}/checkpointverbatim", updateHandler.PatchCheckpointVerbatim)
+		r.Post("/api/stacks/{org}/{project}/{stack}/update/{updateID}/events/batch", updateHandler.RecordEvents)
+		r.Post("/api/stacks/{org}/{project}/{stack}/update/{updateID}/renew_lease", updateHandler.RenewLease)
+		r.Post("/api/stacks/{org}/{project}/{stack}/update/{updateID}/complete", updateHandler.CompleteUpdate)
 	})
 
 	srv := httpserver.NewServer(cfg.ListenAddr, router, logger)
