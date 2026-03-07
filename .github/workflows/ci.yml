@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   check:
-    name: Lint & Unit Tests
+    name: Lint, Typecheck & Unit Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,24 +20,12 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: go-${{ runner.os }}-${{ hashFiles('go.sum') }}
-          restore-keys: go-${{ runner.os }}-
-      - run: mise exec -- bun run check
-
-  web-check:
-    name: Web Lint, Typecheck & Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v2
-      - uses: actions/cache@v4
-        with:
-          path: node_modules
+            node_modules
+            ~/.bun/install/cache
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
-      - run: mise exec -- bun run check:web
+      - run: bun install --frozen-lockfile
+      - run: bun run check
 
   e2e:
     name: E2E Acceptance Tests
@@ -63,15 +51,16 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: go-${{ runner.os }}-${{ hashFiles('go.sum') }}
-          restore-keys: go-${{ runner.os }}-
+            node_modules
+            ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
       - uses: pulumi/setup-pulumi@v2
+      - run: bun install --frozen-lockfile
       - name: Run E2E tests
         env:
           STRATA_DATABASE_URL: postgres://strata:strata@localhost:5432/strata?sslmode=disable
-        run: mise exec -- bun run e2e
+        run: bun run e2e
 
   e2e-cluster:
     name: E2E Cluster Tests
@@ -80,13 +69,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v2
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: go-${{ runner.os }}-${{ hashFiles('go.sum') }}
-          restore-keys: go-${{ runner.os }}-
       - uses: pulumi/setup-pulumi@v2
       - name: Run cluster E2E tests
-        run: mise exec -- bun run e2e:cluster
+        run: bun run docker:cluster && bun run e2e

@@ -1,0 +1,15 @@
+.git
+node_modules
+dist
+.env*
+*.md
+docs/
+e2e/
+.beads/
+.claude/
+.codenomad/
+.sisyphus/
+.husky/
+data/
+apps/ui/
+web/
