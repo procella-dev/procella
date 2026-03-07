@@ -27,7 +27,7 @@ jobs:
       - run: mise exec -- make check
 
   web-check:
-    name: Web Lint & Typecheck
+    name: Web Lint, Typecheck & Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,6 +38,9 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('web/bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
       - run: mise exec -- make check-web
+        env:
+          STRATA_DATABASE_URL: postgres://test:test@localhost:5432/test
+          STRATA_DEV_AUTH_TOKEN: ci-test-token
 
   e2e:
     name: E2E Acceptance Tests
