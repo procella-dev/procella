@@ -157,18 +157,21 @@ Strata is a self-hosted Pulumi backend written in Go. It implements the Pulumi S
 
 ### Tech Stack
 
-- **Go 1.25.7** (via mise — ALL tool invocations must use `mise exec --`)
+- **Go 1.26.1** (via mise — ALL tool invocations must use `mise exec --`)
 - **PostgreSQL 17** (metadata, state)
 - **chi v5** (HTTP router)
 - **pgx v5** (Postgres driver)
 - **golangci-lint v2** (consolidated linting + formatting — gofumpt, goimports as formatters; gosec, govet, revive, etc. as linters)
 - **Pulumi SDK v3.225.1** (apitype definitions)
-- **React 19 + Vite 7 + TailwindCSS v4** (web UI in `web/`)
+- **Bun** (web API runtime + package manager)
+- **Hono + tRPC + Drizzle ORM** (web dashboard API in `web/apps/api/`)
+- **React 19 + Vite 7 + TailwindCSS v4** (web UI in `web/apps/ui/`)
+- **Biome** (strict linter + formatter for TypeScript/JSON)
 
 ### Directory Structure
 
 ```
-cmd/strata/main.go          # Server entrypoint, route registration, SPA mount
+cmd/strata/main.go          # Server entrypoint, route registration
 internal/
   app/app.go                 # App struct (Start/Stop lifecycle)
   auth/service.go            # Authenticator interface, DevAuthenticator
@@ -182,7 +185,6 @@ internal/
     encode/                  # WriteJSON, WriteError helpers
     handlers/                # HTTP handlers (stack, user, update, health, capabilities, crypto)
     middleware/               # Auth, CORS, Gzip, Logging, PulumiAccept, Recovery, RequestID
-    spa/                     # SPA handler — serves embedded React app with index.html fallback
   stacks/
     service.go               # Service interface (7 methods)
     postgres.go              # PostgreSQL implementation
@@ -202,12 +204,23 @@ internal/
     aes.go                   # AES-256-GCM with HKDF per-stack key derivation
     aes_test.go              # 6 unit tests
   storage/blobs/             # Blob storage (local + S3)
-web/                         # React SPA (Vite + React 19 + TailwindCSS v4)
-  embed.go                   # go:embed dist/* for Go binary embedding
-  dist/                      # Built assets (committed for go:embed)
-  src/                       # React source (api client, pages, components)
+web/                         # Bun workspace monorepo
+  package.json               # Workspace root (apps/*)
+  biome.json                 # Strict Biome linter/formatter config
+  tsconfig.json              # Strict TypeScript base config
+  bun.lock                   # Lockfile (committed for reproducible builds)
+  apps/
+    api/                     # @strata/api — tRPC web API (Hono + Drizzle ORM)
+      src/index.ts           # Hono server + tRPC mount (port 3000)
+      src/auth.ts            # Dev + Descope authenticator
+      src/db/schema.ts       # Drizzle schema mirroring Go migrations
+      src/router/            # tRPC router (stacks, updates, events)
+      Dockerfile             # bun build --compile → distroless
+    ui/                      # @strata/ui — React SPA (Vite + Tailwind)
+      src/                   # React pages, components, tRPC client
+      Dockerfile             # bun+vite build → scratch
 e2e/                         # E2E acceptance tests (build tag: e2e)
-.github/workflows/ci.yml    # CI: check + e2e jobs
+.github/workflows/ci.yml    # CI: check + web-check + e2e jobs
 ```
 
 ### Key Patterns
@@ -277,9 +290,10 @@ All state lives in PostgreSQL. No in-memory caches, no local-only state.
 ### Quality Gates
 
 ```bash
-make check      # lint → vuln → build → test (unit only)
+make check      # Go: lint → vuln → build → test (unit only)
+make check-web  # Web: biome lint → typecheck → bun test (28 tests)
 make e2e         # E2E tests (requires postgres + pulumi CLI)
-make check-all   # check + e2e
+make check-all   # check + check-web + e2e
 ```
 
 ### Environment Variables

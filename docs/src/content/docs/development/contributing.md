@@ -9,7 +9,7 @@ description: Prerequisites, setup, code style, and development workflow.
 |---|---|
 | [mise](https://mise.jdx.dev/) | Tool version management (Go, golangci-lint, govulncheck) |
 | [Docker](https://docs.docker.com/get-docker/) | Container runtime for dependencies and builds |
-| [Node.js 22](https://nodejs.org/) | Web UI development (if modifying the frontend) |
+| [Bun](https://bun.sh/) | Web API + UI development (managed by mise) |
 | [Pulumi CLI](https://www.pulumi.com/docs/install/) | Required for E2E tests |
 
 ## Setup
@@ -98,30 +98,35 @@ if err != nil {
 | `make dev` | Start full dev environment (Docker Compose) |
 | `make deps` | Start only dependencies (PostgreSQL, MinIO) |
 | `make down` | Stop dev environment + remove volumes |
-| `make build` | Build Docker image |
-| `make web` | Build React SPA |
+| `make build` | Build Go Docker image |
 | `make go-build` | Build Go binary |
-| `make fmt` | Format code (golangci-lint --fix) |
-| `make lint` | Run linters |
-| `make lint-fix` | Run linters with auto-fix |
+| `make web-install` | Install Bun workspace dependencies |
+| `make web-check` | Biome lint + TypeScript check + Bun tests |
+| `make web-build` | Build React SPA |
+| `make web-dev` | Start tRPC API dev server (hot reload) |
+| `make fmt` | Format Go code (golangci-lint --fix) |
+| `make lint` | Run Go linters |
+| `make lint-fix` | Run Go linters with auto-fix |
 | `make vuln` | Run vulnerability scanner |
-| `make test` | Run unit tests with race detector |
+| `make test` | Run Go unit tests with race detector |
 | `make e2e` | Run E2E tests (in-process server) |
 | `make e2e-cluster` | Run E2E tests against Docker cluster |
 | `make examples` | Run example Pulumi programs |
-| `make check` | lint + vuln + build + test |
-| `make check-all` | check + e2e |
+| `make check` | Go: lint + vuln + build + test |
+| `make check-web` | Web: install + lint + typecheck + test |
+| `make check-all` | check + check-web + e2e |
 
 ## Quality Gates
 
 Before submitting a PR, ensure:
 
 ```bash
-make check      # Must pass: lint, vuln, build, unit tests
+make check      # Must pass: Go lint, vuln, build, unit tests
+make check-web  # Must pass: Biome lint, typecheck, 28 unit tests
 make e2e        # Must pass: 46 E2E acceptance tests
 ```
 
-The CI pipeline runs `check`, `e2e`, and `e2e-cluster` on every push and PR.
+The CI pipeline runs `check`, `web-check`, `e2e`, and `e2e-cluster` on every push and PR.
 
 ## Project Layout
 
@@ -132,13 +137,15 @@ When adding new features, follow the existing package structure:
 - **New middleware** → add to `internal/http/middleware/`
 - **New migration** → add to `internal/db/migrations/` with the next sequence number
 - **New E2E test** → add to `e2e/` with the `e2e` build tag
+- **New tRPC procedure** → add to `web/apps/api/src/router/`, add tests in `__tests__/`
+- **New React page** → add to `web/apps/ui/src/pages/`
 
-## Docker Image
+## Docker Images
 
-The Docker image uses a multi-stage build:
+Three Docker images, one per service:
 
-1. **web-builder** (node:22-alpine) — builds the React SPA
-2. **builder** (golang:1.26.1-alpine) — builds the Go binary
-3. **scratch** — final image with just the binary
+1. **strata** (Go API) — `golang:1.26.1-alpine` builder → `scratch` final image with built-in `healthcheck` subcommand
+2. **strata-web** (tRPC API) — `oven/bun:1.2-alpine` builder with `bun build --compile` → `distroless` final image
+3. **strata-ui** (React SPA) — `oven/bun:1.2-alpine` builder with Vite → `scratch` serving static files
 
-The `scratch` base image has no shell, no package manager, and no utilities. The Go binary includes a built-in `healthcheck` subcommand for container health monitoring.
+All images use minimal base images (`scratch` or `distroless`) with no shell, no package manager, and no utilities.
