@@ -20,14 +20,17 @@ Starts only the shared infrastructure:
 
 Use this when running the Strata server directly on your machine (e.g., via `go run`).
 
-### Dev Profile — Single Server
+### Dev Profile — Full Stack
 
 ```bash
 make dev
 # or: docker compose --profile dev up --build
 ```
 
-Starts the dependencies plus a single Strata server on port 8080. This is the standard development configuration.
+Starts the dependencies plus:
+- **Strata** (Go) — Pulumi CLI API on port 8080
+- **Strata Web** (Bun) — tRPC web dashboard API on port 3000
+- **Caddy** — reverse proxy on port 8080 routing `/api/*` → Go, `/trpc/*` → Bun, `/*` → SPA
 
 ### Cluster Profile — Multi-Replica
 
@@ -87,19 +90,23 @@ Three anchor levels allow mixing and matching:
 
 ## Caddy Configuration
 
-The cluster profile includes a Caddy reverse proxy:
+Caddy routes requests to the appropriate service based on URL path:
 
 ```
 :8080 {
-    reverse_proxy strata-cluster:8080 {
-        lb_policy round_robin
-        health_uri /healthz
-        health_interval 5s
+    handle /api/* {
+        reverse_proxy strata:8080     # Go — Pulumi CLI protocol
+    }
+    handle /trpc/* {
+        reverse_proxy strata-web:3000 # Bun — tRPC web API
+    }
+    handle {
+        # Static SPA fallback
     }
 }
 ```
 
-Caddy uses Docker's built-in DNS to resolve `strata-cluster` to all 3 replica IPs, then load-balances with round-robin and periodic health checks.
+In the cluster profile, the Go service uses round-robin load balancing across 3 replicas with health checks. The Bun tRPC service runs as a single instance (stateless, can be scaled independently).
 
 ## Healthcheck
 

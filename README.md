@@ -10,22 +10,23 @@ A self-hosted [Pulumi](https://www.pulumi.com/) backend. Run `pulumi login`, `pu
 - **AES-256-GCM encryption** — per-stack key derivation via HKDF for secrets at rest
 - **Horizontal scaling** — stateless Go binary behind Caddy load balancer, PostgreSQL for all shared state
 - **S3-compatible blob storage** — local filesystem or any S3-compatible backend (AWS S3, MinIO, R2)
-- **Embedded React UI** — single-page application served from the same binary
-- **Minimal Docker image** — multi-stage build with `FROM scratch`, built-in healthcheck subcommand
+- **Microservice architecture** — Go API for Pulumi CLI, Bun tRPC API for web dashboard, standalone React SPA
+- **Minimal Docker images** — `FROM scratch` / distroless containers with built-in healthcheck
 
 ## Tech Stack
 
 | Component | Technology |
 |---|---|
-| Language | Go 1.26.1 |
-| HTTP Router | chi v5 |
-| Database | PostgreSQL 17 (pgx v5) |
-| Auth | Descope Go SDK / static tokens |
+| Go API | Go 1.26.1, chi v5, pgx v5 |
+| Web API | Bun, Hono, tRPC, Drizzle ORM |
+| Web UI | React 19, Vite 7, Tailwind CSS v4 |
+| Database | PostgreSQL 17 |
+| Auth | Descope / static tokens (both services) |
 | Encryption | AES-256-GCM + HKDF |
 | Blob Storage | Local filesystem / S3 |
-| Frontend | React 19 + Vite 7 + Tailwind CSS v4 |
-| Load Balancer | Caddy 2 |
-| Linting | golangci-lint v2 |
+| Reverse Proxy | Caddy 2 |
+| Quality (Go) | golangci-lint v2 |
+| Quality (Web) | Biome + TypeScript strict |
 | IaC SDK | Pulumi SDK v3 (apitype definitions) |
 
 ## Quick Start
@@ -64,10 +65,11 @@ See the [Horizontal Scaling](docs/src/content/docs/operations/horizontal-scaling
 ## Quality Gates
 
 ```bash
-make check          # lint + vuln scan + build + unit tests
+make check          # Go: lint + vuln scan + build + unit tests
+make check-web      # Web: biome lint + typecheck + 28 unit tests
 make e2e            # E2E acceptance tests (46 tests)
 make e2e-cluster    # Cluster E2E tests (3 replicas)
-make check-all      # check + e2e
+make check-all      # check + check-web + e2e
 ```
 
 ## Documentation
@@ -89,19 +91,22 @@ make docs-build     # Build static docs site
 
 ```
 cmd/strata/           Server entrypoint, healthcheck subcommand
-internal/
-  auth/               Authenticator interface, dev + Descope implementations
+internal/             Go backend (Pulumi CLI protocol)
+  auth/               Authenticator interface, dev + Descope
   config/             Environment variable configuration
   crypto/             AES-256-GCM encryption with HKDF key derivation
   db/                 PostgreSQL connection, embedded migrations
   http/
-    handlers/         HTTP handlers (stacks, updates, crypto, user, health)
-    middleware/       Auth, OrgAuth, UpdateAuth, CORS, Gzip, Logging, Recovery
-    spa/              SPA handler for embedded React app
-  stacks/             Stack service interface + PostgreSQL implementation
+    handlers/         HTTP handlers (stacks, updates, crypto, health)
+    middleware/        Auth, CORS, Gzip, Logging, Recovery
+  stacks/             Stack service + PostgreSQL implementation
   updates/            Update lifecycle, GC worker, TTL caches
   storage/blobs/      Blob storage (local + S3)
-web/                  React SPA (Vite + React 19 + Tailwind CSS v4)
+web/                  Bun workspace monorepo
+  apps/api/           @strata/api — tRPC web API (Hono + Drizzle)
+  apps/ui/            @strata/ui — React SPA (Vite + Tailwind)
+  biome.json          Strict Biome linter/formatter config
+  tsconfig.json       Strict TypeScript base config
 e2e/                  E2E acceptance tests
 docs/                 Starlight documentation site
 ```

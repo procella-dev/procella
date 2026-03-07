@@ -5,36 +5,48 @@ description: High-level architecture, package structure, and design principles.
 
 ## System Architecture
 
-Strata is a single Go binary that serves both the Pulumi Service API and an embedded React SPA. All persistent state lives in PostgreSQL, with blob storage (checkpoints) on the local filesystem or S3.
+Strata uses a microservice architecture with three services sharing one PostgreSQL database. Caddy routes requests to the appropriate service based on URL path.
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│  Pulumi CLI  │     │  Pulumi CLI  │     │   Web UI    │
+│  Pulumi CLI  │     │  Pulumi CLI  │     │   Browser   │
 └──────┬───────┘     └──────┬───────┘     └──────┬──────┘
        │                    │                    │
        └────────────────────┼────────────────────┘
                             │
                     ┌───────▼───────┐
-                    │     Caddy     │  (optional, for multi-replica)
-                    │  Round-Robin  │
-                    └───────┬───────┘
-                            │
-              ┌─────────────┼─────────────┐
-              │             │             │
-       ┌──────▼──┐   ┌──────▼──┐   ┌──────▼──┐
-       │ Strata  │   │ Strata  │   │ Strata  │
-       │  :8080  │   │  :8080  │   │  :8080  │
-       └────┬────┘   └────┬────┘   └────┬────┘
-            │              │              │
-            └──────────────┼──────────────┘
-                           │
-              ┌────────────┼────────────┐
-              │                         │
-       ┌──────▼──────┐          ┌───────▼──────┐
-       │ PostgreSQL  │          │  S3 / MinIO  │
-       │   (state)   │          │   (blobs)    │
-       └─────────────┘          └──────────────┘
+                    │     Caddy     │
+                    │  /api  /trpc  │
+                    │  /docs  /*    │
+                    └───┬───┬───┬──┘
+                        │   │   │
+          ┌─────────────┘   │   └─────────────┐
+          │                 │                 │
+   ┌──────▼──────┐  ┌──────▼──────┐  ┌───────▼─────┐
+   │  strata     │  │ strata-web  │  │  strata-ui  │
+   │  Go :8080   │  │  Bun :3000  │  │ Static SPA  │
+   │  /api/*     │  │  /trpc/*    │  │  /*         │
+   └──────┬──────┘  └──────┬──────┘  └─────────────┘
+          │                │
+          └────────┬───────┘
+                   │
+      ┌────────────┼────────────┐
+      │                         │
+┌─────▼───────┐          ┌─────▼────────┐
+│ PostgreSQL  │          │  S3 / MinIO  │
+│  (shared)   │          │   (blobs)    │
+└─────────────┘          └──────────────┘
 ```
+
+### Services
+
+| Service | Language | Purpose | Routes |
+|---|---|---|---|
+| **strata** | Go | Pulumi CLI protocol | `/api/*` |
+| **strata-web** | Bun/TypeScript | Web dashboard API (tRPC) | `/trpc/*` |
+| **strata-ui** | React SPA | Browser UI | `/*` |
+
+Go owns the database schema and migrations. The Bun service reads via Drizzle ORM with a mirrored schema definition. Both services authenticate requests independently (same Descope/dev-token config).
 
 ## Request Flow
 
@@ -49,6 +61,8 @@ For update execution-phase requests (checkpoints, events), the auth flow differs
 - Validated by the `UpdateAuth` middleware against the lease token stored in the database
 
 ## Package Structure
+
+### Go Service (`strata`)
 
 ```
 cmd/strata/main.go              # Entrypoint, DI wiring, route registration
@@ -71,7 +85,6 @@ internal/
     encode/                      # JSON response helpers
     handlers/                    # HTTP handlers
     middleware/                  # Auth, CORS, Gzip, Logging, etc.
-    spa/                         # SPA handler (serves embedded React app)
   stacks/                        # Stack CRUD service
     service.go                   #   Service interface
     postgres.go                  #   PostgreSQL implementation
@@ -85,9 +98,36 @@ internal/
     interface.go                 #   BlobStore interface
     local.go                     #   Local filesystem implementation
     s3.go                        #   S3 implementation
-web/                             # Embedded React SPA
-  embed.go                       #   go:embed dist/*
-  dist/                          #   Built assets
+```
+
+### Bun Workspace (`web/`)
+
+```
+web/
+  package.json                   # Workspace root (apps/*)
+  biome.json                     # Strict Biome linter/formatter config
+  tsconfig.json                  # Strict TypeScript base config
+  bun.lock                       # Lockfile (committed for reproducible builds)
+  apps/
+    api/                         # @strata/api — tRPC web API
+      src/
+        index.ts                 #   Hono server + tRPC mount
+        auth.ts                  #   Dev + Descope authenticator
+        env.ts                   #   Zod-validated env config
+        db/schema.ts             #   Drizzle schema (mirrors Go migrations)
+        db/client.ts             #   postgres.js + Drizzle client
+        router/trpc.ts           #   tRPC init + Context type
+        router/index.ts          #   Root AppRouter
+        router/stacks.ts         #   stacks.list, stacks.get
+        router/updates.ts        #   updates.list, updates.latest
+        router/events.ts         #   events.list (with continuation)
+        __tests__/               #   28 unit tests
+    ui/                          # @strata/ui — React SPA
+      src/
+        main.tsx                 #   tRPC + React Query providers
+        trpc.ts                  #   tRPC client (imports AppRouter type)
+        pages/                   #   StackList, StackDetail, UpdateDetail
+        components/              #   Layout, shared components
 ```
 
 ## Design Principles
