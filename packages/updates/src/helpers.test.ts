@@ -1,0 +1,257 @@
+import { describe, expect, test } from "bun:test";
+import { InvalidUpdateTokenError } from "@strata/types";
+import {
+	applyDelta,
+	emptyDeployment,
+	formatBlobKey,
+	generateLeaseToken,
+	leaseExpiresAt,
+	parseLeaseToken,
+} from "./helpers.js";
+import { detectEventKind, mapStatusToApiStatus } from "./postgres.js";
+import type { UpdatesService } from "./types.js";
+import {
+	BLOB_THRESHOLD,
+	GC_ADVISORY_LOCK_ID,
+	GC_INTERVAL_MS,
+	GC_STALE_THRESHOLD_MS,
+	LEASE_DURATION_SECONDS,
+} from "./types.js";
+
+describe("@strata/updates helpers", () => {
+	// ========================================================================
+	// generateLeaseToken
+	// ========================================================================
+
+	describe("generateLeaseToken", () => {
+		test("returns correct format", () => {
+			const token = generateLeaseToken("update-1", "stack-1");
+			expect(token).toBe("update:update-1:stack-1");
+		});
+	});
+
+	// ========================================================================
+	// parseLeaseToken
+	// ========================================================================
+
+	describe("parseLeaseToken", () => {
+		test("roundtrips with generateLeaseToken", () => {
+			const token = generateLeaseToken("abc-123", "stack-xyz");
+			const parsed = parseLeaseToken(token);
+			expect(parsed.updateId).toBe("abc-123");
+			expect(parsed.stackId).toBe("stack-xyz");
+		});
+
+		test("throws InvalidUpdateTokenError on too few parts", () => {
+			expect(() => parseLeaseToken("update:only-one")).toThrow(InvalidUpdateTokenError);
+		});
+
+		test("throws InvalidUpdateTokenError on wrong prefix", () => {
+			expect(() => parseLeaseToken("token:abc:def")).toThrow(InvalidUpdateTokenError);
+		});
+
+		test("throws InvalidUpdateTokenError on empty segments", () => {
+			expect(() => parseLeaseToken("update::stack-1")).toThrow(InvalidUpdateTokenError);
+			expect(() => parseLeaseToken("update:abc:")).toThrow(InvalidUpdateTokenError);
+		});
+	});
+
+	// ========================================================================
+	// formatBlobKey
+	// ========================================================================
+
+	describe("formatBlobKey", () => {
+		test("returns correct path", () => {
+			const key = formatBlobKey("stack-1", "update-1", 5);
+			expect(key).toBe("checkpoints/stack-1/update-1/5");
+		});
+	});
+
+	// ========================================================================
+	// applyDelta (RFC 7396 JSON Merge Patch)
+	// ========================================================================
+
+	describe("applyDelta", () => {
+		test("adds new key to object", () => {
+			const result = applyDelta({ a: 1 }, { b: 2 });
+			expect(result).toEqual({ a: 1, b: 2 });
+		});
+
+		test("overwrites existing key", () => {
+			const result = applyDelta({ a: 1 }, { a: 99 });
+			expect(result).toEqual({ a: 99 });
+		});
+
+		test("deletes key with null value", () => {
+			const result = applyDelta({ a: 1, b: 2 }, { b: null });
+			expect(result).toEqual({ a: 1 });
+		});
+
+		test("merges nested objects", () => {
+			const base = { nested: { x: 1, y: 2 } };
+			const delta = { nested: { y: 99, z: 3 } };
+			expect(applyDelta(base, delta)).toEqual({ nested: { x: 1, y: 99, z: 3 } });
+		});
+
+		test("non-object delta replaces entirely", () => {
+			expect(applyDelta({ a: 1 }, "hello")).toBe("hello");
+			expect(applyDelta({ a: 1 }, 42)).toBe(42);
+			expect(applyDelta({ a: 1 }, null)).toBeNull();
+		});
+
+		test("array in delta replaces (not merges)", () => {
+			const result = applyDelta({ items: [1, 2, 3] }, { items: [4, 5] });
+			expect(result).toEqual({ items: [4, 5] });
+		});
+
+		test("handles non-object base with object delta", () => {
+			const result = applyDelta("string-base", { a: 1 });
+			expect(result).toEqual({ a: 1 });
+		});
+	});
+
+	// ========================================================================
+	// leaseExpiresAt
+	// ========================================================================
+
+	describe("leaseExpiresAt", () => {
+		test("returns future date", () => {
+			const now = Date.now();
+			const expiry = leaseExpiresAt();
+			expect(expiry.getTime()).toBeGreaterThan(now);
+		});
+
+		test("uses custom duration", () => {
+			const now = Date.now();
+			const expiry = leaseExpiresAt(60);
+			// Should be ~60 seconds in the future (allow 1s tolerance)
+			expect(expiry.getTime()).toBeGreaterThanOrEqual(now + 59_000);
+			expect(expiry.getTime()).toBeLessThanOrEqual(now + 61_000);
+		});
+	});
+
+	// ========================================================================
+	// emptyDeployment
+	// ========================================================================
+
+	describe("emptyDeployment", () => {
+		test("returns version 3", () => {
+			const d = emptyDeployment();
+			expect(d.version).toBe(3);
+		});
+
+		test("has deployment with manifest and resources", () => {
+			const d = emptyDeployment();
+			const deployment = d.deployment as {
+				manifest: { time: string; magic: string; version: string };
+				resources: unknown[];
+			};
+			expect(deployment).toBeDefined();
+			expect(deployment.manifest).toBeDefined();
+			expect(deployment.manifest.time).toBeTypeOf("string");
+			expect(deployment.manifest.magic).toBe("");
+			expect(deployment.manifest.version).toBe("");
+			expect(deployment.resources).toEqual([]);
+		});
+	});
+
+	// ========================================================================
+	// Constants
+	// ========================================================================
+
+	describe("constants", () => {
+		test("BLOB_THRESHOLD is 1 MB", () => {
+			expect(BLOB_THRESHOLD).toBe(1_048_576);
+		});
+
+		test("LEASE_DURATION_SECONDS is 300", () => {
+			expect(LEASE_DURATION_SECONDS).toBe(300);
+		});
+
+		test("GC_INTERVAL_MS is 60 seconds", () => {
+			expect(GC_INTERVAL_MS).toBe(60_000);
+		});
+
+		test("GC_STALE_THRESHOLD_MS is 1 hour", () => {
+			expect(GC_STALE_THRESHOLD_MS).toBe(3_600_000);
+		});
+
+		test("GC_ADVISORY_LOCK_ID is a bigint", () => {
+			expect(typeof GC_ADVISORY_LOCK_ID).toBe("bigint");
+		});
+	});
+
+	// ========================================================================
+	// UpdatesService interface (compile-time type satisfaction check)
+	// ========================================================================
+
+	describe("UpdatesService interface", () => {
+		test("can be satisfied by a mock object", () => {
+			const noop = () => Promise.resolve({} as never);
+			const mock: UpdatesService = {
+				createUpdate: noop,
+				startUpdate: noop,
+				completeUpdate: noop,
+				cancelUpdate: noop,
+				patchCheckpoint: noop,
+				patchCheckpointVerbatim: noop,
+				patchCheckpointDelta: noop,
+				postEvents: noop,
+				renewLease: noop,
+				getUpdate: noop,
+				getUpdateEvents: noop,
+				getHistory: noop,
+				exportStack: noop,
+				importStack: noop,
+				encryptValue: noop,
+				decryptValue: noop,
+				batchEncrypt: noop,
+				batchDecrypt: noop,
+			};
+			expect(Object.keys(mock)).toHaveLength(18);
+		});
+	});
+
+	// ========================================================================
+	// mapStatusToApiStatus
+	// ========================================================================
+
+	describe("mapStatusToApiStatus", () => {
+		test("maps all DB statuses correctly", () => {
+			expect(mapStatusToApiStatus("not started")).toBe("not-started");
+			expect(mapStatusToApiStatus("requested")).toBe("not-started");
+			expect(mapStatusToApiStatus("running")).toBe("in-progress");
+			expect(mapStatusToApiStatus("succeeded")).toBe("succeeded");
+			expect(mapStatusToApiStatus("failed")).toBe("failed");
+			expect(mapStatusToApiStatus("cancelled")).toBe("failed");
+		});
+
+		test("returns unknown status as-is", () => {
+			expect(mapStatusToApiStatus("something-else")).toBe("something-else");
+		});
+	});
+
+	// ========================================================================
+	// detectEventKind
+	// ========================================================================
+
+	describe("detectEventKind", () => {
+		test("identifies each event type", () => {
+			expect(detectEventKind({ cancelEvent: {} } as never)).toBe("cancel");
+			expect(detectEventKind({ stdoutEvent: {} } as never)).toBe("stdout");
+			expect(detectEventKind({ diagnosticEvent: {} } as never)).toBe("diagnostic");
+			expect(detectEventKind({ preludeEvent: {} } as never)).toBe("prelude");
+			expect(detectEventKind({ summaryEvent: {} } as never)).toBe("summary");
+			expect(detectEventKind({ resourcePreEvent: {} } as never)).toBe("resource-pre");
+			expect(detectEventKind({ resOutputsEvent: {} } as never)).toBe("res-outputs");
+			expect(detectEventKind({ resOpFailedEvent: {} } as never)).toBe("res-op-failed");
+			expect(detectEventKind({ policyEvent: {} } as never)).toBe("policy");
+			expect(detectEventKind({ errorEvent: {} } as never)).toBe("error");
+			expect(detectEventKind({ progressEvent: {} } as never)).toBe("progress");
+		});
+
+		test("returns 'unknown' for empty event", () => {
+			expect(detectEventKind({} as never)).toBe("unknown");
+		});
+	});
+});
