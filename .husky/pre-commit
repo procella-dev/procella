@@ -12,35 +12,35 @@ if [ -z "$STAGED" ]; then
   exit 0
 fi
 
-GO_CHANGED=false
-WEB_CHANGED=false
+TS_CHANGED=false
+UI_CHANGED=false
 INFRA_CHANGED=false
 
 while IFS= read -r file; do
   case "$file" in
-    *.go)                    GO_CHANGED=true ;;
-    web/apps/*.ts|web/apps/*.tsx|web/apps/*.json) WEB_CHANGED=true ;;
+    packages/*.ts|apps/server/*.ts)  TS_CHANGED=true ;;
+    apps/ui/*.ts|apps/ui/*.tsx)       UI_CHANGED=true ;;
     Dockerfile|docker-compose.yml|Caddyfile*|.github/*) INFRA_CHANGED=true ;;
   esac
 done <<< "$STAGED"
 
 FAIL=0
 
-if [ "$GO_CHANGED" = true ]; then
-  echo "▶ bun run check (Go: lint → vuln → build → test)"
+if [ "$TS_CHANGED" = true ]; then
+  echo "▶ bun run check (lint → typecheck → test)"
   if ! bun run check 2>&1; then
     FAIL=1
   fi
 fi
 
-if [ "$WEB_CHANGED" = true ]; then
-  echo "▶ bun run check:web (Web: lint → typecheck → test)"
-  if ! bun run check:web 2>&1; then
+if [ "$UI_CHANGED" = true ]; then
+  echo "▶ bun run check:ui (UI: lint → typecheck)"
+  if ! bun run check:ui 2>&1; then
     FAIL=1
   fi
 fi
 
-if [ "$GO_CHANGED" = true ] || [ "$WEB_CHANGED" = true ] || [ "$INFRA_CHANGED" = true ]; then
+if [ "$TS_CHANGED" = true ] || [ "$UI_CHANGED" = true ] || [ "$INFRA_CHANGED" = true ]; then
   DOCS_CHANGED=false
   while IFS= read -r file; do
     case "$file" in

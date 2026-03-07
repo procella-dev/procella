@@ -12,6 +12,7 @@
 		"check": "biome check . && bun run typecheck && bun test --recursive",
 		"check:ui": "biome check apps/ui/ && bun run --cwd apps/ui typecheck",
 		"typecheck": "tsc --build",
+		"types:generate": "cd packages/types/tygo && go mod tidy && tygo generate && sed -i '' 's/export type UpdateStatus = typeof UpdateStatusSucceeded | typeof UpdateStatusFailed | typeof UpdateStatusCancelled;/export type UpdateStatus = string;/' ../src/pulumi.gen.ts",
 		"e2e": "bun test e2e/",
 		"check:all": "bun run check && bun run check:ui && bun run e2e",
 
