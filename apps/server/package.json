@@ -1,0 +1,17 @@
+{
+	"name": "@strata/server",
+	"private": true,
+	"type": "module",
+	"main": "src/index.ts",
+	"types": "src/index.ts",
+	"dependencies": {
+		"@strata/types": "workspace:*",
+		"@strata/config": "workspace:*",
+		"@strata/db": "workspace:*",
+		"@strata/crypto": "workspace:*",
+		"@strata/storage": "workspace:*",
+		"@strata/auth": "workspace:*",
+		"@strata/stacks": "workspace:*",
+		"@strata/updates": "workspace:*"
+	}
+}

@@ -1,44 +1,46 @@
 {
 	"name": "strata",
 	"private": true,
-	"workspaces": ["web", "web/apps/*"],
+	"workspaces": ["packages/*", "apps/*"],
 	"scripts": {
 		"prepare": "husky",
 
-		"dev": "bun run dev:deps && trap 'kill 0' EXIT && mise exec -- air & bun run --cwd web/apps/api dev & bun run --cwd web/apps/ui dev & mise exec -- caddy run --config Caddyfile & wait",
+		"dev": "bun run dev:deps && trap 'kill 0' EXIT && bun --watch apps/server/src/index.ts & bun run --cwd apps/ui dev & mise exec -- caddy run --config Caddyfile & wait",
 		"dev:deps": "docker compose up -d && printf 'Waiting for postgres' && until docker compose exec -T postgres pg_isready -U strata -q 2>/dev/null; do printf '.'; sleep 1; done && echo ' ready'",
 		"dev:down": "docker compose down -v",
 
-		"go:build": "mise exec -- go build ./...",
-		"go:lint": "mise exec -- golangci-lint run ./...",
-		"go:lint:fix": "mise exec -- golangci-lint run --fix ./...",
-		"go:test": "mise exec -- go test -race -count=1 -timeout=2m ./...",
-		"go:vuln": "mise exec -- govulncheck ./...",
+		"check": "biome check . && bun run typecheck && bun test --recursive",
+		"check:ui": "biome check apps/ui/ && bun run --cwd apps/ui typecheck",
+		"typecheck": "tsc --build",
+		"e2e": "bun test e2e/",
+		"check:all": "bun run check && bun run check:ui && bun run e2e",
 
-		"web:lint": "biome check .",
-		"web:lint:fix": "biome check --write .",
-		"web:typecheck": "bun run --filter '@strata/*' typecheck",
-		"web:test": "mise exec -- bun test --cwd web/apps/api",
-		"web:build": "bun run --cwd web/apps/ui build",
+		"db:generate": "drizzle-kit generate --config packages/db/drizzle.config.ts",
+		"db:migrate": "drizzle-kit migrate --config packages/db/drizzle.config.ts",
 
-		"check": "bun run go:lint && bun run go:vuln && bun run go:build && bun run go:test",
-		"check:web": "bun install && bun run web:lint && bun run web:typecheck && bun run web:test",
-		"check:all": "bun run check && bun run check:web",
-
-		"e2e": "mise exec -- go test -race -count=1 -tags=e2e -timeout=15m -v ./e2e/...",
-		"e2e:cluster": "docker compose --profile cluster up --build -d && echo 'Waiting for cluster...' && until curl -sf http://localhost:8080/healthz > /dev/null 2>&1; do sleep 1; done && STRATA_E2E_URL=http://localhost:8080 mise exec -- go test -race -count=1 -tags=e2e -timeout=15m -v ./e2e/...; s=$?; docker compose --profile cluster down -v; exit $s",
-
-		"docker:dev": "docker compose --profile dev up --build",
+		"docker:build": "docker build -t strata:dev .",
 		"docker:cluster": "docker compose --profile cluster up --build",
 		"docker:cluster:down": "docker compose --profile cluster down -v",
-		"docker:build": "docker build -t strata:dev .",
 
 		"docs:dev": "cd docs && npm run dev",
 		"docs:build": "cd docs && npm run build"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",
+		"@types/bun": "^1.2.0",
+		"drizzle-kit": "^0.30.0",
 		"husky": "^9.1.7",
-		"typescript": "~5.9.3"
+		"typescript": "~5.8.3"
+	},
+	"dependencies": {
+		"@aws-sdk/client-s3": "^3.750.0",
+		"@descope/node-sdk": "^1.10.0",
+		"@hono/zod-validator": "^0.5.0",
+		"@trpc/server": "^11.1.0",
+		"drizzle-orm": "^0.39.0",
+		"hono": "^4.7.0",
+		"jose": "^6.0.0",
+		"postgres": "^3.4.5",
+		"zod": "^3.24.0"
 	}
 }

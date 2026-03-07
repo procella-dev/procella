@@ -1,0 +1,7 @@
+{
+	"name": "@strata/types",
+	"private": true,
+	"type": "module",
+	"main": "src/index.ts",
+	"types": "src/index.ts"
+}

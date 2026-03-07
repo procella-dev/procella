@@ -1,7 +1,6 @@
-# Binary
-/strata
-/bin/
-/tmp/
+# Build output
+dist/
+*.tsbuildinfo
 
 # Environment
 .env
@@ -16,14 +15,10 @@
 
 # Data (dev blobs)
 /data/
+/tmp/
 
-# Generated code (buf generate)
-gen/
-
-# Node / Bun (root workspace)
+# Node / Bun
 node_modules/
-web/apps/*/dist/
-web/bun.lock
 
 # Docs site build artifacts
 docs/node_modules/

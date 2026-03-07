@@ -1,19 +1,12 @@
 [tools]
-go = "1.26.1"
-"go:github.com/steveyegge/beads/cmd/bd" = "0.59.0"
-"go:github.com/golangci/golangci-lint/v2/cmd/golangci-lint" = "2.11.1"
-"go:golang.org/x/vuln/cmd/govulncheck" = "1.1.4"
-"go:github.com/air-verse/air" = "1.61.7"
-"github:caddyserver/caddy" = "2.11.2"
 bun = "1.2"
+"github:caddyserver/caddy" = "2.11.2"
 
 [env]
 STRATA_LISTEN_ADDR = ":8081"
 STRATA_DATABASE_URL = "postgres://strata:strata@localhost:5432/strata?sslmode=disable"
 STRATA_AUTH_MODE = "dev"
 STRATA_DEV_AUTH_TOKEN = "devtoken123"
-STRATA_DEV_USER_LOGIN = "dev-user"
-STRATA_DEV_ORG_LOGIN = "dev-org"
 STRATA_BLOB_BACKEND = "s3"
 STRATA_BLOB_S3_BUCKET = "strata-checkpoints"
 STRATA_BLOB_S3_ENDPOINT = "http://localhost:9000"

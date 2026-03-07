@@ -1,0 +1,11 @@
+{
+	"name": "@strata/stacks",
+	"private": true,
+	"type": "module",
+	"main": "src/index.ts",
+	"types": "src/index.ts",
+	"dependencies": {
+		"@strata/types": "workspace:*",
+		"@strata/db": "workspace:*"
+	}
+}
