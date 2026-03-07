@@ -2,14 +2,15 @@ FROM oven/bun:1.2-alpine AS builder
 
 WORKDIR /app
 
-# Copy workspace root files
+# Copy workspace root + all workspace package.json files (lockfile requires all)
 COPY web/package.json web/bun.lock ./
 COPY web/apps/api/package.json apps/api/package.json
+COPY web/apps/ui/package.json apps/ui/package.json
 
-# Install deps
-RUN bun install --frozen-lockfile --production
+# Install deps (frozen lockfile requires all workspace entries present)
+RUN bun install --frozen-lockfile
 
-# Copy source
+# Copy API source only
 COPY web/apps/api/ apps/api/
 
 # Build standalone binary
