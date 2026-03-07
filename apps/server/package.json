@@ -5,13 +5,14 @@
 	"main": "src/index.ts",
 	"types": "src/index.ts",
 	"dependencies": {
-		"@strata/types": "workspace:*",
-		"@strata/config": "workspace:*",
-		"@strata/db": "workspace:*",
-		"@strata/crypto": "workspace:*",
-		"@strata/storage": "workspace:*",
 		"@strata/auth": "workspace:*",
+		"@strata/config": "workspace:*",
+		"@strata/crypto": "workspace:*",
+		"@strata/db": "workspace:*",
 		"@strata/stacks": "workspace:*",
-		"@strata/updates": "workspace:*"
+		"@strata/storage": "workspace:*",
+		"@strata/types": "workspace:*",
+		"@strata/updates": "workspace:*",
+		"hono": "catalog:"
 	}
 }

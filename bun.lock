@@ -30,6 +30,7 @@
         "@strata/storage": "workspace:*",
         "@strata/types": "workspace:*",
         "@strata/updates": "workspace:*",
+        "hono": "catalog:",
       },
     },
     "apps/ui": {
