@@ -2,7 +2,7 @@
 
 import { appRouter } from "@strata/api/src/router/index.js";
 import type { TRPCContext } from "@strata/api/src/trpc.js";
-import type { AuthService } from "@strata/auth";
+import type { AuthConfig, AuthService } from "@strata/auth";
 import type { Database } from "@strata/db";
 import type { StacksService } from "@strata/stacks";
 import type { UpdatesService } from "@strata/updates";
@@ -35,6 +35,7 @@ import type { Env } from "../types.js";
 
 export function createApp(deps: {
 	auth: AuthService;
+	authConfig: AuthConfig;
 	db: Database;
 	stacks: StacksService;
 	updates: UpdatesService;
@@ -97,6 +98,14 @@ export function createApp(deps: {
 	app.get("/healthz", health.health);
 	app.get("/api/capabilities", health.capabilities);
 	app.get("/api/cli/version", health.cliVersion);
+
+	// Auth config discovery — UI fetches this at runtime to determine auth mode.
+	app.get("/api/auth/config", (c) => {
+		if (deps.authConfig.mode === "descope") {
+			return c.json({ mode: "descope" as const, projectId: deps.authConfig.projectId });
+		}
+		return c.json({ mode: "dev" as const });
+	});
 
 	// ========================================================================
 	// Update-token authenticated routes (during active update execution)

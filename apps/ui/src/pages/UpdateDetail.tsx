@@ -70,7 +70,7 @@ export function UpdateDetail() {
 	// Auto-scroll to bottom when new events arrive
 	useEffect(() => {
 		eventsEndRef.current?.scrollIntoView({ behavior: "smooth" });
-	}, [events]);
+	}, []);
 
 	const getResultColor = (result?: string) => {
 		switch (result) {

@@ -9,7 +9,9 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@descope/react-sdk": "^2.26.7",
 		"@strata/api": "workspace:*",
+		"@strata/types": "workspace:*",
 		"@tanstack/react-query": "catalog:",
 		"@trpc/client": "catalog:",
 		"@trpc/react-query": "catalog:",
@@ -17,8 +19,7 @@
 		"react": "catalog:",
 		"react-dom": "catalog:",
 		"react-router": "catalog:",
-		"superjson": "catalog:",
-		"@strata/types": "workspace:*"
+		"superjson": "catalog:"
 	},
 	"devDependencies": {
 		"@tailwindcss/vite": "catalog:",

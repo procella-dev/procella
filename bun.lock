@@ -60,6 +60,7 @@
     "apps/ui": {
       "name": "@strata/ui",
       "dependencies": {
+        "@descope/react-sdk": "^2.26.7",
         "@strata/api": "workspace:*",
         "@strata/types": "workspace:*",
         "@tanstack/react-query": "catalog:",
@@ -238,9 +239,39 @@
 
     "@ctrl/tinycolor": ["@ctrl/tinycolor@4.2.0", "", {}, "sha512-kzyuwOAQnXJNLS9PSyrk0CWk35nWJW/zl/6KvnTBMFK65gm7U1/Z5BqjxeapjZCIhQcM/DsrEmcbRwDyXyXK4A=="],
 
+    "@descope/access-key-management-widget": ["@descope/access-key-management-widget@0.5.35", "", { "dependencies": { "@descope/sdk-component-drivers": "0.9.0", "@descope/sdk-helpers": "0.6.0", "@descope/sdk-mixins": "0.16.0", "@descope/web-js-sdk": "1.45.0", "@reduxjs/toolkit": "^2.0.1", "immer": "^10.0.3", "redux": "5.0.1", "redux-thunk": "3.1.0", "reselect": "5.1.1", "tslib": "2.8.1" } }, "sha512-/iUyamSsVLGxqlYnrUYZbFY8YbXb5+1cMXJZBgJ/BXyjdouWssEVv5BRwUiv1qN21V25LOO8MtX/rWMpN1TGug=="],
+
+    "@descope/applications-portal-widget": ["@descope/applications-portal-widget@0.5.18", "", { "dependencies": { "@descope/sdk-component-drivers": "0.9.0", "@descope/sdk-helpers": "0.6.0", "@descope/sdk-mixins": "0.16.0", "@descope/web-js-sdk": "1.45.0", "@reduxjs/toolkit": "^2.0.1", "immer": "^10.0.3", "redux": "5.0.1", "redux-thunk": "3.1.0", "reselect": "5.1.1", "tslib": "2.8.1" } }, "sha512-l1QNO8+N3GnDauxmP/vpKR+F50NvMsY+FeThVCOHQ3Dt50xKdgTYKdJI0Zt9OQCUs8CfBrGACOQ80ika+q/w7Q=="],
+
+    "@descope/audit-management-widget": ["@descope/audit-management-widget@0.5.35", "", { "dependencies": { "@descope/sdk-component-drivers": "0.9.0", "@descope/sdk-helpers": "0.6.0", "@descope/sdk-mixins": "0.16.0", "@descope/web-js-sdk": "1.45.0", "@reduxjs/toolkit": "^2.0.1", "immer": "^10.0.3", "redux": "5.0.1", "redux-thunk": "3.1.0", "reselect": "5.1.1", "tslib": "2.8.1" } }, "sha512-Bj3PBH1RIpbD0qBqdxd7FIHvNYUlsw5a5pPC+lxamUxmfTXis61s0toifbU90UMNJM4P+cBL0A8OaMEp2IA9lA=="],
+
     "@descope/core-js-sdk": ["@descope/core-js-sdk@2.57.0", "", { "dependencies": { "jwt-decode": "4.0.0" } }, "sha512-dNvmlyz81VNqmZ699GdhucXQD15kaX3by9086bGR6zWHHVlsenHxW9kDpLoKPoWsKkXxvUq0Ysh9bi+6+A4LyQ=="],
 
+    "@descope/escape-markdown": ["@descope/escape-markdown@0.1.6", "", {}, "sha512-3ENrye8fyyAp88w8OoKGsEl/kH0GgcrPiDRoOajhCODOJnoJ8P/4/giBEjWZV/FKllW4Z5mSXGACEmlINOZLCA=="],
+
     "@descope/node-sdk": ["@descope/node-sdk@1.10.0", "", { "dependencies": { "@descope/core-js-sdk": "2.57.0", "cross-fetch": "^4.0.0", "jose": "5.2.2", "tslib": "^2.0.0" } }, "sha512-v4kII4vcCdQO/ootlGpB97ovjTwE3Z2S0MmIF5j7kgXQIPTUM01fOsbAaPPUn5lXX7muD2VcsDs6Ic1k2yQjrA=="],
+
+    "@descope/outbound-applications-widget": ["@descope/outbound-applications-widget@0.2.23", "", { "dependencies": { "@descope/sdk-component-drivers": "0.9.0", "@descope/sdk-helpers": "0.6.0", "@descope/sdk-mixins": "0.16.0", "@descope/web-component": "3.56.0", "@descope/web-js-sdk": "1.45.0", "@reduxjs/toolkit": "^2.0.1", "immer": "^10.0.3", "redux": "5.0.1", "redux-thunk": "3.1.0", "reselect": "5.1.1", "tslib": "2.8.1" } }, "sha512-E5YvEg0POBsksXiCSzABTbBj+H8RVinQ4pDTJFKySmk9FtkFppNhWqv2c1xytkoJrrrTIzovRPNMlSTRFFlm1g=="],
+
+    "@descope/react-sdk": ["@descope/react-sdk@2.26.7", "", { "dependencies": { "@descope/access-key-management-widget": "0.5.35", "@descope/applications-portal-widget": "0.5.18", "@descope/audit-management-widget": "0.5.35", "@descope/core-js-sdk": "2.57.0", "@descope/outbound-applications-widget": "0.2.23", "@descope/role-management-widget": "0.5.27", "@descope/sdk-helpers": "0.6.0", "@descope/tenant-profile-widget": "0.5.23", "@descope/user-management-widget": "0.11.12", "@descope/user-profile-widget": "0.9.7", "@descope/web-component": "3.56.0", "@descope/web-js-sdk": "1.45.0" }, "peerDependencies": { "@types/react": ">=16", "react": ">=16" } }, "sha512-yrCuHKME+qtvyODcqFOQdLLZFL1Fx9spc3IB4koKdkkvY3QHbjCgvb53EHaHyyWd9BzqMz7A5UXUQgb/ZgFxBA=="],
+
+    "@descope/role-management-widget": ["@descope/role-management-widget@0.5.27", "", { "dependencies": { "@descope/sdk-component-drivers": "0.9.0", "@descope/sdk-helpers": "0.6.0", "@descope/sdk-mixins": "0.16.0", "@descope/web-js-sdk": "1.45.0", "@reduxjs/toolkit": "^2.0.1", "immer": "^10.0.3", "redux": "5.0.1", "redux-thunk": "3.1.0", "reselect": "5.1.1", "tslib": "2.8.1" } }, "sha512-eceZOV7blCl02xfoiDF077tlypLsDzFID9tWX2KmTEzlE/s3r7/+VSd9ZForAqfwritFtntxLpLdaVKZAYbQGw=="],
+
+    "@descope/sdk-component-drivers": ["@descope/sdk-component-drivers@0.9.0", "", { "dependencies": { "@descope/sdk-helpers": "0.6.0", "tslib": "2.8.1" } }, "sha512-BYvIQd66vmyXM+uPePGZALIKqaCInrLh++XKiL1xHFjJgd7PQ+74nXkYE2r+VVteXFk0HpVNI7zBx6iejirJwg=="],
+
+    "@descope/sdk-helpers": ["@descope/sdk-helpers@0.6.0", "", { "dependencies": { "tslib": "2.8.1" } }, "sha512-0zoIYnGJsJCYcMXdQOWp5j1KUgQfcosoDEtiGMsr4PlQCbWpLme4Ma+OY6DJ/BsMbuFcpbSMzvi2tJyVnMQF1w=="],
+
+    "@descope/sdk-mixins": ["@descope/sdk-mixins@0.16.0", "", { "dependencies": { "@descope/sdk-component-drivers": "0.9.0", "@descope/sdk-helpers": "0.6.0", "tslib": "2.8.1" }, "peerDependencies": { "@reduxjs/toolkit": "^2.0.1", "immer": "^10.0.3", "redux": "5.0.1", "redux-thunk": "3.1.0" } }, "sha512-+mTddi0ISl3YZxadpWyd5Jmme+5JLltloPJt3GMcpUbJ4ELTK1yICwTE/0TXGf5KZAempOXhtxpMCdbweBaFMw=="],
+
+    "@descope/tenant-profile-widget": ["@descope/tenant-profile-widget@0.5.23", "", { "dependencies": { "@descope/sdk-component-drivers": "0.9.0", "@descope/sdk-helpers": "0.6.0", "@descope/sdk-mixins": "0.16.0", "@descope/web-component": "3.56.0", "@descope/web-js-sdk": "1.45.0", "@reduxjs/toolkit": "^2.0.1", "immer": "^10.0.3", "redux": "5.0.1", "redux-thunk": "3.1.0", "reselect": "5.1.1", "tslib": "2.8.1" }, "optionalDependencies": { "@descope/core-js-sdk": "2.57.0" } }, "sha512-34Vsd5YMneMFJFiCRk/ukBPhxNOHdUWKzCguGVyYwK842x30aO+zVQyo1X9pMiAXi9jdt+V866gCBSOj9Rk89w=="],
+
+    "@descope/user-management-widget": ["@descope/user-management-widget@0.11.12", "", { "dependencies": { "@descope/sdk-component-drivers": "0.9.0", "@descope/sdk-helpers": "0.6.0", "@descope/sdk-mixins": "0.16.0", "@descope/web-component": "3.56.0", "@descope/web-js-sdk": "1.45.0", "@reduxjs/toolkit": "^2.0.1", "immer": "^10.0.3", "libphonenumber-js": "1.11.17", "redux": "5.0.1", "redux-thunk": "3.1.0", "reselect": "5.1.1", "tslib": "2.8.1" } }, "sha512-Rus8VvhpG7U2JjEjT/B4ycm9rZHGxeNxpsK6dZ3y0iI7GPXHPUDMrs/8wYHd8MZpUuH5Z8m/bzjNfoiLSK0IlQ=="],
+
+    "@descope/user-profile-widget": ["@descope/user-profile-widget@0.9.7", "", { "dependencies": { "@descope/sdk-component-drivers": "0.9.0", "@descope/sdk-helpers": "0.6.0", "@descope/sdk-mixins": "0.16.0", "@descope/web-component": "3.56.0", "@descope/web-js-sdk": "1.45.0", "@reduxjs/toolkit": "^2.0.1", "immer": "^10.0.3", "redux": "5.0.1", "redux-thunk": "3.1.0", "reselect": "5.1.1", "tslib": "2.8.1" }, "optionalDependencies": { "@descope/core-js-sdk": "2.57.0" } }, "sha512-7AS37R/fq88BuJlbGVMhsUSB+hS6Zx/ua49AWwMPqpApI5vLXxHwws7jFIPBkyOMJnIU+oPH4vpA5upw3DbKYw=="],
+
+    "@descope/web-component": ["@descope/web-component@3.56.0", "", { "dependencies": { "@descope/escape-markdown": "0.1.6", "@descope/sdk-helpers": "0.6.0", "@descope/sdk-mixins": "0.16.0", "@descope/web-js-sdk": "1.45.0", "@fingerprintjs/fingerprintjs-pro": "3.11.6", "tslib": "2.8.1" } }, "sha512-FcDTZAdL2RtFFir88O7SNWw+BNOGk/vAkcgaaz9Gz4AZLk0jXH9l4ashrnwUePB7lv0Hphjc+KHuHZ+Uga3+0A=="],
+
+    "@descope/web-js-sdk": ["@descope/web-js-sdk@1.45.0", "", { "dependencies": { "@descope/core-js-sdk": "2.57.0", "@fingerprintjs/fingerprintjs-pro": "3.11.6", "js-cookie": "3.0.5", "jwt-decode": "4.0.0", "tslib": "2.8.1" } }, "sha512-Ptx6adEXRnc9TaC1Hdi6HvAovU6IVZGPtcY6TvijuksvPDW5rVSz5vjVmuJVgft4b9DdMDfoO0gk1M1EUjD6QA=="],
 
     "@drizzle-team/brocli": ["@drizzle-team/brocli@0.10.2", "", {}, "sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w=="],
 
@@ -309,6 +340,8 @@
     "@expressive-code/plugin-shiki": ["@expressive-code/plugin-shiki@0.41.7", "", { "dependencies": { "@expressive-code/core": "^0.41.7", "shiki": "^3.2.2" } }, "sha512-DL605bLrUOgqTdZ0Ot5MlTaWzppRkzzqzeGEu7ODnHF39IkEBbFdsC7pbl3LbUQ1DFtnfx6rD54k/cdofbW6KQ=="],
 
     "@expressive-code/plugin-text-markers": ["@expressive-code/plugin-text-markers@0.41.7", "", { "dependencies": { "@expressive-code/core": "^0.41.7" } }, "sha512-Ewpwuc5t6eFdZmWlFyeuy3e1PTQC0jFvw2Q+2bpcWXbOZhPLsT7+h8lsSIJxb5mS7wZko7cKyQ2RLYDyK6Fpmw=="],
+
+    "@fingerprintjs/fingerprintjs-pro": ["@fingerprintjs/fingerprintjs-pro@3.11.6", "", { "dependencies": { "tslib": "^2.4.1" } }, "sha512-ohN4lorSzV0fzs8fELWuO3bvMMfzF5qyQSOWBvqwGaq6yPP+XSRJOeFdFFiwAqFWYJDEoDOlQluGfa0Rfk7mAQ=="],
 
     "@hono/zod-validator": ["@hono/zod-validator@0.7.6", "", { "peerDependencies": { "hono": ">=3.9.0", "zod": "^3.25.0 || ^4.0.0" } }, "sha512-Io1B6d011Gj1KknV4rXYz4le5+5EubcWEU/speUjuw9XMMIaP3n78yXLhjd2A3PXaXaUwEAluOiAyLqhBEJgsw=="],
 
@@ -390,6 +423,8 @@
 
     "@pagefind/windows-x64": ["@pagefind/windows-x64@1.4.0", "", { "os": "win32", "cpu": "x64" }, "sha512-NkT+YAdgS2FPCn8mIA9bQhiBs+xmniMGq1LFPDhcFn0+2yIUEiIG06t7bsZlhdjknEQRTSdT7YitP6fC5qwP0g=="],
 
+    "@reduxjs/toolkit": ["@reduxjs/toolkit@2.11.2", "", { "dependencies": { "@standard-schema/spec": "^1.0.0", "@standard-schema/utils": "^0.3.0", "immer": "^11.0.0", "redux": "^5.0.1", "redux-thunk": "^3.1.0", "reselect": "^5.1.0" }, "peerDependencies": { "react": "^16.9.0 || ^17.0.0 || ^18 || ^19", "react-redux": "^7.2.1 || ^8.1.3 || ^9.0.0" }, "optionalPeers": ["react", "react-redux"] }, "sha512-Kd6kAHTA6/nUpp8mySPqj3en3dm0tdMIgbttnQ1xFMVpufoj+ADi8pXLBsd4xzTRHQa7t/Jv8W5UnCuW4kuWMQ=="],
+
     "@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.0-rc.3", "", {}, "sha512-eybk3TjzzzV97Dlj5c+XrBFW57eTNhzod66y9HrBlzJ6NsCrWCp/2kaPS3K9wJmurBC0Tdw4yPjXKZqlznim3Q=="],
 
     "@rollup/pluginutils": ["@rollup/pluginutils@5.3.0", "", { "dependencies": { "@types/estree": "^1.0.0", "estree-walker": "^2.0.2", "picomatch": "^4.0.2" }, "peerDependencies": { "rollup": "^1.20.0||^2.0.0||^3.0.0||^4.0.0" }, "optionalPeers": ["rollup"] }, "sha512-5EdhGZtnu3V88ces7s53hhfK5KSASnJZv8Lulpc04cWO3REESroJXg73DFsOmgbU2BhwV0E20bu2IDZb3VKW4Q=="],
@@ -457,6 +492,10 @@
     "@shikijs/types": ["@shikijs/types@3.23.0", "", { "dependencies": { "@shikijs/vscode-textmate": "^10.0.2", "@types/hast": "^3.0.4" } }, "sha512-3JZ5HXOZfYjsYSk0yPwBrkupyYSLpAE26Qc0HLghhZNGTZg/SKxXIIgoxOpmmeQP0RRSDJTk1/vPfw9tbw+jSQ=="],
 
     "@shikijs/vscode-textmate": ["@shikijs/vscode-textmate@10.0.2", "", {}, "sha512-83yeghZ2xxin3Nj8z1NMd/NCuca+gsYXswywDy5bHvwlWL8tpTQmzGeUuHd9FC3E/SBEMvzJRwWEOz5gGes9Qg=="],
+
+    "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
+
+    "@standard-schema/utils": ["@standard-schema/utils@0.3.0", "", {}, "sha512-e7Mew686owMaPJVNNLs55PUvgz371nKgwsc4vxE49zsODpJEnxgxRo2y/OKrqueavXgZNMDVj3DdHFlaSAeU8g=="],
 
     "@strata/api": ["@strata/api@workspace:apps/api"],
 
@@ -834,6 +873,8 @@
 
     "i18next": ["i18next@23.16.8", "", { "dependencies": { "@babel/runtime": "^7.23.2" } }, "sha512-06r/TitrM88Mg5FdUXAKL96dJMzgqLE5dv3ryBAra4KCwD9mJ4ndOTS95ZuymIGoE+2hzfdaMak2X11/es7ZWg=="],
 
+    "immer": ["immer@10.2.0", "", {}, "sha512-d/+XTN3zfODyjr89gM3mPq1WNX2B8pYsu7eORitdwyA2sBubnTl3laYlBk4sXY5FUa5qTZGBDPJICVbvqzjlbw=="],
+
     "import-meta-resolve": ["import-meta-resolve@4.2.0", "", {}, "sha512-Iqv2fzaTQN28s/FwZAoFq0ZSs/7hMAHJVX+w8PZl3cY19Pxk6jFFalxQoIfW2826i/fDLXv8IiEZRIT0lDuWcg=="],
 
     "inline-style-parser": ["inline-style-parser@0.2.7", "", {}, "sha512-Nb2ctOyNR8DqQoR0OwRG95uNWIC0C1lCgf5Naz5H6Ji72KZ8OcFZLz2P5sNgwlyoJ8Yif11oMuYs5pBQa86csA=="],
@@ -866,6 +907,8 @@
 
     "jose": ["jose@5.2.2", "", {}, "sha512-/WByRr4jDcsKlvMd1dRJnPfS1GVO3WuKyaurJ/vvXcOaUQO8rnNObCQMlv/5uCceVQIq5Q4WLF44ohsdiTohdg=="],
 
+    "js-cookie": ["js-cookie@3.0.5", "", {}, "sha512-cEiJEAEoIbWfCZYKWhVwFuvPX1gETRYPw6LlaTKoxD3s2AkXzkCjnp6h0V77ozyqj0jakteJ4YqDJT830+lVGw=="],
+
     "js-tokens": ["js-tokens@4.0.0", "", {}, "sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ=="],
 
     "js-yaml": ["js-yaml@4.1.1", "", { "dependencies": { "argparse": "^2.0.1" }, "bin": { "js-yaml": "bin/js-yaml.js" } }, "sha512-qQKT4zQxXl8lLwBtHMWwaTcGfFOZviOJet3Oy/xmGk2gZH677CJM9EvtfdSkgWcATZhj/55JZ0rmy3myCT5lsA=="],
@@ -879,6 +922,8 @@
     "kleur": ["kleur@3.0.3", "", {}, "sha512-eTIzlVOSUR+JxdDFepEYcBMtZ9Qqdef+rnzWdRZuMbOywu5tO2w2N7rqjoANZ5k9vywhL6Br1VRjUIgTQx4E8w=="],
 
     "klona": ["klona@2.0.6", "", {}, "sha512-dhG34DXATL5hSxJbIexCft8FChFXtmskoZYnoPWjXQuebWYCNkVeV3KkGegCK9CP1oswI/vQibS2GY7Em/sJJA=="],
+
+    "libphonenumber-js": ["libphonenumber-js@1.11.17", "", {}, "sha512-Jr6v8thd5qRlOlc6CslSTzGzzQW03uiscab7KHQZX1Dfo4R6n6FDhZ0Hri6/X7edLIDv9gl4VMZXhxTjLnl0VQ=="],
 
     "lightningcss": ["lightningcss@1.31.1", "", { "dependencies": { "detect-libc": "^2.0.3" }, "optionalDependencies": { "lightningcss-android-arm64": "1.31.1", "lightningcss-darwin-arm64": "1.31.1", "lightningcss-darwin-x64": "1.31.1", "lightningcss-freebsd-x64": "1.31.1", "lightningcss-linux-arm-gnueabihf": "1.31.1", "lightningcss-linux-arm64-gnu": "1.31.1", "lightningcss-linux-arm64-musl": "1.31.1", "lightningcss-linux-x64-gnu": "1.31.1", "lightningcss-linux-x64-musl": "1.31.1", "lightningcss-win32-arm64-msvc": "1.31.1", "lightningcss-win32-x64-msvc": "1.31.1" } }, "sha512-l51N2r93WmGUye3WuFoN5k10zyvrVs0qfKBhyC5ogUQ6Ew6JUSswh78mbSO+IU3nTWsyOArqPCcShdQSadghBQ=="],
 
@@ -1110,6 +1155,10 @@
 
     "recma-stringify": ["recma-stringify@1.0.0", "", { "dependencies": { "@types/estree": "^1.0.0", "estree-util-to-js": "^2.0.0", "unified": "^11.0.0", "vfile": "^6.0.0" } }, "sha512-cjwII1MdIIVloKvC9ErQ+OgAtwHBmcZ0Bg4ciz78FtbT8In39aAYbaA7zvxQ61xVMSPE8WxhLwLbhif4Js2C+g=="],
 
+    "redux": ["redux@5.0.1", "", {}, "sha512-M9/ELqF6fy8FwmkpnF0S3YKOqMyoWJ4+CS5Efg2ct3oY9daQvd/Pc71FpGZsVsbl3Cpb+IIcjBDUnnyBdQbq4w=="],
+
+    "redux-thunk": ["redux-thunk@3.1.0", "", { "peerDependencies": { "redux": "^5.0.0" } }, "sha512-NW2r5T6ksUKXCabzhL9z+h206HQw/NJkcLm1GPImRQ8IzfXwRGqjVhKJGauHirT0DAuyy6hjdnMZaRoAcy0Klw=="],
+
     "regex": ["regex@6.1.0", "", { "dependencies": { "regex-utilities": "^2.3.0" } }, "sha512-6VwtthbV4o/7+OaAF9I5L5V3llLEsoPyq9P1JVXkedTP33c7MfCG0/5NOPcSJn0TzXcG9YUrR0gQSWioew3LDg=="],
 
     "regex-recursion": ["regex-recursion@6.0.2", "", { "dependencies": { "regex-utilities": "^2.3.0" } }, "sha512-0YCaSCq2VRIebiaUviZNs0cBz1kg5kVS2UKUfNIx8YVs1cN3AV7NTctO5FOKBA+UT2BPJIWZauYHPqJODG50cg=="],
@@ -1143,6 +1192,8 @@
     "remark-smartypants": ["remark-smartypants@3.0.2", "", { "dependencies": { "retext": "^9.0.0", "retext-smartypants": "^6.0.0", "unified": "^11.0.4", "unist-util-visit": "^5.0.0" } }, "sha512-ILTWeOriIluwEvPjv67v7Blgrcx+LZOkAUVtKI3putuhlZm84FnqDORNXPPm+HY3NdZOMhyDwZ1E+eZB/Df5dA=="],
 
     "remark-stringify": ["remark-stringify@11.0.0", "", { "dependencies": { "@types/mdast": "^4.0.0", "mdast-util-to-markdown": "^2.0.0", "unified": "^11.0.0" } }, "sha512-1OSmLd3awB/t8qdoEOMazZkNsfVTeY4fTsgzcQFdXNq8ToTN4ZGwrMnlda4K6smTFKD+GRV6O48i6Z4iKgPPpw=="],
+
+    "reselect": ["reselect@5.1.1", "", {}, "sha512-K/BG6eIky/SBpzfHZv/dd+9JBFiS4SWV7FIujVyJRux6e45+73RaUHXLmIR1f7WOMaQ0U1km6qwklRQxpJJY0w=="],
 
     "resolve-pkg-maps": ["resolve-pkg-maps@1.0.0", "", {}, "sha512-seS2Tj26TBVOC2NIc2rOe2y2ZO7efxITtLZcGSOnHHNOQ7CkiUBfw0Iw2ck6xkIhPwLhKNLS8BO+hEpngQlqzw=="],
 
@@ -1313,6 +1364,8 @@
     "@babel/helper-compilation-targets/semver": ["semver@6.3.1", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA=="],
 
     "@esbuild-kit/core-utils/esbuild": ["esbuild@0.18.20", "", { "optionalDependencies": { "@esbuild/android-arm": "0.18.20", "@esbuild/android-arm64": "0.18.20", "@esbuild/android-x64": "0.18.20", "@esbuild/darwin-arm64": "0.18.20", "@esbuild/darwin-x64": "0.18.20", "@esbuild/freebsd-arm64": "0.18.20", "@esbuild/freebsd-x64": "0.18.20", "@esbuild/linux-arm": "0.18.20", "@esbuild/linux-arm64": "0.18.20", "@esbuild/linux-ia32": "0.18.20", "@esbuild/linux-loong64": "0.18.20", "@esbuild/linux-mips64el": "0.18.20", "@esbuild/linux-ppc64": "0.18.20", "@esbuild/linux-riscv64": "0.18.20", "@esbuild/linux-s390x": "0.18.20", "@esbuild/linux-x64": "0.18.20", "@esbuild/netbsd-x64": "0.18.20", "@esbuild/openbsd-x64": "0.18.20", "@esbuild/sunos-x64": "0.18.20", "@esbuild/win32-arm64": "0.18.20", "@esbuild/win32-ia32": "0.18.20", "@esbuild/win32-x64": "0.18.20" }, "bin": { "esbuild": "bin/esbuild" } }, "sha512-ceqxoedUrcayh7Y7ZX6NdbbDzGROiyVBgC4PriJThBKSVPWnnFHZAkfI1lJT8QFkOwH4qOS2SJkS4wvpGl8BpA=="],
+
+    "@reduxjs/toolkit/immer": ["immer@11.1.4", "", {}, "sha512-XREFCPo6ksxVzP4E0ekD5aMdf8WMwmdNaz6vuvxgI40UaEiu6q3p8X52aU6GdyvLY3XXX/8R7JOTXStz/nBbRw=="],
 
     "@rollup/pluginutils/estree-walker": ["estree-walker@2.0.2", "", {}, "sha512-Rfkk/Mp/DL7JVje3u18FxFujQlTNR2q6QfMSMB7AvCBx91NGj/ba3kCfza0f6dVDbw7YlRf/nDrn7pQrCCyQ/w=="],
 

@@ -19,16 +19,16 @@ const config = loadConfig();
 const { db, client } = createDb({ url: config.databaseUrl });
 
 // Services
-const auth = createAuthService(
+const authConfig =
 	config.authMode === "dev"
 		? {
-				mode: "dev",
+				mode: "dev" as const,
 				token: config.devAuthToken as string,
 				userLogin: config.devUserLogin,
 				orgLogin: config.devOrgLogin,
 			}
-		: { mode: "descope", projectId: config.descopeProjectId as string },
-);
+		: { mode: "descope" as const, projectId: config.descopeProjectId as string };
+const auth = createAuthService(authConfig);
 
 const storage = createBlobStorage(
 	config.blobBackend === "local"
@@ -50,7 +50,7 @@ const stacksService = new PostgresStacksService({ db });
 const updatesService = new PostgresUpdatesService({ db, storage, crypto });
 
 // HTTP
-const app = createApp({ auth, db, stacks: stacksService, updates: updatesService });
+const app = createApp({ auth, authConfig, db, stacks: stacksService, updates: updatesService });
 
 const [, portStr] = config.listenAddr.split(":");
 const port = Number.parseInt(portStr || "9090", 10);

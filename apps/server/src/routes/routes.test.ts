@@ -106,9 +106,17 @@ function mockUpdatesService(): UpdatesService {
 // ============================================================================
 
 describe("@strata/server routes", () => {
-	function makeApp() {
+	function makeApp(
+		authConfig: import("@strata/auth").AuthConfig = {
+			mode: "dev",
+			token: "valid-token",
+			userLogin: "test-user",
+			orgLogin: "test-org",
+		},
+	) {
 		return createApp({
 			auth: mockAuthService(),
+			authConfig,
 			db: {} as Database,
 			stacks: mockStacksService(),
 			updates: mockUpdatesService(),
@@ -147,6 +155,22 @@ describe("@strata/server routes", () => {
 			expect(res.status).toBe(200);
 			const body = await res.json();
 			expect(body).toHaveProperty("latestVersion");
+		});
+
+		test("GET /api/auth/config returns dev mode config", async () => {
+			const app = makeApp();
+			const res = await app.request("/api/auth/config");
+			expect(res.status).toBe(200);
+			const body = await res.json();
+			expect(body).toEqual({ mode: "dev" });
+		});
+
+		test("GET /api/auth/config returns descope mode config with projectId", async () => {
+			const app = makeApp({ mode: "descope", projectId: "P3test123" });
+			const res = await app.request("/api/auth/config");
+			expect(res.status).toBe(200);
+			const body = await res.json();
+			expect(body).toEqual({ mode: "descope", projectId: "P3test123" });
 		});
 	});
 
