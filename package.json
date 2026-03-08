@@ -30,25 +30,20 @@
 	},
 	"scripts": {
 		"prepare": "husky",
-
 		"dev": "bun run dev:deps && trap 'kill 0' EXIT && bun --watch apps/server/src/index.ts & bun run --cwd apps/ui dev & mise exec -- caddy run --config Caddyfile & wait",
 		"dev:deps": "docker compose up -d && printf 'Waiting for postgres' && until docker compose exec -T postgres pg_isready -U strata -q 2>/dev/null; do printf '.'; sleep 1; done && echo ' ready'",
 		"dev:down": "docker compose down -v",
-
-		"check": "biome check . && bun run typecheck && bun test --recursive",
+		"check": "biome check . && bun run typecheck && bun test packages/ apps/",
 		"check:ui": "biome check apps/ui/ && bun run --cwd apps/ui typecheck",
 		"typecheck": "tsc --build",
 		"types:generate": "cd packages/types/tygo && go mod tidy && tygo generate && sed -i '' 's/export type UpdateStatus = typeof UpdateStatusSucceeded | typeof UpdateStatusFailed | typeof UpdateStatusCancelled;/export type UpdateStatus = string;/' ../src/pulumi.gen.ts",
-		"e2e": "bun test e2e/",
+		"e2e": "bun test --timeout 120000 --preload ./e2e/setup.ts e2e/",
 		"check:all": "bun run check && bun run e2e",
-
 		"db:generate": "drizzle-kit generate --config packages/db/drizzle.config.ts",
 		"db:migrate": "drizzle-kit migrate --config packages/db/drizzle.config.ts",
-
 		"docker:build": "docker build -t strata:dev .",
 		"docker:cluster": "docker compose --profile cluster up --build",
 		"docker:cluster:down": "docker compose --profile cluster down -v",
-
 		"docs:dev": "cd docs && npm run dev",
 		"docs:build": "cd docs && npm run build"
 	},

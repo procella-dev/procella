@@ -12,10 +12,8 @@ import { SQL } from "bun";
 
 export const TEST_PORT = 18_080;
 export const TEST_TOKEN = "devtoken123";
-export const TEST_DB_URL =
-	process.env.STRATA_DATABASE_URL ??
-	"postgres://strata:strata@localhost:5432/strata?sslmode=disable";
-export const BACKEND_URL = `http://localhost:${TEST_PORT}`;
+export const TEST_DB_URL = "postgres://strata:strata@localhost:5432/strata?sslmode=disable";
+export const BACKEND_URL = `http://127.0.0.1:${TEST_PORT}`;
 export const PROJECT_ROOT = path.resolve(import.meta.dir, "..");
 
 // ============================================================================
@@ -25,16 +23,15 @@ export const PROJECT_ROOT = path.resolve(import.meta.dir, "..");
 /** Drop all old tables and recreate schema from Drizzle migration. */
 export async function resetDatabase(): Promise<void> {
 	const sql = new SQL({ url: TEST_DB_URL });
-	// Drop everything — old Go schema + new TS schema
+	await sql.unsafe("DROP SCHEMA IF EXISTS drizzle CASCADE");
 	await sql.unsafe("DROP SCHEMA public CASCADE");
 	await sql.unsafe("CREATE SCHEMA public");
 	sql.close();
 
-	// Run Drizzle migrations to create fresh schema
 	const proc = Bun.spawn(
 		["bunx", "drizzle-kit", "migrate", "--config", "packages/db/drizzle.config.ts"],
 		{
-			env: { ...process.env, STRATA_DATABASE_URL: TEST_DB_URL },
+			env: { ...cleanEnv(), STRATA_DATABASE_URL: TEST_DB_URL },
 			stdout: "pipe",
 			stderr: "pipe",
 		},
@@ -54,39 +51,76 @@ export async function truncateTables(): Promise<void> {
 }
 
 // ============================================================================
+// Docker Compose
+// ============================================================================
+
+/** Start postgres via docker compose and wait for it to be ready. */
+export async function ensureDeps(): Promise<void> {
+	const proc = Bun.spawn(["docker", "compose", "up", "-d", "postgres"], {
+		stdout: "pipe",
+		stderr: "pipe",
+		cwd: PROJECT_ROOT,
+	});
+	const exit = await proc.exited;
+	if (exit !== 0) {
+		const stderr = await new Response(proc.stderr).text();
+		throw new Error(`docker compose up failed: ${stderr}`);
+	}
+
+	const start = Date.now();
+	while (Date.now() - start < 30_000) {
+		const pg = Bun.spawn(
+			["docker", "compose", "exec", "-T", "postgres", "pg_isready", "-U", "strata"],
+			{ stdout: "pipe", stderr: "pipe", cwd: PROJECT_ROOT },
+		);
+		if ((await pg.exited) === 0) return;
+		await Bun.sleep(300);
+	}
+	throw new Error("Postgres did not become ready within 30s");
+}
+
+// ============================================================================
 // Temp Directory Helpers
 // ============================================================================
 
-/** Create an isolated PULUMI_HOME temp directory. */
 export async function createPulumiHome(): Promise<string> {
-	return mkdtemp(path.join(tmpdir(), "strata-e2e-pulumi-"));
+	const home = await mkdtemp(path.join(tmpdir(), "strata-e2e-pulumi-"));
+	// Copy plugins from system PULUMI_HOME to avoid GitHub rate limits
+	const systemHome = process.env.PULUMI_HOME ?? path.join(process.env.HOME ?? "", ".pulumi");
+	const systemPlugins = path.join(systemHome, "plugins");
+	const homePlugins = path.join(home, "plugins");
+	try {
+		const cp = Bun.spawn(["cp", "-rf", systemPlugins, homePlugins], {
+			stdout: "pipe",
+			stderr: "pipe",
+		});
+		await cp.exited;
+	} catch {
+		// Ignore if system plugins dir doesn't exist
+	}
+	return home;
 }
 
-/** Remove a temp directory recursively. */
 export async function cleanupDir(dir: string): Promise<void> {
 	await rm(dir, { recursive: true, force: true });
 }
 
-/** Create a temp project dir with a minimal Pulumi.yaml (YAML runtime). */
 export async function newProjectDir(name: string): Promise<string> {
 	const dir = await mkdtemp(path.join(tmpdir(), `strata-e2e-${name}-`));
 	await Bun.write(path.join(dir, "Pulumi.yaml"), `name: ${name}\nruntime: yaml\n`);
 	return dir;
 }
 
-/** Copy a Go example to a temp dir and run `go mod tidy`. */
 export async function copyExampleDir(name: string): Promise<string> {
 	const src = path.join(PROJECT_ROOT, "examples", name);
 	const dir = await mkdtemp(path.join(tmpdir(), `strata-e2e-${name}-`));
 
-	// cp -rf to avoid interactive prompts
 	const cp = Bun.spawn(["cp", "-rf", `${src}/.`, dir], {
 		stdout: "pipe",
 		stderr: "pipe",
 	});
 	await cp.exited;
 
-	// go.sum is gitignored — must regenerate
 	const tidy = Bun.spawn(["go", "mod", "tidy"], {
 		cwd: dir,
 		stdout: "pipe",
@@ -105,10 +139,20 @@ export async function copyExampleDir(name: string): Promise<string> {
 // Server Lifecycle
 // ============================================================================
 
+function cleanEnv(): Record<string, string> {
+	const env: Record<string, string> = {};
+	for (const [key, value] of Object.entries(process.env)) {
+		if (key.startsWith("STRATA_")) continue;
+		if (key.startsWith("AWS_")) continue;
+		if (value !== undefined) env[key] = value;
+	}
+	return env;
+}
+
 export async function startServer(): Promise<Subprocess> {
 	const proc = Bun.spawn(["bun", "run", "apps/server/src/index.ts"], {
 		env: {
-			...process.env,
+			...cleanEnv(),
 			STRATA_LISTEN_ADDR: `:${TEST_PORT}`,
 			STRATA_DATABASE_URL: TEST_DB_URL,
 			STRATA_AUTH_MODE: "dev",
@@ -162,7 +206,7 @@ export interface PulumiOpts {
 export async function pulumi(args: string[], opts?: PulumiOpts): Promise<PulumiResult> {
 	const proc = Bun.spawn(["pulumi", ...args, "--non-interactive"], {
 		env: {
-			...process.env,
+			...cleanEnv(),
 			PULUMI_ACCESS_TOKEN: TEST_TOKEN,
 			PULUMI_BACKEND_URL: BACKEND_URL,
 			PULUMI_CONFIG_PASSPHRASE: "test",
@@ -176,11 +220,25 @@ export async function pulumi(args: string[], opts?: PulumiOpts): Promise<PulumiR
 		stderr: "pipe",
 	});
 
-	const [stdout, stderr] = await Promise.all([
-		new Response(proc.stdout).text(),
-		new Response(proc.stderr).text(),
-	]);
-	const exitCode = await proc.exited;
+	// Collect output chunks to avoid pipe deadlock with large outputs
+	const stdoutChunks: Uint8Array[] = [];
+	const stderrChunks: Uint8Array[] = [];
+
+	const stdoutDone = (async () => {
+		for await (const chunk of proc.stdout) {
+			stdoutChunks.push(chunk);
+		}
+	})();
+	const stderrDone = (async () => {
+		for await (const chunk of proc.stderr) {
+			stderrChunks.push(chunk);
+		}
+	})();
+
+	const [exitCode] = await Promise.all([proc.exited, stdoutDone, stderrDone]);
+	const decoder = new TextDecoder();
+	const stdout = stdoutChunks.map((c) => decoder.decode(c, { stream: true })).join("");
+	const stderr = stderrChunks.map((c) => decoder.decode(c, { stream: true })).join("");
 	return { stdout, stderr, exitCode };
 }
 
@@ -188,7 +246,6 @@ export async function pulumi(args: string[], opts?: PulumiOpts): Promise<PulumiR
 // HTTP API Helpers
 // ============================================================================
 
-/** Make an authenticated API request to the Strata server. */
 export async function apiRequest(
 	path: string,
 	opts?: { method?: string; body?: unknown },

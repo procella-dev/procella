@@ -17,6 +17,7 @@ import {
 } from "../handlers/index.js";
 import {
 	apiAuth,
+	decompress,
 	errorHandler,
 	pulumiAccept,
 	requestLogger,
@@ -41,6 +42,7 @@ export function createApp(deps: {
 	// Global middleware
 	app.use("*", requestLogger());
 	app.use("*", cors());
+	app.use("*", decompress());
 
 	// Create handler instances
 	const health = healthHandlers();
@@ -52,6 +54,11 @@ export function createApp(deps: {
 	const cryptoH = cryptoHandlers(deps.updates);
 	const stateH = stateHandlers(deps.updates, deps.stacks);
 
+	// Middleware instances
+	const withApiAuth = apiAuth(deps.auth);
+	const withPulumiAccept = pulumiAccept();
+	const withUpdateAuth = updateAuth(deps.auth);
+
 	// ========================================================================
 	// Public routes (no auth)
 	// ========================================================================
@@ -61,16 +68,53 @@ export function createApp(deps: {
 	app.get("/api/cli/version", health.cliVersion);
 
 	// ========================================================================
+	// Update-token authenticated routes (during active update execution)
+	// These use "Authorization: update-token <lease-token>" from the CLI.
+	// ========================================================================
+
+	app.patch(
+		"/api/stacks/:org/:project/:stack/update/:updateId/checkpoint",
+		withUpdateAuth,
+		checkpointH.patchCheckpoint,
+	);
+	app.patch(
+		"/api/stacks/:org/:project/:stack/update/:updateId/checkpointverbatim",
+		withUpdateAuth,
+		checkpointH.patchCheckpointVerbatim,
+	);
+	app.post(
+		"/api/stacks/:org/:project/:stack/update/:updateId/checkpoint/delta",
+		withUpdateAuth,
+		checkpointH.patchCheckpointDelta,
+	);
+	app.post(
+		"/api/stacks/:org/:project/:stack/update/:updateId/events/batch",
+		withUpdateAuth,
+		eventH.postEvents,
+	);
+	app.post(
+		"/api/stacks/:org/:project/:stack/update/:updateId/renew_lease",
+		withUpdateAuth,
+		eventH.renewLease,
+	);
+	app.post(
+		"/api/stacks/:org/:project/:stack/update/:updateId/complete",
+		withUpdateAuth,
+		updateH.completeUpdate,
+	);
+
+	// ========================================================================
 	// API-token authenticated routes
 	// ========================================================================
 
 	const api = new Hono<Env>();
-	api.use("*", apiAuth(deps.auth));
-	api.use("*", pulumiAccept());
+	api.use("*", withApiAuth);
+	api.use("*", withPulumiAccept);
 
 	// User
 	api.get("/user", user.getCurrentUser);
 	api.get("/user/stacks", user.getUserStacks);
+	api.get("/user/organizations/:orgName", user.getOrganization);
 
 	// Stacks (specific routes first to avoid :kind catch-all)
 	api.get("/stacks", stackH.listStacks);
@@ -79,7 +123,6 @@ export function createApp(deps: {
 
 	// Update lifecycle (API token)
 	api.post("/stacks/:org/:project/:stack/update/:updateId", updateH.startUpdate);
-	api.post("/stacks/:org/:project/:stack/update/:updateId/complete", updateH.completeUpdate);
 	api.post("/stacks/:org/:project/:stack/update/:updateId/cancel", updateH.cancelUpdate);
 	api.get("/stacks/:org/:project/:stack/update/:updateId", updateH.getUpdate);
 	api.get("/stacks/:org/:project/:stack/update/:updateId/events", eventH.getUpdateEvents);
@@ -102,32 +145,9 @@ export function createApp(deps: {
 	api.post("/stacks/:org/:project/:stack", stackH.createStack);
 	api.get("/stacks/:org/:project/:stack", stackH.getStack);
 	api.delete("/stacks/:org/:project/:stack", stackH.deleteStack);
+	// 2-segment stack create: POST /api/stacks/:org/:project (stack name in body)
+	api.post("/stacks/:org/:project", stackH.createStack);
 
 	app.route("/api", api);
-
-	// ========================================================================
-	// Update-token authenticated routes (during active update execution)
-	// ========================================================================
-
-	const updateExec = new Hono<Env>();
-	updateExec.use("*", updateAuth(deps.auth));
-
-	updateExec.patch(
-		"/stacks/:org/:project/:stack/update/:updateId/checkpoint",
-		checkpointH.patchCheckpoint,
-	);
-	updateExec.patch(
-		"/stacks/:org/:project/:stack/update/:updateId/checkpointverbatim",
-		checkpointH.patchCheckpointVerbatim,
-	);
-	updateExec.post(
-		"/stacks/:org/:project/:stack/update/:updateId/checkpoint/delta",
-		checkpointH.patchCheckpointDelta,
-	);
-	updateExec.post("/stacks/:org/:project/:stack/update/:updateId/events/batch", eventH.postEvents);
-	updateExec.post("/stacks/:org/:project/:stack/update/:updateId/renew_lease", eventH.renewLease);
-
-	app.route("/api", updateExec);
-
 	return app;
 }

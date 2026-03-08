@@ -223,7 +223,7 @@ describe("@strata/updates helpers", () => {
 			expect(mapStatusToApiStatus("running")).toBe("in-progress");
 			expect(mapStatusToApiStatus("succeeded")).toBe("succeeded");
 			expect(mapStatusToApiStatus("failed")).toBe("failed");
-			expect(mapStatusToApiStatus("cancelled")).toBe("failed");
+			expect(mapStatusToApiStatus("cancelled")).toBe("cancelled");
 		});
 
 		test("returns unknown status as-is", () => {

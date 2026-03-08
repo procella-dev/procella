@@ -11,9 +11,8 @@ import {
 	pulumi,
 	truncateTables,
 } from "./helpers.js";
-import "./setup.js";
 
-const RANDOM_PET_PROGRAM = `name: state-test
+const RANDOM_PET_PROGRAM = `name: state-proj
 runtime: yaml
 resources:
   pet:

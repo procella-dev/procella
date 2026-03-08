@@ -10,7 +10,6 @@ import {
 	pulumi,
 	truncateTables,
 } from "./helpers.js";
-import "./setup.js";
 
 describe("encrypt and decrypt", () => {
 	let pulumiHome: string;
@@ -89,7 +88,13 @@ describe("encrypt and decrypt", () => {
 		});
 		expect(decryptRes.status).toBe(200);
 		const { plaintexts: decrypted } = await decryptRes.json();
-		expect(decrypted).toEqual(plaintexts);
+		// Response is a map: ciphertext → plaintext
+		expect(typeof decrypted).toBe("object");
+		expect(Object.keys(decrypted)).toHaveLength(2);
+		// Verify each ciphertext maps back to its original plaintext
+		for (let i = 0; i < ciphertexts.length; i++) {
+			expect(decrypted[ciphertexts[i]]).toBe(plaintexts[i]);
+		}
 	});
 
 	test("encrypted value differs from plaintext", async () => {

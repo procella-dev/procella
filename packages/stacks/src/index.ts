@@ -139,40 +139,54 @@ export class PostgresStacksService implements StacksService {
 	): Promise<StackInfo> {
 		const tags = buildStackTags(project, stack, userTags);
 
-		return this.db.transaction(async (tx) => {
-			// Auto-create project (INSERT ON CONFLICT DO NOTHING)
-			await tx
-				.insert(projects)
-				.values({ tenantId, name: project })
-				.onConflictDoNothing({
-					target: [projects.tenantId, projects.name],
-				});
+		try {
+			return await this.db.transaction(async (tx) => {
+				// Auto-create project (INSERT ON CONFLICT DO NOTHING)
+				await tx
+					.insert(projects)
+					.values({ tenantId, name: project })
+					.onConflictDoNothing({
+						target: [projects.tenantId, projects.name],
+					});
 
-			// Fetch the project (may have existed already)
-			const [proj] = await tx
-				.select({ id: projects.id })
-				.from(projects)
-				.where(and(eq(projects.tenantId, tenantId), eq(projects.name, project)));
+				// Fetch the project (may have existed already)
+				const [proj] = await tx
+					.select({ id: projects.id })
+					.from(projects)
+					.where(and(eq(projects.tenantId, tenantId), eq(projects.name, project)));
 
-			// Insert the stack
-			const [row] = await tx
-				.insert(stacks)
-				.values({ projectId: proj.id, name: stack, tags })
-				.returning();
+				// Insert the stack
+				const [row] = await tx
+					.insert(stacks)
+					.values({ projectId: proj.id, name: stack, tags })
+					.returning();
 
-			return {
-				id: row.id,
-				projectId: proj.id,
-				tenantId,
-				orgName: tenantId,
-				projectName: project,
-				stackName: stack,
-				tags: (row.tags ?? {}) as Record<string, string>,
-				activeUpdateId: row.activeUpdateId,
-				createdAt: row.createdAt,
-				updatedAt: row.updatedAt,
-			};
-		});
+				return {
+					id: row.id,
+					projectId: proj.id,
+					tenantId,
+					orgName: tenantId,
+					projectName: project,
+					stackName: stack,
+					tags: (row.tags ?? {}) as Record<string, string>,
+					activeUpdateId: row.activeUpdateId,
+					createdAt: row.createdAt,
+					updatedAt: row.updatedAt,
+				};
+			});
+		} catch (err: unknown) {
+			// Drizzle wraps Postgres errors in DrizzleQueryError with cause
+			const pgErr = err instanceof Error && err.cause instanceof Error ? err.cause : err;
+			if (
+				typeof pgErr === "object" &&
+				pgErr !== null &&
+				"errno" in pgErr &&
+				(pgErr as { errno: string }).errno === "23505"
+			) {
+				throw new StackAlreadyExistsError(tenantId, project, stack);
+			}
+			throw err;
+		}
 	}
 
 	async getStack(

@@ -2,7 +2,6 @@
 
 import { afterAll, describe, expect, test } from "bun:test";
 import { apiRequest, truncateTables } from "./helpers.js";
-import "./setup.js";
 
 describe("stack rename", () => {
 	afterAll(async () => {

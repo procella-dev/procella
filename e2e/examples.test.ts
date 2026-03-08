@@ -10,7 +10,6 @@ import {
 	pulumi,
 	truncateTables,
 } from "./helpers.js";
-import "./setup.js";
 
 // Examples take time: Go compilation + provider plugin downloads.
 setDefaultTimeout(180_000);

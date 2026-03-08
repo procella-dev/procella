@@ -2,7 +2,6 @@
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { BACKEND_URL, cleanupDir, createPulumiHome, pulumi, truncateTables } from "./helpers.js";
-import "./setup.js";
 
 describe("login", () => {
 	let pulumiHome: string;

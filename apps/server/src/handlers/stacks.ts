@@ -2,6 +2,7 @@
 
 import type { StackInfo, StacksService } from "@strata/stacks";
 import type { Stack, StackRenameRequest } from "@strata/types";
+import { BadRequestError } from "@strata/types";
 import type { Context } from "hono";
 import type { Env } from "../types.js";
 import { param } from "./params.js";
@@ -12,19 +13,19 @@ import { param } from "./params.js";
 
 export function stackHandlers(stacks: StacksService) {
 	return {
+		/** POST /api/stacks/:org/:project/:stack OR POST /api/stacks/:org/:project (stack in body) */
 		createStack: async (c: Context<Env>) => {
 			const caller = c.get("caller");
 			const org = param(c, "org");
 			const project = param(c, "project");
-			const stack = param(c, "stack");
 			const body = await c.req.json().catch(() => ({}));
-			const result = await stacks.createStack(
-				caller.tenantId,
-				org,
-				project,
-				stack,
-				(body as { tags?: Record<string, string> }).tags,
-			);
+			const typedBody = body as { stackName?: string; tags?: Record<string, string> };
+			// Stack name can come from URL param or request body
+			const stack = c.req.param("stack") ?? typedBody.stackName ?? "";
+			if (!stack) {
+				throw new BadRequestError("Missing stack name in URL or body");
+			}
+			const result = await stacks.createStack(caller.tenantId, org, project, stack, typedBody.tags);
 			return c.json(mapToStack(result));
 		},
 

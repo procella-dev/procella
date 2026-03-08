@@ -3,6 +3,7 @@
 import type { StacksService } from "@strata/stacks";
 import type { Context } from "hono";
 import type { Env } from "../types.js";
+import { param } from "./params.js";
 
 // ============================================================================
 // User Handlers
@@ -23,6 +24,16 @@ export function userHandlers(stacks: StacksService) {
 			const caller = c.get("caller");
 			const stacksList = await stacks.listStacks(caller.tenantId);
 			return c.json({ stacks: stacksList });
+		},
+
+		/** GET /api/user/organizations/:orgName — Pulumi CLI fetches org defaults. */
+		getOrganization: (c: Context<Env>) => {
+			const orgName = param(c, "orgName");
+			return c.json({
+				githubLogin: orgName,
+				name: orgName,
+				defaultTeam: { type: "pulumi", name: orgName },
+			});
 		},
 	};
 }

@@ -2,7 +2,6 @@
 
 import { describe, expect, test } from "bun:test";
 import { BACKEND_URL } from "./helpers.js";
-import "./setup.js";
 
 describe("health and capabilities", () => {
 	test("GET /healthz returns 200 with status ok", async () => {

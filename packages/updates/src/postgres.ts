@@ -287,8 +287,10 @@ export class PostgresUpdatesService implements UpdatesService {
 			throw new UpdateNotFoundError(updateId);
 		}
 
-		// Verbatim: use untypedDeployment as-is (preserve exact JSON)
-		const rawDeployment = (request as { untypedDeployment?: unknown }).untypedDeployment;
+		// Verbatim: untypedDeployment is the full UntypedDeployment wrapper { version, deployment }.
+		// Extract the inner deployment to store consistently with patchCheckpoint.
+		const wrapper = (request as { untypedDeployment?: { deployment?: unknown } }).untypedDeployment;
+		const rawDeployment = wrapper?.deployment ?? wrapper;
 		const serialized = JSON.stringify(rawDeployment);
 		const version = await this.nextCheckpointVersion(updateId);
 
@@ -603,7 +605,7 @@ export function mapStatusToApiStatus(dbStatus: string): string {
 		case "failed":
 			return "failed";
 		case "cancelled":
-			return "failed";
+			return "cancelled";
 		default:
 			return dbStatus;
 	}

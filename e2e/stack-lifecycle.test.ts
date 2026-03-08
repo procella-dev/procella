@@ -10,7 +10,6 @@ import {
 	pulumi,
 	truncateTables,
 } from "./helpers.js";
-import "./setup.js";
 
 describe("stack lifecycle", () => {
 	let pulumiHome: string;

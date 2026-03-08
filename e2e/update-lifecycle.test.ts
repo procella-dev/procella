@@ -11,7 +11,6 @@ import {
 	pulumi,
 	truncateTables,
 } from "./helpers.js";
-import "./setup.js";
 
 // Minimal inline YAML program using the random provider.
 const RANDOM_PET_PROGRAM = `name: update-test

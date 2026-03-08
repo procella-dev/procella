@@ -1,15 +1,15 @@
-// E2E test lifecycle — start server before all tests, stop after.
+// E2E test lifecycle — docker compose deps + server before all tests.
 
 import { afterAll, beforeAll, setDefaultTimeout } from "bun:test";
 import type { Subprocess } from "bun";
-import { resetDatabase, startServer, stopServer } from "./helpers.js";
+import { ensureDeps, resetDatabase, startServer, stopServer } from "./helpers.js";
 
-// E2E tests can be slow (server startup, CLI calls)
-setDefaultTimeout(60_000);
+setDefaultTimeout(120_000);
 
 let server: Subprocess;
 
 beforeAll(async () => {
+	await ensureDeps();
 	await resetDatabase();
 	server = await startServer();
 });

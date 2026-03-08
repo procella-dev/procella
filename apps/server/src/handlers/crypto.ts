@@ -57,11 +57,17 @@ export function cryptoHandlers(updates: UpdatesService) {
 			const stack = c.req.param("stack");
 			const body = await c.req.json<BatchDecryptRequest>();
 			const stackFQN = `${org}/${project}/${stack}`;
-			const ciphertexts = (body.ciphertexts ?? []).map(decodeBase64);
-			const plaintexts = await updates.batchDecrypt(stackFQN, ciphertexts);
-			return c.json({
-				plaintexts: plaintexts.map(encodeBase64),
-			});
+			const rawCiphertexts = body.ciphertexts ?? [];
+			const ciphertexts = rawCiphertexts.map(decodeBase64);
+			const decrypted = await updates.batchDecrypt(stackFQN, ciphertexts);
+			// Response is a map: base64(ciphertext) → base64(plaintext)
+			const plaintexts: Record<string, string> = {};
+			for (let i = 0; i < rawCiphertexts.length; i++) {
+				const key =
+					typeof rawCiphertexts[i] === "string" ? rawCiphertexts[i] : encodeBase64(ciphertexts[i]);
+				plaintexts[key] = encodeBase64(decrypted[i]);
+			}
+			return c.json({ plaintexts });
 		},
 
 		logDecryption: (c: Context<Env>) => c.body(null, 200),
