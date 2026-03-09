@@ -27,6 +27,7 @@ const configSchema = z
 		devUserLogin: z.string().default("dev-user"),
 		devOrgLogin: z.string().default("dev-org"),
 		descopeProjectId: z.string().optional(),
+		descopeManagementKey: z.string().optional(),
 
 		// Blob storage
 		blobBackend: blobBackendSchema.default("local"),
@@ -102,6 +103,7 @@ function envToConfig(): Record<string, unknown> {
 		devUserLogin: env.STRATA_DEV_USER_LOGIN,
 		devOrgLogin: env.STRATA_DEV_ORG_LOGIN,
 		descopeProjectId: env.STRATA_DESCOPE_PROJECT_ID,
+		descopeManagementKey: env.STRATA_DESCOPE_MANAGEMENT_KEY,
 		blobBackend: env.STRATA_BLOB_BACKEND,
 		blobLocalPath: env.STRATA_BLOB_LOCAL_PATH,
 		blobS3Bucket: env.STRATA_BLOB_S3_BUCKET,

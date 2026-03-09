@@ -16,6 +16,15 @@
 		reverse_proxy {$CADDY_GO_UPSTREAM:strata-cluster:9090}
 	}
 
+	handle /docs* {
+		reverse_proxy {$CADDY_DOCS_UPSTREAM:localhost:4321}
+	}
+
+	@docsDevAssets path_regexp ^\/@(fs|id|vite)\b
+	handle @docsDevAssets {
+		reverse_proxy {$CADDY_DOCS_UPSTREAM:localhost:4321}
+	}
+
 	handle {
 		reverse_proxy {$CADDY_UI_UPSTREAM:strata-ui:80}
 	}

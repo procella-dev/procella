@@ -27,7 +27,11 @@ const authConfig =
 				userLogin: config.devUserLogin,
 				orgLogin: config.devOrgLogin,
 			}
-		: { mode: "descope" as const, projectId: config.descopeProjectId as string };
+		: {
+				mode: "descope" as const,
+				projectId: config.descopeProjectId as string,
+				managementKey: config.descopeManagementKey,
+			};
 const auth = createAuthService(authConfig);
 
 const storage = createBlobStorage(

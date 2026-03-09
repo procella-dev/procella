@@ -1,6 +1,6 @@
 import { QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TRPCClientError } from "@trpc/client";
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router";
 import "./index.css";
@@ -8,9 +8,13 @@ import "./index.css";
 import { StrataAuthProvider } from "./components/AuthProvider";
 import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { CliLogin } from "./pages/CliLogin";
+import { Settings } from "./pages/Settings";
 import { StackDetail } from "./pages/StackDetail";
 import { StackList } from "./pages/StackList";
+import { Tokens } from "./pages/Tokens";
 import { UpdateDetail } from "./pages/UpdateDetail";
+import { WelcomeCli } from "./pages/WelcomeCli";
 import { createTRPCClient, trpc } from "./trpc";
 
 const LoginPage = lazy(() => import("./pages/Login").then((m) => ({ default: m.Login })));
@@ -31,7 +35,7 @@ function handleGlobalError(error: unknown) {
 	}
 }
 
-function App() {
+function TRPCProvider({ children }: { children: React.ReactNode }) {
 	const [queryClient] = useState(
 		() =>
 			new QueryClient({
@@ -49,39 +53,50 @@ function App() {
 				}),
 			}),
 	);
-	const [trpcClient] = useState(createTRPCClient);
+
+	const trpcClient = useMemo(createTRPCClient, []);
 
 	return (
+		<trpc.Provider client={trpcClient} queryClient={queryClient}>
+			<QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+		</trpc.Provider>
+	);
+}
+
+function App() {
+	return (
 		<StrataAuthProvider>
-			<trpc.Provider client={trpcClient} queryClient={queryClient}>
-				<QueryClientProvider client={queryClient}>
-					<BrowserRouter>
-						<Routes>
-							<Route
-								path="/login"
-								element={
-									<Suspense fallback={LoginFallback}>
-										<LoginPage />
-									</Suspense>
-								}
-							/>
-							<Route element={<ProtectedRoute />}>
-								<Route path="/" element={<Layout />}>
-									<Route index element={<StackList />} />
-									<Route path="stacks/:org/:project/:stack" element={<StackDetail />} />
-									<Route
-										path="stacks/:org/:project/:stack/updates/:updateID"
-										element={<UpdateDetail />}
-									/>
-									{/* CLI-generated "View in Browser" URLs omit /stacks/ prefix */}
-									<Route path=":org/:project/:stack" element={<StackDetail />} />
-									<Route path=":org/:project/:stack/updates/:updateID" element={<UpdateDetail />} />
-								</Route>
+			<TRPCProvider>
+				<BrowserRouter>
+					<Routes>
+						<Route
+							path="/login"
+							element={
+								<Suspense fallback={LoginFallback}>
+									<LoginPage />
+								</Suspense>
+							}
+						/>
+						<Route path="/cli-login" element={<CliLogin />} />
+						<Route path="/welcome/cli" element={<WelcomeCli />} />
+						<Route element={<ProtectedRoute />}>
+							<Route path="/" element={<Layout />}>
+								<Route index element={<StackList />} />
+								<Route path="tokens" element={<Tokens />} />
+								<Route path="settings" element={<Settings />} />
+								<Route path="stacks/:org/:project/:stack" element={<StackDetail />} />
+								<Route
+									path="stacks/:org/:project/:stack/updates/:updateID"
+									element={<UpdateDetail />}
+								/>
+								{/* CLI-generated "View in Browser" URLs omit /stacks/ prefix */}
+								<Route path=":org/:project/:stack" element={<StackDetail />} />
+								<Route path=":org/:project/:stack/updates/:updateID" element={<UpdateDetail />} />
 							</Route>
-						</Routes>
-					</BrowserRouter>
-				</QueryClientProvider>
-			</trpc.Provider>
+						</Route>
+					</Routes>
+				</BrowserRouter>
+			</TRPCProvider>
 		</StrataAuthProvider>
 	);
 }

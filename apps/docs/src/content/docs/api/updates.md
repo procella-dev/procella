@@ -3,7 +3,7 @@ title: Update API
 description: Update lifecycle endpoints — create, start, execute, and complete.
 ---
 
-The update API implements the Pulumi Service API protocol for managing infrastructure deployments. See [Update Lifecycle](/architecture/update-lifecycle/) for the conceptual overview.
+The update API implements the Pulumi Service API protocol for managing infrastructure deployments. See [Update Lifecycle](../architecture/update-lifecycle/) for the conceptual overview.
 
 All endpoints require `Accept: application/vnd.pulumi+8`.
 

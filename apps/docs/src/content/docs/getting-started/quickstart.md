@@ -108,6 +108,6 @@ This stops all containers and removes volumes (including database data).
 
 ## Next Steps
 
-- [Configuration](/getting-started/configuration/) — customize the server with environment variables
-- [Docker Compose](/operations/docker-compose/) — understand the deployment profiles
-- [Testing](/development/testing/) — run the E2E acceptance test suite
+- [Configuration](./configuration/) — customize the server with environment variables
+- [Docker Compose](../operations/docker-compose/) — understand the deployment profiles
+- [Testing](../development/testing/) — run the E2E acceptance test suite

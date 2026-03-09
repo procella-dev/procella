@@ -1,10 +1,11 @@
 import { getSessionToken } from "@descope/react-sdk";
 import type { AppRouter } from "@strata/api/src/router/index.js";
-import { createTRPCReact, httpBatchLink } from "@trpc/react-query";
+import { createTRPCUntypedClient, httpBatchLink } from "@trpc/client";
+import { type CreateTRPCReact, createTRPCReact } from "@trpc/react-query";
 import superjson from "superjson";
 import { getAuthConfig } from "./hooks/useAuthConfig";
 
-export const trpc = createTRPCReact<AppRouter>();
+export const trpc: CreateTRPCReact<AppRouter, unknown> = createTRPCReact<AppRouter>();
 
 function getAuthHeaders(): Record<string, string> {
 	const config = getAuthConfig();
@@ -21,7 +22,7 @@ function getAuthHeaders(): Record<string, string> {
 }
 
 export function createTRPCClient() {
-	return trpc.createClient({
+	return createTRPCUntypedClient({
 		links: [
 			httpBatchLink({
 				url: "/trpc",

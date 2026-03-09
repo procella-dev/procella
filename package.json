@@ -30,7 +30,7 @@
 	},
 	"scripts": {
 		"prepare": "husky",
-		"dev": "bun run dev:deps && trap 'kill 0' EXIT && bun --watch apps/server/src/index.ts & bun run --cwd apps/ui dev & mise exec -- caddy run --config Caddyfile & wait",
+		"dev": "bun run dev:deps && trap 'kill 0' EXIT && bun --watch apps/server/src/index.ts & bun run --cwd apps/ui dev & bun run --cwd apps/docs dev --port 4321 & mise exec -- caddy run --config Caddyfile & wait",
 		"dev:deps": "docker compose up -d && printf 'Waiting for postgres' && until docker compose exec -T postgres pg_isready -U strata -q 2>/dev/null; do printf '.'; sleep 1; done && echo ' ready'",
 		"dev:down": "docker compose down -v",
 		"check": "biome check . && bun run typecheck && bun test packages/ apps/",
@@ -45,13 +45,17 @@
 		"docker:cluster": "docker compose --profile cluster up --build",
 		"docker:cluster:down": "docker compose --profile cluster down -v",
 		"docs:dev": "bun run --cwd apps/docs dev",
-		"docs:build": "bun run --cwd apps/docs build"
+		"docs:build": "bun run --cwd apps/docs build",
+		"infra:deploy": "sst deploy",
+		"infra:diff": "sst diff",
+		"infra:remove": "sst remove"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "catalog:",
 		"@types/bun": "catalog:",
 		"drizzle-kit": "catalog:",
 		"husky": "catalog:",
+		"sst": "^4.2.2",
 		"typescript": "catalog:"
 	},
 	"dependencies": {

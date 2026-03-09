@@ -35,6 +35,9 @@ Strata implements the Pulumi Service API surface that the CLI uses:
 | Orphan update garbage collection | ✅ |
 | Web dashboard | ✅ |
 | tRPC dashboard API | ✅ |
+| API token management (web) | ✅ |
+| Admin settings (users, roles, audit, tenant) | ✅ |
+| Browser-based CLI login flow | ✅ |
 
 ## Tech Stack
 
@@ -54,6 +57,7 @@ Strata implements the Pulumi Service API surface that the CLI uses:
 
 ## Next Steps
 
-- [Quick Start](/getting-started/quickstart/) — get a local instance running in under 5 minutes
-- [Configuration](/getting-started/configuration/) — all environment variables and their defaults
-- [Architecture Overview](/architecture/overview/) — how the pieces fit together
+- [Quick Start](../quickstart/) — get a local instance running in under 5 minutes
+- [Configuration](../configuration/) — all environment variables and their defaults
+- [Architecture Overview](../../architecture/overview/) — how the pieces fit together
+- [Web Dashboard](../../architecture/dashboard/) — pages, navigation, and Descope management widgets

@@ -52,6 +52,12 @@ When `STRATA_AUTH_MODE=descope`, the server uses [Descope access keys](https://d
 5. Generate access keys for programmatic access
 6. Set `STRATA_DESCOPE_PROJECT_ID` to your project ID
 
+### Descope Management Widgets
+
+The web dashboard embeds Descope's management UI components on the Settings and Tokens pages. These widgets (`UserManagement`, `RoleManagement`, `AuditManagement`, `TenantProfile`, `AccessKeyManagement`, `UserProfile`) call Descope's management API using the user's session token — which requires the **`Tenant Admin`** built-in Descope role at the tenant level. The standard app-level `admin` role is not sufficient.
+
+Strata's sign-up-or-in flow automatically assigns `Tenant Admin` to every user who creates a new tenant, so the Settings page works for all users without manual intervention. The `Tenant Admin` role is declared in `infra/descope.ts` and managed by Pulumi, so it persists across redeploys.
+
 ### JWT Claims Mapping
 
 | JWT Claim | Caller Field |
@@ -108,7 +114,7 @@ During the execution phase of an update (after `StartUpdate`), a separate auth s
 
 The lease token is generated during `StartUpdate` and has an expiration time. The CLI periodically calls `renew_lease` to extend it. This ensures that crashed or abandoned updates can be detected and garbage-collected.
 
-See [Update Lifecycle](/architecture/update-lifecycle/) for the full protocol.
+See [Update Lifecycle](./update-lifecycle/) for the full protocol.
 
 ## Auth Flow Summary
 

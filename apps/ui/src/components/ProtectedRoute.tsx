@@ -21,7 +21,7 @@ export function ProtectedRoute() {
 }
 
 function DescopeGuard({ returnTo }: { returnTo: string }) {
-	const { isAuthenticated, isSessionLoading } = useSession();
+	const { isAuthenticated, isSessionLoading, sessionToken } = useSession();
 
 	if (isSessionLoading) {
 		return (
@@ -33,6 +33,14 @@ function DescopeGuard({ returnTo }: { returnTo: string }) {
 
 	if (!isAuthenticated) {
 		return <Navigate to="/login" state={{ returnTo }} replace />;
+	}
+
+	if (!sessionToken) {
+		return (
+			<div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+				<div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-700 border-t-blue-500" />
+			</div>
+		);
 	}
 
 	return <Outlet />;

@@ -113,7 +113,7 @@ The GC worker runs as a background interval task and cleans up orphaned updates:
 
 The GC worker uses PostgreSQL advisory locks (`pg_try_advisory_lock`) to ensure only one instance runs across a multi-replica cluster. It runs at startup (reconciliation) and then every 60 seconds.
 
-See [Horizontal Scaling](/operations/horizontal-scaling/) for more on cluster safety.
+See [Horizontal Scaling](../operations/horizontal-scaling/) for more on cluster safety.
 
 ## State Diagram
 

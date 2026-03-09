@@ -35,6 +35,7 @@ function DescopeLogin({ returnTo }: { returnTo: string }) {
 			<div className="w-full max-w-md">
 				<Descope
 					flowId="sign-up-or-in"
+					theme="dark"
 					onSuccess={() => navigate(returnTo, { replace: true })}
 					onError={() => {}}
 				/>

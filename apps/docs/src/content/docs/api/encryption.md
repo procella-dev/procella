@@ -3,7 +3,7 @@ title: Encryption API
 description: Encrypt, decrypt, and batch-decrypt endpoints for Pulumi secrets.
 ---
 
-The encryption API handles Pulumi secrets. When you run `pulumi config set --secret`, the CLI sends the plaintext to these endpoints for server-side encryption. See [Encryption Architecture](/architecture/encryption/) for the cryptographic details.
+The encryption API handles Pulumi secrets. When you run `pulumi config set --secret`, the CLI sends the plaintext to these endpoints for server-side encryption. See [Encryption Architecture](../architecture/encryption/) for the cryptographic details.
 
 All endpoints require:
 - `Accept: application/vnd.pulumi+8`

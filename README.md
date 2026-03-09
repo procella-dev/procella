@@ -5,8 +5,11 @@ A self-hosted [Pulumi](https://www.pulumi.com/) backend. Run `pulumi login`, `pu
 ## Features
 
 - **Full Pulumi CLI compatibility** — login, stack management, updates, previews, refreshes, destroys, state import/export
-- **Web dashboard** — React SPA with real-time stack, update, and event views via tRPC
-- **Multi-tenant authentication** — dev mode with static tokens or [Descope](https://www.descope.com/) access keys with tenant RBAC
+- **Web dashboard** — React SPA with stack/update/event views, API token management, and admin settings
+- **Admin settings panel** — invite users, manage roles, view audit log, edit tenant profile (Descope mode)
+- **API token management** — create and revoke Descope access keys from the browser dashboard
+- **Browser CLI login** — `pulumi login` opens a browser flow; token is stored automatically
+- **Multi-tenant authentication** — dev mode with static tokens or [Descope](https://www.descope.com/) with tenant RBAC
 - **Role-based access control** — viewer / member / admin roles enforced per-organization
 - **AES-256-GCM encryption** — per-stack key derivation via HKDF for secrets at rest
 - **Horizontal scaling** — stateless server behind Caddy load balancer, PostgreSQL for all shared state
@@ -41,9 +44,14 @@ bun run dev
 This starts PostgreSQL, MinIO, the Bun server (with hot-reload), and the Vite UI dev server locally.
 
 ```bash
-# Point the Pulumi CLI at your local Strata instance
+# Dev mode — set token directly
 export PULUMI_ACCESS_TOKEN=devtoken123
 pulumi login http://localhost:9090
+
+# Descope mode — browser login flow (PULUMI_CONSOLE_DOMAIN is set in mise.toml)
+pulumi login http://localhost:9090
+# The CLI opens your browser to /cli-login, you sign in via Descope,
+# and the token is stored automatically in ~/.pulumi/credentials.json
 
 # Create and deploy a stack
 mkdir my-project && cd my-project
@@ -76,6 +84,7 @@ All configuration is via `STRATA_*` environment variables. See `.env.example` fo
 | `STRATA_DEV_ORG_LOGIN` | `dev-org` | Dev org login name |
 | `STRATA_DEV_USERS` | | JSON array of additional dev users |
 | `STRATA_DESCOPE_PROJECT_ID` | *(required if descope)* | Descope project ID |
+| `STRATA_DESCOPE_MANAGEMENT_KEY` | | Descope management key — enables `pulumi login` browser flow and API token creation |
 | `STRATA_BLOB_BACKEND` | `local` | `local` (filesystem) or `s3` (S3-compatible) |
 | `STRATA_BLOB_LOCAL_PATH` | `./data/blobs` | Local blob storage path |
 | `STRATA_BLOB_S3_BUCKET` | *(required if s3)* | S3 bucket name |
@@ -125,6 +134,7 @@ apps/
   api/                @strata/api — tRPC router (stacks, updates, events)
   server/             @strata/server — Hono HTTP server (CLI + tRPC + middleware)
   ui/                 @strata/ui — React SPA (Vite + Tailwind + tRPC client)
+                      Pages: StackList, StackDetail, UpdateDetail, Tokens, Settings, CliLogin
 examples/             Pulumi YAML example programs (7 examples)
 e2e/                  E2E acceptance tests (89 tests, 9 files)
   docs/               @strata/docs — Starlight documentation site

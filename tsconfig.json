@@ -28,7 +28,7 @@
 		{ "path": "packages/auth" },
 		{ "path": "packages/stacks" },
 		{ "path": "packages/updates" },
-		{ "path": "apps/api" },
+		{ "path": "packages/api" },
 		{ "path": "apps/server" }
 	],
 	"files": []

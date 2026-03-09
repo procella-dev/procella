@@ -104,9 +104,9 @@ apps/
       handlers/                    #   HTTP handlers for each API endpoint
   ui/                              # @strata/ui — React SPA
     src/
-      main.tsx                     #   tRPC + React Query providers
-      pages/                       #   StackList, StackDetail, UpdateDetail
-      components/                  #   Layout, shared components
+      main.tsx                     #   tRPC + React Query + Descope providers
+      pages/                       #   StackList, StackDetail, UpdateDetail, Tokens, Settings, CliLogin
+      components/                  #   Layout (header, nav, user menu), shared components
 ```
 
 ## Design Principles

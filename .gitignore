@@ -37,6 +37,9 @@ apps/docs/.astro/
 .dolt/
 *.db
 
+# SST
+.sst/
+
 # Agent / tool artifacts
 .sisyphus/
 .agents/

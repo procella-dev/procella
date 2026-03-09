@@ -16,6 +16,8 @@ export interface AuthService {
 	authenticate(request: Request): Promise<Caller>;
 	/** Authenticate an update-token (lease token from StartUpdate). */
 	authenticateUpdateToken(token: string): Promise<{ updateId: string; stackId: string }>;
+	/** Create a long-lived CLI access key for the given caller. Returns the cleartext key. */
+	createCliAccessKey?(caller: Caller, name: string): Promise<string>;
 }
 
 // ============================================================================
@@ -24,7 +26,7 @@ export interface AuthService {
 
 export type AuthConfig =
 	| { mode: "dev"; token: string; userLogin: string; orgLogin: string }
-	| { mode: "descope"; projectId: string };
+	| { mode: "descope"; projectId: string; managementKey?: string };
 
 // ============================================================================
 // Dev Auth Service
@@ -67,19 +69,22 @@ export class DevAuthService implements AuthService {
 
 export interface DescopeAuthConfig {
 	projectId: string;
+	managementKey?: string;
 }
 
 export class DescopeAuthService implements AuthService {
 	private readonly sdk: ReturnType<typeof DescopeSdk>;
 
 	constructor(config: DescopeAuthConfig) {
-		this.sdk = DescopeSdk({ projectId: config.projectId });
+		this.sdk = DescopeSdk({ projectId: config.projectId, managementKey: config.managementKey });
 	}
 
 	async authenticate(request: Request): Promise<Caller> {
 		const token = extractToken(request);
 
-		const authInfo = await this.sdk.validateJwt(token);
+		const authInfo = token.startsWith("eyJ")
+			? await this.sdk.validateJwt(token)
+			: await this.sdk.exchangeAccessKey(token);
 		const claims = authInfo.token;
 
 		// Descope stores tenant ID in `dct` (descope current tenant) claim
@@ -90,18 +95,46 @@ export class DescopeAuthService implements AuthService {
 		}
 
 		const userId = claims.sub ?? "";
+		const login =
+			typeof claims.strataLogin === "string" && claims.strataLogin ? claims.strataLogin : userId;
 		const roles = extractRoles(claims, tenantId);
 
 		return {
 			tenantId,
 			userId,
-			login: userId,
+			login,
 			roles,
 		};
 	}
 
 	async authenticateUpdateToken(token: string): Promise<{ updateId: string; stackId: string }> {
 		return parseUpdateToken(token);
+	}
+
+	async createCliAccessKey(caller: Caller, name: string): Promise<string> {
+		const userResp = await this.sdk.management.user.loadByUserId(caller.userId);
+		const u = userResp.ok ? userResp.data : undefined;
+		const loginId =
+			u?.email ??
+			u?.name ??
+			(u?.givenName && u?.familyName ? `${u.givenName} ${u.familyName}` : undefined) ??
+			u?.loginIds?.[0] ??
+			caller.userId;
+
+		const resp = await this.sdk.management.accessKey.create(
+			name,
+			0,
+			undefined,
+			[{ tenantId: caller.tenantId, roleNames: [...caller.roles] }],
+			caller.userId,
+			{ strataLogin: loginId },
+		);
+		if (!resp.ok || !resp.data?.cleartext) {
+			throw new Error(
+				resp.error?.errorMessage ?? resp.error?.errorDescription ?? "Failed to create access key",
+			);
+		}
+		return resp.data.cleartext;
 	}
 }
 
@@ -118,7 +151,10 @@ export function createAuthService(config: AuthConfig): AuthService {
 				orgLogin: config.orgLogin,
 			});
 		case "descope":
-			return new DescopeAuthService({ projectId: config.projectId });
+			return new DescopeAuthService({
+				projectId: config.projectId,
+				managementKey: config.managementKey,
+			});
 	}
 }
 

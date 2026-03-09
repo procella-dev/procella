@@ -108,6 +108,21 @@ export function createApp(deps: {
 		return c.json({ mode: "dev" as const });
 	});
 
+	app.post("/api/auth/cli-token", async (c) => {
+		if (!deps.auth.createCliAccessKey) {
+			return c.json({ error: "CLI token creation not available in this auth mode" }, 400);
+		}
+		const caller = await deps.auth.authenticate(c.req.raw).catch(() => null);
+		if (!caller) {
+			return c.json({ error: "Unauthorized" }, 401);
+		}
+		const body = await c.req.json<{ name?: string }>().catch(() => ({}));
+		const keyName =
+			"name" in body && body.name ? body.name : `strata-cli-${caller.login}-${Date.now()}`;
+		const cleartext = await deps.auth.createCliAccessKey(caller, keyName);
+		return c.json({ token: cleartext });
+	});
+
 	// ========================================================================
 	// Update-token authenticated routes (during active update execution)
 	// These use "Authorization: update-token <lease-token>" from the CLI.
