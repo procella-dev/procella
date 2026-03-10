@@ -49,7 +49,8 @@ export interface CreateDbOptions {
  */
 export function createDb(options: CreateDbOptions): { db: Database; client: SQL } {
 	const parsed = new URL(options.url);
-	const client = new SQL({
+
+	const sqlOpts: Record<string, unknown> = {
 		hostname: parsed.hostname,
 		port: parsed.port ? Number(parsed.port) : 5432,
 		username: decodeURIComponent(parsed.username),
@@ -57,7 +58,17 @@ export function createDb(options: CreateDbOptions): { db: Database; client: SQL 
 		database: parsed.pathname.slice(1),
 		max: options.max ?? 20,
 		idleTimeout: options.idleTimeout ?? 30,
-	});
+	};
+
+	for (const [key, value] of parsed.searchParams) {
+		if (key === "sslmode") {
+			sqlOpts.tls = value !== "disable";
+		} else if (!(key in sqlOpts)) {
+			sqlOpts[key] = value;
+		}
+	}
+
+	const client = new SQL(sqlOpts);
 	const db = drizzle({ client, schema });
 	return { db, client };
 }

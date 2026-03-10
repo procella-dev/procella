@@ -98,7 +98,9 @@ export class DescopeAuthService implements AuthService {
 		const login =
 			typeof claims.procellaLogin === "string" && claims.procellaLogin
 				? claims.procellaLogin
-				: userId;
+				: typeof claims.strataLogin === "string" && claims.strataLogin
+					? claims.strataLogin
+					: userId;
 		const roles = extractRoles(claims, tenantId);
 
 		return {

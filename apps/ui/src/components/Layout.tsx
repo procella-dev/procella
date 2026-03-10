@@ -128,7 +128,15 @@ function DevTokenInput() {
 	const [token, setToken] = useState("");
 
 	useEffect(() => {
-		const savedToken = localStorage.getItem("procella-token");
+		let savedToken = localStorage.getItem("procella-token");
+		if (!savedToken) {
+			const legacyToken = localStorage.getItem("strata-token");
+			if (legacyToken) {
+				savedToken = legacyToken;
+				localStorage.setItem("procella-token", legacyToken);
+				localStorage.removeItem("strata-token");
+			}
+		}
 		if (savedToken) {
 			setToken(savedToken);
 		}
