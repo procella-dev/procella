@@ -1,5 +1,5 @@
 # Stage 1: deps - Install dependencies
-FROM oven/bun:1.2-alpine AS deps
+FROM oven/bun:1.2-debian AS deps
 WORKDIR /app
 COPY package.json bun.lock ./
 COPY packages/types/package.json packages/types/
