@@ -135,7 +135,7 @@ This simplifies the CLI workflow — `pulumi stack init` creates everything in o
 The GC worker uses PostgreSQL advisory locks for cluster-safe execution:
 
 ```typescript
-const lockId = 0x5472617461_4743; // "ProcellaGC"
+const lockId = 0x5472617461_4743; // GC lock (historic value, do not change)
 const acquired = await db.execute(
   sql`SELECT pg_try_advisory_lock(${lockId})`
 );

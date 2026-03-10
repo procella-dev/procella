@@ -1,4 +1,4 @@
-// @procella/db — Drizzle ORM schema definitions for Strata's PostgreSQL database.
+// @procella/db — Drizzle ORM schema definitions for Procella's PostgreSQL database.
 //
 // This is a multi-tenant SaaS. Auth is Descope (no users/orgs tables).
 // tenant_id is TEXT from Descope JWT — never a FK, always a soft reference.

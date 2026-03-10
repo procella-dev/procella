@@ -5,6 +5,7 @@ import { requireRole } from "@procella/auth";
 import type { Role } from "@procella/types";
 import { ProcellaError } from "@procella/types";
 import type { MiddlewareHandler } from "hono";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { Env } from "../types.js";
 
 // ============================================================================
@@ -20,7 +21,10 @@ export function apiAuth(authService: AuthService): MiddlewareHandler<Env> {
 			await next();
 		} catch (error) {
 			if (error instanceof ProcellaError) {
-				return c.json({ code: error.statusCode, message: error.message }, error.statusCode as 401);
+				return c.json(
+					{ code: error.statusCode, message: error.message },
+					error.statusCode as ContentfulStatusCode,
+				);
 			}
 			return c.json({ code: 401, message: "Unauthorized" }, 401);
 		}
@@ -48,7 +52,10 @@ export function updateAuth(authService: AuthService): MiddlewareHandler<Env> {
 			await next();
 		} catch (error) {
 			if (error instanceof ProcellaError) {
-				return c.json({ code: error.statusCode, message: error.message }, error.statusCode as 401);
+				return c.json(
+					{ code: error.statusCode, message: error.message },
+					error.statusCode as ContentfulStatusCode,
+				);
 			}
 			return c.json({ code: 401, message: "Unauthorized" }, 401);
 		}
@@ -68,7 +75,10 @@ export function requireRoleMiddleware(...roles: Role[]): MiddlewareHandler<Env> 
 			await next();
 		} catch (error) {
 			if (error instanceof ProcellaError) {
-				return c.json({ code: error.statusCode, message: error.message }, error.statusCode as 403);
+				return c.json(
+					{ code: error.statusCode, message: error.message },
+					error.statusCode as ContentfulStatusCode,
+				);
 			}
 			return c.json({ code: 403, message: "Forbidden" }, 403);
 		}

@@ -85,7 +85,7 @@ export const GC_INTERVAL_MS = 60_000; // 60 seconds
 export const GC_STALE_THRESHOLD_MS = 3_600_000; // 1 hour
 
 /** PostgreSQL advisory lock ID for cluster-safe GC. */
-export const GC_ADVISORY_LOCK_ID = 93_874_835_275_587n; // "StrataGC"
+export const GC_ADVISORY_LOCK_ID = 93_874_835_275_587n; // 0x5472617461_4743 (historic, do not change)
 
 // ============================================================================
 // Internal Row Types (mirror DB schema for type-safe mapping)

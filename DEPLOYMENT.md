@@ -48,7 +48,7 @@ The deployment uses these variables, set via `.env` file or environment:
 |----------|--------|---------|----------|
 | `PROCELLA_DESCOPE_PROJECT_ID` | Your Descope dashboard | `proj_abc123xyz...` | ✅ Yes |
 | `PROCELLA_DESCOPE_MANAGEMENT_KEY` | Your Descope API key | (sensitive, 100+ chars) | ✅ Yes |
-| `PROCELLA_DB_PASSWORD` | You set or auto-generate | (any strong password) | ❌ No (defaults to "procella") |
+| `PROCELLA_DB_PASSWORD` | You set or auto-generate | (any strong password) | ✅ Yes (deploy fails without it) |
 | `PROCELLA_CORS_ORIGINS` | Auto-configured | `https://procella.procella.dev` | Auto |
 | `PROCELLA_DATABASE_URL` | Auto-configured | `postgresql://procella:...@procella-db.local:5432/procella` | Auto |
 | `PROCELLA_BLOB_S3_BUCKET` | Auto-created | `procella-checkpoints-1234...` | Auto |
@@ -56,7 +56,7 @@ The deployment uses these variables, set via `.env` file or environment:
 
 - **Auto-configured**: SST populates these from infrastructure
 - **Auto-generated**: SST generates secure values
-- **You provide**: Descope credentials (required) and DB password (optional)
+- **You provide**: Descope credentials and DB password (all required)
 
 ## Step-by-Step Deployment
 
@@ -95,7 +95,7 @@ cat > .env << 'EOF'
 PROCELLA_DESCOPE_PROJECT_ID=your-project-id-from-descope-dashboard
 PROCELLA_DESCOPE_MANAGEMENT_KEY=your-management-api-key-from-descope-dashboard
 
-# Optional: Database password (defaults to "procella" if not provided)
+# Required: Database password (deploy fails without it)
 PROCELLA_DB_PASSWORD=your-secure-password-here
 EOF
 

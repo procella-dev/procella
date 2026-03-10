@@ -52,7 +52,7 @@ bun run e2e:cluster       # Run full E2E tests against the cluster
 The garbage collection worker uses PostgreSQL advisory locks to ensure only one instance runs across the entire cluster:
 
 ```sql
-SELECT pg_try_advisory_lock(0x5472617461_4743);  -- "ProcellaGC"
+SELECT pg_try_advisory_lock(0x5472617461_4743);  -- GC lock (historic value, do not change)
 ```
 
 - Each replica attempts to acquire the lock every 60 seconds

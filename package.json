@@ -66,6 +66,7 @@
 		"@trpc/server": "catalog:",
 		"drizzle-orm": "catalog:",
 		"hono": "catalog:",
+		"pg": "^8.20.0",
 		"zod": "catalog:"
 	}
 }
