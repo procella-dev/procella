@@ -48,8 +48,8 @@ export default $config({
 		const staticAssetsBucketName = `${appName}-static-${Date.now()}`;
 		const checkpointBlobsBucketName = `${appName}-checkpoints-${Date.now()}`;
 
-		// Database password (ops team provides in Secrets Manager, or use default for dev)
-		const dbPassword = process.env.PROCELLA_DB_PASSWORD || "procella";
+		const dbPassword = process.env.PROCELLA_DB_PASSWORD;
+		if (!dbPassword) throw new Error("PROCELLA_DB_PASSWORD is required");
 
 		// ========================================================================
 		// VPC + NETWORKING (Wave 1.1)
@@ -481,7 +481,7 @@ export default $config({
 		// PROCELLA SERVER TASK DEFINITION (Wave 1.2)
 		// ========================================================================
 
-		const stratoServerTaskDef = new aws.ecs.TaskDefinition(`${appName}-task`, {
+		const procellaServerTaskDef = new aws.ecs.TaskDefinition(`${appName}-task`, {
 			family: `${appName}-task`,
 			networkMode: "awsvpc",
 			requiresCompatibilities: ["FARGATE"],
@@ -715,7 +715,7 @@ export default $config({
 		// Procella Server Service
 		const procellaService = new aws.ecs.Service(`${appName}-service`, {
 			cluster: ecsCluster.arn,
-			taskDefinition: stratoServerTaskDef.arn,
+			taskDefinition: procellaServerTaskDef.arn,
 			desiredCount: ecsDesiredCount,
 			launchType: "FARGATE",
 			networkConfiguration: {

@@ -1,8 +1,8 @@
-// @strata/server — Update lifecycle handlers.
+// @procella/server — Update lifecycle handlers.
 
-import type { StacksService } from "@strata/stacks";
-import type { CompleteUpdateRequest, StartUpdateRequest, UpdateKind } from "@strata/types";
-import type { UpdatesService } from "@strata/updates";
+import type { StacksService } from "@procella/stacks";
+import type { CompleteUpdateRequest, StartUpdateRequest, UpdateKind } from "@procella/types";
+import type { UpdatesService } from "@procella/updates";
 import type { Context } from "hono";
 import type { Env } from "../types.js";
 import { param } from "./params.js";

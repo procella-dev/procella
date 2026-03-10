@@ -1,4 +1,4 @@
-// @strata/api — Root tRPC AppRouter definition.
+// @procella/api — Root tRPC AppRouter definition.
 
 import { router } from "../trpc.js";
 import { eventsRouter } from "./events.js";

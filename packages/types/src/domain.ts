@@ -1,4 +1,4 @@
-// @strata/types — Strata-specific domain types.
+// @procella/types — Strata-specific domain types.
 
 // ============================================================================
 // Role RBAC

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { InvalidUpdateTokenError } from "@strata/types";
+import { InvalidUpdateTokenError } from "@procella/types";
 import {
 	applyDelta,
 	emptyDeployment,
@@ -18,7 +18,7 @@ import {
 	LEASE_DURATION_SECONDS,
 } from "./types.js";
 
-describe("@strata/updates helpers", () => {
+describe("@procella/updates helpers", () => {
 	// ========================================================================
 	// generateLeaseToken
 	// ========================================================================

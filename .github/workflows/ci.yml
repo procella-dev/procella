@@ -35,13 +35,13 @@ jobs:
       postgres:
         image: postgres:17-alpine
         env:
-          POSTGRES_USER: strata
-          POSTGRES_PASSWORD: strata
-          POSTGRES_DB: strata
+          POSTGRES_USER: procella
+          POSTGRES_PASSWORD: procella
+          POSTGRES_DB: procella
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U strata"
+          --health-cmd "pg_isready -U procella"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -59,7 +59,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Run E2E tests
         env:
-          STRATA_DATABASE_URL: postgres://strata:strata@localhost:5432/strata?sslmode=disable
+          PROCELLA_DATABASE_URL: postgres://procella:procella@localhost:5432/procella?sslmode=disable
         run: bun run e2e
 
   e2e-cluster:

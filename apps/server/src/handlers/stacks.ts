@@ -1,8 +1,8 @@
-// @strata/server — Stack CRUD handlers.
+// @procella/server — Stack CRUD handlers.
 
-import type { StackInfo, StacksService } from "@strata/stacks";
-import type { Stack, StackRenameRequest } from "@strata/types";
-import { BadRequestError } from "@strata/types";
+import type { StackInfo, StacksService } from "@procella/stacks";
+import type { Stack, StackRenameRequest } from "@procella/types";
+import { BadRequestError } from "@procella/types";
 import type { Context } from "hono";
 import type { Env } from "../types.js";
 import { param } from "./params.js";

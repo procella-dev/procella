@@ -1,13 +1,13 @@
 ---
 title: Introduction
-description: What Strata is, why self-host your Pulumi backend, and what's included.
+description: What Procella is, why self-host your Pulumi backend, and what's included.
 ---
 
-Strata is a self-hosted backend for [Pulumi](https://www.pulumi.com/), the infrastructure-as-code platform. It implements the Pulumi Service API so that the standard Pulumi CLI works against it without modification — `pulumi login`, `pulumi stack init`, `pulumi up`, `pulumi destroy`, state import/export, secret encryption, and more.
+Procella is a self-hosted backend for [Pulumi](https://www.pulumi.com/), the infrastructure-as-code platform. It implements the Pulumi Service API so that the standard Pulumi CLI works against it without modification — `pulumi login`, `pulumi stack init`, `pulumi up`, `pulumi destroy`, state import/export, secret encryption, and more.
 
 ## Why Self-Host?
 
-Pulumi Cloud is the default backend for managing state, secrets, and collaboration. For teams that need to keep infrastructure state within their own network boundary — whether for compliance, data sovereignty, or cost — Strata provides a drop-in replacement.
+Pulumi Cloud is the default backend for managing state, secrets, and collaboration. For teams that need to keep infrastructure state within their own network boundary — whether for compliance, data sovereignty, or cost — Procella provides a drop-in replacement.
 
 - **Data sovereignty** — state and secrets never leave your infrastructure
 - **No vendor dependency** — run on your own PostgreSQL and S3-compatible storage
@@ -16,7 +16,7 @@ Pulumi Cloud is the default backend for managing state, secrets, and collaborati
 
 ## What Works
 
-Strata implements the Pulumi Service API surface that the CLI uses:
+Procella implements the Pulumi Service API surface that the CLI uses:
 
 | Feature | Status |
 |---|---|

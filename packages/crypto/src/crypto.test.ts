@@ -10,7 +10,7 @@ function devService(): AesCryptoService {
 	return new AesCryptoService(devMasterKey());
 }
 
-describe("@strata/crypto", () => {
+describe("@procella/crypto", () => {
 	describe("AesCryptoService", () => {
 		test("encrypt then decrypt roundtrip returns original plaintext", async () => {
 			const svc = devService();

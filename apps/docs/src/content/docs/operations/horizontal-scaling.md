@@ -1,9 +1,9 @@
 ---
 title: Horizontal Scaling
-description: Running multiple Strata replicas behind a load balancer.
+description: Running multiple Procella replicas behind a load balancer.
 ---
 
-Strata is designed to scale horizontally. The Bun server is stateless — all shared state lives in PostgreSQL and S3-compatible blob storage. You can run N replicas behind a load balancer with no code changes.
+Procella is designed to scale horizontally. The Bun server is stateless — all shared state lives in PostgreSQL and S3-compatible blob storage. You can run N replicas behind a load balancer with no code changes.
 
 ## Architecture
 
@@ -21,7 +21,7 @@ Strata is designed to scale horizontally. The Bun server is stateless — all sh
   ┌──┼──┐
   │  │  │
 ┌─▼┐┌▼─┐┌▼─┐
-│R1││R2││R3│  Strata replicas (stateless)
+│R1││R2││R3│  Procella replicas (stateless)
 └─┬┘└┬─┘└┬─┘
   │  │   │
   └──┼───┘
@@ -52,7 +52,7 @@ bun run e2e:cluster       # Run full E2E tests against the cluster
 The garbage collection worker uses PostgreSQL advisory locks to ensure only one instance runs across the entire cluster:
 
 ```sql
-SELECT pg_try_advisory_lock(0x5472617461_4743);  -- "StrataGC"
+SELECT pg_try_advisory_lock(0x5472617461_4743);  -- "ProcellaGC"
 ```
 
 - Each replica attempts to acquire the lock every 60 seconds
@@ -68,7 +68,7 @@ The included `Caddyfile` configures Caddy as a simple round-robin reverse proxy:
 
 ```
 :9090 {
-    reverse_proxy strata-cluster:9090 {
+    reverse_proxy procella-cluster:9090 {
         lb_policy round_robin
         health_uri /healthz
         health_interval 5s
@@ -94,7 +94,7 @@ Any HTTP load balancer works. Requirements:
 ### S3 Storage
 
 - Use real S3 or a managed S3-compatible service instead of MinIO
-- Configure `STRATA_BLOB_S3_BUCKET` and optionally `STRATA_BLOB_S3_ENDPOINT`
+- Configure `PROCELLA_BLOB_S3_BUCKET` and optionally `PROCELLA_BLOB_S3_ENDPOINT`
 - Ensure the bucket exists before starting the server
 
 ### Replica Count
@@ -107,7 +107,7 @@ Any HTTP load balancer works. Requirements:
 
 The Docker Compose cluster profile is a development tool. For production, use:
 - **Kubernetes** — deploy as a `Deployment` with `replicas: N`, backed by a `Service`
-- **ECS/Fargate** — define a task with the Strata container and a service with desired count
+- **ECS/Fargate** — define a task with the Procella container and a service with desired count
 - **Docker Swarm** — use `deploy.replicas` (similar to the compose cluster profile)
 
 All options work because the server is stateless and health-checkable.

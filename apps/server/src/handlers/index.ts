@@ -1,4 +1,4 @@
-// @strata/server — Handler barrel exports.
+// @procella/server — Handler barrel exports.
 
 export { checkpointHandlers } from "./checkpoints.js";
 export { cryptoHandlers } from "./crypto.js";

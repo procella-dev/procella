@@ -1,4 +1,4 @@
-// @strata/db — Database connection via Bun's built-in SQL + Drizzle ORM.
+// @procella/db — Database connection via Bun's built-in SQL + Drizzle ORM.
 //
 // Uses Bun.sql (import { SQL } from "bun") as the connection driver.
 // Drizzle ORM wraps it for type-safe queries with schema inference.

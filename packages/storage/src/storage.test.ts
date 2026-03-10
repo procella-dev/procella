@@ -10,7 +10,7 @@ describe("LocalBlobStorage", () => {
 	let storage: LocalBlobStorage;
 
 	beforeAll(() => {
-		basePath = join(tmpdir(), `strata-storage-test-${randomUUID()}`);
+		basePath = join(tmpdir(), `procella-storage-test-${randomUUID()}`);
 		storage = new LocalBlobStorage(basePath);
 	});
 
@@ -20,7 +20,7 @@ describe("LocalBlobStorage", () => {
 
 	test("put + get roundtrip returns original data", async () => {
 		const key = "test/roundtrip.bin";
-		const data = new TextEncoder().encode("hello, strata!");
+		const data = new TextEncoder().encode("hello, procella!");
 
 		await storage.put(key, data);
 		const result = await storage.get(key);

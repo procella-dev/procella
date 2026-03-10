@@ -1,8 +1,8 @@
-// @strata/server — Export/import state handlers.
+// @procella/server — Export/import state handlers.
 
-import type { StacksService } from "@strata/stacks";
-import type { UntypedDeployment } from "@strata/types";
-import type { UpdatesService } from "@strata/updates";
+import type { StacksService } from "@procella/stacks";
+import type { UntypedDeployment } from "@procella/types";
+import type { UpdatesService } from "@procella/updates";
 import type { Context } from "hono";
 import type { Env } from "../types.js";
 import { param } from "./params.js";

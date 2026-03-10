@@ -3,7 +3,7 @@ title: Database Schema
 description: PostgreSQL schema — tables, indexes, constraints, and relationships.
 ---
 
-Strata uses PostgreSQL 17 for all metadata and state. The schema is managed through Drizzle ORM migrations that run automatically on server startup.
+Procella uses PostgreSQL 17 for all metadata and state. The schema is managed through Drizzle ORM migrations that run automatically on server startup.
 
 ## Entity Relationship
 
@@ -118,7 +118,7 @@ Engine events emitted during an update (resource operations, diagnostics, output
 
 ## Auto-Create Pattern
 
-When creating a stack, Strata auto-creates the project if it doesn't exist using Drizzle's `INSERT ... ON CONFLICT DO NOTHING`:
+When creating a stack, Procella auto-creates the project if it doesn't exist using Drizzle's `INSERT ... ON CONFLICT DO NOTHING`:
 
 ```typescript
 await db.insert(projects).values({
@@ -135,7 +135,7 @@ This simplifies the CLI workflow — `pulumi stack init` creates everything in o
 The GC worker uses PostgreSQL advisory locks for cluster-safe execution:
 
 ```typescript
-const lockId = 0x5472617461_4743; // "StrataGC"
+const lockId = 0x5472617461_4743; // "ProcellaGC"
 const acquired = await db.execute(
   sql`SELECT pg_try_advisory_lock(${lockId})`
 );

@@ -1,12 +1,12 @@
-// @strata/server — Encrypt/decrypt handlers.
+// @procella/server — Encrypt/decrypt handlers.
 
 import type {
 	BatchDecryptRequest,
 	BatchEncryptRequest,
 	DecryptValueRequest,
 	EncryptValueRequest,
-} from "@strata/types";
-import type { UpdatesService } from "@strata/updates";
+} from "@procella/types";
+import type { UpdatesService } from "@procella/updates";
 import type { Context } from "hono";
 import type { Env } from "../types.js";
 

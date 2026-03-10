@@ -1,11 +1,11 @@
-// @strata/auth — Authentication via Descope JWT + dev mode token validation.
+// @procella/auth — Authentication via Descope JWT + dev mode token validation.
 //
 // Descope handles authn; tenant_id and roles from JWT drive authz.
 // Dev mode uses a static token for local development.
 
 import DescopeSdk from "@descope/node-sdk";
-import type { Caller, Role } from "@strata/types";
-import { ForbiddenError, UnauthorizedError } from "@strata/types";
+import type { Caller, Role } from "@procella/types";
+import { ForbiddenError, UnauthorizedError } from "@procella/types";
 
 // ============================================================================
 // Auth Service Interface
@@ -96,7 +96,9 @@ export class DescopeAuthService implements AuthService {
 
 		const userId = claims.sub ?? "";
 		const login =
-			typeof claims.strataLogin === "string" && claims.strataLogin ? claims.strataLogin : userId;
+			typeof claims.procellaLogin === "string" && claims.procellaLogin
+				? claims.procellaLogin
+				: userId;
 		const roles = extractRoles(claims, tenantId);
 
 		return {
@@ -127,7 +129,7 @@ export class DescopeAuthService implements AuthService {
 			undefined,
 			[{ tenantId: caller.tenantId, roleNames: [...caller.roles] }],
 			caller.userId,
-			{ strataLogin: loginId },
+			{ procellaLogin: loginId },
 		);
 		if (!resp.ok || !resp.data?.cleartext) {
 			throw new Error(

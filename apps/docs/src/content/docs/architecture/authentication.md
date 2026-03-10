@@ -3,7 +3,7 @@ title: Authentication
 description: Dev mode, Descope integration, role-based access control, and the update-token auth flow.
 ---
 
-Strata supports two authentication modes, configured via `STRATA_AUTH_MODE`. Both modes produce the same internal `Caller` type — the authorization layer works identically regardless of which mode is active.
+Procella supports two authentication modes, configured via `PROCELLA_AUTH_MODE`. Both modes produce the same internal `Caller` type — the authorization layer works identically regardless of which mode is active.
 
 :::note[Design Principle]
 The only difference between dev and Descope is **authentication** (who are you?), never **authorization** (what can you do?). Both modes produce the same Caller type used by the authorization layer and role hierarchy.
@@ -11,14 +11,14 @@ The only difference between dev and Descope is **authentication** (who are you?)
 
 ## Dev Mode
 
-When `STRATA_AUTH_MODE=dev`, the server validates tokens against a static list configured via environment variables.
+When `PROCELLA_AUTH_MODE=dev`, the server validates tokens against a static list configured via environment variables.
 
 The primary user is configured with:
-- `STRATA_DEV_AUTH_TOKEN` — the token value
-- `STRATA_DEV_USER_LOGIN` — maps to `login` on the `Caller`
-- `STRATA_DEV_ORG_LOGIN` — the user's organization
+- `PROCELLA_DEV_AUTH_TOKEN` — the token value
+- `PROCELLA_DEV_USER_LOGIN` — maps to `login` on the `Caller`
+- `PROCELLA_DEV_ORG_LOGIN` — the user's organization
 
-Additional users can be registered via `STRATA_DEV_USERS` (a JSON array):
+Additional users can be registered via `PROCELLA_DEV_USERS` (a JSON array):
 
 ```json
 [
@@ -31,14 +31,14 @@ Additional users can be registered via `STRATA_DEV_USERS` (a JSON array):
 
 ## Descope Mode
 
-When `STRATA_AUTH_MODE=descope`, the server uses [Descope access keys](https://docs.descope.com/accesskeys) for authentication.
+When `PROCELLA_AUTH_MODE=descope`, the server uses [Descope access keys](https://docs.descope.com/accesskeys) for authentication.
 
 ### How It Works
 
 1. Client sends `Authorization: token <descope-access-key>`
 2. `DescopeAuthenticator` calls `ExchangeAccessKey` on the Descope SDK
 3. Descope validates the key and returns a JWT with tenant claims
-4. Strata extracts tenant memberships and roles from the JWT:
+4. Procella extracts tenant memberships and roles from the JWT:
    - Each tenant the user belongs to becomes an `OrgRole`
    - Roles are read from the tenant's `roles` array claim
    - The highest role wins: `admin > member > viewer`
@@ -50,13 +50,13 @@ When `STRATA_AUTH_MODE=descope`, the server uses [Descope access keys](https://d
 3. Create roles: `viewer`, `member`, `admin`
 4. Assign users to tenants with appropriate roles
 5. Generate access keys for programmatic access
-6. Set `STRATA_DESCOPE_PROJECT_ID` to your project ID
+6. Set `PROCELLA_DESCOPE_PROJECT_ID` to your project ID
 
 ### Descope Management Widgets
 
 The web dashboard embeds Descope's management UI components on the Settings and Tokens pages. These widgets (`UserManagement`, `RoleManagement`, `AuditManagement`, `TenantProfile`, `AccessKeyManagement`, `UserProfile`) call Descope's management API using the user's session token — which requires the **`Tenant Admin`** built-in Descope role at the tenant level. The standard app-level `admin` role is not sufficient.
 
-Strata's sign-up-or-in flow automatically assigns `Tenant Admin` to every user who creates a new tenant, so the Settings page works for all users without manual intervention. The `Tenant Admin` role is declared in `infra/descope.ts` and managed by Pulumi, so it persists across redeploys.
+Procella's sign-up-or-in flow automatically assigns `Tenant Admin` to every user who creates a new tenant, so the Settings page works for all users without manual intervention. The `Tenant Admin` role is declared in `infra/descope.ts` and managed by Pulumi, so it persists across redeploys.
 
 ### JWT Claims Mapping
 

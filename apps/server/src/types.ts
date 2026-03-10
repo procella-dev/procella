@@ -1,6 +1,6 @@
-// @strata/server — Hono environment type definitions.
+// @procella/server — Hono environment type definitions.
 
-import type { Caller } from "@strata/types";
+import type { Caller } from "@procella/types";
 
 // ============================================================================
 // Hono Env

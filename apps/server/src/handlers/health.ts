@@ -1,7 +1,7 @@
-// @strata/server — Health and capabilities handlers.
+// @procella/server — Health and capabilities handlers.
 
-import type { Database } from "@strata/db";
-import type { CapabilitiesResponse, CLIVersionResponse } from "@strata/types";
+import type { Database } from "@procella/db";
+import type { CapabilitiesResponse, CLIVersionResponse } from "@procella/types";
 import { sql } from "drizzle-orm";
 import type { Context } from "hono";
 import type { Env } from "../types.js";

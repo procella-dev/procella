@@ -7,9 +7,9 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  ECR_REPOSITORY: strata
-  ECS_CLUSTER: strata-cluster
-  ECS_SERVICE: strata-service
+  ECR_REPOSITORY: procella
+  ECS_CLUSTER: procella-cluster
+  ECS_SERVICE: procella-service
 
 jobs:
   build-and-deploy:

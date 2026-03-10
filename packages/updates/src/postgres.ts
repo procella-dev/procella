@@ -1,9 +1,9 @@
-// @strata/updates — PostgreSQL implementation of UpdatesService.
+// @procella/updates — PostgreSQL implementation of UpdatesService.
 
-import type { CryptoService } from "@strata/crypto";
-import type { Database } from "@strata/db";
-import { checkpoints, stacks, updateEvents, updates } from "@strata/db";
-import type { BlobStorage } from "@strata/storage";
+import type { CryptoService } from "@procella/crypto";
+import type { Database } from "@procella/db";
+import { checkpoints, stacks, updateEvents, updates } from "@procella/db";
+import type { BlobStorage } from "@procella/storage";
 import type {
 	CompleteUpdateRequest,
 	EngineEvent,
@@ -23,13 +23,13 @@ import type {
 	UpdateProgramResponse,
 	UpdateResults,
 	UpdateStatus,
-} from "@strata/types";
+} from "@procella/types";
 import {
 	CheckpointNotFoundError,
 	LeaseExpiredError,
 	UpdateConflictError,
 	UpdateNotFoundError,
-} from "@strata/types";
+} from "@procella/types";
 import { and, desc, eq, gt, max, sql } from "drizzle-orm";
 import {
 	applyDelta,

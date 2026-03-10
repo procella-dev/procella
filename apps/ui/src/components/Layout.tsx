@@ -24,7 +24,7 @@ export function Layout() {
 							to="/"
 							className="text-xl font-bold tracking-tight text-zinc-100 hover:text-white transition-colors"
 						>
-							Strata
+							Procella
 						</Link>
 						<span className="px-2 py-1 rounded-md bg-zinc-800 text-xs font-medium text-zinc-400 border border-zinc-700">
 							Pulumi Backend
@@ -128,7 +128,7 @@ function DevTokenInput() {
 	const [token, setToken] = useState("");
 
 	useEffect(() => {
-		const savedToken = localStorage.getItem("strata-token");
+		const savedToken = localStorage.getItem("procella-token");
 		if (savedToken) {
 			setToken(savedToken);
 		}
@@ -137,7 +137,7 @@ function DevTokenInput() {
 	const handleTokenChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const newToken = e.target.value;
 		setToken(newToken);
-		localStorage.setItem("strata-token", newToken);
+		localStorage.setItem("procella-token", newToken);
 	};
 
 	return (

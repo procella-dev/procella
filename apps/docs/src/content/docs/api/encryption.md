@@ -103,7 +103,7 @@ The order of plaintexts matches the order of ciphertexts in the request.
 POST /api/stacks/{org}/{project}/{stack}/decrypt/log-decryption
 ```
 
-The Pulumi CLI sends this request to log that a decryption occurred. Strata accepts it but performs no action (no-op). Returns `200 OK`.
+The Pulumi CLI sends this request to log that a decryption occurred. Procella accepts it but performs no action (no-op). Returns `200 OK`.
 
 ## Error Handling
 

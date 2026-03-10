@@ -2,7 +2,7 @@ import { AuthProvider } from "@descope/react-sdk";
 import type { ReactNode } from "react";
 import { useAuthConfig } from "../hooks/useAuthConfig";
 
-export function StrataAuthProvider({ children }: { children: ReactNode }) {
+export function ProcellaAuthProvider({ children }: { children: ReactNode }) {
 	const { config, isLoading } = useAuthConfig();
 
 	if (isLoading || !config) {
@@ -14,7 +14,7 @@ export function StrataAuthProvider({ children }: { children: ReactNode }) {
 	}
 
 	if (config.mode === "descope") {
-		localStorage.removeItem("strata-token");
+		localStorage.removeItem("procella-token");
 		return <AuthProvider projectId={config.projectId}>{children}</AuthProvider>;
 	}
 

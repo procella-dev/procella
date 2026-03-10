@@ -1,5 +1,5 @@
 # Profiles: (none)=deps only, dev=single server, cluster=N replicas behind Caddy LB
-x-strata: &strata
+x-procella: &procella
   build: .
   depends_on:
     postgres:
@@ -10,20 +10,20 @@ x-strata: &strata
       condition: service_completed_successfully
     migrate:
       condition: service_completed_successfully
-  environment: &strata-env
-    STRATA_LISTEN_ADDR: ":9090"
-    STRATA_DATABASE_URL: "postgres://strata:strata@postgres:5432/strata?sslmode=disable"
-    STRATA_AUTH_MODE: dev
-    STRATA_DEV_AUTH_TOKEN: devtoken123
-    STRATA_DEV_USER_LOGIN: dev-user
-    STRATA_DEV_ORG_LOGIN: dev-org
-    STRATA_DEV_USERS: '[{"token":"token-user-b","login":"user-b","org":"org-b","role":"admin"},{"token":"token-viewer","login":"viewer-user","org":"dev-org","role":"viewer"}]'
-    STRATA_BLOB_BACKEND: s3
-    STRATA_BLOB_S3_BUCKET: strata-checkpoints
-    STRATA_BLOB_S3_ENDPOINT: http://minio:9000
+  environment: &procella-env
+    PROCELLA_LISTEN_ADDR: ":9090"
+    PROCELLA_DATABASE_URL: "postgres://procella:procella@postgres:5432/procella?sslmode=disable"
+    PROCELLA_AUTH_MODE: dev
+    PROCELLA_DEV_AUTH_TOKEN: devtoken123
+    PROCELLA_DEV_USER_LOGIN: dev-user
+    PROCELLA_DEV_ORG_LOGIN: dev-org
+    PROCELLA_DEV_USERS: '[{"token":"token-user-b","login":"user-b","org":"org-b","role":"admin"},{"token":"token-viewer","login":"viewer-user","org":"dev-org","role":"viewer"}]'
+    PROCELLA_BLOB_BACKEND: s3
+    PROCELLA_BLOB_S3_BUCKET: procella-checkpoints
+    PROCELLA_BLOB_S3_ENDPOINT: http://minio:9000
     AWS_ACCESS_KEY_ID: minio
     AWS_SECRET_ACCESS_KEY: minio
-  healthcheck: &strata-health
+  healthcheck: &procella-health
     test: ["CMD-SHELL", "curl -sf http://localhost:9090/healthz || exit 1"]
     interval: 5s
     timeout: 3s
@@ -33,15 +33,15 @@ services:
   postgres:
     image: postgres:17-alpine
     environment:
-      POSTGRES_USER: strata
-      POSTGRES_PASSWORD: strata
-      POSTGRES_DB: strata
+      POSTGRES_USER: procella
+      POSTGRES_PASSWORD: procella
+      POSTGRES_DB: procella
     ports:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U strata"]
+      test: ["CMD-SHELL", "pg_isready -U procella"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -71,19 +71,19 @@ services:
     entrypoint: >
       /bin/sh -c "
       mc alias set local http://minio:9000 minioadmin minioadmin &&
-      mc mb --ignore-existing local/strata-checkpoints &&
+      mc mb --ignore-existing local/procella-checkpoints &&
       echo 'bucket ready'
       "
     restart: "no"
 
-  strata:
-    <<: *strata
+  procella:
+    <<: *procella
     profiles: [dev]
     ports:
       - "9090:9090"
 
-  strata-cluster:
-    <<: *strata
+  procella-cluster:
+    <<: *procella
     profiles: [cluster]
     deploy:
       replicas: 3
@@ -97,17 +97,17 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      STRATA_DATABASE_URL: "postgres://strata:strata@postgres:5432/strata?sslmode=disable"
+      PROCELLA_DATABASE_URL: "postgres://procella:procella@postgres:5432/procella?sslmode=disable"
     entrypoint: ["bun", "drizzle-kit", "migrate", "--config", "packages/db/drizzle.config.ts"]
     restart: "no"
 
-  strata-ui:
+  procella-ui:
     build:
       context: .
       dockerfile: apps/ui/Dockerfile
     profiles: [cluster]
     depends_on:
-      strata-cluster:
+      procella-cluster:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:80/ || exit 1"]
@@ -119,9 +119,9 @@ services:
     image: caddy:2-alpine
     profiles: [cluster]
     depends_on:
-      strata-cluster:
+      procella-cluster:
         condition: service_healthy
-      strata-ui:
+      procella-ui:
         condition: service_healthy
     ports:
       - "9090:9090"

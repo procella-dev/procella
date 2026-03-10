@@ -1,4 +1,4 @@
-// @strata/updates — Service interface, types, and constants.
+// @procella/updates — Service interface, types, and constants.
 
 import type {
 	CompleteUpdateRequest,
@@ -16,7 +16,7 @@ import type {
 	UntypedDeployment,
 	UpdateProgramResponse,
 	UpdateResults,
-} from "@strata/types";
+} from "@procella/types";
 
 // ============================================================================
 // UpdatesService Interface

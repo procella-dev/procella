@@ -1,9 +1,9 @@
 ---
 title: Deploying to AWS with ECS
-description: Deploy Strata to AWS using ECS, PostgreSQL on EFS, and CloudFront for a cost-effective self-hosted Pulumi backend (~$150/month)
+description: Deploy Procella to AWS using ECS, PostgreSQL on EFS, and CloudFront for a cost-effective self-hosted Pulumi backend (~$150/month)
 ---
 
-Strata can be self-hosted on AWS using ECS (Elastic Container Service) for the API server and PostgreSQL database, with static assets served via S3 and CloudFront. This approach is production-ready and significantly cheaper than managed alternatives.
+Procella can be self-hosted on AWS using ECS (Elastic Container Service) for the API server and PostgreSQL database, with static assets served via S3 and CloudFront. This approach is production-ready and significantly cheaper than managed alternatives.
 
 ## Architecture
 
@@ -17,19 +17,19 @@ Strata can be self-hosted on AWS using ECS (Elastic Container Service) for the A
 ```
 ┌─────────────────────────────────────────────────────────┐
 │ CloudFront CDN                                          │
-│ ├─ strata.strata.com (React UI, 1-year cache)         │
-│ └─ docs.strata.com (Astro docs, 1-hour cache)         │
+│ ├─ procella.procella.dev (React UI, 1-year cache)         │
+│ └─ docs.procella.dev (Astro docs, 1-hour cache)         │
 └──────────────────────┬──────────────────────────────────┘
                        │ HTTPS
 ┌──────────────────────┴──────────────────────────────────┐
 │ ALB (Application Load Balancer)                         │
 │ ├─ Health check: /healthz every 5s                     │
-│ └─ Targets: ECS Strata server (port 9090)              │
+│ └─ Targets: ECS Procella server (port 9090)              │
 └──────────────────────┬──────────────────────────────────┘
                        │ Port 9090
 ┌──────────────────────┴──────────────────────────────────┐
-│ ECS Cluster (strata)                                    │
-│ ├─ Strata Service (2-10 replicas)                      │
+│ ECS Cluster (procella)                                    │
+│ ├─ Procella Service (2-10 replicas)                      │
 │ │  ├─ 0.5 vCPU, 1GB RAM per replica                   │
 │ │  └─ Auto-scales on CPU > 70%                         │
 │ │                                                       │
@@ -62,7 +62,7 @@ Strata can be self-hosted on AWS using ECS (Elastic Container Service) for the A
 **Compared to alternatives:**
 - **RDS PostgreSQL**: $1,800+/month (managed database)
 - **Pulumi Cloud**: $10-500+/month (hosted service)
-- **Strata on ECS**: ~$150/month (self-hosted)
+- **Procella on ECS**: ~$150/month (self-hosted)
 
 ## Prerequisites
 
@@ -73,12 +73,12 @@ Before deploying, you need:
 - Default VPC or ability to create new VPC
 
 ### Domain
-- Domain name (e.g., `strata.com`)
+- Domain name (e.g., `procella.dev`)
 - Access to Route53 or external domain registrar
 - Subdomains will be auto-configured:
-  - `strata.strata.com` — Web UI
-  - `api.strata.com` — API server
-  - `docs.strata.com` — Documentation
+  - `procella.procella.dev` — Web UI
+  - `api.procella.dev` — API server
+  - `docs.procella.dev` — Documentation
 
 ### Descope Authentication
 - [Descope account](https://www.descope.com/) and project
@@ -103,8 +103,8 @@ git --version
 ### 1. Clone & Configure
 
 ```bash
-git clone https://github.com/your-org/strata-iac.git
-cd strata
+git clone https://github.com/procella-dev/procella.git
+cd procella
 
 # Create environment file with Descope credentials
 cp .env.example .env
@@ -127,14 +127,14 @@ This takes 5-10 minutes. Once complete, your infrastructure is running.
 
 ```bash
 # Health check
-curl https://api.strata.com/healthz
+curl https://api.procella.dev/healthz
 # Should return: HTTP 200 OK
 
 # Access web UI
-open https://strata.strata.com
+open https://procella.procella.dev
 
 # Access documentation
-open https://docs.strata.com
+open https://docs.procella.dev
 ```
 
 ## Detailed Deployment Guide
@@ -154,7 +154,7 @@ Key sections in the detailed guide:
 
 ## Why ECS + EFS for Database?
 
-Instead of using RDS (AWS's managed relational database), Strata can use PostgreSQL on ECS with EFS storage:
+Instead of using RDS (AWS's managed relational database), Procella can use PostgreSQL on ECS with EFS storage:
 
 ### ECS + EFS (~$30/month)
 - **Pros**: Cheap, full control, portable, no vendor lock-in
@@ -170,7 +170,7 @@ For most self-hosted deployments, ECS + EFS is the right choice.
 
 ## Auto-Scaling
 
-The Strata API server automatically scales based on demand:
+The Procella API server automatically scales based on demand:
 
 - **Min replicas**: 2 (always running)
 - **Max replicas**: 10 (under extreme load)
@@ -185,13 +185,13 @@ Monitor your deployment via CloudWatch:
 
 ```bash
 # Stream application logs
-aws logs tail /ecs/strata-server --follow
+aws logs tail /ecs/procella-server --follow
 
 # Stream database logs
-aws logs tail /ecs/strata-db --follow
+aws logs tail /ecs/procella-db --follow
 
 # View ECS service status
-aws ecs describe-services --cluster strata --services strata-server
+aws ecs describe-services --cluster procella --services procella-server
 ```
 
 Logs are retained for 7 days. Increase retention in `sst.config.ts` if needed.
@@ -224,13 +224,13 @@ If something goes wrong, rollback to the previous version:
 
 ```bash
 # Get previous task definition
-aws ecs describe-task-definition --task-definition strata-server:N
+aws ecs describe-task-definition --task-definition procella-server:N
 
 # Update service to use it
 aws ecs update-service \
-  --cluster strata \
-  --service strata-server \
-  --task-definition strata-server:N-1
+  --cluster procella \
+  --service procella-server \
+  --task-definition procella-server:N-1
 ```
 
 ## Backups & Disaster Recovery
@@ -243,7 +243,7 @@ Create EFS snapshots:
 # Manual snapshot
 aws ec2 create-snapshot \
   --volume-id <efs-id> \
-  --description "Strata DB backup"
+  --description "Procella DB backup"
 ```
 
 Or use AWS Backup for automated daily snapshots.
@@ -255,11 +255,11 @@ S3 buckets have versioning enabled:
 ```bash
 # List object versions
 aws s3api list-object-versions \
-  --bucket strata-checkpoints-xxx
+  --bucket procella-checkpoints-xxx
 
 # Restore old version
 aws s3api get-object \
-  --bucket strata-checkpoints-xxx \
+  --bucket procella-checkpoints-xxx \
   --key state.json \
   --version-id <version-id> \
   state.json
@@ -269,12 +269,12 @@ aws s3api get-object \
 
 1. **[Full Deployment Guide](../../DEPLOYMENT.md)** — Complete step-by-step instructions
 2. **[Configuration Reference](../getting-started/configuration.md)** — All STRATA_* variables
-3. **[Architecture Overview](../architecture/overview.md)** — How Strata works internally
-4. **[Pulumi CLI](https://www.pulumi.com/docs/reference/cli/)** — Using Strata with `pulumi up`
+3. **[Architecture Overview](../architecture/overview.md)** — How Procella works internally
+4. **[Pulumi CLI](https://www.pulumi.com/docs/reference/cli/)** — Using Procella with `pulumi up`
 
 ## Support
 
-- 📖 [Strata Docs](/)
+- 📖 [Procella Docs](/)
 - 🔗 [Pulumi Service API Docs](https://www.pulumi.com/docs/concepts/how-pulumi-works/service/)
 - ☁️ [AWS ECS Docs](https://docs.aws.amazon.com/ecs/)
 - 🚀 [SST Framework Docs](https://sst.dev/docs/)

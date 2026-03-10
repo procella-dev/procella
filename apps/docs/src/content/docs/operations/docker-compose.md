@@ -16,9 +16,9 @@ docker compose up -d
 Starts only the shared infrastructure:
 - **PostgreSQL 17** — database on port 5432
 - **MinIO** — S3-compatible blob storage on ports 9000 (API) and 9001 (console)
-- **MinIO Init** — one-shot container that creates the `strata-checkpoints` bucket
+- **MinIO Init** — one-shot container that creates the `procella-checkpoints` bucket
 
-Use this when running the Strata server directly on your machine (e.g., via `bun run dev`).
+Use this when running the Procella server directly on your machine (e.g., via `bun run dev`).
 
 ### Dev Profile — Single Server
 
@@ -28,7 +28,7 @@ docker compose --profile dev up --build
 
 Starts the dependencies plus:
 - **Migrate** — one-shot container that runs database migrations via `drizzle-kit`
-- **Strata** — single server instance on port 9090
+- **Procella** — single server instance on port 9090
 
 ### Cluster Profile — Multi-Replica
 
@@ -39,8 +39,8 @@ bun run docker:cluster
 
 Starts the dependencies plus:
 - **Migrate** — one-shot container that runs database migrations via `drizzle-kit`
-- **3 Strata replicas** — using Docker Compose `deploy.replicas: 3`
-- **Strata UI** — Caddy serving the React SPA on port 80
+- **3 Procella replicas** — using Docker Compose `deploy.replicas: 3`
+- **Procella UI** — Caddy serving the React SPA on port 80
 - **Caddy** — reverse proxy on port 9090, routing `/api/*` and `/trpc/*` to server replicas and `/*` to the UI
 
 ## Caddy Configuration
@@ -50,22 +50,22 @@ Caddy routes requests based on path:
 ```
 :9090 {
     handle /api/* {
-        reverse_proxy strata-cluster:9090
+        reverse_proxy procella-cluster:9090
     }
     handle /trpc/* {
-        reverse_proxy strata-cluster:9090
+        reverse_proxy procella-cluster:9090
     }
     handle {
-        reverse_proxy strata-ui:80
+        reverse_proxy procella-ui:80
     }
 }
 ```
 
-`/api/*` (Pulumi CLI protocol) and `/trpc/*` (dashboard API) route to the Strata server replicas. All other paths route to the UI container, which serves the React SPA with client-side routing fallback.
+`/api/*` (Pulumi CLI protocol) and `/trpc/*` (dashboard API) route to the Procella server replicas. All other paths route to the UI container, which serves the React SPA with client-side routing fallback.
 
 ## Healthcheck
 
-All Strata containers expose a health endpoint that checks both the server and database connectivity:
+All Procella containers expose a health endpoint that checks both the server and database connectivity:
 
 ```
 GET /healthz → 200 OK (server + database healthy)
@@ -92,7 +92,7 @@ Migrations run automatically via a one-shot `migrate` container that executes `d
 |---|---|---|
 | `bun run dev` | Starts deps + Bun server + Vite UI | Full dev environment |
 | `bun run dev:down` | `docker compose down -v` | Stop dev + remove volumes |
-| `bun run docker:build` | `docker build -t strata:dev .` | Build Docker image |
+| `bun run docker:build` | `docker build -t procella:dev .` | Build Docker image |
 | `bun run docker:cluster` | `docker compose --profile cluster up --build` | Start cluster |
 
 ## Volumes

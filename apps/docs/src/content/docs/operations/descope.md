@@ -1,22 +1,22 @@
 ---
 title: Descope Setup
-description: Configure Strata for production multi-tenant auth with Descope.
+description: Configure Procella for production multi-tenant auth with Descope.
 ---
 
-Descope mode replaces the static dev token with full multi-tenant authentication: users sign in via Descope, receive a JWT, and use Descope access keys as their `PULUMI_ACCESS_TOKEN`. You get browser-based `pulumi login`, role-based access control, audit logs, and self-service token management — all managed through the Strata dashboard.
+Descope mode replaces the static dev token with full multi-tenant authentication: users sign in via Descope, receive a JWT, and use Descope access keys as their `PULUMI_ACCESS_TOKEN`. You get browser-based `pulumi login`, role-based access control, audit logs, and self-service token management — all managed through the Procella dashboard.
 
 See [Authentication Architecture](../architecture/authentication/) for how the auth layer works internally.
 
 ## Prerequisites
 
 - A [Descope](https://app.descope.com) account
-- Strata deployed and reachable (see [Docker Compose](./docker-compose/))
+- Procella deployed and reachable (see [Docker Compose](./docker-compose/))
 - [Pulumi CLI](https://www.pulumi.com/docs/install/) installed (for the `infra/` deployment step)
 
 ## Step 1: Create a Descope Project
 
 1. Sign in to [app.descope.com](https://app.descope.com)
-2. Create a new project — name it anything (e.g. `Strata`)
+2. Create a new project — name it anything (e.g. `Procella`)
 3. Copy the **Project ID** from the project settings (it starts with `P`)
 
 ## Step 2: Deploy Descope Configuration
@@ -39,18 +39,18 @@ pulumi config set --secret DescopeManagementKey <your-management-key>
 pulumi up
 ```
 
-After `pulumi up` completes, your Descope project has all roles, flows, and JWT templates configured correctly for Strata.
+After `pulumi up` completes, your Descope project has all roles, flows, and JWT templates configured correctly for Procella.
 
 ## Step 3: Configure Environment Variables
 
-Set these on your Strata server:
+Set these on your Procella server:
 
 | Variable | Required | Description |
 |---|---|---|
-| `STRATA_AUTH_MODE` | Yes | Set to `descope` |
-| `STRATA_DESCOPE_PROJECT_ID` | Yes | Your Descope project ID (from Step 1) |
-| `STRATA_DESCOPE_MANAGEMENT_KEY` | Recommended | Descope management key — required for browser `pulumi login` flow and API token management in the dashboard |
-| `STRATA_ENCRYPTION_KEY` | Yes (production) | 64 hex chars — required when `STRATA_AUTH_MODE=descope` |
+| `PROCELLA_AUTH_MODE` | Yes | Set to `descope` |
+| `PROCELLA_DESCOPE_PROJECT_ID` | Yes | Your Descope project ID (from Step 1) |
+| `PROCELLA_DESCOPE_MANAGEMENT_KEY` | Recommended | Descope management key — required for browser `pulumi login` flow and API token management in the dashboard |
+| `PROCELLA_ENCRYPTION_KEY` | Yes (production) | 64 hex chars — required when `PROCELLA_AUTH_MODE=descope` |
 
 Generate an encryption key:
 
@@ -59,19 +59,19 @@ openssl rand -hex 32
 ```
 
 :::caution
-`STRATA_ENCRYPTION_KEY` is required in Descope mode. Back it up securely — losing it means losing access to all encrypted stack secrets.
+`PROCELLA_ENCRYPTION_KEY` is required in Descope mode. Back it up securely — losing it means losing access to all encrypted stack secrets.
 :::
 
 :::note
-`STRATA_DESCOPE_MANAGEMENT_KEY` is optional but strongly recommended. Without it, `pulumi login` falls back to a manual token entry form and the API Tokens page in the dashboard is unavailable.
+`PROCELLA_DESCOPE_MANAGEMENT_KEY` is optional but strongly recommended. Without it, `pulumi login` falls back to a manual token entry form and the API Tokens page in the dashboard is unavailable.
 :::
 
 ## Step 4: pulumi login (Browser Flow)
 
-With `STRATA_DESCOPE_MANAGEMENT_KEY` set, users can log in with a single command:
+With `PROCELLA_DESCOPE_MANAGEMENT_KEY` set, users can log in with a single command:
 
 ```bash
-pulumi login http://your-strata-host
+pulumi login http://your-procella-host
 ```
 
 What happens:

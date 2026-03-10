@@ -1,13 +1,13 @@
-// @strata/stacks — Stack management domain (projects, stacks, tags)
+// @procella/stacks — Stack management domain (projects, stacks, tags)
 
-import type { Database } from "@strata/db";
-import { projects, stacks } from "@strata/db";
+import type { Database } from "@procella/db";
+import { projects, stacks } from "@procella/db";
 import {
 	ConflictError,
 	parseStackFQN,
 	StackAlreadyExistsError,
 	StackNotFoundError,
-} from "@strata/types";
+} from "@procella/types";
 import { and, eq, sql } from "drizzle-orm";
 
 // ============================================================================

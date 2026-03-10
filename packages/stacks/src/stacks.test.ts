@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { parseStackFQN } from "@strata/types";
+import { parseStackFQN } from "@procella/types";
 import type { StackInfo, StacksService } from "./index.js";
 import { buildStackTags, mergeTags } from "./index.js";
 
-describe("@strata/stacks", () => {
+describe("@procella/stacks", () => {
 	// ========================================================================
 	// StackInfo type structure (compile-time check)
 	// ========================================================================
@@ -100,7 +100,7 @@ describe("@strata/stacks", () => {
 	});
 
 	// ========================================================================
-	// FQN parsing (via @strata/types, tested for stacks context)
+	// FQN parsing (via @procella/types, tested for stacks context)
 	// ========================================================================
 
 	describe("FQN parsing", () => {

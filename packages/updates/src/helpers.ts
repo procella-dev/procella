@@ -1,7 +1,7 @@
-// @strata/updates — Pure helper functions.
+// @procella/updates — Pure helper functions.
 
-import type { UntypedDeployment } from "@strata/types";
-import { InvalidUpdateTokenError } from "@strata/types";
+import type { UntypedDeployment } from "@procella/types";
+import { InvalidUpdateTokenError } from "@procella/types";
 import { LEASE_DURATION_SECONDS } from "./types.js";
 
 // ============================================================================

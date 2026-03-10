@@ -1,4 +1,4 @@
-// @strata/api — events.list tRPC procedure.
+// @procella/api — events.list tRPC procedure.
 
 import { z } from "zod/v4";
 import { publicProcedure, router } from "../trpc.js";

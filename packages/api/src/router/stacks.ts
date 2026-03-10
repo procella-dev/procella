@@ -1,6 +1,6 @@
-// @strata/api — stacks.list tRPC procedure.
+// @procella/api — stacks.list tRPC procedure.
 
-import { checkpoints, updates } from "@strata/db";
+import { checkpoints, updates } from "@procella/db";
 import { max, sql } from "drizzle-orm";
 import { publicProcedure, router } from "../trpc.js";
 

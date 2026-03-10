@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { getTableColumns, getTableName } from "drizzle-orm";
 import { checkpoints, projects, stacks, updateEvents, updates } from "./schema.js";
 
-describe("@strata/db schema", () => {
+describe("@procella/db schema", () => {
 	describe("projects table", () => {
 		test("is named 'projects'", () => {
 			expect(getTableName(projects)).toBe("projects");

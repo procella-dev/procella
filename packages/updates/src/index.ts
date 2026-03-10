@@ -1,4 +1,4 @@
-// @strata/updates — Update lifecycle domain (updates, events, checkpoints, GC)
+// @procella/updates — Update lifecycle domain (updates, events, checkpoints, GC)
 
 export { GCWorker } from "./gc-worker.js";
 export * from "./helpers.js";

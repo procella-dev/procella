@@ -1,4 +1,4 @@
-// @strata/types — Pulumi protocol types and shared domain interfaces
+// @procella/types — Pulumi protocol types and shared domain interfaces
 
 export * from "./domain.js";
 export * from "./errors.js";

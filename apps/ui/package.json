@@ -1,5 +1,5 @@
 {
-	"name": "@strata/ui",
+	"name": "@procella/ui",
 	"private": true,
 	"type": "module",
 	"scripts": {
@@ -10,8 +10,8 @@
 	},
 	"dependencies": {
 		"@descope/react-sdk": "^2.26.7",
-		"@strata/api": "workspace:*",
-		"@strata/types": "workspace:*",
+		"@procella/api": "workspace:*",
+		"@procella/types": "workspace:*",
 		"@tanstack/react-query": "catalog:",
 		"@trpc/client": "catalog:",
 		"@trpc/react-query": "catalog:",

@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router";
 import "./index.css";
 
-import { StrataAuthProvider } from "./components/AuthProvider";
+import { ProcellaAuthProvider } from "./components/AuthProvider";
 import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { CliLogin } from "./pages/CliLogin";
@@ -65,7 +65,7 @@ function TRPCProvider({ children }: { children: React.ReactNode }) {
 
 function App() {
 	return (
-		<StrataAuthProvider>
+		<ProcellaAuthProvider>
 			<TRPCProvider>
 				<BrowserRouter>
 					<Routes>
@@ -97,7 +97,7 @@ function App() {
 					</Routes>
 				</BrowserRouter>
 			</TRPCProvider>
-		</StrataAuthProvider>
+		</ProcellaAuthProvider>
 	);
 }
 

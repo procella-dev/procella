@@ -1,6 +1,6 @@
-// @strata/server — User endpoint handlers.
+// @procella/server — User endpoint handlers.
 
-import type { StacksService } from "@strata/stacks";
+import type { StacksService } from "@procella/stacks";
 import type { Context } from "hono";
 import type { Env } from "../types.js";
 import { param } from "./params.js";

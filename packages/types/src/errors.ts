@@ -1,17 +1,17 @@
-// @strata/types — Domain error classes.
+// @procella/types — Domain error classes.
 
 // ============================================================================
 // Base Error
 // ============================================================================
 
-export class StrataError extends Error {
+export class ProcellaError extends Error {
 	constructor(
 		message: string,
 		public readonly code: string,
 		public readonly statusCode: number,
 	) {
 		super(message);
-		this.name = "StrataError";
+		this.name = "ProcellaError";
 	}
 }
 
@@ -19,35 +19,35 @@ export class StrataError extends Error {
 // HTTP Status Errors
 // ============================================================================
 
-export class NotFoundError extends StrataError {
+export class NotFoundError extends ProcellaError {
 	constructor(resource: string, id: string) {
 		super(`${resource} not found: ${id}`, "NOT_FOUND", 404);
 		this.name = "NotFoundError";
 	}
 }
 
-export class ConflictError extends StrataError {
+export class ConflictError extends ProcellaError {
 	constructor(message: string) {
 		super(message, "CONFLICT", 409);
 		this.name = "ConflictError";
 	}
 }
 
-export class BadRequestError extends StrataError {
+export class BadRequestError extends ProcellaError {
 	constructor(message: string) {
 		super(message, "BAD_REQUEST", 400);
 		this.name = "BadRequestError";
 	}
 }
 
-export class UnauthorizedError extends StrataError {
+export class UnauthorizedError extends ProcellaError {
 	constructor(message?: string) {
 		super(message ?? "Unauthorized", "UNAUTHORIZED", 401);
 		this.name = "UnauthorizedError";
 	}
 }
 
-export class ForbiddenError extends StrataError {
+export class ForbiddenError extends ProcellaError {
 	constructor(message?: string) {
 		super(message ?? "Forbidden", "FORBIDDEN", 403);
 		this.name = "ForbiddenError";

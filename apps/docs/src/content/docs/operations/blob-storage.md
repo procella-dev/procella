@@ -3,11 +3,11 @@ title: Blob Storage
 description: Local filesystem and S3-compatible checkpoint storage backends.
 ---
 
-Strata stores checkpoint data (infrastructure state snapshots) in a blob storage backend. Two backends are supported: local filesystem and S3-compatible object storage.
+Procella stores checkpoint data (infrastructure state snapshots) in a blob storage backend. Two backends are supported: local filesystem and S3-compatible object storage.
 
 ## Backend Selection
 
-Set `STRATA_BLOB_BACKEND` to choose the backend:
+Set `PROCELLA_BLOB_BACKEND` to choose the backend:
 
 | Value | Backend | Use Case |
 |---|---|---|
@@ -17,8 +17,8 @@ Set `STRATA_BLOB_BACKEND` to choose the backend:
 ## Local Filesystem
 
 ```bash
-export STRATA_BLOB_BACKEND=local
-export STRATA_BLOB_LOCAL_PATH=./data/blobs
+export PROCELLA_BLOB_BACKEND=local
+export PROCELLA_BLOB_LOCAL_PATH=./data/blobs
 ```
 
 Checkpoints are stored as files in the specified directory. The directory is created automatically if it doesn't exist.
@@ -30,38 +30,38 @@ Local blob storage is **not suitable for multi-replica deployments**. Each repli
 ## S3-Compatible Storage
 
 ```bash
-export STRATA_BLOB_BACKEND=s3
-export STRATA_BLOB_S3_BUCKET=strata-checkpoints
+export PROCELLA_BLOB_BACKEND=s3
+export PROCELLA_BLOB_S3_BUCKET=procella-checkpoints
 ```
 
 Works with any S3-compatible object storage:
 
 | Provider | Configuration |
 |---|---|
-| AWS S3 | Set `STRATA_BLOB_S3_BUCKET`, configure AWS credentials via standard methods |
-| MinIO | Set `STRATA_BLOB_S3_ENDPOINT=http://minio:9000` + static credentials |
-| Cloudflare R2 | Set `STRATA_BLOB_S3_ENDPOINT` to R2 endpoint + API credentials |
-| DigitalOcean Spaces | Set `STRATA_BLOB_S3_ENDPOINT` + access keys |
+| AWS S3 | Set `PROCELLA_BLOB_S3_BUCKET`, configure AWS credentials via standard methods |
+| MinIO | Set `PROCELLA_BLOB_S3_ENDPOINT=http://minio:9000` + static credentials |
+| Cloudflare R2 | Set `PROCELLA_BLOB_S3_ENDPOINT` to R2 endpoint + API credentials |
+| DigitalOcean Spaces | Set `PROCELLA_BLOB_S3_ENDPOINT` + access keys |
 
 ### Custom Endpoint (MinIO, R2, etc.)
 
-When `STRATA_BLOB_S3_ENDPOINT` is set, Strata uses path-style addressing and requires explicit credentials:
+When `PROCELLA_BLOB_S3_ENDPOINT` is set, Procella uses path-style addressing and requires explicit credentials:
 
 ```bash
-export STRATA_BLOB_BACKEND=s3
-export STRATA_BLOB_S3_BUCKET=strata-checkpoints
-export STRATA_BLOB_S3_ENDPOINT=http://minio:9000
+export PROCELLA_BLOB_BACKEND=s3
+export PROCELLA_BLOB_S3_BUCKET=procella-checkpoints
+export PROCELLA_BLOB_S3_ENDPOINT=http://minio:9000
 export AWS_ACCESS_KEY_ID=minio
 export AWS_SECRET_ACCESS_KEY=minio
 ```
 
 ### AWS S3 (Standard)
 
-When no custom endpoint is set, Strata uses the standard AWS SDK credential chain:
+When no custom endpoint is set, Procella uses the standard AWS SDK credential chain:
 
 ```bash
-export STRATA_BLOB_BACKEND=s3
-export STRATA_BLOB_S3_BUCKET=my-strata-bucket
+export PROCELLA_BLOB_BACKEND=s3
+export PROCELLA_BLOB_S3_BUCKET=my-procella-bucket
 # Credentials via AWS_ACCESS_KEY_ID/SECRET, IAM role, etc.
 ```
 
@@ -100,8 +100,8 @@ minio-init:
   entrypoint: >
     /bin/sh -c "
     mc alias set local http://minio:9000 minioadmin minioadmin &&
-    mc mb --ignore-existing local/strata-checkpoints
+    mc mb --ignore-existing local/procella-checkpoints
     "
 ```
 
-The `minio-init` container automatically creates the `strata-checkpoints` bucket on first start. You can browse stored objects at [http://localhost:9001](http://localhost:9001).
+The `minio-init` container automatically creates the `procella-checkpoints` bucket on first start. You can browse stored objects at [http://localhost:9001](http://localhost:9001).

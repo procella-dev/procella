@@ -61,7 +61,7 @@ function DescopeCliLogin({
 				Authorization: `Bearer ${sessionToken}`,
 			},
 			body: JSON.stringify({
-				name: description ? `strata-cli: ${description}` : undefined,
+				name: description ? `procella-cli: ${description}` : undefined,
 			}),
 		})
 			.then((r) => r.json() as Promise<{ token?: string; error?: string }>)
@@ -105,8 +105,8 @@ function DescopeCliLogin({
 				<div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl p-8 space-y-3 text-center">
 					<p className="text-red-400 text-sm">{errorMsg}</p>
 					<p className="text-zinc-500 text-xs">
-						Make sure <code className="text-zinc-300">STRATA_DESCOPE_MANAGEMENT_KEY</code> is set on
-						the server.
+						Make sure <code className="text-zinc-300">PROCELLA_DESCOPE_MANAGEMENT_KEY</code> is set
+						on the server.
 					</p>
 				</div>
 			</Screen>
@@ -191,7 +191,7 @@ function Screen({ children }: { children: React.ReactNode }) {
 	return (
 		<div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-4">
 			<div className="mb-8 text-center">
-				<h1 className="text-3xl font-bold text-zinc-100">Strata</h1>
+				<h1 className="text-3xl font-bold text-zinc-100">Procella</h1>
 				<p className="mt-2 text-sm text-zinc-400">Sign in to your Pulumi backend</p>
 			</div>
 			{children}

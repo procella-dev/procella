@@ -1,4 +1,4 @@
-// @strata/server — Decompress gzip request bodies.
+// @procella/server — Decompress gzip request bodies.
 //
 // The Pulumi CLI sends checkpoint and event payloads with
 // Content-Encoding: gzip. Hono does not auto-decompress request bodies,

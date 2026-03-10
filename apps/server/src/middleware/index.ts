@@ -1,4 +1,4 @@
-// @strata/server — Middleware barrel exports.
+// @procella/server — Middleware barrel exports.
 
 export { apiAuth, requireRoleMiddleware, updateAuth } from "./auth.js";
 export { decompress } from "./decompress.js";

@@ -1,7 +1,7 @@
-// @strata/server — Event batch + get + lease handlers.
+// @procella/server — Event batch + get + lease handlers.
 
-import type { EngineEventBatch, RenewUpdateLeaseRequest } from "@strata/types";
-import type { UpdatesService } from "@strata/updates";
+import type { EngineEventBatch, RenewUpdateLeaseRequest } from "@procella/types";
+import type { UpdatesService } from "@procella/updates";
 import type { Context } from "hono";
 import type { Env } from "../types.js";
 import { param, updateContext } from "./params.js";

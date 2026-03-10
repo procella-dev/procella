@@ -3,15 +3,15 @@ import {
 	ErrorType,
 	formatStackFQN,
 	NotFoundError,
+	ProcellaError,
 	parseStackFQN,
 	type StackFQN,
-	StrataError,
 	UpdateKind,
 	UpdateResult,
 	UpdateStatus,
 } from "./index.js";
 
-describe("@strata/types", () => {
+describe("@procella/types", () => {
 	describe("StackFQN", () => {
 		test("parseStackFQN splits org/project/stack", () => {
 			const fqn = parseStackFQN("acme/my-project/production");
@@ -33,9 +33,9 @@ describe("@strata/types", () => {
 	});
 
 	describe("errors", () => {
-		test("StrataError has correct name and status", () => {
-			const err = new StrataError("test error", "TEST", 400);
-			expect(err.name).toBe("StrataError");
+		test("ProcellaError has correct name and status", () => {
+			const err = new ProcellaError("test error", "TEST", 400);
+			expect(err.name).toBe("ProcellaError");
 			expect(err.statusCode).toBe(400);
 			expect(err.code).toBe("TEST");
 			expect(err.message).toBe("test error");
@@ -46,7 +46,7 @@ describe("@strata/types", () => {
 			const err = new NotFoundError("stack", "abc-123");
 			expect(err.statusCode).toBe(404);
 			expect(err.code).toBe("NOT_FOUND");
-			expect(err).toBeInstanceOf(StrataError);
+			expect(err).toBeInstanceOf(ProcellaError);
 		});
 	});
 

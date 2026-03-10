@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { GCWorker } from "./gc-worker.js";
 import { GC_ADVISORY_LOCK_ID, GC_INTERVAL_MS, GC_STALE_THRESHOLD_MS } from "./types.js";
 
-describe("@strata/updates GCWorker", () => {
+describe("@procella/updates GCWorker", () => {
 	// ========================================================================
 	// Construction
 	// ========================================================================

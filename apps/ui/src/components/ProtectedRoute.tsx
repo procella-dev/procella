@@ -12,7 +12,7 @@ export function ProtectedRoute() {
 		return <DescopeGuard returnTo={location.pathname} />;
 	}
 
-	const token = localStorage.getItem("strata-token");
+	const token = localStorage.getItem("procella-token");
 	if (!token) {
 		return <Navigate to="/login" state={{ returnTo: location.pathname }} replace />;
 	}

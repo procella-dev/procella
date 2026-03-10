@@ -15,7 +15,7 @@ description: Prerequisites, setup, code style, and development workflow.
 
 ```bash
 git clone https://github.com/strata-iac/strata.git
-cd strata
+cd procella
 bun install
 
 # Start the full dev environment (PostgreSQL, MinIO, Bun server with hot-reload, Vite UI)
@@ -29,7 +29,7 @@ bun run dev
 - **Formatting**: Tab indentation, double quotes, semicolons (enforced by [Biome](https://biomejs.dev/))
 - **Linting**: Biome strict mode — no `console.log`, no `as any`, no `@ts-ignore`
 - **Type Safety**: TypeScript strict mode, no type error suppression
-- **Errors**: Throw typed errors from `@strata/types` (UnauthorizedError, NotFoundError, ConflictError, etc.)
+- **Errors**: Throw typed errors from `@procella/types` (UnauthorizedError, NotFoundError, ConflictError, etc.)
 - **Testing**: `bun:test` with `describe`, `test`, `expect`, `beforeAll`, `afterAll`
 
 ### Interfaces

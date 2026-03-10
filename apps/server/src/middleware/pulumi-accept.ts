@@ -1,4 +1,4 @@
-// @strata/server — PulumiAccept header validation middleware.
+// @procella/server — PulumiAccept header validation middleware.
 
 import type { MiddlewareHandler } from "hono";
 

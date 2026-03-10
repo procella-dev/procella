@@ -1,4 +1,4 @@
-# Strata
+# Procella
 
 A self-hosted [Pulumi](https://www.pulumi.com/) backend. Run `pulumi login`, `pulumi stack init`, `pulumi up`, and every other CLI command against your own infrastructure — no Pulumi Cloud account required.
 
@@ -36,8 +36,8 @@ A self-hosted [Pulumi](https://www.pulumi.com/) backend. Run `pulumi login`, `pu
 
 ```bash
 # Clone and start the dev environment
-git clone https://github.com/strata-iac/strata.git
-cd strata
+git clone https://github.com/procella-dev/procella.git
+cd procella
 bun run dev
 ```
 
@@ -72,26 +72,26 @@ See the [Horizontal Scaling](apps/docs/src/content/docs/operations/horizontal-sc
 
 ## Configuration
 
-All configuration is via `STRATA_*` environment variables. See `.env.example` for a complete reference.
+All configuration is via `PROCELLA_*` environment variables. See `.env.example` for a complete reference.
 
 | Variable | Default | Description |
 |---|---|---|
-| `STRATA_LISTEN_ADDR` | `:9090` | Server listen address |
-| `STRATA_DATABASE_URL` | *(required)* | PostgreSQL connection string |
-| `STRATA_AUTH_MODE` | `dev` | `dev` (static tokens) or `descope` (Descope access keys) |
-| `STRATA_DEV_AUTH_TOKEN` | *(required if dev)* | Static auth token for dev mode |
-| `STRATA_DEV_USER_LOGIN` | `dev-user` | Dev user login name |
-| `STRATA_DEV_ORG_LOGIN` | `dev-org` | Dev org login name |
-| `STRATA_DEV_USERS` | | JSON array of additional dev users |
-| `STRATA_DESCOPE_PROJECT_ID` | *(required if descope)* | Descope project ID |
-| `STRATA_DESCOPE_MANAGEMENT_KEY` | | Descope management key — enables `pulumi login` browser flow and API token creation |
-| `STRATA_BLOB_BACKEND` | `local` | `local` (filesystem) or `s3` (S3-compatible) |
-| `STRATA_BLOB_LOCAL_PATH` | `./data/blobs` | Local blob storage path |
-| `STRATA_BLOB_S3_BUCKET` | *(required if s3)* | S3 bucket name |
-| `STRATA_BLOB_S3_ENDPOINT` | | Custom S3 endpoint (MinIO, R2, etc.) |
-| `STRATA_BLOB_S3_REGION` | `us-east-1` | S3 region |
-| `STRATA_ENCRYPTION_KEY` | *(auto in dev)* | 64 hex chars (32 bytes) for AES-256-GCM |
-| `STRATA_CORS_ORIGINS` | *(unrestricted)* | Comma-separated allowed CORS origins |
+| `PROCELLA_LISTEN_ADDR` | `:9090` | Server listen address |
+| `PROCELLA_DATABASE_URL` | *(required)* | PostgreSQL connection string |
+| `PROCELLA_AUTH_MODE` | `dev` | `dev` (static tokens) or `descope` (Descope access keys) |
+| `PROCELLA_DEV_AUTH_TOKEN` | *(required if dev)* | Static auth token for dev mode |
+| `PROCELLA_DEV_USER_LOGIN` | `dev-user` | Dev user login name |
+| `PROCELLA_DEV_ORG_LOGIN` | `dev-org` | Dev org login name |
+| `PROCELLA_DEV_USERS` | | JSON array of additional dev users |
+| `PROCELLA_DESCOPE_PROJECT_ID` | *(required if descope)* | Descope project ID |
+| `PROCELLA_DESCOPE_MANAGEMENT_KEY` | | Descope management key — enables `pulumi login` browser flow and API token creation |
+| `PROCELLA_BLOB_BACKEND` | `local` | `local` (filesystem) or `s3` (S3-compatible) |
+| `PROCELLA_BLOB_LOCAL_PATH` | `./data/blobs` | Local blob storage path |
+| `PROCELLA_BLOB_S3_BUCKET` | *(required if s3)* | S3 bucket name |
+| `PROCELLA_BLOB_S3_ENDPOINT` | | Custom S3 endpoint (MinIO, R2, etc.) |
+| `PROCELLA_BLOB_S3_REGION` | `us-east-1` | S3 region |
+| `PROCELLA_ENCRYPTION_KEY` | *(auto in dev)* | 64 hex chars (32 bytes) for AES-256-GCM |
+| `PROCELLA_CORS_ORIGINS` | *(unrestricted)* | Comma-separated allowed CORS origins |
 
 Encryption keys are auto-generated in dev mode via `mise` (see `mise.toml`). For production, generate one with `openssl rand -hex 32`.
 
@@ -123,7 +123,7 @@ bun run docs:build     # Build static docs site
 ```
 packages/
   types/              Pulumi protocol types + domain types + errors
-  config/             Zod-validated env config (STRATA_*)
+  config/             Zod-validated env config (PROCELLA_*)
   db/                 Drizzle schema + Bun.sql connection factory
   crypto/             AES-256-GCM with HKDF per-stack key derivation
   storage/            Blob storage (local filesystem + S3)
@@ -131,13 +131,13 @@ packages/
   stacks/             Stack CRUD, rename, tags (PostgreSQL)
   updates/            Update lifecycle, checkpoints, events, GC worker
 apps/
-  api/                @strata/api — tRPC router (stacks, updates, events)
-  server/             @strata/server — Hono HTTP server (CLI + tRPC + middleware)
-  ui/                 @strata/ui — React SPA (Vite + Tailwind + tRPC client)
+  api/                @procella/api — tRPC router (stacks, updates, events)
+  server/             @procella/server — Hono HTTP server (CLI + tRPC + middleware)
+  ui/                 @procella/ui — React SPA (Vite + Tailwind + tRPC client)
                       Pages: StackList, StackDetail, UpdateDetail, Tokens, Settings, CliLogin
 examples/             Pulumi YAML example programs (7 examples)
 e2e/                  E2E acceptance tests (89 tests, 9 files)
-  docs/               @strata/docs — Starlight documentation site
+  docs/               @procella/docs — Starlight documentation site
 ```
 
 ## License

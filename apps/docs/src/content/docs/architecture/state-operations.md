@@ -3,7 +3,7 @@ title: State Operations
 description: Export, import, and versioned state retrieval.
 ---
 
-Strata supports the Pulumi CLI's state management commands: `pulumi stack export`, `pulumi stack import`, and versioned checkpoint retrieval.
+Procella supports the Pulumi CLI's state management commands: `pulumi stack export`, `pulumi stack import`, and versioned checkpoint retrieval.
 
 ## Export
 
@@ -52,7 +52,7 @@ Import is a **single-shot operation** — unlike regular updates, it does not fo
 2. Stores the checkpoint
 3. Returns the update ID
 
-After import, the CLI polls `GET .../update/{updateID}` to confirm success. Strata returns `UpdateResults{Status: "succeeded"}` immediately.
+After import, the CLI polls `GET .../update/{updateID}` to confirm success. Procella returns `UpdateResults{Status: "succeeded"}` immediately.
 
 ### Cross-Stack Import
 
@@ -63,7 +63,7 @@ pulumi stack export --stack org/project/source > state.json
 pulumi stack import --stack org/project/target --force < state.json
 ```
 
-The `--force` flag is a client-side safety check; Strata accepts the import regardless.
+The `--force` flag is a client-side safety check; Procella accepts the import regardless.
 
 ## Checkpoint Versioning
 

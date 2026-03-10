@@ -1,4 +1,4 @@
-// @strata/crypto — AES-256-GCM encryption with HKDF per-stack key derivation
+// @procella/crypto — AES-256-GCM encryption with HKDF per-stack key derivation
 
 import { createCipheriv, createDecipheriv, createHash, hkdfSync, randomBytes } from "node:crypto";
 
@@ -19,7 +19,7 @@ const ALGORITHM = "aes-256-gcm" as const;
 const NONCE_LENGTH = 12;
 const TAG_LENGTH = 16;
 const KEY_LENGTH = 32;
-const HKDF_INFO = "strata-encrypt";
+const HKDF_INFO = "procella-encrypt";
 
 // ============================================================================
 // AesCryptoService — production implementation
@@ -97,7 +97,7 @@ export class NopCryptoService implements CryptoService {
 // Dev helper — deterministic master key for development
 // ============================================================================
 
-/** Generate a deterministic master key from sha256("strata-dev-encryption-key"). */
+/** Generate a deterministic master key from sha256("procella-dev-encryption-key"). */
 export function devMasterKey(): string {
-	return createHash("sha256").update("strata-dev-encryption-key").digest("hex");
+	return createHash("sha256").update("procella-dev-encryption-key").digest("hex");
 }

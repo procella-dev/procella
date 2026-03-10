@@ -3,7 +3,7 @@ title: Testing
 description: Unit tests, E2E acceptance tests, and quality gates.
 ---
 
-Strata has two levels of testing: unit tests (320 tests across all packages) and E2E acceptance tests (89 tests exercising the full Pulumi CLI lifecycle).
+Procella has two levels of testing: unit tests (320 tests across all packages) and E2E acceptance tests (89 tests exercising the full Pulumi CLI lifecycle).
 
 ## Unit Tests
 
@@ -42,10 +42,10 @@ bun test --filter "encrypt"
 bun run e2e
 ```
 
-E2E tests exercise the full Pulumi CLI lifecycle against a real Strata server. They require:
+E2E tests exercise the full Pulumi CLI lifecycle against a real Procella server. They require:
 - PostgreSQL (started via `docker compose up -d`)
 - Pulumi CLI installed
-- `STRATA_DATABASE_URL` environment variable
+- `PROCELLA_DATABASE_URL` environment variable
 
 ### Test Files
 

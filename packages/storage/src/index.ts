@@ -1,4 +1,4 @@
-// @strata/storage — Blob storage abstraction (S3 and local filesystem)
+// @procella/storage — Blob storage abstraction (S3 and local filesystem)
 
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join, normalize } from "node:path";

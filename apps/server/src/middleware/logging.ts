@@ -1,4 +1,4 @@
-// @strata/server — Request logging middleware.
+// @procella/server — Request logging middleware.
 
 import type { MiddlewareHandler } from "hono";
 

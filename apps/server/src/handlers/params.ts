@@ -1,10 +1,10 @@
-// @strata/server — Route parameter extraction helpers.
+// @procella/server — Route parameter extraction helpers.
 //
 // Hono's c.req.param() returns string | undefined because the type system
 // doesn't know which params are defined by the route. These helpers provide
 // safe extraction with descriptive errors.
 
-import { BadRequestError } from "@strata/types";
+import { BadRequestError } from "@procella/types";
 import type { Context } from "hono";
 import type { Env } from "../types.js";
 

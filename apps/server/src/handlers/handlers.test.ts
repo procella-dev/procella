@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import type { StackInfo, StacksService } from "@strata/stacks";
-import type { Caller } from "@strata/types";
-import { BadRequestError } from "@strata/types";
+import type { StackInfo, StacksService } from "@procella/stacks";
+import type { Caller } from "@procella/types";
+import { BadRequestError } from "@procella/types";
 import { Hono } from "hono";
 import type { Env } from "../types.js";
 import { healthHandlers } from "./health.js";
@@ -62,7 +62,7 @@ function injectCaller(caller: Caller) {
 // Tests
 // ============================================================================
 
-describe("@strata/server handlers", () => {
+describe("@procella/server handlers", () => {
 	// ========================================================================
 	// healthHandlers
 	// ========================================================================

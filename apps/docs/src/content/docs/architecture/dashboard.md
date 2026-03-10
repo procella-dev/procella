@@ -3,7 +3,7 @@ title: Web Dashboard
 description: The React SPA dashboard — pages, navigation, authentication modes, and Descope management widgets.
 ---
 
-The Strata web dashboard is a React 19 single-page application built with Vite 7, Tailwind CSS v4, and tRPC. In production it is served as static files by the Strata server. In development the Vite dev server handles it with hot module replacement.
+The Procella web dashboard is a React 19 single-page application built with Vite 7, Tailwind CSS v4, and tRPC. In production it is served as static files by the Procella server. In development the Vite dev server handles it with hot module replacement.
 
 ## Pages
 
@@ -21,7 +21,7 @@ The Strata web dashboard is a React 19 single-page application built with Vite 7
 
 The sticky header contains:
 
-- **Strata wordmark** — links to `/`
+- **Procella wordmark** — links to `/`
 - **"Pulumi Backend" badge** — static label
 - **Tokens link** — shown in Descope mode for all authenticated users
 - **Settings link** — shown in Descope mode only for users with the `admin` role
@@ -49,7 +49,7 @@ Available in Descope mode for all authenticated users. Contains two tabs:
 | API Tokens | `AccessKeyManagement` | Create and revoke Descope access keys used as Pulumi API tokens |
 | Profile | `UserProfile` | Edit name, email, password, MFA, and passkeys |
 
-Access keys created here are standard Descope access keys. The Pulumi CLI uses them as `PULUMI_ACCESS_TOKEN` values — the Strata server validates them via `ExchangeAccessKey` on every request.
+Access keys created here are standard Descope access keys. The Pulumi CLI uses them as `PULUMI_ACCESS_TOKEN` values — the Procella server validates them via `ExchangeAccessKey` on every request.
 
 ## Settings Page (`/settings`)
 
@@ -68,11 +68,11 @@ Tab state is stored in the URL hash (`#users`, `#roles`, `#audit`, `#tenant`) so
 
 The Descope management widgets call Descope's management API using the user's session token. This requires the **`Tenant Admin`** built-in Descope role at the tenant level — the app-level `admin` role alone is not sufficient.
 
-Strata's sign-up-or-in flow automatically assigns `Tenant Admin` to every user who creates a new tenant (via the `createTenant` flow action). No manual configuration is needed. The role is declared in `infra/descope.ts` and managed by Pulumi, so it survives redeploys.
+Procella's sign-up-or-in flow automatically assigns `Tenant Admin` to every user who creates a new tenant (via the `createTenant` flow action). No manual configuration is needed. The role is declared in `infra/descope.ts` and managed by Pulumi, so it survives redeploys.
 
 ## CLI Login Flow (`/cli-login`)
 
-When `pulumi login http://your-strata-host` is run, the CLI starts a local HTTP server and opens the browser to `/cli-login` with three query parameters:
+When `pulumi login http://your-procella-host` is run, the CLI starts a local HTTP server and opens the browser to `/cli-login` with three query parameters:
 
 | Parameter | Description |
 |---|---|
@@ -88,7 +88,7 @@ When `pulumi login http://your-strata-host` is run, the CLI starts a local HTTP 
 4. The browser redirects to `http://localhost:<cliSessionPort>/?accessToken=<token>&nonce=<nonce>`, which the CLI picks up and stores in `~/.pulumi/credentials.json`.
 
 :::note
-`STRATA_DESCOPE_MANAGEMENT_KEY` must be set on the server for token creation to work. If it is missing, the error state shows a hint.
+`PROCELLA_DESCOPE_MANAGEMENT_KEY` must be set on the server for token creation to work. If it is missing, the error state shows a hint.
 :::
 
 ### Dev Mode Flow

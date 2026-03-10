@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import type { AuthService } from "@strata/auth";
-import type { Database } from "@strata/db";
-import type { StackInfo, StacksService } from "@strata/stacks";
-import type { Caller } from "@strata/types";
-import { UnauthorizedError } from "@strata/types";
-import type { UpdatesService } from "@strata/updates";
+import type { AuthService } from "@procella/auth";
+import type { Database } from "@procella/db";
+import type { StackInfo, StacksService } from "@procella/stacks";
+import type { Caller } from "@procella/types";
+import { UnauthorizedError } from "@procella/types";
+import type { UpdatesService } from "@procella/updates";
 import { createApp } from "./index.js";
 
 // ============================================================================
@@ -105,9 +105,9 @@ function mockUpdatesService(): UpdatesService {
 // Tests
 // ============================================================================
 
-describe("@strata/server routes", () => {
+describe("@procella/server routes", () => {
 	function makeApp(
-		authConfig: import("@strata/auth").AuthConfig = {
+		authConfig: import("@procella/auth").AuthConfig = {
 			mode: "dev",
 			token: "valid-token",
 			userLogin: "test-user",

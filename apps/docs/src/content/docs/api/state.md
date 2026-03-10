@@ -109,7 +109,7 @@ Import is a single-shot operation — it does not follow the create → start �
 2. Stores the deployment as a new checkpoint
 3. Returns the update ID immediately
 
-After import, the CLI polls `GET .../update/{updateID}` to confirm. Strata returns the update with `status: "succeeded"`.
+After import, the CLI polls `GET .../update/{updateID}` to confirm. Procella returns the update with `status: "succeeded"`.
 
 ### CLI Usage
 
@@ -124,7 +124,7 @@ pulumi stack import --stack org/project/target < state.json
 pulumi stack import --stack org/project/target --force < state.json
 ```
 
-The `--force` flag is a client-side safety check; Strata accepts imports regardless.
+The `--force` flag is a client-side safety check; Procella accepts imports regardless.
 
 ## Update Status (used after Import)
 

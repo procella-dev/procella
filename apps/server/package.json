@@ -1,19 +1,19 @@
 {
-	"name": "@strata/server",
+	"name": "@procella/server",
 	"private": true,
 	"type": "module",
 	"main": "src/index.ts",
 	"types": "src/index.ts",
 	"dependencies": {
-		"@strata/api": "workspace:*",
-		"@strata/auth": "workspace:*",
-		"@strata/config": "workspace:*",
-		"@strata/crypto": "workspace:*",
-		"@strata/db": "workspace:*",
-		"@strata/stacks": "workspace:*",
-		"@strata/storage": "workspace:*",
-		"@strata/types": "workspace:*",
-		"@strata/updates": "workspace:*",
+		"@procella/api": "workspace:*",
+		"@procella/auth": "workspace:*",
+		"@procella/config": "workspace:*",
+		"@procella/crypto": "workspace:*",
+		"@procella/db": "workspace:*",
+		"@procella/stacks": "workspace:*",
+		"@procella/storage": "workspace:*",
+		"@procella/types": "workspace:*",
+		"@procella/updates": "workspace:*",
 		"hono": "catalog:"
 	}
 }

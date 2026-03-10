@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import type { AuthService } from "@strata/auth";
-import type { Caller } from "@strata/types";
-import { StackNotFoundError, UnauthorizedError } from "@strata/types";
+import type { AuthService } from "@procella/auth";
+import type { Caller } from "@procella/types";
+import { StackNotFoundError, UnauthorizedError } from "@procella/types";
 import { Hono } from "hono";
 import type { Env } from "../types.js";
 import { apiAuth, updateAuth } from "./auth.js";
@@ -42,7 +42,7 @@ function mockAuthService(opts?: { failAuth?: boolean }): AuthService {
 // Tests
 // ============================================================================
 
-describe("@strata/server middleware", () => {
+describe("@procella/server middleware", () => {
 	// ========================================================================
 	// apiAuth
 	// ========================================================================
@@ -164,7 +164,7 @@ describe("@strata/server middleware", () => {
 	// ========================================================================
 
 	describe("errorHandler", () => {
-		test("maps StrataError to correct status code", async () => {
+		test("maps ProcellaError to correct status code", async () => {
 			const app = new Hono();
 			app.onError(errorHandler());
 			app.get("/test", () => {

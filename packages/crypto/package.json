@@ -1,11 +1,11 @@
 {
-	"name": "@strata/crypto",
+	"name": "@procella/crypto",
 	"private": true,
 	"type": "module",
 	"main": "src/index.ts",
 	"types": "src/index.ts",
 	"dependencies": {
-		"@strata/types": "workspace:*",
-		"@strata/config": "workspace:*"
+		"@procella/types": "workspace:*",
+		"@procella/config": "workspace:*"
 	}
 }

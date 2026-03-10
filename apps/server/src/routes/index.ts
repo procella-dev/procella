@@ -1,11 +1,11 @@
-// @strata/server — Hono route registration.
+// @procella/server — Hono route registration.
 
-import { appRouter } from "@strata/api/src/router/index.js";
-import type { TRPCContext } from "@strata/api/src/trpc.js";
-import type { AuthConfig, AuthService } from "@strata/auth";
-import type { Database } from "@strata/db";
-import type { StacksService } from "@strata/stacks";
-import type { UpdatesService } from "@strata/updates";
+import { appRouter } from "@procella/api/src/router/index.js";
+import type { TRPCContext } from "@procella/api/src/trpc.js";
+import type { AuthConfig, AuthService } from "@procella/auth";
+import type { Database } from "@procella/db";
+import type { StacksService } from "@procella/stacks";
+import type { UpdatesService } from "@procella/updates";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -118,7 +118,7 @@ export function createApp(deps: {
 		}
 		const body = await c.req.json<{ name?: string }>().catch(() => ({}));
 		const keyName =
-			"name" in body && body.name ? body.name : `strata-cli-${caller.login}-${Date.now()}`;
+			"name" in body && body.name ? body.name : `procella-cli-${caller.login}-${Date.now()}`;
 		const cleartext = await deps.auth.createCliAccessKey(caller, keyName);
 		return c.json({ token: cleartext });
 	});

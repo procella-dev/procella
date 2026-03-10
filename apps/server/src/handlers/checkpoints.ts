@@ -1,6 +1,6 @@
-// @strata/server — Checkpoint patch handlers.
+// @procella/server — Checkpoint patch handlers.
 
-import type { UpdatesService } from "@strata/updates";
+import type { UpdatesService } from "@procella/updates";
 import type { Context } from "hono";
 import type { Env } from "../types.js";
 import { updateContext } from "./params.js";

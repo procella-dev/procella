@@ -1,6 +1,6 @@
-// @strata/config — Environment configuration with Zod validation.
+// @procella/config — Environment configuration with Zod validation.
 //
-// All configuration is sourced from environment variables (STRATA_* prefix).
+// All configuration is sourced from environment variables (PROCELLA_* prefix).
 // Zod schemas validate and parse at startup — fail fast on misconfiguration.
 // Bun.env is used directly (native .env file support, no dotenv needed).
 
@@ -52,21 +52,21 @@ const configSchema = z
 		if (data.authMode === "dev" && !data.devAuthToken) {
 			ctx.addIssue({
 				code: z.ZodIssueCode.custom,
-				message: "STRATA_DEV_AUTH_TOKEN is required when STRATA_AUTH_MODE=dev",
+				message: "PROCELLA_DEV_AUTH_TOKEN is required when PROCELLA_AUTH_MODE=dev",
 				path: ["devAuthToken"],
 			});
 		}
 		if (data.authMode === "descope" && !data.descopeProjectId) {
 			ctx.addIssue({
 				code: z.ZodIssueCode.custom,
-				message: "STRATA_DESCOPE_PROJECT_ID is required when STRATA_AUTH_MODE=descope",
+				message: "PROCELLA_DESCOPE_PROJECT_ID is required when PROCELLA_AUTH_MODE=descope",
 				path: ["descopeProjectId"],
 			});
 		}
 		if (data.blobBackend === "s3" && !data.blobS3Bucket) {
 			ctx.addIssue({
 				code: z.ZodIssueCode.custom,
-				message: "STRATA_BLOB_S3_BUCKET is required when STRATA_BLOB_BACKEND=s3",
+				message: "PROCELLA_BLOB_S3_BUCKET is required when PROCELLA_BLOB_BACKEND=s3",
 				path: ["blobS3Bucket"],
 			});
 		}
@@ -74,7 +74,7 @@ const configSchema = z
 			ctx.addIssue({
 				code: z.ZodIssueCode.custom,
 				message:
-					"STRATA_ENCRYPTION_KEY is required in production (non-dev auth mode). Must be 64 hex chars (32 bytes).",
+					"PROCELLA_ENCRYPTION_KEY is required in production (non-dev auth mode). Must be 64 hex chars (32 bytes).",
 				path: ["encryptionKey"],
 			});
 		}
@@ -92,25 +92,25 @@ export type BlobBackend = z.infer<typeof blobBackendSchema>;
 // Loader
 // ============================================================================
 
-/** Map STRATA_* env vars to config object shape. */
+/** Map PROCELLA_* env vars to config object shape. */
 function envToConfig(): Record<string, unknown> {
 	const env = Bun.env;
 	return {
-		listenAddr: env.STRATA_LISTEN_ADDR,
-		databaseUrl: env.STRATA_DATABASE_URL,
-		authMode: env.STRATA_AUTH_MODE,
-		devAuthToken: env.STRATA_DEV_AUTH_TOKEN,
-		devUserLogin: env.STRATA_DEV_USER_LOGIN,
-		devOrgLogin: env.STRATA_DEV_ORG_LOGIN,
-		descopeProjectId: env.STRATA_DESCOPE_PROJECT_ID,
-		descopeManagementKey: env.STRATA_DESCOPE_MANAGEMENT_KEY,
-		blobBackend: env.STRATA_BLOB_BACKEND,
-		blobLocalPath: env.STRATA_BLOB_LOCAL_PATH,
-		blobS3Bucket: env.STRATA_BLOB_S3_BUCKET,
-		blobS3Endpoint: env.STRATA_BLOB_S3_ENDPOINT,
-		blobS3Region: env.STRATA_BLOB_S3_REGION,
-		encryptionKey: env.STRATA_ENCRYPTION_KEY,
-		corsOrigins: env.STRATA_CORS_ORIGINS,
+		listenAddr: env.PROCELLA_LISTEN_ADDR,
+		databaseUrl: env.PROCELLA_DATABASE_URL,
+		authMode: env.PROCELLA_AUTH_MODE,
+		devAuthToken: env.PROCELLA_DEV_AUTH_TOKEN,
+		devUserLogin: env.PROCELLA_DEV_USER_LOGIN,
+		devOrgLogin: env.PROCELLA_DEV_ORG_LOGIN,
+		descopeProjectId: env.PROCELLA_DESCOPE_PROJECT_ID,
+		descopeManagementKey: env.PROCELLA_DESCOPE_MANAGEMENT_KEY,
+		blobBackend: env.PROCELLA_BLOB_BACKEND,
+		blobLocalPath: env.PROCELLA_BLOB_LOCAL_PATH,
+		blobS3Bucket: env.PROCELLA_BLOB_S3_BUCKET,
+		blobS3Endpoint: env.PROCELLA_BLOB_S3_ENDPOINT,
+		blobS3Region: env.PROCELLA_BLOB_S3_REGION,
+		encryptionKey: env.PROCELLA_ENCRYPTION_KEY,
+		corsOrigins: env.PROCELLA_CORS_ORIGINS,
 	};
 }
 

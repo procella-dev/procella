@@ -1,8 +1,8 @@
-# Strata AWS ECS Deployment Guide
+# Procella AWS ECS Deployment Guide
 
 ## Overview
 
-Strata is a self-hosted Pulumi backend that can be deployed to AWS using ECS (Elastic Container Service) for the API server and PostgreSQL database, with static assets served via S3 and CloudFront.
+Procella is a self-hosted Pulumi backend that can be deployed to AWS using ECS (Elastic Container Service) for the API server and PostgreSQL database, with static assets served via S3 and CloudFront.
 
 - **Cost**: ~$150/month (ECS Fargate + PostgreSQL + EFS + S3 + CloudFront + ALB)
 - **Architecture**: VPC with public/private subnets, ALB, ECS Fargate for server and database, EFS for persistent storage, S3 for blobs and static assets, CloudFront CDN
@@ -46,13 +46,13 @@ The deployment uses these variables, set via `.env` file or environment:
 
 | Variable | Source | Example | Required |
 |----------|--------|---------|----------|
-| `STRATA_DESCOPE_PROJECT_ID` | Your Descope dashboard | `proj_abc123xyz...` | ✅ Yes |
-| `STRATA_DESCOPE_MANAGEMENT_KEY` | Your Descope API key | (sensitive, 100+ chars) | ✅ Yes |
-| `STRATA_DB_PASSWORD` | You set or auto-generate | (any strong password) | ❌ No (defaults to "strata") |
-| `STRATA_CORS_ORIGINS` | Auto-configured | `https://strata.strata.com` | Auto |
-| `STRATA_DATABASE_URL` | Auto-configured | `postgresql://strata:...@strata-db.local:5432/strata` | Auto |
-| `STRATA_BLOB_S3_BUCKET` | Auto-created | `strata-checkpoints-1234...` | Auto |
-| `STRATA_ENCRYPTION_KEY` | Auto-generated | (64 hex chars) | Auto |
+| `PROCELLA_DESCOPE_PROJECT_ID` | Your Descope dashboard | `proj_abc123xyz...` | ✅ Yes |
+| `PROCELLA_DESCOPE_MANAGEMENT_KEY` | Your Descope API key | (sensitive, 100+ chars) | ✅ Yes |
+| `PROCELLA_DB_PASSWORD` | You set or auto-generate | (any strong password) | ❌ No (defaults to "strata") |
+| `PROCELLA_CORS_ORIGINS` | Auto-configured | `https://strata.strata.com` | Auto |
+| `PROCELLA_DATABASE_URL` | Auto-configured | `postgresql://strata:...@strata-db.local:5432/strata` | Auto |
+| `PROCELLA_BLOB_S3_BUCKET` | Auto-created | `procella-checkpoints-1234...` | Auto |
+| `PROCELLA_ENCRYPTION_KEY` | Auto-generated | (64 hex chars) | Auto |
 
 - **Auto-configured**: SST populates these from infrastructure
 - **Auto-generated**: SST generates secure values
@@ -92,11 +92,11 @@ cp .env.example .env
 # Edit .env with your values:
 cat > .env << 'EOF'
 # Descope Authentication
-STRATA_DESCOPE_PROJECT_ID=your-project-id-from-descope-dashboard
-STRATA_DESCOPE_MANAGEMENT_KEY=your-management-api-key-from-descope-dashboard
+PROCELLA_DESCOPE_PROJECT_ID=your-project-id-from-descope-dashboard
+PROCELLA_DESCOPE_MANAGEMENT_KEY=your-management-api-key-from-descope-dashboard
 
 # Optional: Database password (defaults to "strata" if not provided)
-STRATA_DB_PASSWORD=your-secure-password-here
+PROCELLA_DB_PASSWORD=your-secure-password-here
 EOF
 
 # Verify the file
@@ -190,13 +190,13 @@ For a new deployment, initialize the database:
 
 ```bash
 # Get database connection URL from stack output
-STRATA_DB_URL=$(aws ssm get-parameter --name /strata/database-url --query Parameter.Value --output text)
+PROCELLA_DB_URL=$(aws ssm get-parameter --name /strata/database-url --query Parameter.Value --output text)
 
 # Run database migrations (if any exist)
 bun run --cwd packages/db migrate
 
 # Verify database is accessible
-psql "$STRATA_DB_URL" -c "SELECT version();"
+psql "$PROCELLA_DB_URL" -c "SELECT version();"
 ```
 
 ### 7. Verify Deployment
@@ -221,7 +221,7 @@ curl -H "Authorization: token <your-api-token>" https://api.strata.com/api/stack
 # Open React SPA
 open https://strata.strata.com
 
-# Should display: Strata login page or stack list
+# Should display: Procella login page or stack list
 ```
 
 #### Access Documentation
@@ -230,7 +230,7 @@ open https://strata.strata.com
 # Open Astro docs
 open https://docs.strata.com
 
-# Should display: Strata documentation homepage
+# Should display: Procella documentation homepage
 ```
 
 #### CloudFront Caching
@@ -267,7 +267,7 @@ This is ~12x cheaper than hosted alternatives:
 
 | Solution | Monthly Cost | Notes |
 |----------|---|---|
-| **Strata on ECS** (this setup) | ~$150 | Self-hosted, full control |
+| **Procella on ECS** (this setup) | ~$150 | Self-hosted, full control |
 | **RDS PostgreSQL** | $1,800+ | Managed database alone |
 | **Pulumi Cloud** | $10-500+ | Hosted Pulumi backend as service |
 
@@ -474,7 +474,7 @@ aws application-autoscaling describe-scaling-activities \
 # Create manual EFS snapshot
 aws ec2 create-snapshot \
   --volume-id <efs-id> \
-  --description "Strata PostgreSQL backup"
+  --description "Procella PostgreSQL backup"
 
 # List snapshots
 aws ec2 describe-snapshots --filters "Name=volume-id,Values=<efs-id>"
@@ -486,11 +486,11 @@ S3 buckets have versioning enabled automatically:
 
 ```bash
 # List object versions
-aws s3api list-object-versions --bucket strata-checkpoints-xxx
+aws s3api list-object-versions --bucket procella-checkpoints-xxx
 
 # Restore previous version
 aws s3api get-object \
-  --bucket strata-checkpoints-xxx \
+  --bucket procella-checkpoints-xxx \
   --key state.json \
   --version-id <version-id> \
   state.json
@@ -498,7 +498,7 @@ aws s3api get-object \
 
 ## Support & Resources
 
-- **Strata Documentation**: https://docs.strata.com/
+- **Procella Documentation**: https://docs.strata.com/
 - **Pulumi Service API**: https://www.pulumi.com/docs/concepts/how-pulumi-works/service/
 - **AWS ECS Documentation**: https://docs.aws.amazon.com/ecs/
 - **SST Documentation**: https://sst.dev/docs/
@@ -515,4 +515,4 @@ aws s3api get-object \
 ---
 
 **Last Updated**: March 10, 2026
-**Strata Version**: 1.0.0
+**Procella Version**: 1.0.0

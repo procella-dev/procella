@@ -23,7 +23,7 @@
       },
     },
     "apps/docs": {
-      "name": "@strata/docs",
+      "name": "@procella/docs",
       "version": "0.0.1",
       "dependencies": {
         "@astrojs/starlight": "^0.34.0",
@@ -33,26 +33,26 @@
       },
     },
     "apps/server": {
-      "name": "@strata/server",
+      "name": "@procella/server",
       "dependencies": {
-        "@strata/api": "workspace:*",
-        "@strata/auth": "workspace:*",
-        "@strata/config": "workspace:*",
-        "@strata/crypto": "workspace:*",
-        "@strata/db": "workspace:*",
-        "@strata/stacks": "workspace:*",
-        "@strata/storage": "workspace:*",
-        "@strata/types": "workspace:*",
-        "@strata/updates": "workspace:*",
+        "@procella/api": "workspace:*",
+        "@procella/auth": "workspace:*",
+        "@procella/config": "workspace:*",
+        "@procella/crypto": "workspace:*",
+        "@procella/db": "workspace:*",
+        "@procella/stacks": "workspace:*",
+        "@procella/storage": "workspace:*",
+        "@procella/types": "workspace:*",
+        "@procella/updates": "workspace:*",
         "hono": "catalog:",
       },
     },
     "apps/ui": {
-      "name": "@strata/ui",
+      "name": "@procella/ui",
       "dependencies": {
         "@descope/react-sdk": "^2.26.7",
-        "@strata/api": "workspace:*",
-        "@strata/types": "workspace:*",
+        "@procella/api": "workspace:*",
+        "@procella/types": "workspace:*",
         "@tanstack/react-query": "catalog:",
         "@trpc/client": "catalog:",
         "@trpc/react-query": "catalog:",
@@ -73,12 +73,12 @@
       },
     },
     "packages/api": {
-      "name": "@strata/api",
+      "name": "@procella/api",
       "dependencies": {
-        "@strata/db": "workspace:*",
-        "@strata/stacks": "workspace:*",
-        "@strata/types": "workspace:*",
-        "@strata/updates": "workspace:*",
+        "@procella/db": "workspace:*",
+        "@procella/stacks": "workspace:*",
+        "@procella/types": "workspace:*",
+        "@procella/updates": "workspace:*",
         "@trpc/server": "catalog:",
         "drizzle-orm": "catalog:",
         "superjson": "catalog:",
@@ -86,54 +86,54 @@
       },
     },
     "packages/auth": {
-      "name": "@strata/auth",
+      "name": "@procella/auth",
       "dependencies": {
-        "@strata/config": "workspace:*",
-        "@strata/types": "workspace:*",
+        "@procella/config": "workspace:*",
+        "@procella/types": "workspace:*",
       },
     },
     "packages/config": {
-      "name": "@strata/config",
+      "name": "@procella/config",
       "dependencies": {
-        "@strata/types": "workspace:*",
+        "@procella/types": "workspace:*",
       },
     },
     "packages/crypto": {
-      "name": "@strata/crypto",
+      "name": "@procella/crypto",
       "dependencies": {
-        "@strata/config": "workspace:*",
-        "@strata/types": "workspace:*",
+        "@procella/config": "workspace:*",
+        "@procella/types": "workspace:*",
       },
     },
     "packages/db": {
-      "name": "@strata/db",
+      "name": "@procella/db",
       "dependencies": {
-        "@strata/config": "workspace:*",
+        "@procella/config": "workspace:*",
       },
     },
     "packages/stacks": {
-      "name": "@strata/stacks",
+      "name": "@procella/stacks",
       "dependencies": {
-        "@strata/db": "workspace:*",
-        "@strata/types": "workspace:*",
+        "@procella/db": "workspace:*",
+        "@procella/types": "workspace:*",
       },
     },
     "packages/storage": {
-      "name": "@strata/storage",
+      "name": "@procella/storage",
       "dependencies": {
-        "@strata/config": "workspace:*",
+        "@procella/config": "workspace:*",
       },
     },
     "packages/types": {
-      "name": "@strata/types",
+      "name": "@procella/types",
     },
     "packages/updates": {
-      "name": "@strata/updates",
+      "name": "@procella/updates",
       "dependencies": {
-        "@strata/crypto": "workspace:*",
-        "@strata/db": "workspace:*",
-        "@strata/storage": "workspace:*",
-        "@strata/types": "workspace:*",
+        "@procella/crypto": "workspace:*",
+        "@procella/db": "workspace:*",
+        "@procella/storage": "workspace:*",
+        "@procella/types": "workspace:*",
       },
     },
   },
@@ -506,6 +506,30 @@
 
     "@pagefind/windows-x64": ["@pagefind/windows-x64@1.4.0", "", { "os": "win32", "cpu": "x64" }, "sha512-NkT+YAdgS2FPCn8mIA9bQhiBs+xmniMGq1LFPDhcFn0+2yIUEiIG06t7bsZlhdjknEQRTSdT7YitP6fC5qwP0g=="],
 
+    "@procella/api": ["@procella/api@workspace:packages/api"],
+
+    "@procella/auth": ["@procella/auth@workspace:packages/auth"],
+
+    "@procella/config": ["@procella/config@workspace:packages/config"],
+
+    "@procella/crypto": ["@procella/crypto@workspace:packages/crypto"],
+
+    "@procella/db": ["@procella/db@workspace:packages/db"],
+
+    "@procella/docs": ["@procella/docs@workspace:apps/docs"],
+
+    "@procella/server": ["@procella/server@workspace:apps/server"],
+
+    "@procella/stacks": ["@procella/stacks@workspace:packages/stacks"],
+
+    "@procella/storage": ["@procella/storage@workspace:packages/storage"],
+
+    "@procella/types": ["@procella/types@workspace:packages/types"],
+
+    "@procella/ui": ["@procella/ui@workspace:apps/ui"],
+
+    "@procella/updates": ["@procella/updates@workspace:packages/updates"],
+
     "@protobufjs/aspromise": ["@protobufjs/aspromise@1.1.2", "", {}, "sha512-j+gKExEuLmKwvz3OgROXtrJ2UG2x8Ch2YZUxahh+s1F2HZ+wAceUNLkvy6zKCPVRkU++ZWQrdxsUeQXmcg4uoQ=="],
 
     "@protobufjs/base64": ["@protobufjs/base64@1.1.2", "", {}, "sha512-AZkcAA5vnN/v4PDqKyMR5lx7hZttPDgClv83E//FMNhR2TMcLUhfRUBHCmSl0oi9zMgDDqRUJkSxO3wm85+XLg=="],
@@ -617,30 +641,6 @@
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
 
     "@standard-schema/utils": ["@standard-schema/utils@0.3.0", "", {}, "sha512-e7Mew686owMaPJVNNLs55PUvgz371nKgwsc4vxE49zsODpJEnxgxRo2y/OKrqueavXgZNMDVj3DdHFlaSAeU8g=="],
-
-    "@strata/api": ["@strata/api@workspace:packages/api"],
-
-    "@strata/auth": ["@strata/auth@workspace:packages/auth"],
-
-    "@strata/config": ["@strata/config@workspace:packages/config"],
-
-    "@strata/crypto": ["@strata/crypto@workspace:packages/crypto"],
-
-    "@strata/db": ["@strata/db@workspace:packages/db"],
-
-    "@strata/docs": ["@strata/docs@workspace:apps/docs"],
-
-    "@strata/server": ["@strata/server@workspace:apps/server"],
-
-    "@strata/stacks": ["@strata/stacks@workspace:packages/stacks"],
-
-    "@strata/storage": ["@strata/storage@workspace:packages/storage"],
-
-    "@strata/types": ["@strata/types@workspace:packages/types"],
-
-    "@strata/ui": ["@strata/ui@workspace:apps/ui"],
-
-    "@strata/updates": ["@strata/updates@workspace:packages/updates"],
 
     "@szmarczak/http-timer": ["@szmarczak/http-timer@4.0.6", "", { "dependencies": { "defer-to-connect": "^2.0.0" } }, "sha512-4BAffykYOgO+5nzBWYwE3W90sBgLJoUPRWWcL8wlyiM8IB8ipJz3UMJ9KXQd1RKQXpKp8Tutn80HZtWsu2u76w=="],
 
@@ -1864,13 +1864,13 @@
 
     "@opentelemetry/sdk-trace-node/@opentelemetry/core": ["@opentelemetry/core@1.30.1", "", { "dependencies": { "@opentelemetry/semantic-conventions": "1.28.0" }, "peerDependencies": { "@opentelemetry/api": ">=1.0.0 <1.10.0" } }, "sha512-OOCM2C/QIURhJMuKaekP3TRBxBKxG/TWWA0TL2J6nXUtDnuCtccy49LUJF8xPFXMX+0LMcxFpCo8M9cGY1W6rQ=="],
 
+    "@procella/docs/zod": ["zod@3.25.76", "", {}, "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="],
+
     "@reduxjs/toolkit/immer": ["immer@11.1.4", "", {}, "sha512-XREFCPo6ksxVzP4E0ekD5aMdf8WMwmdNaz6vuvxgI40UaEiu6q3p8X52aU6GdyvLY3XXX/8R7JOTXStz/nBbRw=="],
 
     "@rollup/pluginutils/estree-walker": ["estree-walker@2.0.2", "", {}, "sha512-Rfkk/Mp/DL7JVje3u18FxFujQlTNR2q6QfMSMB7AvCBx91NGj/ba3kCfza0f6dVDbw7YlRf/nDrn7pQrCCyQ/w=="],
 
     "@rollup/pluginutils/picomatch": ["picomatch@4.0.3", "", {}, "sha512-5gTmgEY/sqK6gFXLIsQNH19lWb4ebPDLA4SdLP7dsWkIXHWlG66oPuVvXSGFPppYZz8ZDZq0dYYrbHfBCVUb1Q=="],
-
-    "@strata/docs/zod": ["zod@3.25.76", "", {}, "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="],
 
     "@tailwindcss/oxide-wasm32-wasi/@emnapi/core": ["@emnapi/core@1.8.1", "", { "dependencies": { "@emnapi/wasi-threads": "1.1.0", "tslib": "^2.4.0" }, "bundled": true }, "sha512-AvT9QFpxK0Zd8J0jopedNm+w/2fIzvtPKPjqyw9jwvBaReTTqPBk9Hixaz7KbjimP+QNz605/XnjFcDAL2pqBg=="],
 

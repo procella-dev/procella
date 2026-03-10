@@ -1,9 +1,9 @@
-// @strata/api — tRPC initialization and context definition.
+// @procella/api — tRPC initialization and context definition.
 
-import type { Database } from "@strata/db";
-import type { StacksService } from "@strata/stacks";
-import type { Caller } from "@strata/types";
-import type { UpdatesService } from "@strata/updates";
+import type { Database } from "@procella/db";
+import type { StacksService } from "@procella/stacks";
+import type { Caller } from "@procella/types";
+import type { UpdatesService } from "@procella/updates";
 import { initTRPC } from "@trpc/server";
 import superjson from "superjson";
 

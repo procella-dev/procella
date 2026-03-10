@@ -5,7 +5,7 @@ description: High-level architecture, package structure, and design principles.
 
 ## System Architecture
 
-Strata runs as a single Bun process that serves both the Pulumi CLI API and the web dashboard API. Caddy acts as a reverse proxy in production, routing requests and load-balancing across replicas.
+Procella runs as a single Bun process that serves both the Pulumi CLI API and the web dashboard API. Caddy acts as a reverse proxy in production, routing requests and load-balancing across replicas.
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
@@ -20,7 +20,7 @@ Strata runs as a single Bun process that serves both the Pulumi CLI API and the 
                     └───────┬───────┘
                             │
                     ┌───────▼───────┐
-                    │  Strata       │
+                    │  Procella       │
                     │  Bun :9090    │
                     │               │
                     │  /api/*       │  ← Pulumi CLI protocol (Hono)
@@ -69,7 +69,7 @@ packages/
       domain.ts                    #   Caller, Role, internal types
       errors.ts                    #   Typed domain errors (NotFound, Conflict, etc.)
   config/                          # Zod-validated env config
-    src/index.ts                   #   STRATA_* env var parsing + validation
+    src/index.ts                   #   PROCELLA_* env var parsing + validation
   db/                              # Drizzle ORM schema + connection factory
     src/
       schema.ts                    #   Table definitions (projects, stacks, updates, checkpoints, events)
@@ -89,20 +89,20 @@ packages/
       gc.ts                        #   Orphan garbage collection worker
 
 apps/
-  api/                             # @strata/api — tRPC router definition
+  api/                             # @procella/api — tRPC router definition
     src/
       trpc.ts                      #   tRPC init + TRPCContext type
       router/index.ts              #   Root AppRouter
       router/stacks.ts             #   stacks.list
       router/updates.ts            #   updates.list, updates.latest
       router/events.ts             #   events.list
-  server/                          # @strata/server — Hono HTTP server
+  server/                          # @procella/server — Hono HTTP server
     src/
       index.ts                     #   Server bootstrap, DI wiring
       routes/index.ts              #   Route registration + tRPC mount
       middleware/auth.ts            #   Auth + RBAC middleware
       handlers/                    #   HTTP handlers for each API endpoint
-  ui/                              # @strata/ui — React SPA
+  ui/                              # @procella/ui — React SPA
     src/
       main.tsx                     #   tRPC + React Query + Descope providers
       pages/                       #   StackList, StackDetail, UpdateDetail, Tokens, Settings, CliLogin

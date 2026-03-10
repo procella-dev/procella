@@ -1,6 +1,6 @@
 ---
 title: Quick Start
-description: Get a local Strata instance running and deploy your first stack in under 5 minutes.
+description: Get a local Procella instance running and deploy your first stack in under 5 minutes.
 ---
 
 ## Prerequisites
@@ -13,7 +13,7 @@ description: Get a local Strata instance running and deploy your first stack in 
 
 ```bash
 git clone https://github.com/strata-iac/strata.git
-cd strata
+cd procella
 bun run dev
 ```
 
@@ -23,7 +23,7 @@ This starts the following services:
 |---|---|---|
 | PostgreSQL 17 | Database | 5432 |
 | MinIO | S3-compatible blob storage | 9000 (API), 9001 (console) |
-| Strata server | Bun server with hot-reload | 9090 |
+| Procella server | Bun server with hot-reload | 9090 |
 | Vite dev server | React UI with HMR | 5173 |
 
 The server runs database migrations automatically on startup.

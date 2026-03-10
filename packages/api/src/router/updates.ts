@@ -1,6 +1,6 @@
-// @strata/api — updates.list + updates.latest tRPC procedures.
+// @procella/api — updates.list + updates.latest tRPC procedures.
 
-import { updates } from "@strata/db";
+import { updates } from "@procella/db";
 import { desc, eq } from "drizzle-orm";
 import { z } from "zod/v4";
 import { publicProcedure, router } from "../trpc.js";

@@ -10,7 +10,7 @@ resources:
       create: "echo 'resource created' && date -u +%s"
       delete: "echo 'resource deleted'"
       environment:
-        STRATA_TEST: "true"
+        PROCELLA_TEST: "true"
   timestamped:
     type: command:local:Command
     properties:

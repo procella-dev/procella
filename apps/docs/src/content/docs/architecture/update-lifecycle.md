@@ -3,7 +3,7 @@ title: Update Lifecycle
 description: The four-phase Pulumi update protocol — create, start, execute, complete.
 ---
 
-When you run `pulumi up`, the CLI follows a structured protocol to communicate with the backend. Strata implements this protocol exactly as the Pulumi Service API defines it.
+When you run `pulumi up`, the CLI follows a structured protocol to communicate with the backend. Procella implements this protocol exactly as the Pulumi Service API defines it.
 
 ## The Four Phases
 
@@ -140,7 +140,7 @@ See [Horizontal Scaling](../operations/horizontal-scaling/) for more on cluster 
 
 ## Concurrent Update Protection
 
-Strata prevents multiple simultaneous updates to the same stack through two mechanisms:
+Procella prevents multiple simultaneous updates to the same stack through two mechanisms:
 
 1. **Stack lock**: The `current_operation_id` column on the `stacks` table tracks the active update
 2. **Partial unique index**: `CREATE UNIQUE INDEX idx_updates_active_per_stack ON updates (stack_id) WHERE status IN ('not started', 'requested', 'running')` — PostgreSQL enforces at most one active update per stack

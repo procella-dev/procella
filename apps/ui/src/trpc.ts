@@ -1,5 +1,5 @@
 import { getSessionToken } from "@descope/react-sdk";
-import type { AppRouter } from "@strata/api/src/router/index.js";
+import type { AppRouter } from "@procella/api/src/router/index.js";
 import { createTRPCUntypedClient, httpBatchLink } from "@trpc/client";
 import { type CreateTRPCReact, createTRPCReact } from "@trpc/react-query";
 import superjson from "superjson";
@@ -16,7 +16,7 @@ function getAuthHeaders(): Record<string, string> {
 		return { Authorization: `Bearer ${token}` };
 	}
 
-	const token = localStorage.getItem("strata-token") ?? "";
+	const token = localStorage.getItem("procella-token") ?? "";
 	if (!token) return {};
 	return { Authorization: `token ${token}` };
 }

@@ -5,14 +5,15 @@ import { formatConfigErrors, loadConfig, tryLoadConfig } from "./index.js";
 let savedEnv: Record<string, string | undefined>;
 
 function setMinimalEnv() {
-	Bun.env.STRATA_DATABASE_URL = "postgres://strata:strata@localhost:5432/strata?sslmode=disable";
-	Bun.env.STRATA_AUTH_MODE = "dev";
-	Bun.env.STRATA_DEV_AUTH_TOKEN = "devtoken123";
+	Bun.env.PROCELLA_DATABASE_URL =
+		"postgres://procella:procella@localhost:5432/procella?sslmode=disable";
+	Bun.env.PROCELLA_AUTH_MODE = "dev";
+	Bun.env.PROCELLA_DEV_AUTH_TOKEN = "devtoken123";
 }
 
 function clearStrataEnv() {
 	for (const key of Object.keys(Bun.env)) {
-		if (key.startsWith("STRATA_")) {
+		if (key.startsWith("PROCELLA_")) {
 			delete Bun.env[key];
 		}
 	}
@@ -21,7 +22,7 @@ function clearStrataEnv() {
 beforeEach(() => {
 	savedEnv = {};
 	for (const key of Object.keys(Bun.env)) {
-		if (key.startsWith("STRATA_") || key.startsWith("AWS_")) {
+		if (key.startsWith("PROCELLA_") || key.startsWith("AWS_")) {
 			savedEnv[key] = Bun.env[key];
 		}
 	}
@@ -36,7 +37,7 @@ afterEach(() => {
 	}
 });
 
-describe("@strata/config", () => {
+describe("@procella/config", () => {
 	describe("loadConfig", () => {
 		test("loads minimal dev config with defaults", () => {
 			clearStrataEnv();
@@ -44,7 +45,7 @@ describe("@strata/config", () => {
 			const config = loadConfig();
 			expect(config.listenAddr).toBe(":9090");
 			expect(config.databaseUrl).toBe(
-				"postgres://strata:strata@localhost:5432/strata?sslmode=disable",
+				"postgres://procella:procella@localhost:5432/procella?sslmode=disable",
 			);
 			expect(config.authMode).toBe("dev");
 			expect(config.devAuthToken).toBe("devtoken123");
@@ -57,13 +58,13 @@ describe("@strata/config", () => {
 		test("loads full config with all overrides", () => {
 			clearStrataEnv();
 			setMinimalEnv();
-			Bun.env.STRATA_LISTEN_ADDR = ":9090";
-			Bun.env.STRATA_DEV_USER_LOGIN = "custom-user";
-			Bun.env.STRATA_DEV_ORG_LOGIN = "custom-org";
-			Bun.env.STRATA_BLOB_BACKEND = "s3";
-			Bun.env.STRATA_BLOB_S3_BUCKET = "my-bucket";
-			Bun.env.STRATA_BLOB_S3_ENDPOINT = "http://localhost:9000";
-			Bun.env.STRATA_ENCRYPTION_KEY = "a".repeat(64);
+			Bun.env.PROCELLA_LISTEN_ADDR = ":9090";
+			Bun.env.PROCELLA_DEV_USER_LOGIN = "custom-user";
+			Bun.env.PROCELLA_DEV_ORG_LOGIN = "custom-org";
+			Bun.env.PROCELLA_BLOB_BACKEND = "s3";
+			Bun.env.PROCELLA_BLOB_S3_BUCKET = "my-bucket";
+			Bun.env.PROCELLA_BLOB_S3_ENDPOINT = "http://localhost:9000";
+			Bun.env.PROCELLA_ENCRYPTION_KEY = "a".repeat(64);
 
 			const config = loadConfig();
 			expect(config.listenAddr).toBe(":9090");
@@ -77,51 +78,51 @@ describe("@strata/config", () => {
 
 		test("throws on missing database URL", () => {
 			clearStrataEnv();
-			Bun.env.STRATA_AUTH_MODE = "dev";
-			Bun.env.STRATA_DEV_AUTH_TOKEN = "token";
+			Bun.env.PROCELLA_AUTH_MODE = "dev";
+			Bun.env.PROCELLA_DEV_AUTH_TOKEN = "token";
 			expect(() => loadConfig()).toThrow();
 		});
 
 		test("throws when dev mode lacks auth token", () => {
 			clearStrataEnv();
-			Bun.env.STRATA_DATABASE_URL = "postgres://localhost:5432/strata?sslmode=disable";
-			Bun.env.STRATA_AUTH_MODE = "dev";
+			Bun.env.PROCELLA_DATABASE_URL = "postgres://localhost:5432/procella?sslmode=disable";
+			Bun.env.PROCELLA_AUTH_MODE = "dev";
 			expect(() => loadConfig()).toThrow();
 		});
 
 		test("throws when descope mode lacks project ID", () => {
 			clearStrataEnv();
-			Bun.env.STRATA_DATABASE_URL = "postgres://localhost:5432/strata?sslmode=disable";
-			Bun.env.STRATA_AUTH_MODE = "descope";
+			Bun.env.PROCELLA_DATABASE_URL = "postgres://localhost:5432/procella?sslmode=disable";
+			Bun.env.PROCELLA_AUTH_MODE = "descope";
 			expect(() => loadConfig()).toThrow();
 		});
 
 		test("throws when s3 backend lacks bucket", () => {
 			clearStrataEnv();
 			setMinimalEnv();
-			Bun.env.STRATA_BLOB_BACKEND = "s3";
+			Bun.env.PROCELLA_BLOB_BACKEND = "s3";
 			expect(() => loadConfig()).toThrow();
 		});
 
 		test("throws on invalid encryption key format", () => {
 			clearStrataEnv();
 			setMinimalEnv();
-			Bun.env.STRATA_ENCRYPTION_KEY = "not-hex";
+			Bun.env.PROCELLA_ENCRYPTION_KEY = "not-hex";
 			expect(() => loadConfig()).toThrow();
 		});
 
 		test("throws when non-dev mode lacks encryption key", () => {
 			clearStrataEnv();
-			Bun.env.STRATA_DATABASE_URL = "postgres://localhost:5432/strata?sslmode=disable";
-			Bun.env.STRATA_AUTH_MODE = "descope";
-			Bun.env.STRATA_DESCOPE_PROJECT_ID = "P3test";
-			expect(() => loadConfig()).toThrow(/STRATA_ENCRYPTION_KEY is required/);
+			Bun.env.PROCELLA_DATABASE_URL = "postgres://localhost:5432/procella?sslmode=disable";
+			Bun.env.PROCELLA_AUTH_MODE = "descope";
+			Bun.env.PROCELLA_DESCOPE_PROJECT_ID = "P3test";
+			expect(() => loadConfig()).toThrow(/PROCELLA_ENCRYPTION_KEY is required/);
 		});
 
 		test("allows missing encryption key in dev mode", () => {
 			clearStrataEnv();
 			setMinimalEnv();
-			// No STRATA_ENCRYPTION_KEY set — should be fine in dev
+			// No PROCELLA_ENCRYPTION_KEY set — should be fine in dev
 			const config = loadConfig();
 			expect(config.encryptionKey).toBeUndefined();
 		});

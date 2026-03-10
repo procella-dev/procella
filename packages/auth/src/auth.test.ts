@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { ForbiddenError, UnauthorizedError } from "@strata/types";
+import { ForbiddenError, UnauthorizedError } from "@procella/types";
 import {
 	type AuthService,
 	createAuthService,

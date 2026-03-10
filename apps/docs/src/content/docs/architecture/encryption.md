@@ -3,19 +3,19 @@ title: Encryption
 description: AES-256-GCM encryption with HKDF per-stack key derivation for secrets at rest.
 ---
 
-Strata encrypts Pulumi secrets at rest using AES-256-GCM with per-stack key derivation. When you run `pulumi config set --secret`, the CLI sends the plaintext to the server, which encrypts it before storing.
+Procella encrypts Pulumi secrets at rest using AES-256-GCM with per-stack key derivation. When you run `pulumi config set --secret`, the CLI sends the plaintext to the server, which encrypts it before storing.
 
 ## How It Works
 
 ### Key Hierarchy
 
 ```
-Master Key (32 bytes, from STRATA_ENCRYPTION_KEY)
+Master Key (32 bytes, from PROCELLA_ENCRYPTION_KEY)
     │
-    ├── HKDF(masterKey, salt="org/project/stack", info="strata-encrypt")
+    ├── HKDF(masterKey, salt="org/project/stack", info="procella-encrypt")
     │   └── Stack-specific key (32 bytes) → AES-256-GCM
     │
-    ├── HKDF(masterKey, salt="org/project/other-stack", info="strata-encrypt")
+    ├── HKDF(masterKey, salt="org/project/other-stack", info="procella-encrypt")
     │   └── Different stack-specific key (32 bytes) → AES-256-GCM
     │
     └── ... one derived key per stack
@@ -26,7 +26,7 @@ A single master key derives unique encryption keys per stack using [HKDF](https:
 - **Hash**: SHA-256
 - **Input Key Material (IKM)**: The master key (32 bytes)
 - **Salt**: The stack's fully qualified name (`org/project/stack`)
-- **Info**: `"strata-encrypt"` (fixed context string)
+- **Info**: `"procella-encrypt"` (fixed context string)
 - **Output**: 32-byte AES-256 key unique to each stack
 
 ### Encryption (AES-256-GCM)
@@ -75,11 +75,11 @@ Decrypts multiple values in a single request. Used by the CLI when displaying st
 
 ### Development Mode
 
-If `STRATA_ENCRYPTION_KEY` is not set and `STRATA_AUTH_MODE=dev`, a deterministic key is auto-generated:
+If `PROCELLA_ENCRYPTION_KEY` is not set and `PROCELLA_AUTH_MODE=dev`, a deterministic key is auto-generated:
 
 ```typescript
 import { createHash } from "node:crypto";
-const key = createHash("sha256").update("strata-dev-encryption-key").digest("hex");
+const key = createHash("sha256").update("procella-dev-encryption-key").digest("hex");
 // key is used as the 64-char hex master key
 ```
 
@@ -90,7 +90,7 @@ This means all dev instances with no explicit key will share the same encryption
 Generate a random 32-byte key and set it as 64 hex characters:
 
 ```bash
-export STRATA_ENCRYPTION_KEY="$(openssl rand -hex 32)"
+export PROCELLA_ENCRYPTION_KEY="$(openssl rand -hex 32)"
 ```
 
 :::danger

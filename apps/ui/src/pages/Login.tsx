@@ -29,7 +29,7 @@ function DescopeLogin({ returnTo }: { returnTo: string }) {
 	return (
 		<div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center">
 			<div className="mb-8 text-center">
-				<h1 className="text-3xl font-bold text-zinc-100">Strata</h1>
+				<h1 className="text-3xl font-bold text-zinc-100">Procella</h1>
 				<p className="mt-2 text-sm text-zinc-400">Sign in to your Pulumi backend</p>
 			</div>
 			<div className="w-full max-w-md">
@@ -51,14 +51,14 @@ function DevLogin({ returnTo }: { returnTo: string }) {
 	const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
 		if (!token.trim()) return;
-		localStorage.setItem("strata-token", token.trim());
+		localStorage.setItem("procella-token", token.trim());
 		navigate(returnTo, { replace: true });
 	};
 
 	return (
 		<div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center">
 			<div className="mb-8 text-center">
-				<h1 className="text-3xl font-bold text-zinc-100">Strata</h1>
+				<h1 className="text-3xl font-bold text-zinc-100">Procella</h1>
 				<p className="mt-2 text-sm text-zinc-400">Enter your API token to continue</p>
 			</div>
 			<form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4">
