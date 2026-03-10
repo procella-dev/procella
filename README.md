@@ -130,8 +130,8 @@ packages/
   auth/               Dev mode (static token) + Descope (JWT)
   stacks/             Stack CRUD, rename, tags (PostgreSQL)
   updates/            Update lifecycle, checkpoints, events, GC worker
-apps/
   api/                @procella/api — tRPC router (stacks, updates, events)
+apps/
   server/             @procella/server — Hono HTTP server (CLI + tRPC + middleware)
   ui/                 @procella/ui — React SPA (Vite + Tailwind + tRPC client)
                       Pages: StackList, StackDetail, UpdateDetail, Tokens, Settings, CliLogin

@@ -178,8 +178,8 @@ packages/
   auth/                # Authenticator: dev mode (static token) + Descope (JWT)
   stacks/              # Stack service: CRUD, rename, tags (PostgreSQL)
   updates/             # Update lifecycle, checkpoints, events, GC worker (PostgreSQL + blob)
-apps/
   api/                 # @procella/api — tRPC router definition (stacks.list, updates.list/latest, events.list)
+apps/
   server/              # @procella/server — Hono HTTP server (CLI routes + tRPC mount + middleware)
   ui/                  # @procella/ui — React SPA (Vite + Tailwind + tRPC client)
   docs/                # @procella/docs — Starlight documentation site

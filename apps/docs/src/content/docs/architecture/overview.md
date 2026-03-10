@@ -88,7 +88,6 @@ packages/
       postgres.ts                  #   PostgresUpdatesService implementation
       gc.ts                        #   Orphan garbage collection worker
 
-apps/
   api/                             # @procella/api — tRPC router definition
     src/
       trpc.ts                      #   tRPC init + TRPCContext type
@@ -96,6 +95,8 @@ apps/
       router/stacks.ts             #   stacks.list
       router/updates.ts            #   updates.list, updates.latest
       router/events.ts             #   events.list
+
+apps/
   server/                          # @procella/server — Hono HTTP server
     src/
       index.ts                     #   Server bootstrap, DI wiring

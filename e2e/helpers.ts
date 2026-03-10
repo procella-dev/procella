@@ -57,7 +57,9 @@ export async function truncateTables(): Promise<void> {
 // ============================================================================
 
 export async function ensureDeps(): Promise<void> {
-	if (process.env.PROCELLA_DATABASE_URL) {
+	// In CI, the database is provided as a service — skip docker compose.
+	// Locally, .env may define PROCELLA_DATABASE_URL but we still need docker compose.
+	if (process.env.CI) {
 		return;
 	}
 

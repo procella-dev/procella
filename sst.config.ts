@@ -535,10 +535,10 @@ export default $config({
 								name: "PROCELLA_CORS_ORIGINS",
 								value: `https://${$app.stage === "production" ? "procella" : $app.stage}.procella.dev`,
 							},
-							{
-								name: "PROCELLA_DATABASE_URL",
-								value: `postgresql://procella:${dbPassword}@procella-db.local:5432/procella`,
-							},
+						{
+							name: "PROCELLA_DATABASE_URL",
+							value: `postgresql://procella:${encodeURIComponent(dbPassword)}@procella-db.local:5432/procella`,
+						},
 						],
 						secrets: [
 							{
