@@ -1,18 +1,20 @@
-name: Deploy Procella to ECS
+name: Deploy Procella
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      stage:
+        description: "SST stage to deploy"
+        required: false
+        default: "production"
 
 env:
   AWS_REGION: us-east-1
-  ECR_REPOSITORY: procella
-  ECS_CLUSTER: procella-cluster
-  ECS_SERVICE: procella-service
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -22,85 +24,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build Docker image
-        id: build
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
-          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
-
-      - name: Push image to ECR
-        env:
-          IMAGE: ${{ steps.build.outputs.image }}
-        run: |
-          docker push $IMAGE
-          docker push ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:latest
-
-      - name: Update ECS service
-        id: update-service
-        run: |
-          aws ecs update-service \
-            --cluster ${{ env.ECS_CLUSTER }} \
-            --service ${{ env.ECS_SERVICE }} \
-            --force-new-deployment \
-            --region ${{ env.AWS_REGION }}
-
-      - name: Wait for deployment
-        run: |
-          aws ecs wait services-stable \
-            --cluster ${{ env.ECS_CLUSTER }} \
-            --services ${{ env.ECS_SERVICE }} \
-            --region ${{ env.AWS_REGION }}
-
-      - name: Verify deployment health
-        run: |
-          TASK_ARN=$(aws ecs list-tasks \
-            --cluster ${{ env.ECS_CLUSTER }} \
-            --service-name ${{ env.ECS_SERVICE }} \
-            --query 'taskArns[0]' \
-            --output text \
-            --region ${{ env.AWS_REGION }})
-          
-          if [ -z "$TASK_ARN" ] || [ "$TASK_ARN" = "None" ]; then
-            echo "❌ No running tasks found!"
-            exit 1
-          fi
-          
-          LAST_STATUS=$(aws ecs describe-tasks \
-            --cluster ${{ env.ECS_CLUSTER }} \
-            --tasks $TASK_ARN \
-            --query 'tasks[0].lastStatus' \
-            --output text \
-            --region ${{ env.AWS_REGION }})
-          
-          echo "✅ Task status: $LAST_STATUS"
-          
-          if [ "$LAST_STATUS" != "RUNNING" ]; then
-            echo "❌ Task is not in RUNNING state!"
-            exit 1
-          fi
-
-      - name: Deployment successful
-        run: |
-          echo "✅ Deployment to ECS completed successfully!"
-          echo "Image pushed: ${{ steps.build.outputs.image }}"
-          echo "Service: ${{ env.ECS_SERVICE }}"
-          echo "Cluster: ${{ env.ECS_CLUSTER }}"
-
-      - name: Notify on failure
-        if: failure()
-        run: |
-          echo "❌ Deployment failed!"
-          exit 1
+      - name: Deploy with SST
+        run: bunx sst deploy --stage ${{ inputs.stage || 'production' }}
