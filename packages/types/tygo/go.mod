@@ -1,4 +1,4 @@
-module strata-tygo
+module procella-tygo
 
 go 1.25.6
 

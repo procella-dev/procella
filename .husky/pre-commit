@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Strata pre-commit hook — runs quality gates via bun scripts.
+# Procella pre-commit hook — runs quality gates via bun scripts.
 # Checks are scoped to what actually changed to keep commits fast.
 # All commands live in package.json — this hook only decides WHICH scripts to run.
 

@@ -4,17 +4,17 @@ import starlight from '@astrojs/starlight';
 const isProd = process.env.NODE_ENV === 'production';
 
 export default defineConfig({
-  site: 'https://strata-iac.github.io',
-  base: isProd ? '/strata' : '/docs',
+  site: 'https://procella-dev.github.io',
+  base: isProd ? '/procella' : '/docs',
   integrations: [
     starlight({
-      title: 'Strata',
+      title: 'Procella',
       description: 'Self-hosted Pulumi backend documentation',
       social: [
-        { icon: 'github', label: 'GitHub', href: 'https://github.com/strata-iac/strata' },
+        { icon: 'github', label: 'GitHub', href: 'https://github.com/procella-dev/procella' },
       ],
       editLink: {
-        baseUrl: 'https://github.com/strata-iac/strata/edit/main/docs/',
+        baseUrl: 'https://github.com/procella-dev/procella/edit/main/docs/',
       },
       tableOfContents: {
         minHeadingLevel: 2,
