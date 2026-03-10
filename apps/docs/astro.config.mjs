@@ -14,7 +14,7 @@ export default defineConfig({
         { icon: 'github', label: 'GitHub', href: 'https://github.com/procella-dev/procella' },
       ],
       editLink: {
-        baseUrl: 'https://github.com/procella-dev/procella/edit/main/docs/',
+        baseUrl: 'https://github.com/procella-dev/procella/edit/main/apps/docs/',
       },
       tableOfContents: {
         minHeadingLevel: 2,
