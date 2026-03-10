@@ -25,15 +25,30 @@ export default $config({
 		const dbPassword = new sst.Secret("ProcellaDbPassword");
 		const encryptionKey = new sst.Secret("ProcellaEncryptionKey");
 
+		// Encryption key stored in Secrets Manager so ECS can inject it via ssm (ARN-based).
+		const encryptionKeySecret = new aws.secretsmanager.Secret("ProcellaEncryptionKeySecret", {
+			description: "Procella AES-256-GCM encryption key",
+		});
+		new aws.secretsmanager.SecretVersion("ProcellaEncryptionKeyVersion", {
+			secretId: encryptionKeySecret.id,
+			secretString: encryptionKey.value,
+		});
+
 		// Descope management key for ECS container injection (Secrets Manager ARN).
 		// The infra/descope.ts module manages its own sst.Secret("DescopeManagementKey")
 		// for the Descope provider; this is the Secrets Manager secret the ECS task reads.
 		const descopeKeySecret = new aws.secretsmanager.Secret("ProcellaDescopeKey", {
 			description: "Descope Management Key for Procella",
 		});
+		const descopeKeyValue = process.env.DESCOPE_MANAGEMENT_KEY ?? "";
+		if (!descopeKeyValue && $app.stage === "production") {
+			throw new Error(
+				"DESCOPE_MANAGEMENT_KEY is required for production. Set it in your environment or CI secrets.",
+			);
+		}
 		new aws.secretsmanager.SecretVersion("ProcellaDescopeKeyVersion", {
 			secretId: descopeKeySecret.id,
-			secretString: process.env.DESCOPE_MANAGEMENT_KEY || "placeholder-key",
+			secretString: descopeKeyValue || "placeholder-key",
 		});
 
 		// ========================================================================
@@ -163,11 +178,13 @@ export default $config({
 				PROCELLA_BLOB_S3_BUCKET: checkpointBlobs.name,
 				PROCELLA_BLOB_S3_REGION: aws.getRegionOutput().name,
 				PROCELLA_CORS_ORIGINS: $interpolate`https://${$app.stage === "production" ? "procella" : $app.stage}.procella.dev`,
-				PROCELLA_DATABASE_URL: $interpolate`postgresql://procella:${dbPassword.value}@${db.service}:5432/procella`,
+				PROCELLA_DATABASE_URL: dbPassword.value.apply(
+					(pw) => $interpolate`postgresql://procella:${encodeURIComponent(pw)}@${db.service}:5432/procella`,
+				),
 			},
 			ssm: {
 				PROCELLA_DESCOPE_MANAGEMENT_KEY: descopeKeySecret.arn,
-				PROCELLA_ENCRYPTION_KEY: encryptionKey.value,
+				PROCELLA_ENCRYPTION_KEY: encryptionKeySecret.arn,
 			},
 			loadBalancer: {
 				rules: [
@@ -201,14 +218,18 @@ export default $config({
 		// CLOUDFRONT CDN (Static Assets)
 		// ========================================================================
 
+		const oac = new aws.cloudfront.OriginAccessControl("ProcellaOac", {
+			originAccessControlOriginType: "s3",
+			signingBehavior: "always",
+			signingProtocol: "sigv4",
+		});
+
 		const cdn = new sst.aws.Cdn("ProcellaCdn", {
 			origins: [
 				{
 					domainName: staticAssets.nodes.bucket.bucketRegionalDomainName,
 					originId: "S3",
-					s3OriginConfig: {
-						originAccessIdentity: "",
-					},
+					originAccessControlId: oac.id,
 				},
 			],
 			defaultCacheBehavior: {
