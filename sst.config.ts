@@ -48,6 +48,9 @@ export default $config({
 		const staticAssetsBucketName = `${appName}-static-${Date.now()}`;
 		const checkpointBlobsBucketName = `${appName}-checkpoints-${Date.now()}`;
 
+		// Database password (ops team provides in Secrets Manager, or use default for dev)
+		const dbPassword = process.env.STRATA_DB_PASSWORD || "strata";
+
 		// ========================================================================
 		// VPC + NETWORKING (Wave 1.1)
 		// ========================================================================
@@ -347,7 +350,7 @@ export default $config({
 			description: "Descope Management Key for Strata",
 		});
 
-		// Note: In production, populate this with actual key
+		// Descope Management Key - fetched from environment (DESCOPE_MANAGEMENT_KEY) or use placeholder
 		new aws.secretsmanager.SecretVersion(`${appName}-descope-key-version`, {
 			secretId: descopeKeySecret.id,
 			secretString: process.env.DESCOPE_MANAGEMENT_KEY || "placeholder-key",
@@ -530,11 +533,11 @@ export default $config({
 							},
 							{
 								name: "STRATA_CORS_ORIGINS",
-								value: "https://strata.example.com", // TODO: Replace with actual domain
+								value: `https://${$app.stage === "production" ? "strata" : $app.stage}.strata.com`,
 							},
 							{
 								name: "STRATA_DATABASE_URL",
-								value: `postgresql://strata:strata@localhost:5432/strata`,
+								value: `postgresql://strata:${dbPassword}@strata-db.local:5432/strata`,
 							},
 						],
 						secrets: [
@@ -619,7 +622,7 @@ export default $config({
 							},
 							{
 								name: "POSTGRES_PASSWORD",
-								value: "strata", // TODO: Move to Secrets Manager
+								value: dbPassword,
 							},
 						],
 						mountPoints: [

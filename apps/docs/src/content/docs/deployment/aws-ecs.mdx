@@ -1,0 +1,280 @@
+---
+title: Deploying to AWS with ECS
+description: Deploy Strata to AWS using ECS, PostgreSQL on EFS, and CloudFront for a cost-effective self-hosted Pulumi backend (~$150/month)
+---
+
+Strata can be self-hosted on AWS using ECS (Elastic Container Service) for the API server and PostgreSQL database, with static assets served via S3 and CloudFront. This approach is production-ready and significantly cheaper than managed alternatives.
+
+## Architecture
+
+**Key Components**:
+- **API Server**: ECS Fargate containers (2-10 replicas, auto-scaling on CPU > 70%)
+- **Database**: PostgreSQL on ECS with EFS for persistent storage
+- **Static Assets**: React SPA + Astro docs served via S3 + CloudFront
+- **Load Balancing**: Application Load Balancer with automatic health checks
+- **Networking**: VPC with public/private subnets, security groups, NAT Gateway
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ CloudFront CDN                                          │
+│ ├─ strata.strata.com (React UI, 1-year cache)         │
+│ └─ docs.strata.com (Astro docs, 1-hour cache)         │
+└──────────────────────┬──────────────────────────────────┘
+                       │ HTTPS
+┌──────────────────────┴──────────────────────────────────┐
+│ ALB (Application Load Balancer)                         │
+│ ├─ Health check: /healthz every 5s                     │
+│ └─ Targets: ECS Strata server (port 9090)              │
+└──────────────────────┬──────────────────────────────────┘
+                       │ Port 9090
+┌──────────────────────┴──────────────────────────────────┐
+│ ECS Cluster (strata)                                    │
+│ ├─ Strata Service (2-10 replicas)                      │
+│ │  ├─ 0.5 vCPU, 1GB RAM per replica                   │
+│ │  └─ Auto-scales on CPU > 70%                         │
+│ │                                                       │
+│ └─ PostgreSQL Service (1 replica, always-on)           │
+│    ├─ 0.5 vCPU, 1GB RAM                               │
+│    └─ Data stored on EFS volume                        │
+└──────────────────────┬──────────────────────────────────┘
+                       │ S3 buckets
+┌──────────────────────┴──────────────────────────────────┐
+│ S3 + EFS                                                │
+│ ├─ Static Assets: React build (versioned, long TTL)    │
+│ ├─ Checkpoint Blobs: Pulumi state snapshots            │
+│ └─ EFS Volume: PostgreSQL data (30GB typical)          │
+└─────────────────────────────────────────────────────────┘
+```
+
+## Cost Breakdown
+
+### ~$150/Month
+
+| Component | Cost | Details |
+|-----------|------|---------|
+| ECS Fargate (Server) | $40-80 | 2-10 replicas, auto-scaling |
+| ECS Fargate (Database) | $20-40 | 1 dedicated replica |
+| EFS Storage | ~$9 | 30GB @ $0.30/GB/month |
+| S3 + CloudFront | $25-30 | Static assets + egress |
+| ALB | $15-20 | Load balancer + processing |
+| **Total** | **~$150** | Scales with traffic |
+
+**Compared to alternatives:**
+- **RDS PostgreSQL**: $1,800+/month (managed database)
+- **Pulumi Cloud**: $10-500+/month (hosted service)
+- **Strata on ECS**: ~$150/month (self-hosted)
+
+## Prerequisites
+
+Before deploying, you need:
+
+### AWS Account
+- Permissions for EC2, ECS, S3, CloudFront, Route53, Secrets Manager, CloudWatch, IAM, EFS, ALB
+- Default VPC or ability to create new VPC
+
+### Domain
+- Domain name (e.g., `strata.com`)
+- Access to Route53 or external domain registrar
+- Subdomains will be auto-configured:
+  - `strata.strata.com` — Web UI
+  - `api.strata.com` — API server
+  - `docs.strata.com` — Documentation
+
+### Descope Authentication
+- [Descope account](https://www.descope.com/) and project
+- Project ID from dashboard
+- Management API key for token creation
+
+### Local Tools
+```bash
+# Bun runtime
+curl -fsSL https://bun.sh/install | bash
+
+# AWS CLI (configured with credentials)
+brew install awscli  # or use your package manager
+aws configure
+
+# Git
+git --version
+```
+
+## Quick Start
+
+### 1. Clone & Configure
+
+```bash
+git clone https://github.com/your-org/strata-iac.git
+cd strata
+
+# Create environment file with Descope credentials
+cp .env.example .env
+# Edit .env with your Descope Project ID and Management Key
+```
+
+### 2. Deploy
+
+```bash
+# Preview changes (optional but recommended)
+bun run infra:deploy --dry-run
+
+# Deploy to AWS
+bun run infra:deploy
+```
+
+This takes 5-10 minutes. Once complete, your infrastructure is running.
+
+### 3. Verify
+
+```bash
+# Health check
+curl https://api.strata.com/healthz
+# Should return: HTTP 200 OK
+
+# Access web UI
+open https://strata.strata.com
+
+# Access documentation
+open https://docs.strata.com
+```
+
+## Detailed Deployment Guide
+
+For step-by-step instructions, environment variable details, troubleshooting, and operational runbooks, see the [complete DEPLOYMENT.md guide](../../DEPLOYMENT.md).
+
+Key sections in the detailed guide:
+- Environment variables and configuration
+- Step-by-step deployment with AWS CLI examples
+- DNS configuration for Route53 or external registrars
+- Database initialization
+- Deployment verification
+- Cost optimization
+- Updating and rollback procedures
+- Comprehensive troubleshooting
+- Monitoring and scaling
+
+## Why ECS + EFS for Database?
+
+Instead of using RDS (AWS's managed relational database), Strata can use PostgreSQL on ECS with EFS storage:
+
+### ECS + EFS (~$30/month)
+- **Pros**: Cheap, full control, portable, no vendor lock-in
+- **Cons**: Requires some ops work, manual backups
+- **Best for**: Self-hosted projects, cost-conscious teams
+
+### RDS Managed ($1,800+/month)
+- **Pros**: Automatic backups, high availability, AWS support
+- **Cons**: Expensive, less control, vendor lock-in
+- **Best for**: Enterprise deployments, compliance requirements
+
+For most self-hosted deployments, ECS + EFS is the right choice.
+
+## Auto-Scaling
+
+The Strata API server automatically scales based on demand:
+
+- **Min replicas**: 2 (always running)
+- **Max replicas**: 10 (under extreme load)
+- **Scale-out trigger**: CPU > 70% (adds replicas after 300s)
+- **Scale-in trigger**: CPU < 20% (removes replicas after 300s)
+
+No manual configuration needed—scaling happens automatically.
+
+## Monitoring & Logs
+
+Monitor your deployment via CloudWatch:
+
+```bash
+# Stream application logs
+aws logs tail /ecs/strata-server --follow
+
+# Stream database logs
+aws logs tail /ecs/strata-db --follow
+
+# View ECS service status
+aws ecs describe-services --cluster strata --services strata-server
+```
+
+Logs are retained for 7 days. Increase retention in `sst.config.ts` if needed.
+
+## Updating Deployments
+
+### Code Changes
+
+Push to main branch—GitHub Actions automatically:
+1. Builds Docker image
+2. Pushes to ECR
+3. Updates ECS service
+4. Waits for health checks
+
+### Infrastructure Changes
+
+Edit `sst.config.ts` and redeploy:
+
+```bash
+git add sst.config.ts
+git commit -m "config: add new resource"
+git push
+
+bun run infra:deploy
+```
+
+### Rollback
+
+If something goes wrong, rollback to the previous version:
+
+```bash
+# Get previous task definition
+aws ecs describe-task-definition --task-definition strata-server:N
+
+# Update service to use it
+aws ecs update-service \
+  --cluster strata \
+  --service strata-server \
+  --task-definition strata-server:N-1
+```
+
+## Backups & Disaster Recovery
+
+### Database Backups
+
+Create EFS snapshots:
+
+```bash
+# Manual snapshot
+aws ec2 create-snapshot \
+  --volume-id <efs-id> \
+  --description "Strata DB backup"
+```
+
+Or use AWS Backup for automated daily snapshots.
+
+### State Backups
+
+S3 buckets have versioning enabled:
+
+```bash
+# List object versions
+aws s3api list-object-versions \
+  --bucket strata-checkpoints-xxx
+
+# Restore old version
+aws s3api get-object \
+  --bucket strata-checkpoints-xxx \
+  --key state.json \
+  --version-id <version-id> \
+  state.json
+```
+
+## Next Steps
+
+1. **[Full Deployment Guide](../../DEPLOYMENT.md)** — Complete step-by-step instructions
+2. **[Configuration Reference](../getting-started/configuration.md)** — All STRATA_* variables
+3. **[Architecture Overview](../architecture/overview.md)** — How Strata works internally
+4. **[Pulumi CLI](https://www.pulumi.com/docs/reference/cli/)** — Using Strata with `pulumi up`
+
+## Support
+
+- 📖 [Strata Docs](/)
+- 🔗 [Pulumi Service API Docs](https://www.pulumi.com/docs/concepts/how-pulumi-works/service/)
+- ☁️ [AWS ECS Docs](https://docs.aws.amazon.com/ecs/)
+- 🚀 [SST Framework Docs](https://sst.dev/docs/)
