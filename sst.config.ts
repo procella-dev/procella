@@ -18,6 +18,11 @@ export default $config({
 	async run() {
 		const { createDescopeProject } = await import("./infra/descope");
 
+		const isProd = $app.stage === "production";
+		const domain = isProd ? "procella.dev" : `${$app.stage}.procella.dev`;
+		const apiDomain = `api.${domain}`;
+		const docsDomain = `docs.${domain}`;
+
 		// ========================================================================
 		// SECRETS
 		// ========================================================================
@@ -66,11 +71,6 @@ export default $config({
 		// ========================================================================
 		// STORAGE
 		// ========================================================================
-
-		const staticAssets = new sst.aws.Bucket("ProcellaStatic", {
-			versioning: true,
-			access: "cloudfront",
-		});
 
 		const checkpointBlobs = new sst.aws.Bucket("ProcellaCheckpoints", {
 			versioning: true,
@@ -183,7 +183,7 @@ export default $config({
 				PROCELLA_BLOB_BACKEND: "s3",
 				PROCELLA_BLOB_S3_BUCKET: checkpointBlobs.name,
 				PROCELLA_BLOB_S3_REGION: aws.getRegionOutput().name,
-				PROCELLA_CORS_ORIGINS: $interpolate`https://${$app.stage === "production" ? "procella" : $app.stage}.procella.dev`,
+				PROCELLA_CORS_ORIGINS: $interpolate`https://${domain}`,
 				PROCELLA_DATABASE_URL: dbPassword.apply(
 					(pw) => $interpolate`postgresql://procella:${encodeURIComponent(pw)}@${db.service}:5432/procella`,
 				),
@@ -193,8 +193,10 @@ export default $config({
 				PROCELLA_ENCRYPTION_KEY: encryptionKeySecret.arn,
 			},
 			loadBalancer: {
+				domain: { name: apiDomain, dns: sst.aws.dns() },
 				rules: [
 					{ listen: "80/http", forward: "9090/http" },
+					{ listen: "443/https", forward: "9090/http" },
 				],
 				health: {
 					"9090/http": {
@@ -213,60 +215,19 @@ export default $config({
 			},
 		});
 
-		// ========================================================================
-		// CLOUDFRONT CDN (Static Assets)
-		// ========================================================================
-
-		const oac = new aws.cloudfront.OriginAccessControl("ProcellaOac", {
-			originAccessControlOriginType: "s3",
-			signingBehavior: "always",
-			signingProtocol: "sigv4",
+		const web = new sst.aws.StaticSite("ProcellaWeb", {
+			path: "apps/ui",
+			build: { command: "bun run build", output: "dist" },
+			domain: { name: domain, dns: sst.aws.dns() },
+			environment: {
+				VITE_API_URL: `https://${apiDomain}`,
+			},
 		});
 
-		const cdn = new sst.aws.Cdn("ProcellaCdn", {
-			origins: [
-				{
-					domainName: staticAssets.nodes.bucket.bucketRegionalDomainName,
-					originId: "S3",
-					originAccessControlId: oac.id,
-				},
-			],
-			defaultCacheBehavior: {
-				targetOriginId: "S3",
-				viewerProtocolPolicy: "allow-all",
-				allowedMethods: ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"],
-				cachedMethods: ["GET", "HEAD"],
-				forwardedValues: {
-					queryString: false,
-					cookies: { forward: "none" },
-				},
-				compress: true,
-				minTtl: 0,
-				defaultTtl: 3600,
-				maxTtl: 86400,
-			},
-			orderedCacheBehaviors: [
-				{
-					pathPattern: "*.{js,css,png,jpg,jpeg,gif,svg,woff,woff2}",
-					targetOriginId: "S3",
-					viewerProtocolPolicy: "allow-all",
-					allowedMethods: ["GET", "HEAD", "OPTIONS"],
-					cachedMethods: ["GET", "HEAD"],
-					forwardedValues: {
-						queryString: false,
-						cookies: { forward: "none" },
-					},
-					compress: true,
-					minTtl: 0,
-					defaultTtl: 31536000,
-					maxTtl: 31536000,
-				},
-			],
-			transform: {
-				distribution: {
-					priceClass: "PriceClass_100",
-				},
-			},
+		const docs = new sst.aws.StaticSite("ProcellaDocs", {
+			path: "apps/docs",
+			build: { command: "bun run build", output: "dist" },
+			domain: { name: docsDomain, dns: sst.aws.dns() },
 		});
 
 		// ========================================================================
@@ -284,16 +245,13 @@ export default $config({
 
 			// ECS
 			ClusterId: cluster.id,
-			AppUrl: app.url,
+			ApiUrl: app.url,
+			WebUrl: web.url,
+			DocsUrl: docs.url,
 			DbServiceEndpoint: db.service,
 
 			// S3
-			StaticAssetsBucket: staticAssets.name,
 			CheckpointBlobsBucket: checkpointBlobs.name,
-
-			// CloudFront
-			CloudFrontUrl: cdn.url,
-			CloudFrontDistributionId: cdn.nodes.distribution.id,
 
 			// Database
 			EfsId: postgresStorage.id,

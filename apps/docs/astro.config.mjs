@@ -1,11 +1,9 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
-const isProd = process.env.NODE_ENV === 'production';
-
 export default defineConfig({
-  site: 'https://procella-dev.github.io',
-  base: isProd ? '/procella' : '/docs',
+  site: 'https://docs.procella.dev',
+  base: '/',
   integrations: [
     starlight({
       title: 'Procella',
