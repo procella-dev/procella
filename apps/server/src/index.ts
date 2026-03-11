@@ -2,8 +2,9 @@
 
 if (process.argv.includes("--healthz")) {
 	const port = (Bun.env.PROCELLA_LISTEN_ADDR ?? ":9090").split(":").pop() || "9090";
-	const res = await fetch(`http://localhost:${port}/healthz`).catch(() => null);
-	process.exit(res?.ok ? 0 : 1);
+	fetch(`http://localhost:${port}/healthz`)
+		.then((res) => process.exit(res.ok ? 0 : 1))
+		.catch(() => process.exit(1));
 }
 
 import { createAuthService } from "@procella/auth";
