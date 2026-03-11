@@ -37,6 +37,4 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Deploy with SST
-        env:
-          DESCOPE_MANAGEMENT_KEY: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
         run: bunx sst deploy --stage ${{ github.event.inputs.stage || 'production' }}

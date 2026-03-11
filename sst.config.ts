@@ -16,11 +16,17 @@ export default $config({
 		};
 	},
 	async run() {
-		const descope = await import("./infra/descope");
+		const { createDescopeProject } = await import("./infra/descope");
 
 		// ========================================================================
 		// SECRETS
 		// ========================================================================
+
+		// Single source of truth for Descope management key — used by both the
+		// Pulumi Descope provider (at deploy time) and ECS containers (at runtime).
+		// Set via: `sst secret set DescopeManagementKey <your-key>`
+		const descopeManagementKey = new sst.Secret("DescopeManagementKey");
+		const descope = createDescopeProject(descopeManagementKey);
 
 		const dbPassword = new random.RandomPassword("ProcellaDbPassword", {
 			length: 32,
@@ -32,7 +38,7 @@ export default $config({
 			length: 32,
 		}).hex;
 
-		// Store encryption key in Secrets Manager so ECS can inject it via ssm (ARN-based).
+		// Store secrets in Secrets Manager so ECS can inject them via ssm (ARN-based).
 		const encryptionKeySecret = new aws.secretsmanager.Secret("ProcellaEncryptionKeySecret", {
 			description: "Procella AES-256-GCM encryption key",
 		});
@@ -41,21 +47,12 @@ export default $config({
 			secretString: encryptionKeyHex,
 		});
 
-		// Descope management key for ECS container injection (Secrets Manager ARN).
-		// The infra/descope.ts module manages its own sst.Secret("DescopeManagementKey")
-		// for the Descope provider; this is the Secrets Manager secret the ECS task reads.
 		const descopeKeySecret = new aws.secretsmanager.Secret("ProcellaDescopeKey", {
 			description: "Descope Management Key for Procella",
 		});
-		const descopeKeyValue = process.env.DESCOPE_MANAGEMENT_KEY ?? "";
-		if (!descopeKeyValue && $app.stage === "production") {
-			throw new Error(
-				"DESCOPE_MANAGEMENT_KEY is required for production. Set it in your environment or CI secrets.",
-			);
-		}
 		new aws.secretsmanager.SecretVersion("ProcellaDescopeKeyVersion", {
 			secretId: descopeKeySecret.id,
-			secretString: descopeKeyValue || "placeholder-key",
+			secretString: descopeManagementKey.value,
 		});
 
 		// ========================================================================
@@ -182,7 +179,7 @@ export default $config({
 			environment: {
 				PROCELLA_LISTEN_ADDR: ":9090",
 				PROCELLA_AUTH_MODE: "descope",
-				PROCELLA_DESCOPE_PROJECT_ID: descope.descopeProjectId,
+				PROCELLA_DESCOPE_PROJECT_ID: descope.projectId,
 				PROCELLA_BLOB_BACKEND: "s3",
 				PROCELLA_BLOB_S3_BUCKET: checkpointBlobs.name,
 				PROCELLA_BLOB_S3_REGION: aws.getRegionOutput().name,
@@ -278,7 +275,7 @@ export default $config({
 
 		return {
 			// Descope
-			DescopeProjectId: descope.descopeProjectId,
+			DescopeProjectId: descope.projectId,
 
 			// Networking
 			VpcId: vpc.id,
