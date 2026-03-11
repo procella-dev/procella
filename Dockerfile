@@ -24,9 +24,7 @@ COPY apps/server/ apps/server/
 RUN bun build apps/server/src/index.ts \
       --compile \
       --target=bun-linux-$([ "$TARGETARCH" = "arm64" ] && echo "arm64" || echo "x64") \
-      --minify \
       --sourcemap \
-      --bytecode \
       --compile-exec-argv="--smol" \
       --no-compile-autoload-dotenv \
       --no-compile-autoload-bunfig \
