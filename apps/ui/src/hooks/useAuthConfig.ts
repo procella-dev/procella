@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { apiBase } from "../config";
 
 export type AuthConfigResponse = { mode: "dev" } | { mode: "descope"; projectId: string };
 
@@ -9,7 +10,7 @@ function fetchAuthConfig(): Promise<AuthConfigResponse> {
 	if (cachedConfig) return Promise.resolve(cachedConfig);
 	if (fetchPromise) return fetchPromise;
 
-	fetchPromise = fetch("/api/auth/config")
+	fetchPromise = fetch(`${apiBase}/api/auth/config`)
 		.then((res) => res.json() as Promise<AuthConfigResponse>)
 		.then((data) => {
 			cachedConfig = data;

@@ -1,6 +1,7 @@
 import { Descope, useDescope, useSession, useUser } from "@descope/react-sdk";
 import { useRef, useState } from "react";
 import { useSearchParams } from "react-router";
+import { apiBase } from "../config";
 import { useAuthConfig } from "../hooks/useAuthConfig";
 
 export function CliLogin() {
@@ -54,7 +55,7 @@ function DescopeCliLogin({
 		setStatus("creating");
 
 		const sessionToken = sdk.getSessionToken();
-		fetch("/api/auth/cli-token", {
+		fetch(`${apiBase}/api/auth/cli-token`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
