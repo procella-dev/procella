@@ -8,9 +8,9 @@ export default $config({
 			protect: ["production"].includes(input?.stage),
 			home: "aws",
 			providers: {
+				"@pulumi/random": "4.16.7",
 				// Descope Pulumi provider — manages Descope project config as code.
-				// Credentials: set DESCOPE_MANAGEMENT_KEY env var or run:
-				//   sst secret set DescopeManagementKey <your-key>
+				// Credentials: run `sst secret set DescopeManagementKey <your-key>`
 				"@descope/pulumi-descope": "0.3.4",
 			},
 		};
@@ -22,16 +22,23 @@ export default $config({
 		// SECRETS
 		// ========================================================================
 
-		const dbPassword = new sst.Secret("ProcellaDbPassword");
-		const encryptionKey = new sst.Secret("ProcellaEncryptionKey");
+		const dbPassword = new random.RandomPassword("ProcellaDbPassword", {
+			length: 32,
+			special: true,
+			overrideSpecial: "_%",
+		}).result;
 
-		// Encryption key stored in Secrets Manager so ECS can inject it via ssm (ARN-based).
+		const encryptionKeyHex = new random.RandomBytes("ProcellaEncryptionKey", {
+			length: 32,
+		}).hex;
+
+		// Store encryption key in Secrets Manager so ECS can inject it via ssm (ARN-based).
 		const encryptionKeySecret = new aws.secretsmanager.Secret("ProcellaEncryptionKeySecret", {
 			description: "Procella AES-256-GCM encryption key",
 		});
 		new aws.secretsmanager.SecretVersion("ProcellaEncryptionKeyVersion", {
 			secretId: encryptionKeySecret.id,
-			secretString: encryptionKey.value,
+			secretString: encryptionKeyHex,
 		});
 
 		// Descope management key for ECS container injection (Secrets Manager ARN).
@@ -126,7 +133,7 @@ export default $config({
 			environment: {
 				POSTGRES_USER: "procella",
 				POSTGRES_DB: "procella",
-				POSTGRES_PASSWORD: dbPassword.value,
+				POSTGRES_PASSWORD: dbPassword,
 			},
 			volumes: [
 				{
@@ -180,7 +187,7 @@ export default $config({
 				PROCELLA_BLOB_S3_BUCKET: checkpointBlobs.name,
 				PROCELLA_BLOB_S3_REGION: aws.getRegionOutput().name,
 				PROCELLA_CORS_ORIGINS: $interpolate`https://${$app.stage === "production" ? "procella" : $app.stage}.procella.dev`,
-				PROCELLA_DATABASE_URL: dbPassword.value.apply(
+				PROCELLA_DATABASE_URL: dbPassword.apply(
 					(pw) => $interpolate`postgresql://procella:${encodeURIComponent(pw)}@${db.service}:5432/procella`,
 				),
 			},
