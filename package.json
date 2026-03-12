@@ -41,23 +41,16 @@
 		"check:all": "bun run check && bun run e2e",
 		"db:generate": "drizzle-kit generate --config packages/db/drizzle.config.ts",
 		"db:migrate": "drizzle-kit migrate --config packages/db/drizzle.config.ts",
-		"docker:build": "docker build -t procella:dev .",
 		"docker:cluster": "docker compose --profile cluster up --build",
 		"docker:cluster:down": "docker compose --profile cluster down -v",
 		"docs:dev": "bun run --cwd apps/docs dev",
 		"docs:build": "bun run --cwd apps/docs build",
-		"infra:deploy": "sst deploy",
-		"infra:diff": "sst diff",
-		"infra:remove": "sst remove"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "catalog:",
-		"@pulumi/aws": "^7.21.0",
-		"@pulumi/pulumi": "^3.225.1",
 		"@types/bun": "catalog:",
 		"drizzle-kit": "catalog:",
 		"husky": "catalog:",
-		"sst": "^4.2.2",
 		"typescript": "catalog:"
 	},
 	"dependencies": {
@@ -66,7 +59,6 @@
 		"@trpc/server": "catalog:",
 		"drizzle-orm": "catalog:",
 		"hono": "catalog:",
-		"postgres": "^3.4.8",
 		"zod": "catalog:"
 	}
 }
