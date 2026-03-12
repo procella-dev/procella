@@ -42,8 +42,8 @@ const storage = createBlobStorage(
 				bucket: config.blobS3Bucket as string,
 				endpoint: config.blobS3Endpoint,
 				region: config.blobS3Region,
-				accessKeyId: (process.env.AWS_ACCESS_KEY_ID ?? "") as string,
-				secretAccessKey: (process.env.AWS_SECRET_ACCESS_KEY ?? "") as string,
+				accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+				secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
 			},
 );
 

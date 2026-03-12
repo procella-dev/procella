@@ -41,8 +41,6 @@
 		"check:all": "bun run check && bun run e2e",
 		"db:generate": "drizzle-kit generate --config packages/db/drizzle.config.ts",
 		"db:migrate": "drizzle-kit migrate --config packages/db/drizzle.config.ts",
-		"docker:cluster": "docker compose --profile cluster up --build",
-		"docker:cluster:down": "docker compose --profile cluster down -v",
 		"docs:dev": "bun run --cwd apps/docs dev",
 		"docs:build": "bun run --cwd apps/docs build",
 	},

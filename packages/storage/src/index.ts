@@ -35,8 +35,8 @@ export interface S3StorageConfig {
 	bucket: string;
 	endpoint?: string;
 	region?: string;
-	accessKeyId: string;
-	secretAccessKey: string;
+	accessKeyId?: string;
+	secretAccessKey?: string;
 }
 
 export type StorageConfig = LocalStorageConfig | S3StorageConfig;
@@ -117,10 +117,14 @@ export class S3BlobStorage implements BlobStorage {
 	constructor(config: Omit<S3StorageConfig, "backend">) {
 		this.bucket = config.bucket;
 		this.client = new S3Client({
-			credentials: {
-				accessKeyId: config.accessKeyId,
-				secretAccessKey: config.secretAccessKey,
-			},
+			...(config.accessKeyId && config.secretAccessKey
+				? {
+						credentials: {
+							accessKeyId: config.accessKeyId,
+							secretAccessKey: config.secretAccessKey,
+						},
+					}
+				: {}),
 			endpoint: config.endpoint,
 			region: config.region,
 			forcePathStyle: true,
