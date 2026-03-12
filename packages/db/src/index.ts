@@ -4,7 +4,7 @@
 // Drizzle ORM wraps it for type-safe queries with schema inference.
 // WebSocket mode is required for interactive transactions (db.transaction()).
 
-import { Pool, neonConfig } from "@neondatabase/serverless";
+import { neonConfig, Pool } from "@neondatabase/serverless";
 import type { NeonDatabase } from "drizzle-orm/neon-serverless";
 import { drizzle } from "drizzle-orm/neon-serverless";
 import ws from "ws";
@@ -13,8 +13,8 @@ import { schema } from "./schema.js";
 // Node.js does not have a global WebSocket — provide the ws library.
 neonConfig.webSocketConstructor = ws;
 
-	// Re-export schema for consumers
-	export {
+// Re-export schema for consumers
+export {
 	checkpoints,
 	projects,
 	schema,
@@ -30,8 +30,8 @@ neonConfig.webSocketConstructor = ws;
 /** Drizzle database instance with full schema type inference. */
 export type Database = NeonDatabase<typeof schema>;
 
-	/** Options for creating a database connection. */
-	export interface CreateDbOptions {
+/** Options for creating a database connection. */
+export interface CreateDbOptions {
 	/** PostgreSQL connection URL. */
 	url: string;
 	/** Maximum number of connections in the pool. Defaults to 20. */
@@ -44,19 +44,19 @@ export type Database = NeonDatabase<typeof schema>;
 export interface DbClient {
 	/** Shut down the connection pool. */
 	close(): Promise<void>;
- }
+}
 
- // ============================================================================
+// ============================================================================
 // Factory
-	// ============================================================================
+// ============================================================================
 
-	/**
+/**
  * Create a Drizzle database instance backed by Neon serverless (WebSocket).
  *
  * Returns both the Drizzle instance (for type-safe queries) and a client
  * handle (for lifecycle management — call client.close() on shutdown).
  */
-		export function createDb(options: CreateDbOptions): { db: Database; client: DbClient } {
+export function createDb(options: CreateDbOptions): { db: Database; client: DbClient } {
 	const pool = new Pool({
 		connectionString: options.url,
 		max: options.max ?? 20,
