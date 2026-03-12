@@ -36,6 +36,11 @@ export class GCWorker {
 		}
 	}
 
+	/** Run a single GC cycle (for use by cron endpoints). */
+	async runOnce(): Promise<void> {
+		await this.runCycle();
+	}
+
 	private async runCycle(): Promise<void> {
 		if (this.running) return;
 		this.running = true;

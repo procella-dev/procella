@@ -5,7 +5,7 @@ import type { TRPCContext } from "@procella/api/src/trpc.js";
 import type { AuthConfig, AuthService } from "@procella/auth";
 import type { Database } from "@procella/db";
 import type { StacksService } from "@procella/stacks";
-import type { UpdatesService } from "@procella/updates";
+import { GCWorker, type UpdatesService } from "@procella/updates";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -99,6 +99,18 @@ export function createApp(deps: {
 	app.get("/healthz", health.health);
 	app.get("/api/capabilities", health.capabilities);
 	app.get("/api/cli/version", health.cliVersion);
+
+	// Vercel Cron endpoint — GC worker runs as a scheduled job.
+	// Secured via CRON_SECRET header (set by Vercel automatically).
+	app.get("/api/cron/gc", async (c) => {
+		const secret = process.env.CRON_SECRET;
+		if (secret && c.req.header("authorization") !== `Bearer ${secret}`) {
+			return c.json({ error: "Unauthorized" }, 401);
+		}
+		const gc = new GCWorker({ db: deps.db });
+		await gc.runOnce();
+		return c.json({ ok: true });
+	});
 
 	// Auth config discovery — UI fetches this at runtime to determine auth mode.
 	app.get("/api/auth/config", (c) => {

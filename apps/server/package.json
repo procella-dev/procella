@@ -5,6 +5,7 @@
 	"main": "src/index.ts",
 	"types": "src/index.ts",
 	"dependencies": {
+		"@hono/node-server": "^1.19.11",
 		"@procella/api": "workspace:*",
 		"@procella/auth": "workspace:*",
 		"@procella/config": "workspace:*",

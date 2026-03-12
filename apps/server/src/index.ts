@@ -1,13 +1,9 @@
-// @procella/server — Hono HTTP server entrypoint.
+// @procella/server — Bun.serve entrypoint for local development.
+//
+// Production uses vercel.ts instead. This file is only used for local dev
+// via `bun run apps/server/src/index.ts`.
 
-import { createAuthService } from "@procella/auth";
-import { loadConfig } from "@procella/config";
-import { AesCryptoService, devMasterKey } from "@procella/crypto";
-import { createDb } from "@procella/db";
-import { PostgresStacksService } from "@procella/stacks";
-import { createBlobStorage } from "@procella/storage";
-import { GCWorker, PostgresUpdatesService } from "@procella/updates";
-import { createApp } from "./routes/index.js";
+import { GCWorker } from "@procella/updates";
 
 // Healthcheck probe — runs inside the same compiled binary to avoid shipping
 // a separate health binary. Must exit before any server bootstrap.
@@ -17,65 +13,7 @@ if (process.argv.includes("--healthz")) {
 		.then((res) => process.exit(res.ok ? 0 : 1))
 		.catch(() => process.exit(1));
 } else {
-	// ============================================================================
-	// Bootstrap
-	// ============================================================================
-
-	const config = loadConfig();
-
-	// Database
-	const { db, client } = createDb({ url: config.databaseUrl });
-
-	// Services
-	const authConfig =
-		config.authMode === "dev"
-			? {
-					mode: "dev" as const,
-					token: config.devAuthToken as string,
-					userLogin: config.devUserLogin,
-					orgLogin: config.devOrgLogin,
-				}
-			: {
-					mode: "descope" as const,
-					projectId: config.descopeProjectId as string,
-					managementKey: config.descopeManagementKey,
-				};
-	const auth = createAuthService(authConfig);
-
-	const storage = createBlobStorage(
-		config.blobBackend === "local"
-			? { backend: "local", basePath: config.blobLocalPath }
-			: {
-					backend: "s3",
-					bucket: config.blobS3Bucket as string,
-					endpoint: config.blobS3Endpoint,
-					region: config.blobS3Region,
-					accessKeyId: (process.env.AWS_ACCESS_KEY_ID ?? "") as string,
-					secretAccessKey: (process.env.AWS_SECRET_ACCESS_KEY ?? "") as string,
-				},
-	);
-
-	const encryptionKey =
-		config.encryptionKey ??
-		(config.authMode === "dev"
-			? devMasterKey()
-			: (() => {
-					throw new Error("PROCELLA_ENCRYPTION_KEY is required in production");
-				})());
-	const crypto = new AesCryptoService(encryptionKey);
-
-	const stacksService = new PostgresStacksService({ db });
-	const updatesService = new PostgresUpdatesService({ db, storage, crypto });
-
-	// HTTP
-	const app = createApp({
-		auth,
-		authConfig,
-		corsOrigins: config.corsOrigins,
-		db,
-		stacks: stacksService,
-		updates: updatesService,
-	});
+	const { app, config, db, client } = await import("./bootstrap.js");
 
 	const [, portStr] = config.listenAddr.split(":");
 	const port = Number.parseInt(portStr || "9090", 10);
