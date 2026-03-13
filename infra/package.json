@@ -1,0 +1,10 @@
+{
+	"name": "@procella/infra",
+	"private": true,
+	"type": "module",
+	"main": "index.ts",
+	"dependencies": {
+		"@descope/pulumi-descope": "^0.3.4",
+		"@pulumi/pulumi": "^3.142.0"
+	}
+}
