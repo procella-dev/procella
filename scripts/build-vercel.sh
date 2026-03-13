@@ -11,6 +11,10 @@ rm -rf "$OUT"
 echo "→ Typecheck"
 bun run typecheck
 
+# 1b. Run database migrations (Neon connection via PROCELLA_DATABASE_URL)
+echo "→ Migrate database"
+bunx drizzle-kit migrate --config packages/db/drizzle.config.ts
+
 # 2. Build UI (static)
 echo "→ Build UI"
 bun run --cwd apps/ui build
