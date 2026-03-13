@@ -12,8 +12,12 @@ echo "→ Typecheck"
 bun run typecheck
 
 # 1b. Run database migrations (Neon connection via PROCELLA_DATABASE_URL)
-echo "→ Migrate database"
-bunx drizzle-kit migrate --config packages/db/drizzle.config.ts
+if [ -n "${PROCELLA_DATABASE_URL:-}" ]; then
+  echo "→ Migrate database"
+  bunx drizzle-kit migrate --config packages/db/drizzle.config.ts
+else
+  echo "→ Skip migrations (PROCELLA_DATABASE_URL not set)"
+fi
 
 # 2. Build UI (static)
 echo "→ Build UI"
@@ -41,10 +45,10 @@ cat > "$OUT/config.json" << 'EOF'
 {
   "version": 3,
   "routes": [
-    { "src": "/api/(.*)", "dest": "/api/index" },
-    { "src": "/trpc/(.*)", "dest": "/api/index" },
+    { "src": "/api(?:/(.*))?", "dest": "/api/index" },
+    { "src": "/trpc(?:/(.*))?", "dest": "/api/index" },
     { "src": "/healthz", "dest": "/api/index" },
-    { "src": "/cron/(.*)", "dest": "/api/index" },
+    { "src": "/cron(?:/(.*))?", "dest": "/api/index" },
     { "handle": "filesystem" },
     { "src": "/(.*)", "dest": "/index.html" }
   ]

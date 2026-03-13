@@ -10,19 +10,21 @@
 //
 // bootstrap.ts uses top-level await (async createDb), which causes
 // "Requested module is not instantiated yet" errors with static imports
-// on Vercel's Bun runtime. Lazy-init on first request avoids this.
+// during Bun's build-time bundling. Lazy-init on first request avoids this.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-let handler: ((req: IncomingMessage, res: ServerResponse) => void) | null = null;
+let handlerPromise: Promise<(req: IncomingMessage, res: ServerResponse) => void> | null = null;
 
-async function getHandler() {
-	if (!handler) {
-		const { handle } = await import("@hono/node-server/vercel");
-		const { app } = await import("./bootstrap.js");
-		handler = handle(app);
+function getHandler() {
+	if (!handlerPromise) {
+		handlerPromise = (async () => {
+			const { handle } = await import("@hono/node-server/vercel");
+			const { app } = await import("./bootstrap.js");
+			return handle(app);
+		})();
 	}
-	return handler;
+	return handlerPromise;
 }
 
 export default async function (req: IncomingMessage, res: ServerResponse) {

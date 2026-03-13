@@ -21,7 +21,7 @@ See [Authentication Architecture](../architecture/authentication/) for how the a
 
 ## Step 2: Deploy Descope Configuration
 
-The `infra/` directory contains a Pulumi program (`infra/descope.ts`) that provisions all required Descope configuration:
+The `infra/` directory contains a Pulumi program that provisions all required Descope configuration:
 
 - **Roles**: `viewer`, `member`, `admin`, `Tenant Admin`
 - **Permissions**: `stacks:write`, `stacks:delete`, `members:manage`
@@ -35,7 +35,8 @@ The Pulumi program authenticates to Descope using a **management key**. Generate
 
 ```bash
 cd infra
-pulumi config set --secret DescopeManagementKey <your-management-key>
+bun install
+pulumi config set --secret descope:managementKey <your-management-key>
 pulumi up
 ```
 

@@ -16,16 +16,13 @@ const provider = new descope.Provider("DescopeProvider", {
 	managementKey,
 });
 
-// ── JWT Templates ───────────────────────────────────────────────────────────
-const userJwtTemplate = JSON.stringify({
-	roles: "{{user.roles}}",
-	tenants: "{{user.tenants}}",
-});
+// ── JWT Templates ───────────────────────────────────────────────────────
+// Descope template placeholders must be unquoted so the JWT claims are
+// emitted as arrays/objects (not strings). packages/auth expects
+// tenants as Record<string, { roles: string[] }> and roles as string[].
+const userJwtTemplate = '{"roles": {{user.roles}}, "tenants": {{user.tenants}}}';
 
-const accessKeyJwtTemplate = JSON.stringify({
-	roles: "{{accesskey.roles}}",
-	tenants: "{{accesskey.tenants}}",
-});
+const accessKeyJwtTemplate = '{"roles": {{accesskey.roles}}, "tenants": {{accesskey.tenants}}}';
 
 // ── Project ─────────────────────────────────────────────────────────────────
 const project = new descope.Project(
