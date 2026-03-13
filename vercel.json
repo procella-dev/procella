@@ -7,6 +7,7 @@
 	"bunVersion": "1.x",
 	"functions": {
 		"api/index.ts": {
+			"runtime": "@vercel/node@4",
 			"maxDuration": 60
 		}
 	},
