@@ -14,11 +14,5 @@
 		{ "source": "/trpc/:path(.*)", "destination": "/api/index" },
 		{ "source": "/healthz", "destination": "/api/index" },
 		{ "source": "/cron/:path(.*)", "destination": "/api/index" }
-	],
-	"crons": [
-		{
-			"path": "/cron/gc",
-			"schedule": "* * * * *"
-		}
 	]
 }
