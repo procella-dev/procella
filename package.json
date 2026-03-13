@@ -5,7 +5,6 @@
 	"catalog": {
 		"@biomejs/biome": "^2.4.6",
 		"@descope/node-sdk": "^1.10.0",
-		"@hono/zod-validator": "^0.7.6",
 		"@tailwindcss/vite": "^4.2.1",
 		"@tanstack/react-query": "^5.80.6",
 		"@trpc/client": "^11.1.0",
@@ -34,15 +33,12 @@
 		"dev:deps": "docker compose up -d && printf 'Waiting for postgres' && until docker compose exec -T postgres pg_isready -U procella -q 2>/dev/null; do printf '.'; sleep 1; done && echo ' ready'",
 		"dev:down": "docker compose down -v",
 		"check": "biome check . && bun run typecheck && bun test packages/ apps/",
-		"check:ui": "biome check apps/ui/ && bun run --cwd apps/ui typecheck",
 		"typecheck": "tsc --build",
 		"types:generate": "cd packages/types/tygo && go mod tidy && tygo generate && sed -i '' 's/export type UpdateStatus = typeof UpdateStatusSucceeded | typeof UpdateStatusFailed | typeof UpdateStatusCancelled;/export type UpdateStatus = string;/' ../src/pulumi.gen.ts",
 		"e2e": "bun test --timeout 120000 --preload ./e2e/setup.ts e2e/",
 		"check:all": "bun run check && bun run e2e",
 		"db:generate": "drizzle-kit generate --config packages/db/drizzle.config.ts",
-		"db:migrate": "drizzle-kit migrate --config packages/db/drizzle.config.ts",
-		"docs:dev": "bun run --cwd apps/docs dev",
-		"docs:build": "bun run --cwd apps/docs build",
+		"db:migrate": "drizzle-kit migrate --config packages/db/drizzle.config.ts"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "catalog:",
@@ -50,13 +46,5 @@
 		"drizzle-kit": "catalog:",
 		"husky": "catalog:",
 		"typescript": "catalog:"
-	},
-	"dependencies": {
-		"@descope/node-sdk": "catalog:",
-		"@hono/zod-validator": "catalog:",
-		"@trpc/server": "catalog:",
-		"drizzle-orm": "catalog:",
-		"hono": "catalog:",
-		"zod": "catalog:"
 	}
 }

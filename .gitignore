@@ -37,8 +37,6 @@ apps/docs/.astro/
 .dolt/
 *.db
 
-# SST
-.sst/
 
 # Agent / tool artifacts
 .sisyphus/
@@ -46,3 +44,10 @@ apps/docs/.astro/
 skills-lock.json
 plan.md
 $PULUMI_HOME/
+
+# Node compile cache
+node-compile-cache/
+*.node-gyp/
+
+# Vercel
+.vercel

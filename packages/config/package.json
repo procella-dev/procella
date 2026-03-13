@@ -5,6 +5,7 @@
 	"main": "src/index.ts",
 	"types": "src/index.ts",
 	"dependencies": {
-		"@procella/types": "workspace:*"
+		"@procella/types": "workspace:*",
+		"zod": "catalog:"
 	}
 }

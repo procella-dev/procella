@@ -4,14 +4,6 @@
   "workspaces": {
     "": {
       "name": "strata",
-      "dependencies": {
-        "@descope/node-sdk": "catalog:",
-        "@hono/zod-validator": "catalog:",
-        "@trpc/server": "catalog:",
-        "drizzle-orm": "catalog:",
-        "hono": "catalog:",
-        "zod": "catalog:",
-      },
       "devDependencies": {
         "@biomejs/biome": "catalog:",
         "@types/bun": "catalog:",
@@ -43,6 +35,8 @@
         "@procella/storage": "workspace:*",
         "@procella/types": "workspace:*",
         "@procella/updates": "workspace:*",
+        "@trpc/server": "catalog:",
+        "drizzle-orm": "catalog:",
         "hono": "catalog:",
       },
     },
@@ -87,6 +81,7 @@
     "packages/auth": {
       "name": "@procella/auth",
       "dependencies": {
+        "@descope/node-sdk": "catalog:",
         "@procella/config": "workspace:*",
         "@procella/types": "workspace:*",
       },
@@ -95,6 +90,7 @@
       "name": "@procella/config",
       "dependencies": {
         "@procella/types": "workspace:*",
+        "zod": "catalog:",
       },
     },
     "packages/crypto": {
@@ -124,6 +120,7 @@
       "dependencies": {
         "@procella/db": "workspace:*",
         "@procella/types": "workspace:*",
+        "drizzle-orm": "catalog:",
       },
     },
     "packages/storage": {
@@ -143,13 +140,13 @@
         "@procella/db": "workspace:*",
         "@procella/storage": "workspace:*",
         "@procella/types": "workspace:*",
+        "drizzle-orm": "catalog:",
       },
     },
   },
   "catalog": {
     "@biomejs/biome": "^2.4.6",
     "@descope/node-sdk": "^1.10.0",
-    "@hono/zod-validator": "^0.7.6",
     "@tailwindcss/vite": "^4.2.1",
     "@tanstack/react-query": "^5.80.6",
     "@trpc/client": "^11.1.0",
@@ -436,8 +433,6 @@
     "@fingerprintjs/fingerprintjs-pro": ["@fingerprintjs/fingerprintjs-pro@3.11.6", "", { "dependencies": { "tslib": "^2.4.1" } }, "sha512-ohN4lorSzV0fzs8fELWuO3bvMMfzF5qyQSOWBvqwGaq6yPP+XSRJOeFdFFiwAqFWYJDEoDOlQluGfa0Rfk7mAQ=="],
 
     "@hono/node-server": ["@hono/node-server@1.19.11", "", { "peerDependencies": { "hono": "^4" } }, "sha512-dr8/3zEaB+p0D2n/IUrlPF1HZm586qgJNXK1a9fhg/PzdtkK7Ksd5l312tJX2yBuALqDYBlG20QEbayqPyxn+g=="],
-
-    "@hono/zod-validator": ["@hono/zod-validator@0.7.6", "", { "peerDependencies": { "hono": ">=3.9.0", "zod": "^3.25.0 || ^4.0.0" } }, "sha512-Io1B6d011Gj1KknV4rXYz4le5+5EubcWEU/speUjuw9XMMIaP3n78yXLhjd2A3PXaXaUwEAluOiAyLqhBEJgsw=="],
 
     "@img/colour": ["@img/colour@1.1.0", "", {}, "sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ=="],
 

@@ -6,6 +6,7 @@
 	"types": "src/index.ts",
 	"dependencies": {
 		"@procella/types": "workspace:*",
-		"@procella/config": "workspace:*"
+		"@procella/config": "workspace:*",
+		"@descope/node-sdk": "catalog:"
 	}
 }

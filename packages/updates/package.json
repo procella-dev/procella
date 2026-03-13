@@ -8,6 +8,7 @@
 		"@procella/types": "workspace:*",
 		"@procella/db": "workspace:*",
 		"@procella/storage": "workspace:*",
-		"@procella/crypto": "workspace:*"
+		"@procella/crypto": "workspace:*",
+		"drizzle-orm": "catalog:"
 	}
 }

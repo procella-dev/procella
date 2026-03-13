@@ -1,18 +1,7 @@
 {
 	"$schema": "https://openapi.vercel.sh/vercel.json",
-	"buildCommand": "bun run typecheck && bun run --cwd apps/ui build && bun run --cwd apps/docs build",
+	"buildCommand": "bash scripts/build-vercel.sh",
 	"installCommand": "bun install --frozen-lockfile",
 	"framework": null,
-	"bunVersion": "1.x",
-	"functions": {
-		"api/index.ts": {
-			"maxDuration": 60
-		}
-	},
-	"rewrites": [
-		{ "source": "/api/:path(.*)", "destination": "/api/index" },
-		{ "source": "/trpc/:path(.*)", "destination": "/api/index" },
-		{ "source": "/healthz", "destination": "/api/index" },
-		{ "source": "/cron/:path(.*)", "destination": "/api/index" }
-	]
+	"bunVersion": "1.x"
 }
