@@ -1,11 +1,11 @@
 {
 	"$schema": "https://openapi.vercel.sh/vercel.json",
-	"buildCommand": "bun run typecheck && bun run --cwd apps/ui build",
+	"buildCommand": "bun run typecheck && bun run --cwd apps/ui build && bun build apps/server/src/vercel.ts --target=node --outfile=api/index.mjs --format=esm",
 	"installCommand": "bun install --frozen-lockfile",
 	"framework": null,
 	"outputDirectory": "apps/ui/dist",
 	"functions": {
-		"api/index.ts": {
+		"api/index.mjs": {
 			"maxDuration": 60
 		}
 	},

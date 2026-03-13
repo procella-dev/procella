@@ -50,3 +50,6 @@ $PULUMI_HOME/
 # Node compile cache
 node-compile-cache/
 *.node-gyp/
+
+# Vercel function bundle (built at deploy time)
+api/index.mjs
