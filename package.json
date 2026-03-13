@@ -42,7 +42,7 @@
 		"db:generate": "drizzle-kit generate --config packages/db/drizzle.config.ts",
 		"db:migrate": "drizzle-kit migrate --config packages/db/drizzle.config.ts",
 		"docs:dev": "bun run --cwd apps/docs dev",
-		"docs:build": "bun run --cwd apps/docs build",
+		"docs:build": "bun run --cwd apps/docs build"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "catalog:",

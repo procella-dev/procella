@@ -46,3 +46,7 @@ apps/docs/.astro/
 skills-lock.json
 plan.md
 $PULUMI_HOME/
+
+# Node compile cache
+node-compile-cache/
+*.node-gyp/

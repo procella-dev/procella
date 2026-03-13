@@ -1,8 +1,9 @@
 {
 	"$schema": "https://openapi.vercel.sh/vercel.json",
-	"buildCommand": "bun run typecheck && bun run --cwd apps/ui build && bun run --cwd apps/docs build",
+	"buildCommand": "bun run typecheck && bun run --cwd apps/ui build",
 	"installCommand": "bun install --frozen-lockfile",
 	"framework": null,
+	"outputDirectory": "apps/ui/dist",
 	"bunVersion": "1.x",
 	"functions": {
 		"api/index.ts": {
