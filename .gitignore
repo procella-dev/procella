@@ -52,4 +52,5 @@ node-compile-cache/
 *.node-gyp/
 
 # Vercel function bundle (built at deploy time)
-api/index.mjs
+api/index.js
+.vercel
