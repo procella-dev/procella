@@ -1,7 +1,7 @@
 // @procella/storage — Blob storage abstraction (S3 and local filesystem)
 
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { dirname, join, normalize } from "node:path";
+import { dirname, resolve } from "node:path";
 import {
 	DeleteObjectCommand,
 	GetObjectCommand,
@@ -49,13 +49,14 @@ export class LocalBlobStorage implements BlobStorage {
 	private readonly basePath: string;
 
 	constructor(basePath: string) {
-		this.basePath = basePath;
+		this.basePath = resolve(basePath);
 	}
 
 	private resolvePath(key: string): string {
-		const resolved = normalize(join(this.basePath, key));
+		const resolved = resolve(this.basePath, key);
 		// Prevent path traversal outside basePath
-		if (!resolved.startsWith(this.basePath)) {
+		const prefix = this.basePath.endsWith("/") ? this.basePath : `${this.basePath}/`;
+		if (!resolved.startsWith(prefix) && resolved !== this.basePath) {
 			throw new Error("Invalid key: path traversal detected");
 		}
 		return resolved;

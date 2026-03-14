@@ -100,6 +100,36 @@ describe("LocalBlobStorage", () => {
 	});
 });
 
+describe("LocalBlobStorage with relative basePath", () => {
+	let relPath: string;
+	let storage: LocalBlobStorage;
+
+	beforeAll(() => {
+		relPath = `./tmp-rel-test-${randomUUID()}`;
+		storage = new LocalBlobStorage(relPath);
+	});
+
+	afterAll(async () => {
+		const { resolve } = await import("node:path");
+		await rm(resolve(relPath), { recursive: true, force: true });
+	});
+
+	test("put + get works with relative basePath (no path traversal false positive)", async () => {
+		const key = "checkpoints/stack-1/update-1/1";
+		const data = new TextEncoder().encode("checkpoint data");
+
+		await storage.put(key, data);
+		const result = await storage.get(key);
+
+		expect(result).not.toBeNull();
+		expect(result).toEqual(data);
+	});
+
+	test("path traversal is still rejected", async () => {
+		await expect(storage.get("../../etc/passwd")).rejects.toThrow("path traversal detected");
+	});
+});
+
 describe("createBlobStorage factory", () => {
 	test("returns LocalBlobStorage for local config", () => {
 		const storage = createBlobStorage({
