@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { createBlobStorage, LocalBlobStorage } from "./index";
 
 describe("LocalBlobStorage", () => {
@@ -101,17 +101,18 @@ describe("LocalBlobStorage", () => {
 });
 
 describe("LocalBlobStorage with relative basePath", () => {
+	let absPath: string;
 	let relPath: string;
 	let storage: LocalBlobStorage;
 
 	beforeAll(() => {
-		relPath = `./tmp-rel-test-${randomUUID()}`;
+		absPath = join(tmpdir(), `procella-rel-test-${randomUUID()}`);
+		relPath = relative(process.cwd(), absPath);
 		storage = new LocalBlobStorage(relPath);
 	});
 
 	afterAll(async () => {
-		const { resolve } = await import("node:path");
-		await rm(resolve(relPath), { recursive: true, force: true });
+		await rm(absPath, { recursive: true, force: true });
 	});
 
 	test("put + get works with relative basePath (no path traversal false positive)", async () => {
