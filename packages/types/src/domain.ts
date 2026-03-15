@@ -17,6 +17,8 @@ export type Role = (typeof Role)[keyof typeof Role];
 
 export interface Caller {
 	readonly tenantId: string;
+	/** URL-safe org slug derived from tenant name; falls back to tenantId. */
+	readonly orgSlug: string;
 	readonly userId: string;
 	readonly login: string;
 	readonly roles: readonly Role[];

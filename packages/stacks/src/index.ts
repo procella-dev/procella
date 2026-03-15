@@ -220,8 +220,8 @@ export class PostgresStacksService implements StacksService {
 		return toStackInfo(rows[0]);
 	}
 
-	async listStacks(tenantId: string, org?: string, project?: string): Promise<StackInfo[]> {
-		const conditions = [eq(projects.tenantId, org ?? tenantId)];
+	async listStacks(tenantId: string, _org?: string, project?: string): Promise<StackInfo[]> {
+		const conditions = [eq(projects.tenantId, tenantId)];
 
 		if (project) {
 			conditions.push(eq(projects.name, project));

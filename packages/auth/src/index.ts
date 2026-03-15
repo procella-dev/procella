@@ -4,6 +4,7 @@
 // Dev mode uses a static token for local development.
 
 import DescopeSdk from "@descope/node-sdk";
+
 import type { Caller, Role } from "@procella/types";
 import { ForbiddenError, UnauthorizedError } from "@procella/types";
 
@@ -52,6 +53,7 @@ export class DevAuthService implements AuthService {
 		}
 		return {
 			tenantId: this.config.orgLogin,
+			orgSlug: this.config.orgLogin,
 			userId: this.config.userLogin,
 			login: this.config.userLogin,
 			roles: ["admin"] as const,
@@ -105,6 +107,7 @@ export class DescopeAuthService implements AuthService {
 
 		return {
 			tenantId,
+			orgSlug: extractOrgSlug(claims, tenantId),
 			userId,
 			login,
 			roles,
@@ -250,6 +253,32 @@ function extractTenantId(claims: Record<string, unknown>): string | undefined {
 	}
 
 	return undefined;
+}
+
+/**
+ * Derive a URL-safe org slug from the tenant name in JWT claims.
+ * The `tenant_name` claim is set via Descope JWT Templates (mapped from `{{tenant.name}}`).
+ * Falls back to the raw tenantId if no name is available.
+ */
+function extractOrgSlug(claims: Record<string, unknown>, tenantId: string): string {
+	const tenantName =
+		typeof claims.tenant_name === "string" && claims.tenant_name ? claims.tenant_name : undefined;
+	if (!tenantName) {
+		return tenantId;
+	}
+	const slug = slugify(tenantName);
+	// Fall back to tenantId if slugify produces empty string (e.g. non-Latin names)
+	return slug || tenantId;
+}
+
+/** Convert a string to a URL-safe slug (lowercase, alphanumeric + hyphens). */
+export function slugify(value: string): string {
+	return value
+		.toLowerCase()
+		.trim()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-/, "")
+		.replace(/-$/, "");
 }
 
 /** Extract roles from Descope JWT claims for a specific tenant. */

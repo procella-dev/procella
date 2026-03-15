@@ -105,7 +105,7 @@ export const stacksRouter = router({
 		}
 
 		return stackList.map((s) => ({
-			orgName: s.orgName,
+			orgName: ctx.caller.orgSlug,
 			projectName: s.projectName,
 			stackName: s.stackName,
 			version: versionMap.get(s.id) ?? 0,
