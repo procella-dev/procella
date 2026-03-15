@@ -16,14 +16,23 @@ export function userHandlers(stacks: StacksService) {
 			return c.json({
 				githubLogin: caller.login,
 				name: caller.login,
-				organizations: [{ githubLogin: caller.tenantId, name: caller.tenantId }],
+				organizations: [
+					{
+						githubLogin: caller.orgSlug,
+						name: caller.orgSlug,
+					},
+				],
 			});
 		},
 
 		getUserStacks: async (c: Context<Env>) => {
 			const caller = c.get("caller");
 			const stacksList = await stacks.listStacks(caller.tenantId);
-			return c.json({ stacks: stacksList });
+			const mapped = stacksList.map((s) => ({
+				...s,
+				orgName: caller.orgSlug,
+			}));
+			return c.json({ stacks: mapped });
 		},
 
 		/** GET /api/user/organizations/:orgName — Pulumi CLI fetches org defaults. */

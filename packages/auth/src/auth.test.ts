@@ -7,6 +7,7 @@ import {
 	DevAuthService,
 	METHOD_ROLE_MAP,
 	requireRole,
+	slugify,
 } from "./index.js";
 
 // ============================================================================
@@ -68,10 +69,11 @@ describe("DevAuthService", () => {
 		);
 	});
 
-	test("returned Caller has correct tenantId, userId, login, roles", async () => {
+	test("returned Caller has correct tenantId, orgSlug, userId, login, roles", async () => {
 		const caller = await svc.authenticate(reqWithAuth("token devtoken123"));
 
 		expect(caller.tenantId).toBe("dev-org");
+		expect(caller.orgSlug).toBe("dev-org");
 		expect(caller.userId).toBe("dev-user");
 		expect(caller.login).toBe("dev-user");
 		expect(caller.roles).toEqual(["admin"]);
@@ -109,13 +111,25 @@ describe("DevAuthService", () => {
 
 describe("requireRole", () => {
 	test("allows caller with matching role", () => {
-		const caller = { tenantId: "t1", userId: "u1", login: "user", roles: ["member"] as const };
+		const caller = {
+			tenantId: "t1",
+			orgSlug: "t1",
+			userId: "u1",
+			login: "user",
+			roles: ["member"] as const,
+		};
 
 		expect(() => requireRole(caller, "member")).not.toThrow();
 	});
 
 	test("admin caller passes any role check", () => {
-		const caller = { tenantId: "t1", userId: "u1", login: "admin", roles: ["admin"] as const };
+		const caller = {
+			tenantId: "t1",
+			orgSlug: "t1",
+			userId: "u1",
+			login: "admin",
+			roles: ["admin"] as const,
+		};
 
 		expect(() => requireRole(caller, "viewer")).not.toThrow();
 		expect(() => requireRole(caller, "member")).not.toThrow();
@@ -125,6 +139,7 @@ describe("requireRole", () => {
 	test("member caller passes member and viewer checks", () => {
 		const caller = {
 			tenantId: "t1",
+			orgSlug: "t1",
 			userId: "u1",
 			login: "member",
 			roles: ["member"] as const,
@@ -137,6 +152,7 @@ describe("requireRole", () => {
 	test("throws ForbiddenError for caller without matching role", () => {
 		const caller = {
 			tenantId: "t1",
+			orgSlug: "t1",
 			userId: "u1",
 			login: "viewer",
 			roles: ["viewer"] as const,
@@ -148,6 +164,7 @@ describe("requireRole", () => {
 	test("viewer cannot perform member actions", () => {
 		const caller = {
 			tenantId: "t1",
+			orgSlug: "t1",
 			userId: "u1",
 			login: "viewer",
 			roles: ["viewer"] as const,
@@ -220,5 +237,47 @@ describe("createAuthService", () => {
 
 		expect(typeof svc.authenticate).toBe("function");
 		expect(typeof svc.authenticateUpdateToken).toBe("function");
+	});
+});
+
+// ============================================================================
+// slugify
+// ============================================================================
+
+describe("slugify", () => {
+	test("converts simple name to lowercase slug", () => {
+		expect(slugify("My Company")).toBe("my-company");
+	});
+
+	test("replaces multiple non-alphanumeric chars with single hyphen", () => {
+		expect(slugify("Hello   World!!!")).toBe("hello-world");
+	});
+
+	test("trims leading/trailing hyphens", () => {
+		expect(slugify("--hello--")).toBe("hello");
+	});
+
+	test("handles already-valid slug", () => {
+		expect(slugify("my-org")).toBe("my-org");
+	});
+
+	test("returns empty string for non-Latin-only input", () => {
+		expect(slugify("日本語")).toBe("");
+	});
+
+	test("returns empty string for whitespace-only input", () => {
+		expect(slugify("   ")).toBe("");
+	});
+
+	test("returns empty string for punctuation-only input", () => {
+		expect(slugify("!@#$%")).toBe("");
+	});
+
+	test("handles mixed Latin and non-Latin", () => {
+		expect(slugify("Acme Corp 株式会社")).toBe("acme-corp");
+	});
+
+	test("collapses consecutive hyphens from mixed separators", () => {
+		expect(slugify("a - b _ c")).toBe("a-b-c");
 	});
 });

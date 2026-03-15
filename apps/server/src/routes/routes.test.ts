@@ -13,6 +13,7 @@ import { createApp } from "./index.js";
 
 const validCaller: Caller = {
 	tenantId: "t-1",
+	orgSlug: "my-org",
 	userId: "u-1",
 	login: "test-user",
 	roles: ["admin"],
@@ -304,7 +305,7 @@ describe("@procella/server routes", () => {
 			});
 			expect(res.status).toBe(200);
 			const body = await res.json();
-			expect(body.orgName).toBe("myorg");
+			expect(body.orgName).toBe("my-org");
 		});
 
 		test("GET /api/stacks/:org/:project/:stack returns stack info", async () => {

@@ -26,7 +26,7 @@ export function stackHandlers(stacks: StacksService) {
 				throw new BadRequestError("Missing stack name in URL or body");
 			}
 			const result = await stacks.createStack(caller.tenantId, org, project, stack, typedBody.tags);
-			return c.json(mapToStack(result));
+			return c.json(mapToStack(result, caller.orgSlug));
 		},
 
 		getStack: async (c: Context<Env>) => {
@@ -35,7 +35,7 @@ export function stackHandlers(stacks: StacksService) {
 			const project = param(c, "project");
 			const stack = param(c, "stack");
 			const result = await stacks.getStack(caller.tenantId, org, project, stack);
-			return c.json(mapToStack(result));
+			return c.json(mapToStack(result, caller.orgSlug));
 		},
 
 		deleteStack: async (c: Context<Env>) => {
@@ -52,7 +52,7 @@ export function stackHandlers(stacks: StacksService) {
 			const org = c.req.query("organization");
 			const project = c.req.query("project");
 			const results = await stacks.listStacks(caller.tenantId, org, project);
-			return c.json({ stacks: results.map(mapToStack) });
+			return c.json({ stacks: results.map((r) => mapToStack(r, caller.orgSlug)) });
 		},
 
 		renameStack: async (c: Context<Env>) => {
@@ -81,10 +81,10 @@ export function stackHandlers(stacks: StacksService) {
 // Helpers
 // ============================================================================
 
-function mapToStack(info: StackInfo): Stack {
+function mapToStack(info: StackInfo, orgSlug?: string): Stack {
 	return {
 		id: info.id,
-		orgName: info.orgName,
+		orgName: orgSlug ?? info.orgName,
 		projectName: info.projectName,
 		stackName: info.stackName,
 		tags: info.tags,

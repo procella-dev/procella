@@ -15,6 +15,7 @@ import { userHandlers } from "./user.js";
 
 const validCaller: Caller = {
 	tenantId: "t-1",
+	orgSlug: "my-org",
 	userId: "u-1",
 	login: "test-user",
 	roles: ["admin"],
@@ -206,7 +207,7 @@ describe("@procella/server handlers", () => {
 			expect(body.githubLogin).toBe("test-user");
 			expect(body.name).toBe("test-user");
 			expect(body.organizations).toBeArray();
-			expect(body.organizations[0].githubLogin).toBe("t-1");
+			expect(body.organizations[0].githubLogin).toBe("my-org");
 		});
 
 		test("getUserStacks returns stacks for caller tenant", async () => {
@@ -241,7 +242,7 @@ describe("@procella/server handlers", () => {
 			});
 			expect(res.status).toBe(200);
 			const body = await res.json();
-			expect(body.orgName).toBe("myorg");
+			expect(body.orgName).toBe("my-org");
 			expect(body.projectName).toBe("myproj");
 			expect(body.stackName).toBe("dev");
 			expect(body).toHaveProperty("id");
@@ -256,7 +257,7 @@ describe("@procella/server handlers", () => {
 			const res = await app.request("/stacks/myorg/myproj/dev");
 			expect(res.status).toBe(200);
 			const body = await res.json();
-			expect(body.orgName).toBe("myorg");
+			expect(body.orgName).toBe("my-org");
 			expect(body.stackName).toBe("dev");
 		});
 

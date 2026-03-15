@@ -20,9 +20,12 @@ const provider = new descope.Provider("DescopeProvider", {
 // Descope template placeholders must be unquoted so the JWT claims are
 // emitted as arrays/objects (not strings). packages/auth expects
 // tenants as Record<string, { roles: string[] }> and roles as string[].
-const userJwtTemplate = '{"roles": {{user.roles}}, "tenants": {{user.tenants}}}';
+// `tenant_name` carries the human-friendly tenant name for org slug derivation.
+const userJwtTemplate =
+	'{"roles": {{user.roles}}, "tenants": {{user.tenants}}, "tenant_name": "{{tenant.name}}"}';
 
-const accessKeyJwtTemplate = '{"roles": {{accesskey.roles}}, "tenants": {{accesskey.tenants}}}';
+const accessKeyJwtTemplate =
+	'{"roles": {{accesskey.roles}}, "tenants": {{accesskey.tenants}}, "tenant_name": "{{tenant.name}}"}';
 
 // ── Project ─────────────────────────────────────────────────────────────────
 const project = new descope.Project(
@@ -38,6 +41,7 @@ const project = new descope.Project(
 		// The Procella auth service (packages/auth) requires:
 		//   - `dct` claim (auto-set by autoTenantClaim) for tenant detection
 		//   - `roles` claim for RBAC (viewer / member / admin)
+		//   - `tenant_name` claim for human-friendly org name (slugified at runtime)
 		jwtTemplates: {
 			userTemplates: [
 				{
