@@ -6,8 +6,9 @@ import { BrowserRouter, Route, Routes } from "react-router";
 import "./index.css";
 
 import { ProcellaAuthProvider } from "./components/AuthProvider";
+import { FullPageSpinner } from "./components/FullPageSpinner";
+import { HomeRoute } from "./components/HomeRoute";
 import { Layout } from "./components/Layout";
-import { ProtectedRoute } from "./components/ProtectedRoute";
 import { CliLogin } from "./pages/CliLogin";
 import { Settings } from "./pages/Settings";
 import { StackDetail } from "./pages/StackDetail";
@@ -19,11 +20,7 @@ import { createTRPCClient, trpc } from "./trpc";
 
 const LoginPage = lazy(() => import("./pages/Login").then((m) => ({ default: m.Login })));
 
-const LoginFallback = (
-	<div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-		<div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-700 border-t-blue-500" />
-	</div>
-);
+const LoginFallback = <FullPageSpinner />;
 
 function handleGlobalError(error: unknown) {
 	if (
@@ -79,7 +76,7 @@ function App() {
 						/>
 						<Route path="/cli-login" element={<CliLogin />} />
 						<Route path="/welcome/cli" element={<WelcomeCli />} />
-						<Route element={<ProtectedRoute />}>
+						<Route element={<HomeRoute />}>
 							<Route path="/" element={<Layout />}>
 								<Route index element={<StackList />} />
 								<Route path="tokens" element={<Tokens />} />

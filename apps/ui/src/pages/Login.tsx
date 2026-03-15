@@ -1,6 +1,8 @@
 import { Descope } from "@descope/react-sdk";
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router";
+import { FullPageSpinner } from "../components/FullPageSpinner";
+import { ProcellaLogo } from "../components/ProcellaLogo";
 import { useAuthConfig } from "../hooks/useAuthConfig";
 
 export function Login() {
@@ -9,11 +11,7 @@ export function Login() {
 	const returnTo = (location.state as { returnTo?: string })?.returnTo ?? "/";
 
 	if (isLoading || !config) {
-		return (
-			<div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-				<div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-700 border-t-blue-500" />
-			</div>
-		);
+		return <FullPageSpinner />;
 	}
 
 	if (config.mode === "descope") {
@@ -27,11 +25,9 @@ function DescopeLogin({ returnTo }: { returnTo: string }) {
 	const navigate = useNavigate();
 
 	return (
-		<div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center">
-			<div className="mb-8 text-center">
-				<h1 className="text-3xl font-bold text-zinc-100">Procella</h1>
-				<p className="mt-2 text-sm text-zinc-400">Sign in to your Pulumi backend</p>
-			</div>
+		<div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-4">
+			<ProcellaLogo linkTo="/" className="mb-8" />
+			<p className="text-sm text-zinc-400 mb-8">Sign in to your Pulumi backend</p>
 			<div className="w-full max-w-md">
 				<Descope
 					flowId="sign-up-or-in"
@@ -56,11 +52,9 @@ function DevLogin({ returnTo }: { returnTo: string }) {
 	};
 
 	return (
-		<div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center">
-			<div className="mb-8 text-center">
-				<h1 className="text-3xl font-bold text-zinc-100">Procella</h1>
-				<p className="mt-2 text-sm text-zinc-400">Enter your API token to continue</p>
-			</div>
+		<div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-4">
+			<ProcellaLogo linkTo="/" className="mb-3" />
+			<p className="text-sm text-zinc-400 mb-8">Enter your API token to continue</p>
 			<form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4">
 				<input
 					type="password"
@@ -77,7 +71,10 @@ function DevLogin({ returnTo }: { returnTo: string }) {
 					Connect
 				</button>
 			</form>
-			<p className="mt-6 text-xs text-zinc-600">Dev mode</p>
+			<div className="mt-6 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-800/50 border border-zinc-700/50">
+				<span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+				<span className="text-xs text-zinc-500">Dev mode</span>
+			</div>
 		</div>
 	);
 }
