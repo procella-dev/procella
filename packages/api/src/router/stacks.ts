@@ -49,8 +49,8 @@ function redactSecrets(obj: unknown): unknown {
 	if (Array.isArray(obj)) return obj.map(redactSecrets);
 	if (typeof obj === "object") {
 		const record = obj as Record<string, unknown>;
-		if (SECRET_SENTINEL in record) return "[secret]";
-		const result: Record<string, unknown> = {};
+		if (Object.hasOwn(record, SECRET_SENTINEL)) return "[secret]";
+		const result: Record<string, unknown> = Object.create(null);
 		for (const [k, v] of Object.entries(record)) {
 			result[k] = redactSecrets(v);
 		}
@@ -237,7 +237,10 @@ export const stacksRouter = router({
 			const deployment = await ctx.updates.exportStack(stackInfo.id);
 
 			const resources = extractResources(deployment.deployment);
-			const resource = resources.find((r) => r.urn === input.urn);
+
+			// Build indexes for O(1) lookups
+			const byUrn = new Map(resources.map((r) => [r.urn, r]));
+			const resource = byUrn.get(input.urn);
 			if (!resource) return null;
 
 			// Find children (resources whose parent is this URN)
@@ -245,9 +248,9 @@ export const stacksRouter = router({
 				.filter((r) => r.parent === resource.urn)
 				.map((r) => ({ urn: r.urn, type: r.type, name: nameFromUrn(r.urn) }));
 
-			// Resolve dependency URNs to names
+			// Resolve dependency URNs to names via index
 			const dependencyDetails = (resource.dependencies ?? []).map((depUrn) => {
-				const dep = resources.find((r) => r.urn === depUrn);
+				const dep = byUrn.get(depUrn);
 				return {
 					urn: depUrn,
 					type: dep?.type ?? "unknown",

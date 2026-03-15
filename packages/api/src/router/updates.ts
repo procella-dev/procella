@@ -1,7 +1,7 @@
 // @procella/api — updates.list + updates.latest tRPC procedures.
 
 import { updateEvents, updates } from "@procella/db";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import { publicProcedure, router } from "../trpc.js";
 
@@ -58,7 +58,7 @@ export const updatesRouter = router({
 				sequence: updateEvents.sequence,
 			})
 			.from(updateEvents)
-			.where(and(sql`${updateEvents.updateId} IN ${updateIds}`, eq(updateEvents.kind, "summary")))
+			.where(and(inArray(updateEvents.updateId, updateIds), eq(updateEvents.kind, "summary")))
 			.orderBy(desc(updateEvents.sequence));
 
 		// Keep only the latest (highest sequence) summary per update
