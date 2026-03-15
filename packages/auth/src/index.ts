@@ -266,7 +266,9 @@ function extractOrgSlug(claims: Record<string, unknown>, tenantId: string): stri
 	if (!tenantName) {
 		return tenantId;
 	}
-	return slugify(tenantName);
+	const slug = slugify(tenantName);
+	// Fall back to tenantId if slugify produces empty string (e.g. non-Latin names)
+	return slug || tenantId;
 }
 
 /** Convert a string to a URL-safe slug (lowercase, alphanumeric + hyphens). */

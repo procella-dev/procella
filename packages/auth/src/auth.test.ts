@@ -7,6 +7,7 @@ import {
 	DevAuthService,
 	METHOD_ROLE_MAP,
 	requireRole,
+	slugify,
 } from "./index.js";
 
 // ============================================================================
@@ -236,5 +237,47 @@ describe("createAuthService", () => {
 
 		expect(typeof svc.authenticate).toBe("function");
 		expect(typeof svc.authenticateUpdateToken).toBe("function");
+	});
+});
+
+// ============================================================================
+// slugify
+// ============================================================================
+
+describe("slugify", () => {
+	test("converts simple name to lowercase slug", () => {
+		expect(slugify("My Company")).toBe("my-company");
+	});
+
+	test("replaces multiple non-alphanumeric chars with single hyphen", () => {
+		expect(slugify("Hello   World!!!")).toBe("hello-world");
+	});
+
+	test("trims leading/trailing hyphens", () => {
+		expect(slugify("--hello--")).toBe("hello");
+	});
+
+	test("handles already-valid slug", () => {
+		expect(slugify("my-org")).toBe("my-org");
+	});
+
+	test("returns empty string for non-Latin-only input", () => {
+		expect(slugify("日本語")).toBe("");
+	});
+
+	test("returns empty string for whitespace-only input", () => {
+		expect(slugify("   ")).toBe("");
+	});
+
+	test("returns empty string for punctuation-only input", () => {
+		expect(slugify("!@#$%")).toBe("");
+	});
+
+	test("handles mixed Latin and non-Latin", () => {
+		expect(slugify("Acme Corp 株式会社")).toBe("acme-corp");
+	});
+
+	test("collapses consecutive hyphens from mixed separators", () => {
+		expect(slugify("a - b _ c")).toBe("a-b-c");
 	});
 });
