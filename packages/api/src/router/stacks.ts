@@ -1,4 +1,4 @@
-// @procella/api — stacks tRPC procedures (list, detail, resources).
+// @procella/api — stacks tRPC procedures (list, detail, resources, resource).
 
 import { checkpoints, updateEvents, updates } from "@procella/db";
 import type { DeploymentV3, ResourceV3 } from "@procella/types";
@@ -38,6 +38,25 @@ function extractResources(deployment: unknown): ResourceV3[] {
 	if (!deployment || typeof deployment !== "object") return [];
 	const d = deployment as DeploymentV3;
 	return d.resources ?? [];
+}
+
+/** Pulumi secret sentinel — objects with this key contain encrypted values. */
+const SECRET_SENTINEL = "4dabf18193072939515e22adb298388d";
+
+/** Recursively redact secret values from a property bag. */
+function redactSecrets(obj: unknown): unknown {
+	if (obj === null || obj === undefined) return obj;
+	if (Array.isArray(obj)) return obj.map(redactSecrets);
+	if (typeof obj === "object") {
+		const record = obj as Record<string, unknown>;
+		if (SECRET_SENTINEL in record) return "[secret]";
+		const result: Record<string, unknown> = {};
+		for (const [k, v] of Object.entries(record)) {
+			result[k] = redactSecrets(v);
+		}
+		return result;
+	}
+	return obj;
 }
 
 // ============================================================================
@@ -210,4 +229,67 @@ export const stacksRouter = router({
 				dependencies: (r.dependencies ?? []).length,
 			}));
 	}),
+
+	resource: publicProcedure
+		.input(stackInput.extend({ urn: z.string() }))
+		.query(async ({ ctx, input }) => {
+			const stackInfo = await ctx.stacks.getStack(
+				ctx.caller.tenantId,
+				input.org,
+				input.project,
+				input.stack,
+			);
+
+			let deployment: { deployment?: unknown };
+			try {
+				deployment = await ctx.updates.exportStack(stackInfo.id);
+			} catch {
+				return null;
+			}
+
+			const resources = extractResources(deployment.deployment);
+			const resource = resources.find((r) => r.urn === input.urn);
+			if (!resource) return null;
+
+			// Find children (resources whose parent is this URN)
+			const children = resources
+				.filter((r) => r.parent === resource.urn)
+				.map((r) => ({ urn: r.urn, type: r.type, name: nameFromUrn(r.urn) }));
+
+			// Resolve dependency URNs to names
+			const dependencyDetails = (resource.dependencies ?? []).map((depUrn) => {
+				const dep = resources.find((r) => r.urn === depUrn);
+				return {
+					urn: depUrn,
+					type: dep?.type ?? "unknown",
+					name: nameFromUrn(depUrn),
+				};
+			});
+
+			return {
+				urn: resource.urn,
+				type: resource.type,
+				name: nameFromUrn(resource.urn),
+				provider: providerFromType(resource.type),
+				id: resource.id ?? null,
+				custom: resource.custom,
+				protect: resource.protect ?? false,
+				external: resource.external ?? false,
+				parent: resource.parent
+					? { urn: resource.parent, name: nameFromUrn(resource.parent) }
+					: null,
+				children,
+				dependencies: dependencyDetails,
+				outputs: redactSecrets(resource.outputs ?? {}) as Record<string, unknown>,
+				inputs: redactSecrets(resource.inputs ?? {}) as Record<string, unknown>,
+				created: resource.created ?? null,
+				modified: resource.modified ?? null,
+				aliases: resource.aliases ?? [],
+				initErrors: resource.initErrors ?? [],
+				taint: resource.taint ?? false,
+				pendingReplacement: resource.pendingReplacement ?? false,
+				delete: resource.delete ?? false,
+				retainOnDelete: resource.retainOnDelete ?? false,
+			};
+		}),
 });

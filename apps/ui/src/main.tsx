@@ -9,6 +9,7 @@ import { ProcellaAuthProvider } from "./components/AuthProvider";
 import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { CliLogin } from "./pages/CliLogin";
+import { ResourceDetail } from "./pages/ResourceDetail";
 import { Settings } from "./pages/Settings";
 import { StackDetail } from "./pages/StackDetail";
 import { StackList } from "./pages/StackList";
@@ -85,12 +86,14 @@ function App() {
 								<Route path="tokens" element={<Tokens />} />
 								<Route path="settings" element={<Settings />} />
 								<Route path="stacks/:org/:project/:stack" element={<StackDetail />} />
+								<Route path="stacks/:org/:project/:stack/resources" element={<ResourceDetail />} />
 								<Route
 									path="stacks/:org/:project/:stack/updates/:updateID"
 									element={<UpdateDetail />}
 								/>
 								{/* CLI-generated "View in Browser" URLs omit /stacks/ prefix */}
 								<Route path=":org/:project/:stack" element={<StackDetail />} />
+								<Route path=":org/:project/:stack/resources" element={<ResourceDetail />} />
 								<Route path=":org/:project/:stack/updates/:updateID" element={<UpdateDetail />} />
 							</Route>
 						</Route>

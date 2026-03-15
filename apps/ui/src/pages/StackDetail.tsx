@@ -313,14 +313,22 @@ export function StackDetail() {
 							</thead>
 							<tbody className="divide-y divide-zinc-800 bg-zinc-900">
 								{resourceItems.map((r) => (
-									<tr key={r.urn} className="hover:bg-zinc-800/50 transition-colors">
+									<tr
+										key={r.urn}
+										className="hover:bg-zinc-800/50 transition-colors cursor-pointer group"
+									>
 										<td className="px-4 py-3 whitespace-nowrap">
 											<span className="font-mono text-sm text-zinc-300" title={r.type}>
 												{shortType(r.type)}
 											</span>
 										</td>
 										<td className="px-4 py-3 whitespace-nowrap">
-											<span className="text-sm text-zinc-100 font-medium">{r.name}</span>
+											<Link
+												to={`/stacks/${org}/${project}/${stack}/resources?urn=${encodeURIComponent(r.urn)}`}
+												className="text-sm text-blue-400 hover:text-blue-300 font-medium group-hover:underline"
+											>
+												{r.name}
+											</Link>
 											{r.parent && <span className="ml-2 text-xs text-zinc-600">← {r.parent}</span>}
 										</td>
 										<td className="px-4 py-3 whitespace-nowrap hidden md:table-cell">
