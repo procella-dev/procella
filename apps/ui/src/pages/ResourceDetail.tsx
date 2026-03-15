@@ -159,14 +159,37 @@ export function ResourceDetail() {
 	const urn = searchParams.get("urn") ?? "";
 
 	const enabled = Boolean(org && project && stack && urn);
-	const { data: resource, isLoading } = trpc.stacks.resource.useQuery(
+	const {
+		data: resource,
+		isLoading,
+		error: queryError,
+	} = trpc.stacks.resource.useQuery(
 		{ org: org ?? "", project: project ?? "", stack: stack ?? "", urn },
 		{ enabled },
 	);
 
 	const stackPath = `/stacks/${org}/${project}/${stack}`;
 
-	// ── Loading State ──────────────────────────────────────────────────
+	// ── Missing URN ─────────────────────────────────────────────────────────────────────
+	if (!urn) {
+		return (
+			<div className="space-y-6">
+				<div className="flex items-center gap-4">
+					<Link to={stackPath} className="text-zinc-400 hover:text-zinc-200 transition-colors">
+						&larr; Back to Stack
+					</Link>
+					<h1 className="text-2xl font-bold text-zinc-100">Invalid URL</h1>
+				</div>
+				<div className="bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-8 text-center">
+					<p className="text-zinc-500">
+						No resource URN specified. Navigate to a resource from the stack detail page.
+					</p>
+				</div>
+			</div>
+		);
+	}
+
+	// ── Loading State ────────────────────────────────────────────────────────────────────
 	if (isLoading) {
 		return (
 			<div className="space-y-6">
@@ -185,6 +208,23 @@ export function ResourceDetail() {
 					))}
 				</div>
 				<div className="h-64 bg-zinc-800/50 rounded-lg border border-zinc-700 animate-pulse" />
+			</div>
+		);
+	}
+
+	// ── Error State ─────────────────────────────────────────────────────────────────────
+	if (queryError) {
+		return (
+			<div className="space-y-6">
+				<div className="flex items-center gap-4">
+					<Link to={stackPath} className="text-zinc-400 hover:text-zinc-200 transition-colors">
+						&larr; Back to Stack
+					</Link>
+					<h1 className="text-2xl font-bold text-zinc-100">Error</h1>
+				</div>
+				<div className="bg-red-900/20 border border-red-900/50 text-red-400 p-4 rounded-lg">
+					{queryError.message}
+				</div>
 			</div>
 		);
 	}

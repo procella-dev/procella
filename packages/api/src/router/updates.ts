@@ -55,13 +55,18 @@ export const updatesRouter = router({
 			.select({
 				updateId: updateEvents.updateId,
 				fields: updateEvents.fields,
+				sequence: updateEvents.sequence,
 			})
 			.from(updateEvents)
-			.where(and(sql`${updateEvents.updateId} IN ${updateIds}`, eq(updateEvents.kind, "summary")));
+			.where(and(sql`${updateEvents.updateId} IN ${updateIds}`, eq(updateEvents.kind, "summary")))
+			.orderBy(desc(updateEvents.sequence));
 
+		// Keep only the latest (highest sequence) summary per update
 		const resourceChangesMap = new Map<string, Record<string, number>>();
 		for (const row of summaryRows) {
-			resourceChangesMap.set(row.updateId, parseResourceChanges(row.fields));
+			if (!resourceChangesMap.has(row.updateId)) {
+				resourceChangesMap.set(row.updateId, parseResourceChanges(row.fields));
+			}
 		}
 
 		return rows.map((row) => ({
@@ -100,6 +105,7 @@ export const updatesRouter = router({
 			.select({ fields: updateEvents.fields })
 			.from(updateEvents)
 			.where(and(eq(updateEvents.updateId, row.id), eq(updateEvents.kind, "summary")))
+			.orderBy(desc(updateEvents.sequence))
 			.limit(1);
 
 		return {

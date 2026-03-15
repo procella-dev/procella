@@ -157,6 +157,7 @@ export const stacksRouter = router({
 				.select({ fields: updateEvents.fields })
 				.from(updateEvents)
 				.where(and(eq(updateEvents.updateId, latestUpdate.id), eq(updateEvents.kind, "summary")))
+				.orderBy(desc(updateEvents.sequence))
 				.limit(1);
 
 			if (summaryRow?.fields) {
@@ -202,12 +203,7 @@ export const stacksRouter = router({
 			input.stack,
 		);
 
-		let deployment: { deployment?: unknown };
-		try {
-			deployment = await ctx.updates.exportStack(stackInfo.id);
-		} catch {
-			return [];
-		}
+		const deployment = await ctx.updates.exportStack(stackInfo.id);
 
 		const resources = extractResources(deployment.deployment);
 
@@ -238,12 +234,7 @@ export const stacksRouter = router({
 				input.stack,
 			);
 
-			let deployment: { deployment?: unknown };
-			try {
-				deployment = await ctx.updates.exportStack(stackInfo.id);
-			} catch {
-				return null;
-			}
+			const deployment = await ctx.updates.exportStack(stackInfo.id);
 
 			const resources = extractResources(deployment.deployment);
 			const resource = resources.find((r) => r.urn === input.urn);
