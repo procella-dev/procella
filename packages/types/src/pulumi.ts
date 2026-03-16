@@ -37,6 +37,8 @@ export type {
 	DecryptValueResponse,
 	DeltaCheckpointUploadsConfigV2,
 	DeploymentSchemaVersionConfig,
+	// Deployment / resource types (core.go)
+	DeploymentV3,
 	DiagnosticEvent,
 	EncryptValueRequest,
 	EncryptValueResponse,
@@ -77,6 +79,7 @@ export type {
 	ResOpFailedEvent,
 	ResOutputsEvent,
 	ResourcePreEvent,
+	ResourceV3,
 	SecretsProvidersV1,
 	Stack,
 	StackConfig,
