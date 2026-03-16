@@ -80,9 +80,11 @@ jobs:
         run: |
           # Neon computes may need time to wake up after branch create
           for i in 1 2 3; do
-            bunx drizzle-kit migrate --config packages/db/drizzle.config.ts && break
+            bunx drizzle-kit migrate --config packages/db/drizzle.config.ts && exit 0
             echo "Attempt $i failed, retrying in 5s..."
             sleep 5
+          done
+          echo "All migration attempts failed" && exit 1
           done
 
   # ── Deploy Descope infra (Pulumi preview stack) ────────────────────────
