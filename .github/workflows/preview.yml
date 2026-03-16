@@ -65,7 +65,7 @@ jobs:
           branch_name: preview/pr-${{ github.event.number }}
           parent_branch: main
           api_key: ${{ secrets.NEON_API_KEY }}
-          database: procella
+          database: neondb
 
   # ── Run database migrations on preview branch ──────────────────────────
   migrate:
