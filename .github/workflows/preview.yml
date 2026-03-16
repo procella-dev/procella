@@ -78,14 +78,13 @@ jobs:
         env:
           PROCELLA_DATABASE_URL: ${{ steps.branch.outputs.db_url }}
         run: |
-          # Neon computes may need time to wake up after branch create
-          for i in 1 2 3; do
+          # Neon computes may be suspended; first connection wakes them (~5-10s)
+          for i in 1 2 3 4 5; do
             bunx drizzle-kit migrate --config packages/db/drizzle.config.ts && exit 0
-            echo "Attempt $i failed, retrying in 5s..."
-            sleep 5
+            echo "Attempt $i failed, retrying in 10s..."
+            sleep 10
           done
           echo "All migration attempts failed" && exit 1
-          done
 
   # ── Deploy Descope infra (Pulumi preview stack) ────────────────────────
   infra:
