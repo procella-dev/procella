@@ -79,6 +79,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
+      - uses: pulumi/setup-pulumi@v2
       - uses: actions/cache@v5
         with:
           path: |
