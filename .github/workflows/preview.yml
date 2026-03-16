@@ -1,0 +1,249 @@
+name: Preview Environment
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    branches: [main]
+
+concurrency:
+  group: preview-${{ github.event.number }}
+  cancel-in-progress: true
+
+env:
+  NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  PULUMI_BACKEND_URL: s3://procella-pulumi-state?endpoint=${{ secrets.R2_ENDPOINT }}&region=auto
+  AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+
+jobs:
+  # ── Detect what changed ──────────────────────────────────────────────────
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      app: ${{ steps.filter.outputs.app }}
+      docs: ${{ steps.filter.outputs.docs }}
+      infra: ${{ steps.filter.outputs.infra }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            app:
+              - 'packages/**'
+              - 'apps/server/**'
+              - 'apps/ui/**'
+              - 'scripts/**'
+              - 'bun.lock'
+            docs:
+              - 'apps/docs/**'
+            infra:
+              - 'infra/**'
+
+  # ── Create Neon database branch ─────────────────────────────────────────
+  neon:
+    name: Neon Branch
+    needs: [changes]
+    if: needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      db_url: ${{ steps.branch.outputs.db_url }}
+      db_url_pooled: ${{ steps.branch.outputs.db_url_pooled }}
+      branch_id: ${{ steps.branch.outputs.branch_id }}
+    steps:
+      - uses: neondatabase/create-branch-action@v6
+        id: branch
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          branch_name: preview/pr-${{ github.event.number }}
+          parent_branch: main
+          api_key: ${{ secrets.NEON_API_KEY }}
+          database: procella
+
+  # ── Run database migrations on preview branch ──────────────────────────
+  migrate:
+    name: Migrate Preview DB
+    needs: [neon]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - name: Run migrations
+        env:
+          PROCELLA_DATABASE_URL: ${{ needs.neon.outputs.db_url }}
+        run: bunx drizzle-kit migrate --config packages/db/drizzle.config.ts
+
+  # ── Deploy Descope infra (Pulumi preview stack) ────────────────────────
+  infra:
+    name: Pulumi Preview Stack
+    needs: [changes]
+    if: needs.changes.outputs.app == 'true' || needs.changes.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      descope_project_id: ${{ steps.pulumi.outputs.descope_project_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - run: bun install --frozen-lockfile
+        working-directory: infra
+      - uses: pulumi/actions@v6
+        id: pulumi
+        with:
+          command: up
+          stack-name: preview-pr-${{ github.event.number }}
+          work-dir: infra
+          upsert: true
+        env:
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+      - name: Export Descope project ID
+        id: export
+        run: |
+          DESCOPE_ID=$(cd infra && pulumi stack output projectId --stack preview-pr-${{ github.event.number }})
+          echo "descope_project_id=$DESCOPE_ID" >> $GITHUB_OUTPUT
+        env:
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+
+  # ── Deploy Procella to Vercel (preview) ─────────────────────────────────
+  deploy-app:
+    name: Deploy App Preview
+    needs: [changes, neon, migrate, infra]
+    if: needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - run: npm install --global vercel@latest
+      - name: Build & Deploy
+        id: deploy
+        env:
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          PROCELLA_DATABASE_URL: ${{ needs.neon.outputs.db_url_pooled }}
+          PROCELLA_DESCOPE_PROJECT_ID: ${{ needs.infra.outputs.descope_project_id }}
+          PROCELLA_AUTH_MODE: descope
+          PROCELLA_BLOB_BACKEND: s3
+          PROCELLA_BLOB_S3_BUCKET: ${{ secrets.PROCELLA_BLOB_S3_BUCKET }}
+          PROCELLA_BLOB_S3_ENDPOINT: ${{ secrets.PROCELLA_BLOB_S3_ENDPOINT }}
+          PROCELLA_BLOB_S3_REGION: ${{ secrets.PROCELLA_BLOB_S3_REGION }}
+          PROCELLA_ENCRYPTION_KEY: ${{ secrets.PROCELLA_ENCRYPTION_KEY }}
+          PROCELLA_DESCOPE_MANAGEMENT_KEY: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
+        run: |
+          vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+          vercel build --token=${{ secrets.VERCEL_TOKEN }}
+          URL=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$URL" >> $GITHUB_OUTPUT
+
+  # ── Deploy Docs to Vercel (preview) ────────────────────────────────────
+  deploy-docs:
+    name: Deploy Docs Preview
+    needs: [changes]
+    if: needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - run: npm install --global vercel@latest
+      - name: Build & Deploy
+        id: deploy
+        env:
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_DOCS_PROJECT_ID }}
+        run: |
+          vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+          vercel build --token=${{ secrets.VERCEL_TOKEN }}
+          URL=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$URL" >> $GITHUB_OUTPUT
+
+  # ── Comment on PR with preview URLs ────────────────────────────────────
+  comment:
+    name: PR Comment
+    needs: [deploy-app, deploy-docs, infra, neon]
+    if: always() && (needs.deploy-app.result == 'success' || needs.deploy-docs.result == 'success')
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const lines = ['## 🚀 Preview Environment\n'];
+
+            const appUrl = '${{ needs.deploy-app.outputs.url }}';
+            const docsUrl = '${{ needs.deploy-docs.outputs.url }}';
+            const neonBranch = '${{ needs.neon.outputs.branch_id }}';
+            const descopeId = '${{ needs.infra.outputs.descope_project_id }}';
+
+            if (appUrl) {
+              lines.push(`| App | [${appUrl}](${appUrl}) |`);
+            }
+            if (docsUrl) {
+              lines.push(`| Docs | [${docsUrl}](${docsUrl}) |`);
+            }
+            if (neonBranch) {
+              lines.push(`| Neon Branch | \`preview/pr-${{ github.event.number }}\` (\`${neonBranch}\`) |`);
+            }
+            if (descopeId) {
+              lines.push(`| Descope Project | \`${descopeId}\` |`);
+            }
+
+            // Find and update existing comment or create new
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const marker = '## 🚀 Preview Environment';
+            const existing = comments.find(c => c.body?.startsWith(marker));
+            const body = lines.join('\n');
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }

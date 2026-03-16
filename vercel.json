@@ -3,5 +3,8 @@
 	"buildCommand": "bash scripts/build-vercel.sh",
 	"installCommand": "bun install --frozen-lockfile",
 	"framework": null,
-	"bunVersion": "1.x"
+	"bunVersion": "1.x",
+	"git": {
+		"deploymentEnabled": false
+	}
 }

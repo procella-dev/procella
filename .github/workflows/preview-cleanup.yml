@@ -1,0 +1,81 @@
+name: Preview Cleanup
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+concurrency:
+  group: preview-${{ github.event.number }}
+
+env:
+  NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  PULUMI_BACKEND_URL: s3://procella-pulumi-state?endpoint=${{ secrets.R2_ENDPOINT }}&region=auto
+  AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+
+jobs:
+  # ── Delete Neon branch ────────────────────────────────────────────────────
+  neon:
+    name: Delete Neon Branch
+    runs-on: ubuntu-latest
+    steps:
+      - uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          branch: preview/pr-${{ github.event.number }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+  # ── Destroy Pulumi preview stack ─────────────────────────────────────────
+  infra:
+    name: Destroy Pulumi Stack
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - run: bun install --frozen-lockfile
+        working-directory: infra
+      - uses: pulumi/actions@v6
+        with:
+          command: destroy
+          stack-name: preview-pr-${{ github.event.number }}
+          work-dir: infra
+        env:
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+      - name: Remove stack
+        run: cd infra && pulumi stack rm preview-pr-${{ github.event.number }} --yes
+        env:
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+
+  # ── Remove Vercel preview deployments ────────────────────────────────────
+  vercel:
+    name: Remove Vercel Previews
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        project:
+          - id: VERCEL_PROJECT_ID
+            name: app
+          - id: VERCEL_DOCS_PROJECT_ID
+            name: docs
+    steps:
+      - run: npm install --global vercel@latest
+      - name: Remove deployment
+        env:
+          VERCEL_PROJECT_ID: ${{ secrets[matrix.project.id] }}
+        run: |
+          # List deployments with meta filter, remove if found
+          DEPLOYMENTS=$(vercel ls --token=${{ secrets.VERCEL_TOKEN }} --meta githubPrNumber=${{ github.event.number }} 2>/dev/null || true)
+          if [ -n "$DEPLOYMENTS" ]; then
+            echo "Cleaning up ${{ matrix.project.name }} preview deployments"
+            vercel remove --token=${{ secrets.VERCEL_TOKEN }} --yes --safe 2>/dev/null || true
+          fi
