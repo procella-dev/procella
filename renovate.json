@@ -9,22 +9,6 @@
     {
       "matchPackageNames": ["astro", "@astrojs/starlight"],
       "groupName": "astro + starlight"
-    },
-    {
-      "description": "Regenerate TypeScript types when Pulumi Go SDK is bumped",
-      "matchPackageNames": ["github.com/pulumi/pulumi/sdk/v3"],
-      "postUpgradeTasks": {
-        "commands": [
-          "go install github.com/gzuidhof/tygo@latest",
-          "sh packages/types/tygo/generate.sh"
-        ],
-        "fileFilters": [
-          "packages/types/src/pulumi.gen.ts",
-          "packages/types/tygo/go.mod",
-          "packages/types/tygo/go.sum"
-        ],
-        "executionMode": "update"
-      }
     }
   ]
 }
