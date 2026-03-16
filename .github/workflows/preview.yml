@@ -14,9 +14,9 @@ concurrency:
 
 env:
   NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
-  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
   VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-  PULUMI_BACKEND_URL: s3://procella-pulumi-state?endpoint=${{ secrets.R2_ENDPOINT }}&region=auto
+  PULUMI_BACKEND_URL: s3://procella-pulumi-state?endpoint=${{ vars.R2_ENDPOINT }}&region=auto
   AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
 
@@ -158,14 +158,14 @@ jobs:
       - name: Build & Deploy
         id: deploy
         env:
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
           PROCELLA_DATABASE_URL: ${{ needs.neon.outputs.db_url_pooled }}
           PROCELLA_DESCOPE_PROJECT_ID: ${{ needs.infra.outputs.descope_project_id }}
           PROCELLA_AUTH_MODE: descope
           PROCELLA_BLOB_BACKEND: s3
-          PROCELLA_BLOB_S3_BUCKET: ${{ secrets.PROCELLA_BLOB_S3_BUCKET }}
-          PROCELLA_BLOB_S3_ENDPOINT: ${{ secrets.PROCELLA_BLOB_S3_ENDPOINT }}
-          PROCELLA_BLOB_S3_REGION: ${{ secrets.PROCELLA_BLOB_S3_REGION }}
+          PROCELLA_BLOB_S3_BUCKET: ${{ vars.PROCELLA_BLOB_S3_BUCKET }}
+          PROCELLA_BLOB_S3_ENDPOINT: ${{ vars.PROCELLA_BLOB_S3_ENDPOINT }}
+          PROCELLA_BLOB_S3_REGION: ${{ vars.PROCELLA_BLOB_S3_REGION }}
           PROCELLA_ENCRYPTION_KEY: ${{ secrets.PROCELLA_ENCRYPTION_KEY }}
           PROCELLA_DESCOPE_MANAGEMENT_KEY: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
           SKIP_MIGRATIONS: "1"
@@ -209,7 +209,7 @@ jobs:
       - name: Build & Deploy
         id: deploy
         env:
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_DOCS_PROJECT_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_DOCS_PROJECT_ID }}
         run: |
           vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
           vercel build --token="$VERCEL_TOKEN"
