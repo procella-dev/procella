@@ -52,6 +52,7 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
+    environment: preview
     outputs:
       db_url: ${{ steps.branch.outputs.db_url }}
       db_url_pooled: ${{ steps.branch.outputs.db_url_pooled }}
@@ -93,6 +94,7 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.app == 'true' || needs.changes.outputs.infra == 'true'
     runs-on: ubuntu-latest
+    environment: preview
     outputs:
       descope_project_id: ${{ steps.export.outputs.descope_project_id }}
     steps:
@@ -138,6 +140,7 @@ jobs:
     needs: [changes, neon, migrate, infra]
     if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
+    environment: preview
     outputs:
       url: ${{ steps.deploy.outputs.url }}
     steps:
@@ -188,6 +191,7 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.docs == 'true'
     runs-on: ubuntu-latest
+    environment: preview
     outputs:
       url: ${{ steps.deploy.outputs.url }}
     steps:

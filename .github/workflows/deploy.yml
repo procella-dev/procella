@@ -52,6 +52,7 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
+    environment: production
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
@@ -74,6 +75,7 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.infra == 'true'
     runs-on: ubuntu-latest
+    environment: production
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
@@ -101,6 +103,7 @@ jobs:
     needs: [changes, migrate]
     if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
+    environment: production
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
