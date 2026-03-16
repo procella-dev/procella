@@ -106,6 +106,7 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
+      - run: bun install --frozen-lockfile
         working-directory: infra
       - name: Init preview stack config
         working-directory: infra
@@ -164,10 +165,11 @@ jobs:
           PROCELLA_BLOB_S3_REGION: ${{ secrets.PROCELLA_BLOB_S3_REGION }}
           PROCELLA_ENCRYPTION_KEY: ${{ secrets.PROCELLA_ENCRYPTION_KEY }}
           PROCELLA_DESCOPE_MANAGEMENT_KEY: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
+          SKIP_MIGRATIONS: "1"
         run: |
           vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
           vercel build --token="$VERCEL_TOKEN"
-          URL=$(vercel deploy --prebuilt --token="$VERCEL_TOKEN")
+          URL=$(vercel deploy --prebuilt --token="$VERCEL_TOKEN" --meta githubCommitRef=${{ github.head_ref }})
           echo "url=$URL" >> $GITHUB_OUTPUT
 
   # ── Deploy Docs to Vercel (preview) ────────────────────────────────────
@@ -197,7 +199,7 @@ jobs:
         run: |
           vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
           vercel build --token="$VERCEL_TOKEN"
-          URL=$(vercel deploy --prebuilt --token="$VERCEL_TOKEN")
+          URL=$(vercel deploy --prebuilt --token="$VERCEL_TOKEN" --meta githubCommitRef=${{ github.head_ref }})
           echo "url=$URL" >> $GITHUB_OUTPUT
 
   # ── Comment on PR with preview URLs ────────────────────────────────────

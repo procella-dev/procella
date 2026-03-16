@@ -29,6 +29,8 @@ jobs:
       infra: ${{ steps.filter.outputs.infra }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
       - uses: dorny/paths-filter@v4
         id: filter
         with:
