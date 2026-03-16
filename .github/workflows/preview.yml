@@ -106,15 +106,21 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
-      - run: bun install --frozen-lockfile
         working-directory: infra
+      - name: Init preview stack config
+        working-directory: infra
+        env:
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          DESCOPE_MANAGEMENT_KEY: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
+        run: |
+          pulumi stack select --create preview-pr-${{ github.event.number }} 2>/dev/null || true
+          pulumi config set --secret descope:managementKey "$DESCOPE_MANAGEMENT_KEY"
       - uses: pulumi/actions@v6
         id: pulumi
         with:
           command: up
           stack-name: preview-pr-${{ github.event.number }}
           work-dir: infra
-          upsert: true
         env:
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
       - name: Export Descope project ID

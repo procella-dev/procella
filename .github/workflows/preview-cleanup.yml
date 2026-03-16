@@ -64,31 +64,37 @@ jobs:
   vercel-app:
     name: Remove App Preview
     runs-on: ubuntu-latest
-    env:
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
     steps:
-      - run: npm install --global vercel@latest
-      - name: Remove deployments
+      - name: Remove PR deployments
+        env:
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
-          # List deployments and extract URLs for this project
-          URLS=$(vercel ls --token="$VERCEL_TOKEN" 2>/dev/null | grep -oP 'https://\S+' || true)
-          for url in $URLS; do
-            echo "Removing $url"
-            vercel remove "$url" --token="$VERCEL_TOKEN" --yes 2>/dev/null || true
+          # Find deployments for this PR's branch via Vercel API
+          BRANCH="${{ github.head_ref }}"
+          DEPLOYS=$(curl -s -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&meta-githubCommitRef=$BRANCH&limit=10" \
+            | jq -r '.deployments[].uid // empty')
+          for uid in $DEPLOYS; do
+            echo "Removing deployment $uid"
+            curl -s -X DELETE -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$uid" || true
           done
 
   vercel-docs:
     name: Remove Docs Preview
     runs-on: ubuntu-latest
-    env:
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_DOCS_PROJECT_ID }}
     steps:
-      - run: npm install --global vercel@latest
-      - name: Remove deployments
+      - name: Remove PR deployments
+        env:
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_DOCS_PROJECT_ID }}
         run: |
-          # List deployments and extract URLs for this project
-          URLS=$(vercel ls --token="$VERCEL_TOKEN" 2>/dev/null | grep -oP 'https://\S+' || true)
-          for url in $URLS; do
-            echo "Removing $url"
-            vercel remove "$url" --token="$VERCEL_TOKEN" --yes 2>/dev/null || true
+          # Find deployments for this PR's branch via Vercel API
+          BRANCH="${{ github.head_ref }}"
+          DEPLOYS=$(curl -s -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&meta-githubCommitRef=$BRANCH&limit=10" \
+            | jq -r '.deployments[].uid // empty')
+          for uid in $DEPLOYS; do
+            echo "Removing deployment $uid"
+            curl -s -X DELETE -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$uid" || true
           done

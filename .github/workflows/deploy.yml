@@ -90,7 +90,6 @@ jobs:
           command: up
           stack-name: prod
           work-dir: infra
-          upsert: true
         env:
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
 
