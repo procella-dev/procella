@@ -1,0 +1,160 @@
+name: Deploy Production
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  # ── Detect what changed ──────────────────────────────────────────────────
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      app: ${{ steps.filter.outputs.app }}
+      docs: ${{ steps.filter.outputs.docs }}
+      infra: ${{ steps.filter.outputs.infra }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            app:
+              - 'packages/**'
+              - 'apps/server/**'
+              - 'apps/ui/**'
+              - 'scripts/**'
+              - 'bun.lock'
+            docs:
+              - 'apps/docs/**'
+            infra:
+              - 'infra/**'
+
+  # ── Run database migrations on production ─────────────────────────────────
+  migrate:
+    name: Migrate Production DB
+    needs: [changes]
+    if: needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v6
+      - uses: jdx/mise-action@v4
+      - uses: actions/cache@v5
+        with:
+          path: |
+            node_modules
+            ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - name: Run migrations
+        env:
+          PROCELLA_DATABASE_URL: ${{ secrets.PROCELLA_DATABASE_URL }}
+        run: |
+          mise set PROCELLA_DATABASE_URL="${PROCELLA_DATABASE_URL}"
+          bun run scripts/migrate.ts
+          mise unset PROCELLA_DATABASE_URL
+
+  # ── Deploy Descope infra (production stack) ──────────────────────────────
+  infra:
+    name: Pulumi Production
+    needs: [changes]
+    if: needs.changes.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      PULUMI_BACKEND_URL: s3://${{ vars.PROCELLA_BLOB_S3_BUCKET }}?endpoint=${{ vars.R2_ENDPOINT }}&region=auto
+    steps:
+      - uses: actions/checkout@v6
+      - uses: jdx/mise-action@v4
+      - uses: pulumi/setup-pulumi@v2
+      - uses: actions/cache@v5
+        with:
+          path: |
+            node_modules
+            ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - run: bun install --frozen-lockfile
+        working-directory: infra
+      - uses: pulumi/actions@v6
+        with:
+          command: up
+          stack-name: prod
+          work-dir: infra
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+
+  # ── Deploy Procella to Vercel (production) ───────────────────────────────
+  deploy-app:
+    name: Deploy App Production
+    needs: [changes, migrate]
+    if: needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: jdx/mise-action@v4
+      - uses: actions/cache@v5
+        with:
+          path: |
+            node_modules
+            ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - run: npm install --global vercel@latest
+      - name: Build & Deploy
+        env:
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          SKIP_MIGRATIONS: "1"
+        run: |
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+          vercel build --prod --token="$VERCEL_TOKEN"
+          vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+
+  # ── Deploy Docs to Vercel (production) ───────────────────────────────────
+  deploy-docs:
+    name: Deploy Docs Production
+    needs: [changes]
+    if: needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: jdx/mise-action@v4
+      - uses: actions/cache@v5
+        with:
+          path: |
+            node_modules
+            ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - run: npm install --global vercel@latest
+      - name: Build & Deploy
+        env:
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_DOCS_PROJECT_ID }}
+        run: |
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+          vercel build --prod --token="$VERCEL_TOKEN"
+          vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"

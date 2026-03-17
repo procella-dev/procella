@@ -17,15 +17,23 @@ const provider = new descope.Provider("DescopeProvider", {
 });
 
 // ── JWT Templates ───────────────────────────────────────────────────────
-// Descope template placeholders must be unquoted so the JWT claims are
-// emitted as arrays/objects (not strings). packages/auth expects
-// tenants as Record<string, { roles: string[] }> and roles as string[].
-// `tenant_name` carries the human-friendly tenant name for org slug derivation.
-const userJwtTemplate =
-	'{"roles": {{user.roles}}, "tenants": {{user.tenants}}, "tenant_name": "{{tenant.name}}"}';
+// Descope template placeholders use {{...}} syntax. The Pulumi/Terraform
+// provider requires the template to be valid JSON, so placeholders must be
+// quoted as string values. Descope's backend interprets them at runtime and
+// emits the actual arrays/objects in the JWT claims.
+// packages/auth expects tenants as Record<string, { roles: string[] }> and
+// roles as string[]. `tenant_name` carries the human-friendly tenant name.
+const userJwtTemplate = JSON.stringify({
+	roles: "{{user.roles}}",
+	tenants: "{{user.tenants}}",
+	tenant_name: "{{tenant.name}}",
+});
 
-const accessKeyJwtTemplate =
-	'{"roles": {{accesskey.roles}}, "tenants": {{accesskey.tenants}}, "tenant_name": "{{tenant.name}}"}';
+const accessKeyJwtTemplate = JSON.stringify({
+	roles: "{{accesskey.roles}}",
+	tenants: "{{accesskey.tenants}}",
+	tenant_name: "{{tenant.name}}",
+});
 
 // ── Project ─────────────────────────────────────────────────────────────────
 const project = new descope.Project(

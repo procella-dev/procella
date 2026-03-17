@@ -1,6 +1,4 @@
 name: procella-descope
 runtime:
-  name: nodejs
-  options:
-    packagemanager: bun
+  name: bun
 description: Descope auth configuration for Procella

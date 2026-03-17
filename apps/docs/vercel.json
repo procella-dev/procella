@@ -4,5 +4,8 @@
 	"installCommand": "cd ../.. && bun install --frozen-lockfile",
 	"buildCommand": "bun run build",
 	"outputDirectory": "dist",
-	"bunVersion": "1.x"
+	"bunVersion": "1.x",
+	"git": {
+		"deploymentEnabled": false
+	}
 }

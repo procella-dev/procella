@@ -1,0 +1,118 @@
+name: Preview Cleanup
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: preview-${{ github.event.number }}
+
+jobs:
+  # ── Delete Neon branch ────────────────────────────────────────────────────
+  neon:
+    name: Delete Neon Branch
+    runs-on: ubuntu-latest
+    environment: preview
+    continue-on-error: true
+    steps:
+      - uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch: preview/pr-${{ github.event.number }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+  # ── Destroy Pulumi preview stack ─────────────────────────────────────────
+  infra:
+    name: Destroy Pulumi Stack
+    runs-on: ubuntu-latest
+    environment: preview
+    continue-on-error: true
+    env:
+      PULUMI_BACKEND_URL: s3://${{ vars.PROCELLA_BLOB_S3_BUCKET }}?endpoint=${{ vars.R2_ENDPOINT }}&region=auto
+    steps:
+      - uses: actions/checkout@v6
+      - uses: jdx/mise-action@v4
+      - uses: pulumi/setup-pulumi@v2
+      - uses: actions/cache@v5
+        with:
+          path: |
+            node_modules
+            ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - run: bun install --frozen-lockfile
+        working-directory: infra
+      - uses: pulumi/actions@v6
+        with:
+          command: destroy
+          stack-name: preview-pr-${{ github.event.number }}
+          work-dir: infra
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+      - name: Remove stack
+        continue-on-error: true
+        run: cd infra && pulumi stack rm preview-pr-${{ github.event.number }} --yes
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+
+  # ── Remove Vercel preview deployments ────────────────────────────────────
+  vercel-app:
+    name: Remove App Preview
+    runs-on: ubuntu-latest
+    environment: preview
+    continue-on-error: true
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - name: Remove PR deployments
+        env:
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          GIT_BRANCH: ${{ github.head_ref }}
+        run: |
+          # Find deployments for this PR's branch via Vercel API
+          RESPONSE=$(curl -sf -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&meta-githubCommitRef=$GIT_BRANCH&limit=100") || {
+            echo "::warning::Failed to list Vercel deployments for cleanup"
+            exit 0
+          }
+          DEPLOYS=$(echo "$RESPONSE" | jq -r '.deployments[].uid // empty')
+          for uid in $DEPLOYS; do
+            echo "Removing deployment $uid"
+            curl -s -X DELETE -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$uid" || true
+          done
+
+  vercel-docs:
+    name: Remove Docs Preview
+    runs-on: ubuntu-latest
+    environment: preview
+    continue-on-error: true
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - name: Remove PR deployments
+        env:
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_DOCS_PROJECT_ID }}
+          GIT_BRANCH: ${{ github.head_ref }}
+        run: |
+          # Find deployments for this PR's branch via Vercel API
+          RESPONSE=$(curl -sf -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&meta-githubCommitRef=$GIT_BRANCH&limit=100") || {
+            echo "::warning::Failed to list Vercel deployments for cleanup"
+            exit 0
+          }
+          DEPLOYS=$(echo "$RESPONSE" | jq -r '.deployments[].uid // empty')
+          for uid in $DEPLOYS; do
+            echo "Removing deployment $uid"
+            curl -s -X DELETE -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$uid" || true
+          done
