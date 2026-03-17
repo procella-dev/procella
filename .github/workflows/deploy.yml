@@ -69,7 +69,7 @@ jobs:
   infra:
     name: Pulumi Production
     needs: [changes]
-    if: needs.changes.outputs.infra == 'true'
+    if: needs.changes.outputs.app == 'true' || needs.changes.outputs.infra == 'true'
     runs-on: ubuntu-latest
     environment: production
     env:
