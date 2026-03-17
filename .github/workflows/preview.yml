@@ -98,12 +98,15 @@ jobs:
             exit 1
           fi
           echo "DB_URL host: $(echo $DB_URL | sed 's|.*@||;s|/.*||')"
+          # Ensure sslmode=require for Neon
+          DB_URL="${DB_URL}?sslmode=require"
           echo "::add-mask::$DB_URL"
           echo "db_url=$DB_URL" >> $GITHUB_OUTPUT
           # Get pooled connection URI for runtime
           DB_URL_POOLED=$(curl -s -H "Authorization: Bearer $NEON_API_KEY" \
             "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/connection_uri?branch_id=$BRANCH_ID&database_name=neondb&role_name=neondb_owner&pooled=true" \
             | jq -r '.uri')
+          DB_URL_POOLED="${DB_URL_POOLED}?sslmode=require"
           echo "::add-mask::$DB_URL_POOLED"
           echo "db_url_pooled=$DB_URL_POOLED" >> $GITHUB_OUTPUT
       - name: Run migrations
