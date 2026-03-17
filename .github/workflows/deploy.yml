@@ -60,7 +60,9 @@ jobs:
       - name: Run migrations
         env:
           PROCELLA_DATABASE_URL: ${{ secrets.PROCELLA_DATABASE_URL }}
-        run: bun run scripts/migrate.ts
+        run: |
+          mise set PROCELLA_DATABASE_URL="${PROCELLA_DATABASE_URL}"
+          bun run scripts/migrate.ts
 
   # ── Deploy Descope infra (production stack) ──────────────────────────────
   infra:
