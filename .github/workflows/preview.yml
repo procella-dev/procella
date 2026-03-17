@@ -57,6 +57,13 @@ jobs:
       branch_id: ${{ steps.branch.outputs.branch_id }}
       db_url_pooled: ${{ steps.neon-url.outputs.db_url_pooled }}
     steps:
+      - name: Delete existing Neon branch (if suspended)
+        uses: neondatabase/delete-branch-action@v3
+        continue-on-error: true
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          branch: preview/pr-${{ github.event.number }}
+          api_key: ${{ secrets.NEON_API_KEY }}
       - uses: neondatabase/create-branch-action@v6
         id: branch
         with:
