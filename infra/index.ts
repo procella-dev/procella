@@ -1,4 +1,3 @@
-import * as pulumi from "@pulumi/pulumi";
 import * as descope from "@descope/pulumi-descope";
 
 import signUpOrInFlowJson from "./flows/sign-up-or-in.json" with { type: "json" };
@@ -8,8 +7,10 @@ const signUpOrInFlow = JSON.stringify(signUpOrInFlowJson);
 const stylesData = JSON.stringify(stylesJson);
 
 // ── Config ──────────────────────────────────────────────────────────────────
-const config = new pulumi.Config("descope");
-const managementKey = config.requireSecret("managementKey");
+const managementKey = process.env.DESCOPE_MANAGEMENT_KEY;
+if (!managementKey) {
+	throw new Error("DESCOPE_MANAGEMENT_KEY environment variable is required");
+}
 
 // ── Provider ────────────────────────────────────────────────────────────────
 const provider = new descope.Provider("DescopeProvider", {
