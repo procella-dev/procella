@@ -12,14 +12,6 @@ concurrency:
   group: preview-${{ github.event.number }}
   cancel-in-progress: true
 
-env:
-  NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
-  VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
-  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-  PULUMI_BACKEND_URL: s3://${{ vars.PROCELLA_BLOB_S3_BUCKET }}?endpoint=${{ vars.R2_ENDPOINT }}&region=auto
-  AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-
 jobs:
   # ── Detect what changed ──────────────────────────────────────────────────
   changes:
@@ -53,6 +45,8 @@ jobs:
     if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     environment: preview
+    env:
+      NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
     outputs:
       branch_id: ${{ steps.branch.outputs.branch_id }}
       db_url_pooled: ${{ steps.neon-url.outputs.db_url_pooled }}
@@ -61,13 +55,13 @@ jobs:
         uses: neondatabase/delete-branch-action@v3
         continue-on-error: true
         with:
-          project_id: ${{ env.NEON_PROJECT_ID }}
+          project_id: ${{ vars.NEON_PROJECT_ID }}
           branch: preview/pr-${{ github.event.number }}
           api_key: ${{ secrets.NEON_API_KEY }}
       - uses: neondatabase/create-branch-action@v6
         id: branch
         with:
-          project_id: ${{ env.NEON_PROJECT_ID }}
+          project_id: ${{ vars.NEON_PROJECT_ID }}
           branch_name: preview/pr-${{ github.event.number }}
           parent_branch: main
           api_key: ${{ secrets.NEON_API_KEY }}
@@ -91,7 +85,7 @@ jobs:
           echo "Branch ID: $BRANCH_ID"
           # Get direct (non-pooled) connection URI for migrations
           RESPONSE=$(curl -s -H "Authorization: Bearer $NEON_API_KEY" \
-            "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/connection_uri?branch_id=$BRANCH_ID&database_name=neondb&role_name=neondb_owner")
+            "https://console.neon.tech/api/v2/projects/${{ vars.NEON_PROJECT_ID }}/connection_uri?branch_id=$BRANCH_ID&database_name=neondb&role_name=neondb_owner")
           DB_URL=$(echo "$RESPONSE" | jq -r '.uri')
           if [ -z "$DB_URL" ] || [ "$DB_URL" = "null" ]; then
             echo "::error::Failed to get Neon connection URI. Response: $RESPONSE"
@@ -104,7 +98,7 @@ jobs:
           echo "db_url=$DB_URL" >> $GITHUB_OUTPUT
           # Get pooled connection URI for runtime
           DB_URL_POOLED=$(curl -s -H "Authorization: Bearer $NEON_API_KEY" \
-            "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/connection_uri?branch_id=$BRANCH_ID&database_name=neondb&role_name=neondb_owner&pooled=true" \
+            "https://console.neon.tech/api/v2/projects/${{ vars.NEON_PROJECT_ID }}/connection_uri?branch_id=$BRANCH_ID&database_name=neondb&role_name=neondb_owner&pooled=true" \
             | jq -r '.uri')
           DB_URL_POOLED="${DB_URL_POOLED}?sslmode=require"
           echo "::add-mask::$DB_URL_POOLED"
@@ -121,6 +115,8 @@ jobs:
     if: needs.changes.outputs.app == 'true' || needs.changes.outputs.infra == 'true'
     runs-on: ubuntu-latest
     environment: preview
+    env:
+      PULUMI_BACKEND_URL: s3://${{ vars.PROCELLA_BLOB_S3_BUCKET }}?endpoint=${{ vars.R2_ENDPOINT }}&region=auto
     outputs:
       descope_project_id: ${{ steps.export.outputs.descope_project_id }}
     steps:
@@ -174,6 +170,9 @@ jobs:
     if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     environment: preview
+    env:
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     outputs:
       url: ${{ steps.deploy.outputs.url }}
     steps:
@@ -226,6 +225,9 @@ jobs:
     if: needs.changes.outputs.docs == 'true'
     runs-on: ubuntu-latest
     environment: preview
+    env:
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     outputs:
       url: ${{ steps.deploy.outputs.url }}
     steps:

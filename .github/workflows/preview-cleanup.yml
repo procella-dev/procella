@@ -11,14 +11,6 @@ permissions:
 concurrency:
   group: preview-${{ github.event.number }}
 
-env:
-  NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
-  VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
-  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-  PULUMI_BACKEND_URL: s3://${{ vars.PROCELLA_BLOB_S3_BUCKET }}?endpoint=${{ vars.R2_ENDPOINT }}&region=auto
-  AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-
 jobs:
   # ── Delete Neon branch ────────────────────────────────────────────────────
   neon:
@@ -28,7 +20,7 @@ jobs:
     steps:
       - uses: neondatabase/delete-branch-action@v3
         with:
-          project_id: ${{ env.NEON_PROJECT_ID }}
+          project_id: ${{ vars.NEON_PROJECT_ID }}
           branch: preview/pr-${{ github.event.number }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
@@ -37,6 +29,8 @@ jobs:
     name: Destroy Pulumi Stack
     runs-on: ubuntu-latest
     continue-on-error: true
+    env:
+      PULUMI_BACKEND_URL: s3://${{ vars.PROCELLA_BLOB_S3_BUCKET }}?endpoint=${{ vars.R2_ENDPOINT }}&region=auto
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
@@ -72,6 +66,8 @@ jobs:
     name: Remove App Preview
     runs-on: ubuntu-latest
     continue-on-error: true
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
       - name: Remove PR deployments
         env:
@@ -92,6 +88,8 @@ jobs:
     name: Remove Docs Preview
     runs-on: ubuntu-latest
     continue-on-error: true
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
       - name: Remove PR deployments
         env:
