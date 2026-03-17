@@ -33,6 +33,6 @@
 	},
 	"lint-staged": {
 		"*.{ts,tsx}": ["biome check --write --no-errors-on-unmatched"],
-		"*.{json,jsonl}": ["biome format --write --no-errors-on-unmatched"]
+		"*.{json,jsonl,css}": ["biome format --write --no-errors-on-unmatched"]
 	}
 }
