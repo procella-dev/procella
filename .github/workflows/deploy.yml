@@ -12,38 +12,49 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # ── Detect what changed ──────────────────────────────────────────────────
+  # ── Detect what changed (dependency-aware) ────────────────────────────────
   changes:
     name: Detect Changes
     runs-on: ubuntu-latest
     outputs:
-      app: ${{ steps.filter.outputs.app }}
-      docs: ${{ steps.filter.outputs.docs }}
-      infra: ${{ steps.filter.outputs.infra }}
+      server: ${{ steps.affected.outputs.server }}
+      ui: ${{ steps.affected.outputs.ui }}
+      docs: ${{ steps.affected.outputs.docs }}
+      infra: ${{ steps.affected.outputs.infra }}
+      migrate: ${{ steps.affected.outputs.migrate }}
+      affected: ${{ steps.affected.outputs.affected }}
     steps:
       - uses: actions/checkout@v6
         with:
-          fetch-depth: 2
-      - uses: dorny/paths-filter@v4
-        id: filter
+          fetch-depth: 0
+      - uses: jdx/mise-action@v4
+      - uses: actions/cache@v5
         with:
-          filters: |
-            app:
-              - 'packages/**'
-              - 'apps/server/**'
-              - 'apps/ui/**'
-              - 'scripts/**'
-              - 'bun.lock'
-            docs:
-              - 'apps/docs/**'
-            infra:
-              - 'infra/**'
+          path: |
+            node_modules
+            ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - name: Detect affected packages
+        id: affected
+        run: |
+          RESULT=$(bun run scripts/affected.ts --base=HEAD~1)
+          echo "server=$(echo "$RESULT" | jq -r .server)" >> $GITHUB_OUTPUT
+          echo "ui=$(echo "$RESULT" | jq -r .ui)" >> $GITHUB_OUTPUT
+          echo "docs=$(echo "$RESULT" | jq -r .docs)" >> $GITHUB_OUTPUT
+          echo "infra=$(echo "$RESULT" | jq -r .infra)" >> $GITHUB_OUTPUT
+          echo "migrate=$(echo "$RESULT" | jq -r .migrate)" >> $GITHUB_OUTPUT
+          echo "affected=$(echo "$RESULT" | jq -c .affected)" >> $GITHUB_OUTPUT
+          echo "::group::Change detection result"
+          echo "$RESULT" | jq .
+          echo "::endgroup::"
 
   # ── Run database migrations on production ─────────────────────────────────
   migrate:
     name: Migrate Production DB
     needs: [changes]
-    if: needs.changes.outputs.app == 'true'
+    if: needs.changes.outputs.migrate == 'true'
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -69,13 +80,11 @@ jobs:
   infra:
     name: Pulumi Production
     needs: [changes]
-    if: needs.changes.outputs.app == 'true' || needs.changes.outputs.infra == 'true'
+    if: needs.changes.outputs.infra == 'true'
     runs-on: ubuntu-latest
     environment: production
     env:
       PULUMI_BACKEND_URL: s3://${{ vars.PROCELLA_BLOB_S3_BUCKET }}?endpoint=${{ vars.R2_ENDPOINT }}&region=auto
-    outputs:
-      descope_project_id: ${{ steps.export.outputs.descope_project_id }}
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
@@ -100,15 +109,6 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
           DESCOPE_MANAGEMENT_KEY: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
-      - name: Export Descope project ID
-        id: export
-        run: |
-          DESCOPE_ID=$(cd infra && pulumi stack output projectId --stack prod)
-          echo "descope_project_id=$DESCOPE_ID" >> $GITHUB_OUTPUT
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
 
   # ── Deploy Procella to Vercel (production) ───────────────────────────────
   deploy-app:
@@ -116,7 +116,7 @@ jobs:
     needs: [changes, migrate, infra]
     if: |
       always() &&
-      needs.changes.outputs.app == 'true' &&
+      (needs.changes.outputs.server == 'true' || needs.changes.outputs.ui == 'true') &&
       (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') &&
       (needs.infra.result == 'success' || needs.infra.result == 'skipped')
     runs-on: ubuntu-latest
@@ -124,9 +124,11 @@ jobs:
     env:
       VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      PULUMI_BACKEND_URL: s3://${{ vars.PROCELLA_BLOB_S3_BUCKET }}?endpoint=${{ vars.R2_ENDPOINT }}&region=auto
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
+      - uses: pulumi/setup-pulumi@v2
       - uses: actions/cache@v5
         with:
           path: |
@@ -135,12 +137,23 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
+      - run: bun install --frozen-lockfile
+        working-directory: infra
+      - name: Get Descope project ID from Pulumi stack
+        id: descope
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+        run: |
+          DESCOPE_ID=$(cd infra && pulumi stack output projectId --stack prod)
+          echo "project_id=$DESCOPE_ID" >> $GITHUB_OUTPUT
       - run: npm install --global vercel@latest
       - name: Build & Deploy
         env:
           VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
           PROCELLA_DATABASE_URL: ${{ secrets.PROCELLA_DATABASE_URL }}
-          PROCELLA_DESCOPE_PROJECT_ID: ${{ needs.infra.outputs.descope_project_id }}
+          PROCELLA_DESCOPE_PROJECT_ID: ${{ steps.descope.outputs.project_id }}
           PROCELLA_AUTH_MODE: descope
           PROCELLA_BLOB_BACKEND: s3
           PROCELLA_BLOB_S3_BUCKET: ${{ vars.PROCELLA_BLOB_S3_BUCKET }}
