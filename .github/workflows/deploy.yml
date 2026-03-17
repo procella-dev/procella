@@ -63,6 +63,7 @@ jobs:
         run: |
           mise set PROCELLA_DATABASE_URL="${PROCELLA_DATABASE_URL}"
           bun run scripts/migrate.ts
+          mise unset PROCELLA_DATABASE_URL
 
   # ── Deploy Descope infra (production stack) ──────────────────────────────
   infra:
