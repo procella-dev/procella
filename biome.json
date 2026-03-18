@@ -41,16 +41,33 @@
 			"semicolons": "always"
 		}
 	},
+	"css": {
+		"parser": { "cssModules": true, "tailwindDirectives": true },
+		"linter": { "enabled": true },
+		"formatter": { "enabled": true }
+	},
 	"files": {
 		"includes": [
 			"**/packages/**/*.ts",
 			"**/apps/**/*.ts",
 			"**/apps/**/*.tsx",
 			"**/e2e/**/*.ts",
+			"**/scripts/**/*.ts",
+			"**/apps/**/*.css",
 			"!**/node_modules",
 			"!**/dist",
 			"!**/*.gen.*",
 			"!**/.astro"
 		]
-	}
+	},
+	"overrides": [
+		{
+			"includes": ["scripts/**"],
+			"linter": {
+				"rules": {
+					"suspicious": { "noConsole": "off" }
+				}
+			}
+		}
+	]
 }

@@ -3,7 +3,7 @@
 // Uses @neondatabase/serverless for Neon hosts (CI preview), node-postgres
 // for local/Docker hosts. Retries on connection failure (Neon compute wake-up).
 
-export {};  // Make file a module for top-level await
+export {}; // Make file a module for top-level await
 
 const DATABASE_URL = process.env.PROCELLA_DATABASE_URL;
 if (!DATABASE_URL) throw new Error("PROCELLA_DATABASE_URL is required");
@@ -11,8 +11,12 @@ if (!DATABASE_URL) throw new Error("PROCELLA_DATABASE_URL is required");
 // Log connection target (host only, no credentials)
 try {
 	const parsed = new URL(DATABASE_URL.replace(/^postgres(ql)?:\/\//, "http://"));
-	console.log(`Target: ${parsed.hostname}:${parsed.port || 5432} (neon=${parsed.hostname.endsWith(".neon.tech")})`);	
-} catch { /* ignore parse errors */ }
+	console.log(
+		`Target: ${parsed.hostname}:${parsed.port || 5432} (neon=${parsed.hostname.endsWith(".neon.tech")})`,
+	);
+} catch {
+	/* ignore parse errors */
+}
 
 const MAX_RETRIES = 5;
 const RETRY_DELAY_MS = 5_000;
@@ -65,9 +69,10 @@ for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
 		// Log full error chain for debugging PG error codes
 		if (err instanceof Error) {
 			if (err.cause) console.error("Cause:", err.cause);
-			if ("code" in err) console.error("PG code:", (err as any).code);
-			if ("detail" in err) console.error("PG detail:", (err as any).detail);
-			if ("severity" in err) console.error("PG severity:", (err as any).severity);
+			if ("code" in err) console.error("PG code:", (err as Record<string, unknown>).code);
+			if ("detail" in err) console.error("PG detail:", (err as Record<string, unknown>).detail);
+			if ("severity" in err)
+				console.error("PG severity:", (err as Record<string, unknown>).severity);
 		}
 		console.error(`Attempt ${attempt} failed: ${msg}`);
 		if (attempt === MAX_RETRIES) {

@@ -12,22 +12,22 @@
 		"@descope/react-sdk": "^2.26.7",
 		"@procella/api": "workspace:*",
 		"@procella/types": "workspace:*",
-		"@tanstack/react-query": "catalog:",
-		"@trpc/client": "catalog:",
-		"@trpc/react-query": "catalog:",
+		"@tanstack/react-query": "^5.80.6",
+		"@trpc/client": "^11.1.0",
+		"@trpc/react-query": "^11.1.0",
 		"@trpc/server": "catalog:",
-		"react": "catalog:",
-		"react-dom": "catalog:",
-		"react-router": "catalog:",
+		"react": "^19.2.0",
+		"react-dom": "^19.2.0",
+		"react-router": "^7.13.1",
 		"superjson": "catalog:"
 	},
 	"devDependencies": {
-		"@tailwindcss/vite": "catalog:",
-		"@types/react": "catalog:",
-		"@types/react-dom": "catalog:",
-		"@vitejs/plugin-react": "catalog:",
-		"tailwindcss": "catalog:",
+		"@tailwindcss/vite": "^4.2.1",
+		"@types/react": "^19.2.7",
+		"@types/react-dom": "^19.2.3",
+		"@vitejs/plugin-react": "^5.1.1",
+		"tailwindcss": "^4.2.1",
 		"typescript": "catalog:",
-		"vite": "catalog:"
+		"vite": "^7.3.1"
 	}
 }

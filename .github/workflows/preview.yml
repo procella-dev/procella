@@ -13,36 +13,41 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # ── Detect what changed ──────────────────────────────────────────────────
+  # ── Detect what changed (dependency-aware) ────────────────────────────────
   changes:
     name: Detect Changes
     runs-on: ubuntu-latest
     outputs:
-      app: ${{ steps.filter.outputs.app }}
-      docs: ${{ steps.filter.outputs.docs }}
-      infra: ${{ steps.filter.outputs.infra }}
+      server: ${{ steps.affected.outputs.server }}
+      ui: ${{ steps.affected.outputs.ui }}
+      docs: ${{ steps.affected.outputs.docs }}
+      infra: ${{ steps.affected.outputs.infra }}
+      migrate: ${{ steps.affected.outputs.migrate }}
+      affected: ${{ steps.affected.outputs.affected }}
     steps:
       - uses: actions/checkout@v6
-      - uses: dorny/paths-filter@v4
-        id: filter
         with:
-          filters: |
-            app:
-              - 'packages/**'
-              - 'apps/server/**'
-              - 'apps/ui/**'
-              - 'scripts/**'
-              - 'bun.lock'
-            docs:
-              - 'apps/docs/**'
-            infra:
-              - 'infra/**'
+          fetch-depth: 0
+      - uses: jdx/mise-action@v4
+      - name: Detect affected packages
+        id: affected
+        run: |
+          RESULT=$(bun run scripts/affected.ts)
+          echo "server=$(echo "$RESULT" | jq -r .server)" >> $GITHUB_OUTPUT
+          echo "ui=$(echo "$RESULT" | jq -r .ui)" >> $GITHUB_OUTPUT
+          echo "docs=$(echo "$RESULT" | jq -r .docs)" >> $GITHUB_OUTPUT
+          echo "infra=$(echo "$RESULT" | jq -r .infra)" >> $GITHUB_OUTPUT
+          echo "migrate=$(echo "$RESULT" | jq -r .migrate)" >> $GITHUB_OUTPUT
+          echo "affected=$(echo "$RESULT" | jq -c .affected)" >> $GITHUB_OUTPUT
+          echo "::group::Change detection result"
+          echo "$RESULT" | jq .
+          echo "::endgroup::"
 
   # ── Create Neon database branch & run migrations ────────────────────────
   neon:
     name: Neon Branch & Migrate
     needs: [changes]
-    if: needs.changes.outputs.app == 'true'
+    if: needs.changes.outputs.server == 'true' || needs.changes.outputs.ui == 'true'
     runs-on: ubuntu-latest
     environment: preview
     env:
@@ -110,6 +115,7 @@ jobs:
           echo "::add-mask::$DB_URL_POOLED"
           echo "db_url_pooled=$DB_URL_POOLED" >> $GITHUB_OUTPUT
       - name: Run migrations
+        if: needs.changes.outputs.migrate == 'true'
         env:
           PROCELLA_DATABASE_URL: ${{ steps.neon-url.outputs.db_url }}
         run: |
@@ -123,13 +129,11 @@ jobs:
   infra:
     name: Pulumi Preview Stack
     needs: [changes]
-    if: needs.changes.outputs.app == 'true' || needs.changes.outputs.infra == 'true'
+    if: needs.changes.outputs.infra == 'true' || needs.changes.outputs.server == 'true' || needs.changes.outputs.ui == 'true'
     runs-on: ubuntu-latest
     environment: preview
     env:
       PULUMI_BACKEND_URL: s3://${{ vars.PROCELLA_BLOB_S3_BUCKET }}?endpoint=${{ vars.R2_ENDPOINT }}&region=auto
-    outputs:
-      descope_project_id: ${{ steps.export.outputs.descope_project_id }}
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
@@ -163,31 +167,28 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
           DESCOPE_MANAGEMENT_KEY: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
-      - name: Export Descope project ID
-        id: export
-        run: |
-          DESCOPE_ID=$(cd infra && pulumi stack output projectId --stack preview-pr-${{ github.event.number }})
-          echo "descope_project_id=$DESCOPE_ID" >> $GITHUB_OUTPUT
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
 
   # ── Deploy Procella to Vercel (preview) ─────────────────────────────────
   deploy-app:
     name: Deploy App Preview
     needs: [changes, neon, infra]
-    if: needs.changes.outputs.app == 'true'
+    if: |
+      always() &&
+      (needs.changes.outputs.server == 'true' || needs.changes.outputs.ui == 'true') &&
+      (needs.neon.result == 'success' || needs.neon.result == 'skipped') &&
+      (needs.infra.result == 'success' || needs.infra.result == 'skipped')
     runs-on: ubuntu-latest
     environment: preview
     env:
       VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      PULUMI_BACKEND_URL: s3://${{ vars.PROCELLA_BLOB_S3_BUCKET }}?endpoint=${{ vars.R2_ENDPOINT }}&region=auto
     outputs:
       url: ${{ steps.deploy.outputs.url }}
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
+      - uses: pulumi/setup-pulumi@v2
       - uses: actions/cache@v5
         with:
           path: |
@@ -196,13 +197,24 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
+      - run: bun install --frozen-lockfile
+        working-directory: infra
+      - name: Get Descope project ID from Pulumi stack
+        id: descope
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+        run: |
+          DESCOPE_ID=$(cd infra && pulumi stack output projectId --stack preview-pr-${{ github.event.number }})
+          echo "project_id=$DESCOPE_ID" >> $GITHUB_OUTPUT
       - run: npm install --global vercel@latest
       - name: Build & Deploy
         id: deploy
         env:
           VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
           PROCELLA_DATABASE_URL: ${{ needs.neon.outputs.db_url_pooled }}
-          PROCELLA_DESCOPE_PROJECT_ID: ${{ needs.infra.outputs.descope_project_id }}
+          PROCELLA_DESCOPE_PROJECT_ID: ${{ steps.descope.outputs.project_id }}
           PROCELLA_AUTH_MODE: descope
           PROCELLA_BLOB_BACKEND: s3
           PROCELLA_BLOB_S3_BUCKET: ${{ vars.PROCELLA_BLOB_S3_BUCKET }}
@@ -270,7 +282,7 @@ jobs:
   # ── Comment on PR with preview URLs ────────────────────────────────────
   comment:
     name: PR Comment
-    needs: [deploy-app, deploy-docs, infra, neon]
+    needs: [changes, deploy-app, deploy-docs, infra, neon]
     if: always() && (needs.deploy-app.result == 'success' || needs.deploy-docs.result == 'success')
     runs-on: ubuntu-latest
     permissions:
@@ -281,7 +293,7 @@ jobs:
           APP_URL: ${{ needs.deploy-app.outputs.url }}
           DOCS_URL: ${{ needs.deploy-docs.outputs.url }}
           NEON_BRANCH_ID: ${{ needs.neon.outputs.branch_id }}
-          DESCOPE_ID: ${{ needs.infra.outputs.descope_project_id }}
+          AFFECTED: ${{ needs.changes.outputs.affected }}
           PR_NUMBER: ${{ github.event.number }}
         with:
           script: |
@@ -290,7 +302,7 @@ jobs:
             const appUrl = process.env.APP_URL;
             const docsUrl = process.env.DOCS_URL;
             const neonBranch = process.env.NEON_BRANCH_ID;
-            const descopeId = process.env.DESCOPE_ID;
+            const affected = process.env.AFFECTED;
             const prNumber = process.env.PR_NUMBER;
             if (appUrl) {
               lines.push(`| App | [${appUrl}](${appUrl}) |`);
@@ -301,8 +313,14 @@ jobs:
             if (neonBranch) {
               lines.push(`| Neon Branch | \`preview/pr-${prNumber}\` (\`${neonBranch}\`) |`);
             }
-            if (descopeId) {
-              lines.push(`| Descope Project | \`${descopeId}\` |`);
+            if (affected) {
+              lines.push('');
+              lines.push(`<details><summary>Affected packages</summary>\n`);
+              try {
+                const pkgs = JSON.parse(affected);
+                for (const pkg of pkgs) lines.push(`- \`${pkg}\``);
+              } catch { lines.push(`\`${affected}\``); }
+              lines.push(`\n</details>`);
             }
 
             // Find and update existing comment or create new

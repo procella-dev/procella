@@ -367,8 +367,8 @@ export function ResourceDetail() {
 						Initialization Errors
 					</div>
 					<div className="space-y-1.5">
-						{resource.initErrors.map((err, i) => (
-							<div key={i} className="text-sm text-red-300 font-mono">
+						{resource.initErrors.map((err) => (
+							<div key={err} className="text-sm text-red-300 font-mono">
 								{err}
 							</div>
 						))}
@@ -458,8 +458,8 @@ export function ResourceDetail() {
 						</span>
 					</h2>
 					<div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 space-y-1.5">
-						{resource.aliases.map((alias, i) => (
-							<div key={i} className="font-mono text-sm text-zinc-400 break-all">
+						{resource.aliases.map((alias) => (
+							<div key={alias} className="font-mono text-sm text-zinc-400 break-all">
 								{alias}
 							</div>
 						))}
