@@ -116,6 +116,24 @@ export function walkAffected(
 }
 
 // ---------------------------------------------------------------------------
+// Ref resolution — normalize a base ref for git merge-base
+// ---------------------------------------------------------------------------
+
+const SHA_RE = /^[0-9a-f]{7,40}$/;
+
+/**
+ * Resolve a raw base ref to a git-compatible ref.
+ * - Commit SHAs → used as-is
+ * - Already-qualified refs (origin/*, refs/*) → used as-is
+ * - Bare branch names (main, release/1.0) → prefixed with origin/
+ */
+export function resolveBaseRef(raw: string): string {
+	if (SHA_RE.test(raw)) return raw;
+	if (raw.startsWith("origin/") || raw.startsWith("refs/")) return raw;
+	return `origin/${raw}`;
+}
+
+// ---------------------------------------------------------------------------
 // Git diff — get changed files between base and HEAD
 // ---------------------------------------------------------------------------
 
@@ -128,10 +146,7 @@ async function getChangedFiles(baseRef?: string): Promise<string[]> {
 
 	let cmd: string[];
 	if (rawBase) {
-		// SHAs and refs with "/" are used as-is; bare branch names get origin/ prefix
-		// (actions/checkout only creates remote refs, not local branches).
-		const isSha = /^[0-9a-f]{7,40}$/.test(rawBase);
-		const base = isSha || rawBase.includes("/") ? rawBase : `origin/${rawBase}`;
+		const base = resolveBaseRef(rawBase);
 		const mergeBase = Bun.spawnSync(["git", "merge-base", base, "HEAD"], {
 			stdout: "pipe",
 			stderr: "pipe",

@@ -1,5 +1,37 @@
 import { describe, expect, test } from "bun:test";
-import { computeTargets, walkAffected } from "./affected.ts";
+import { computeTargets, resolveBaseRef, walkAffected } from "./affected.ts";
+
+// ---------------------------------------------------------------------------
+// resolveBaseRef
+// ---------------------------------------------------------------------------
+
+describe("resolveBaseRef", () => {
+	test("commit SHA is used as-is", () => {
+		expect(resolveBaseRef("e24d947e6b88d3af0769bfadbe6147f4c11de766")).toBe(
+			"e24d947e6b88d3af0769bfadbe6147f4c11de766",
+		);
+	});
+
+	test("short SHA is used as-is", () => {
+		expect(resolveBaseRef("e24d947")).toBe("e24d947");
+	});
+
+	test("bare branch name gets origin/ prefix", () => {
+		expect(resolveBaseRef("main")).toBe("origin/main");
+	});
+
+	test("branch with slash gets origin/ prefix", () => {
+		expect(resolveBaseRef("release/1.0")).toBe("origin/release/1.0");
+	});
+
+	test("origin/ ref is used as-is", () => {
+		expect(resolveBaseRef("origin/main")).toBe("origin/main");
+	});
+
+	test("refs/ ref is used as-is", () => {
+		expect(resolveBaseRef("refs/heads/main")).toBe("refs/heads/main");
+	});
+});
 
 // ---------------------------------------------------------------------------
 // Test graph matching the real Procella dependency structure
