@@ -128,7 +128,10 @@ async function getChangedFiles(baseRef?: string): Promise<string[]> {
 
 	let cmd: string[];
 	if (rawBase) {
-		const base = rawBase.includes("/") ? rawBase : `origin/${rawBase}`;
+		// SHAs and refs with "/" are used as-is; bare branch names get origin/ prefix
+		// (actions/checkout only creates remote refs, not local branches).
+		const isSha = /^[0-9a-f]{7,40}$/.test(rawBase);
+		const base = isSha || rawBase.includes("/") ? rawBase : `origin/${rawBase}`;
 		const mergeBase = Bun.spawnSync(["git", "merge-base", base, "HEAD"], {
 			stdout: "pipe",
 			stderr: "pipe",
