@@ -194,6 +194,7 @@ function fileToPackage(filePath: string, packages: PackageMap): string | null {
 /** Files outside any package that affect all app targets */
 const GLOBAL_APP_PATTERNS = [
 	"bun.lock",
+	"mise.toml",
 	"package.json",
 	"tsconfig.json",
 	"scripts/build-vercel.sh",
