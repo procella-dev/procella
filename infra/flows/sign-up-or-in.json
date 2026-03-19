@@ -1,29 +1,773 @@
 {
-  "flowId": "sign-up-or-in",
-  "metadata": {
-    "name": "Sign Up or In",
-    "description": "Sign up or sign in with auto tenant provisioning"
-  },
   "contents": {
     "startTask": "30",
     "tasks": {
-      "start": {
-        "id": "start",
-        "name": "start",
-        "next": { "rules": [{ "taskId": "30" }] },
-        "view": { "x": -300, "y": 804 }
+      "1": {
+        "allInputKeys": [
+          "email"
+        ],
+        "calculatedInputKeys": true,
+        "clientScripts": [],
+        "componentsConditions": [],
+        "componentsConnectors": {},
+        "dynamicSelects": {},
+        "htmlTemplate": {
+          "altActionsContainer": {
+            "custom": {},
+            "displayName": "Container",
+            "hidden": false,
+            "isCanvas": true,
+            "linkedNodes": {},
+            "nodes": [],
+            "parent": "ROOT",
+            "props": {
+              "align": "center",
+              "background": "#ffffff00",
+              "data-editor-type": "container",
+              "direction": "row",
+              "id": "altActionsContainer",
+              "justify": "center",
+              "paddingX": "0",
+              "paddingY": "0",
+              "spaceBetween": "4",
+              "st-items-grow": 0,
+              "width": "100%%"
+            },
+            "type": {
+              "resolvedName": "Container"
+            }
+          },
+          "divider": {
+            "custom": {},
+            "displayName": "Divider",
+            "hidden": false,
+            "isCanvas": false,
+            "linkedNodes": {},
+            "nodes": [],
+            "parent": "ROOT",
+            "props": {
+              "children": "or",
+              "full-width": true,
+              "id": "divider",
+              "italic": false,
+              "mode": "primary",
+              "variant": "body1",
+              "vertical": false
+            },
+            "type": {
+              "resolvedName": "Divider"
+            }
+          },
+          "emailField": {
+            "custom": {
+              "type": "input"
+            },
+            "displayName": "Email Input",
+            "hidden": false,
+            "isCanvas": false,
+            "linkedNodes": {},
+            "nodes": [],
+            "parent": "ROOT",
+            "props": {
+              "bordered": true,
+              "copy-to-clipboard": false,
+              "data-errormessage-pattern-mismatch": "Must be a valid email",
+              "data-errormessage-value-missing": "Please fill out this field.",
+              "full-width": true,
+              "id": "emailField",
+              "label": "Email",
+              "label-type": "static",
+              "max": 100,
+              "name": "email",
+              "pattern": "^[\\w\\.\\%\\+\\-']+@[\\w\\.\\-]+\\.[A-Za-z]{2,}$",
+              "placeholder": "Enter your email",
+              "required": true,
+              "size": "md",
+              "type": "email"
+            },
+            "type": {
+              "resolvedName": "EmailInput"
+            }
+          },
+          "errorMsg": {
+            "custom": {},
+            "displayName": "Error Message",
+            "hidden": false,
+            "isCanvas": false,
+            "linkedNodes": {},
+            "nodes": [],
+            "parent": "ROOT",
+            "props": {
+              "data-type": "error-message",
+              "full-width": false,
+              "hide-when-empty": true,
+              "id": "errorMsg",
+              "italic": false,
+              "link-target-blank": true,
+              "mode": "error",
+              "text-align": "center",
+              "variant": "body1"
+            },
+            "type": {
+              "resolvedName": "ErrorMessage"
+            }
+          },
+          "gKDHyrEeGQ": {
+            "custom": {
+              "subType": "social",
+              "type": "button"
+            },
+            "displayName": "Google Button",
+            "hidden": false,
+            "isCanvas": false,
+            "linkedNodes": {},
+            "nodes": [],
+            "parent": "socialContainer",
+            "props": {
+              "aria-label": "Continue with Google",
+              "children": "",
+              "color": "primary",
+              "data-descope-provider": "google",
+              "data-type": "social",
+              "formNoValidate": true,
+              "full-width": false,
+              "id": "gKDHyrEeGQ",
+              "mode": "primary",
+              "shape": "square",
+              "size": "md",
+              "st-label-spacing": "10px",
+              "startIcon": "google",
+              "startIconColorText": false,
+              "tooltipText": "Tooltip text",
+              "variant": "outline"
+            },
+            "type": {
+              "resolvedName": "GoogleButton"
+            }
+          },
+          "LdgRgSLZ0h": {
+            "custom": {
+              "type": "button"
+            },
+            "displayName": "Biometrics Button",
+            "hidden": false,
+            "isCanvas": false,
+            "linkedNodes": {},
+            "nodes": [],
+            "parent": "socialContainer",
+            "props": {
+              "aria-label": "Sign in with biometrics",
+              "children": "",
+              "color": "primary",
+              "data-type": "biometrics",
+              "formNoValidate": false,
+              "full-width": false,
+              "id": "LdgRgSLZ0h",
+              "size": "md",
+              "st-icon-color": "currentColor",
+              "st-label-spacing": "10px",
+              "startIcon": "fingerprint",
+              "startIconColorText": true,
+              "tooltipText": "Tooltip text",
+              "variant": "outline"
+            },
+            "type": {
+              "resolvedName": "BiometricsButton"
+            }
+          },
+          "mCuIwaR6mv": {
+            "custom": {
+              "subType": "social",
+              "type": "button"
+            },
+            "displayName": "Microsoft Button",
+            "hidden": false,
+            "isCanvas": false,
+            "linkedNodes": {},
+            "nodes": [],
+            "parent": "socialContainer",
+            "props": {
+              "aria-label": "Sign in with Microsoft",
+              "children": "",
+              "color": "primary",
+              "data-descope-provider": "microsoft",
+              "data-type": "social",
+              "formNoValidate": true,
+              "full-width": false,
+              "id": "mCuIwaR6mv",
+              "shape": "square",
+              "size": "md",
+              "st-label-spacing": "10px",
+              "startIcon": "microsoft",
+              "startIconColorText": false,
+              "tooltipText": "Tooltip text",
+              "variant": "outline"
+            },
+            "type": {
+              "resolvedName": "MicrosoftButton"
+            }
+          },
+          "mGpwQF8o64": {
+            "custom": {
+              "subType": "social",
+              "type": "button"
+            },
+            "displayName": "Github Button",
+            "hidden": false,
+            "isCanvas": false,
+            "linkedNodes": {},
+            "nodes": [],
+            "parent": "socialContainer",
+            "props": {
+              "aria-label": "Sign in with Github",
+              "children": "",
+              "color": "primary",
+              "data-descope-provider": "github",
+              "data-type": "social",
+              "formNoValidate": true,
+              "full-width": false,
+              "id": "mGpwQF8o64",
+              "shape": "square",
+              "size": "md",
+              "st-label-spacing": "10px",
+              "startIcon": "github",
+              "startIconColorText": false,
+              "tooltipText": "Tooltip text",
+              "variant": "outline"
+            },
+            "type": {
+              "resolvedName": "GithubButton"
+            }
+          },
+          "PiNPGdsZKA": {
+            "custom": {
+              "type": "submit"
+            },
+            "displayName": "Button",
+            "hidden": false,
+            "isCanvas": false,
+            "linkedNodes": {},
+            "nodes": [],
+            "parent": "ROOT",
+            "props": {
+              "aria-label": "Continue",
+              "auto-submit": true,
+              "children": "Continue",
+              "color": "primary",
+              "data-type": "submit",
+              "formNoValidate": false,
+              "full-width": true,
+              "id": "PiNPGdsZKA",
+              "mode": "primary",
+              "size": "md",
+              "tooltipText": "Tooltip text",
+              "variant": "contained"
+            },
+            "type": {
+              "resolvedName": "Button"
+            }
+          },
+          "ROOT": {
+            "custom": {},
+            "displayName": "Container",
+            "hidden": false,
+            "isCanvas": true,
+            "linkedNodes": {},
+            "nodes": [
+              "emailField",
+              "PiNPGdsZKA",
+              "errorMsg",
+              "divider",
+              "socialContainer",
+              "altActionsContainer"
+            ],
+            "props": {
+              "align": "center",
+              "background": "",
+              "data-editor-type": "container",
+              "direction": "column",
+              "id": "ROOT",
+              "justify": "center",
+              "paddingX": "4",
+              "paddingY": "8",
+              "spaceBetween": "4",
+              "st-items-grow": 0,
+              "width": "100%%"
+            },
+            "type": {
+              "resolvedName": "Container"
+            }
+          },
+          "S3lBSkj9NS": {
+            "custom": {
+              "type": "button"
+            },
+            "displayName": "SSO Button",
+            "hidden": false,
+            "isCanvas": false,
+            "linkedNodes": {},
+            "nodes": [],
+            "parent": "socialContainer",
+            "props": {
+              "aria-label": "Sign in with SSO",
+              "children": "",
+              "color": "primary",
+              "data-type": "sso",
+              "formNoValidate": false,
+              "full-width": false,
+              "id": "S3lBSkj9NS",
+              "shape": "square",
+              "size": "md",
+              "st-icon-color": "currentColor",
+              "st-label-spacing": "10px",
+              "startIcon": "sso",
+              "startIconColorText": true,
+              "tooltipText": "Tooltip text",
+              "variant": "outline"
+            },
+            "type": {
+              "resolvedName": "SSOButton"
+            }
+          },
+          "socialContainer": {
+            "custom": {},
+            "displayName": "Container",
+            "hidden": false,
+            "isCanvas": true,
+            "linkedNodes": {},
+            "nodes": [
+              "mCuIwaR6mv",
+              "mGpwQF8o64",
+              "gKDHyrEeGQ",
+              "LdgRgSLZ0h",
+              "S3lBSkj9NS"
+            ],
+            "parent": "ROOT",
+            "props": {
+              "align": "start",
+              "background": "#ffffff00",
+              "data-editor-type": "container",
+              "direction": "row",
+              "id": "socialContainer",
+              "justify": "center",
+              "paddingX": "0",
+              "paddingY": "0",
+              "spaceBetween": "2",
+              "st-items-grow": 0,
+              "width": "100%%"
+            },
+            "type": {
+              "resolvedName": "Container"
+            }
+          }
+        },
+        "id": "1",
+        "inputKeys": [
+          "email"
+        ],
+        "inputsMetadata": [
+          {
+            "displayName": "Email Input",
+            "key": "email"
+          }
+        ],
+        "interactions": [
+          {
+            "icon": "google",
+            "id": "gKDHyrEeGQ",
+            "label": "",
+            "subType": "social",
+            "type": "button"
+          },
+          {
+            "icon": "github",
+            "id": "mGpwQF8o64",
+            "label": "",
+            "subType": "social",
+            "type": "button"
+          },
+          {
+            "icon": "microsoft",
+            "id": "mCuIwaR6mv",
+            "label": "",
+            "subType": "social",
+            "type": "button"
+          },
+          {
+            "icon": "sso",
+            "id": "S3lBSkj9NS",
+            "label": "",
+            "type": "button"
+          },
+          {
+            "icon": "fingerprint",
+            "id": "LdgRgSLZ0h",
+            "label": "",
+            "type": "button"
+          }
+        ],
+        "name": "Sign Up Or In Screen",
+        "next": {
+          "rules": [
+            {
+              "interactionId": "S3lBSkj9NS",
+              "taskId": "12"
+            },
+            {
+              "interactionId": "LdgRgSLZ0h",
+              "taskId": "35"
+            },
+            {
+              "interactionId": "gKDHyrEeGQ",
+              "taskId": "14"
+            },
+            {
+              "interactionId": "mGpwQF8o64",
+              "taskId": "14"
+            },
+            {
+              "interactionId": "mCuIwaR6mv",
+              "taskId": "14"
+            }
+          ]
+        },
+        "recoveryCodesData": [],
+        "screenId": "SC2TvN6n4WW1LhLm2nRuEAGEL4U9S",
+        "type": "screen",
+        "view": {
+          "x": 2436,
+          "y": 420
+        }
+      },
+      "100": {
+        "conditions": [
+          {
+            "atomicConditions": [
+              {
+                "operator": "empty",
+                "predicate": {
+                  "type": "inline",
+                  "value": ""
+                },
+                "target": {
+                  "type": "context",
+                  "value": "authInfo.user.userTenants"
+                }
+              }
+            ],
+            "interactionId": "no-tenant",
+            "name": "No tenant"
+          },
+          {
+            "interactionId": "ELSE",
+            "name": "Has tenant"
+          }
+        ],
+        "id": "100",
+        "name": "Has tenant?",
+        "next": {
+          "rules": [
+            {
+              "interactionId": "no-tenant",
+              "taskId": "101"
+            },
+            {
+              "interactionId": "ELSE",
+              "taskId": "9"
+            }
+          ]
+        },
+        "type": "condition",
+        "view": {
+          "x": 3408,
+          "y": 312
+        }
+      },
+      "101": {
+        "action": "createTenant",
+        "arguments": {
+          "dynamicId": {
+            "type": "inline",
+            "value": ""
+          },
+          "dynamicName": {
+            "type": "context",
+            "value": "authInfo.user.email"
+          },
+          "dynamicSelfProvision": {
+            "type": "inline",
+            "value": ""
+          },
+          "parentId": {
+            "type": "inline",
+            "value": ""
+          },
+          "setAsSelectedTenant": {
+            "type": "inline",
+            "value": true
+          },
+          "tenantPropertiesDefinitions": {
+            "type": "inline",
+            "value": null
+          },
+          "tenantRoles": {
+            "type": "inline",
+            "value": "admin,Tenant Admin"
+          }
+        },
+        "errorHandlingV2": {
+          "ActionErrorParseCustomClaims": {
+            "errorHandlingType": "automatic"
+          },
+          "ActionErrorUpdateJWT": {
+            "errorHandlingType": "automatic"
+          },
+          "AssignRoles": {
+            "errorHandlingType": "automatic"
+          },
+          "GetDefaultRoles": {
+            "errorHandlingType": "automatic"
+          },
+          "InvalidJWT": {
+            "errorHandlingType": "automatic"
+          },
+          "TenantCreation": {
+            "errorHandlingType": "automatic"
+          },
+          "TenantExists": {
+            "errorHandlingType": "automatic"
+          }
+        },
+        "id": "101",
+        "name": "Create Tenant",
+        "next": {
+          "rules": [
+            {
+              "interactionId": "success",
+              "taskId": "9"
+            }
+          ]
+        },
+        "type": "automated",
+        "view": {
+          "x": 3888,
+          "y": 324
+        }
+      },
+      "12": {
+        "action": "saml-start",
+        "arguments": {
+          "exchangeStepId": {
+            "type": "inline",
+            "value": "12.end"
+          },
+          "forceAuthn": {
+            "type": "inline",
+            "value": ""
+          },
+          "loginHint": {
+            "type": "inline",
+            "value": ""
+          },
+          "prompt": {
+            "type": "inline",
+            "value": []
+          },
+          "redirectUrl": {
+            "type": "inline",
+            "value": ""
+          },
+          "verifyInitiatedEmail": {
+            "type": "inline",
+            "value": ""
+          }
+        },
+        "id": "12",
+        "name": "SSO",
+        "next": {
+          "rules": [
+            {
+              "interactionId": "success",
+              "taskId": "12.end"
+            }
+          ]
+        },
+        "type": "automated",
+        "view": {
+          "x": 2916,
+          "y": 36
+        }
+      },
+      "12.end": {
+        "action": "exchange-saml-code",
+        "arguments": {
+          "exchangeStepId": {
+            "type": "inline",
+            "value": "12.end"
+          },
+          "forceAuthn": {
+            "type": "inline",
+            "value": ""
+          },
+          "loginHint": {
+            "type": "inline",
+            "value": ""
+          },
+          "prompt": {
+            "type": "inline",
+            "value": []
+          },
+          "redirectUrl": {
+            "type": "inline",
+            "value": ""
+          },
+          "verifyInitiatedEmail": {
+            "type": "inline",
+            "value": ""
+          }
+        },
+        "id": "12.end",
+        "name": "SSO",
+        "next": {
+          "rules": [
+            {
+              "interactionId": "success",
+              "taskId": "100"
+            }
+          ]
+        },
+        "type": "automated",
+        "view": {
+          "x": 2916,
+          "y": 36
+        }
+      },
+      "14": {
+        "action": "oauth-start",
+        "arguments": {
+          "allowSetDefaultProvider": {
+            "type": "inline",
+            "value": ""
+          },
+          "defaultProvider": {
+            "type": "inline",
+            "value": ""
+          },
+          "exchangeStepId": {
+            "type": "inline",
+            "value": "14.end"
+          },
+          "forceNonNative": {
+            "type": "inline",
+            "value": ""
+          },
+          "loginHint": {
+            "type": "inline",
+            "value": ""
+          },
+          "popup": {
+            "type": "inline",
+            "value": ""
+          },
+          "prompt": {
+            "type": "inline",
+            "value": []
+          },
+          "rawResponse": {
+            "type": "inline",
+            "value": ""
+          },
+          "redirectUrl": {
+            "type": "inline",
+            "value": ""
+          }
+        },
+        "id": "14",
+        "name": "OAuth",
+        "next": {
+          "rules": [
+            {
+              "interactionId": "success",
+              "taskId": "14.end"
+            }
+          ]
+        },
+        "type": "automated",
+        "view": {
+          "x": 2916,
+          "y": 420
+        }
+      },
+      "14.end": {
+        "action": "exchange-oauth-code",
+        "arguments": {
+          "allowSetDefaultProvider": {
+            "type": "inline",
+            "value": ""
+          },
+          "defaultProvider": {
+            "type": "inline",
+            "value": ""
+          },
+          "exchangeStepId": {
+            "type": "inline",
+            "value": "14.end"
+          },
+          "forceNonNative": {
+            "type": "inline",
+            "value": ""
+          },
+          "loginHint": {
+            "type": "inline",
+            "value": ""
+          },
+          "popup": {
+            "type": "inline",
+            "value": ""
+          },
+          "prompt": {
+            "type": "inline",
+            "value": []
+          },
+          "rawResponse": {
+            "type": "inline",
+            "value": ""
+          },
+          "redirectUrl": {
+            "type": "inline",
+            "value": ""
+          }
+        },
+        "id": "14.end",
+        "name": "OAuth",
+        "next": {
+          "rules": [
+            {
+              "interactionId": "success",
+              "taskId": "100"
+            }
+          ]
+        },
+        "type": "automated",
+        "view": {
+          "x": 2916,
+          "y": 420
+        }
       },
       "30": {
-        "id": "30",
-        "name": "Check if IdP initiated or Remembered User",
-        "type": "condition",
         "conditions": [
           {
             "atomicConditions": [
               {
                 "operator": "is-true",
-                "predicate": { "type": "inline", "value": "" },
-                "target": { "type": "context", "value": "idpInitiated" }
+                "predicate": {
+                  "type": "inline",
+                  "value": ""
+                },
+                "target": {
+                  "type": "context",
+                  "value": "idpInitiated"
+                }
               }
             ],
             "interactionId": "xxryem0j80p",
@@ -33,141 +777,239 @@
             "atomicConditions": [
               {
                 "operator": "not-empty",
-                "predicate": { "type": "inline", "value": "" },
-                "target": { "type": "context", "value": "lastAuth.loginId" }
+                "predicate": {
+                  "type": "inline",
+                  "value": ""
+                },
+                "target": {
+                  "type": "context",
+                  "value": "lastAuth.loginId"
+                }
               }
             ],
             "interactionId": "tbtw4say85",
             "name": "Remembered user"
           },
-          { "interactionId": "ELSE", "name": "Fresh user" }
-        ],
-        "next": {
-          "rules": [
-            { "interactionId": "xxryem0j80p", "taskId": "12" },
-            { "interactionId": "tbtw4say85", "taskId": "31" },
-            { "interactionId": "ELSE", "taskId": "39" }
-          ]
-        },
-        "view": { "x": -96, "y": 720 }
-      },
-      "1": {
-        "id": "1",
-        "name": "Sign Up Or In Screen",
-        "type": "screen",
-        "screenId": "SC2TvN6n4WW1LhLm2nRuEAGEL4U9S",
-        "next": {
-          "rules": [
-            { "interactionId": "S2pZAnYwxz", "taskId": "12" },
-            { "interactionId": "PiNPGdsZKA", "taskId": "36" },
-            { "interactionId": "my_KoUs1g1", "taskId": "35" },
-            { "interactionId": "gKDHyrEeGQ", "taskId": "14" },
-            { "interactionId": "lMCfAHLBS3", "taskId": "14" },
-            { "interactionId": "mAGh2EpnlA", "taskId": "14" }
-          ]
-        },
-        "view": { "x": 1164, "y": 828 }
-      },
-      "12": {
-        "id": "12",
-        "name": "SSO",
-        "type": "automated",
-        "action": "saml-start",
-        "arguments": {
-          "exchangeStepId": { "type": "inline", "value": "12.end" },
-          "redirectUrl": { "type": "inline", "value": "" }
-        },
-        "next": { "rules": [{ "interactionId": "success", "taskId": "12.end" }] },
-        "view": { "x": 1632, "y": 348 }
-      },
-      "12.end": {
-        "id": "12.end",
-        "name": "SSO",
-        "type": "automated",
-        "action": "exchange-saml-code",
-        "arguments": {},
-        "next": { "rules": [{ "interactionId": "success", "taskId": "22" }] },
-        "view": { "x": 1632, "y": 348 }
-      },
-      "14": {
-        "id": "14",
-        "name": "OAuth",
-        "type": "automated",
-        "action": "oauth-start",
-        "arguments": {
-          "exchangeStepId": { "type": "inline", "value": "14.end" },
-          "redirectUrl": { "type": "inline", "value": "" }
-        },
-        "next": { "rules": [{ "interactionId": "success", "taskId": "14.end" }] },
-        "view": { "x": 1632, "y": 828 }
-      },
-      "14.end": {
-        "id": "14.end",
-        "name": "OAuth",
-        "type": "automated",
-        "action": "exchange-oauth-code",
-        "arguments": {},
-        "next": { "rules": [{ "interactionId": "success", "taskId": "22" }] },
-        "view": { "x": 1632, "y": 828 }
-      },
-      "22": {
-        "id": "22",
-        "name": "Is new user?",
-        "type": "condition",
-        "conditions": [
           {
-            "atomicConditions": [
-              {
-                "operator": "is-true",
-                "predicate": { "ArgType": "", "type": "inline", "value": "" },
-                "target": { "ArgType": "", "type": "context", "value": "authInfo.firstSeen" }
-              }
-            ],
-            "interactionId": "iluqssh9ju",
-            "name": "New user"
-          },
-          { "interactionId": "ELSE", "name": "Existing user" }
+            "interactionId": "ELSE",
+            "name": "Fresh user"
+          }
         ],
+        "id": "30",
+        "name": "Check if IdP initiated or Remembered User",
         "next": {
           "rules": [
-            { "interactionId": "iluqssh9ju", "taskId": "34" },
-            { "interactionId": "ELSE", "taskId": "100" }
+            {
+              "interactionId": "xxryem0j80p",
+              "taskId": "12"
+            },
+            {
+              "interactionId": "tbtw4say85",
+              "taskId": "31"
+            },
+            {
+              "interactionId": "ELSE",
+              "taskId": "39"
+            }
           ]
         },
-        "view": { "x": 2088, "y": 456 }
-      },
-      "24": {
-        "id": "24",
-        "name": "Update User / Properties",
-        "type": "automated",
-        "action": "update-user-properties",
-        "next": { "rules": [{ "interactionId": "success", "taskId": "100" }] },
-        "view": { "x": 3468, "y": 468 }
+        "type": "condition",
+        "view": {
+          "x": 0,
+          "y": 72
+        }
       },
       "31": {
+        "allInputKeys": [],
+        "calculatedInputKeys": true,
+        "clientScripts": [],
+        "componentsConditions": [],
+        "componentsConnectors": {},
+        "contextKeys": [
+          "lastAuth.loginId"
+        ],
+        "dynamicSelects": {},
+        "htmlTemplate": {
+          "errorMsg": {
+            "custom": {},
+            "displayName": "Error Message",
+            "hidden": false,
+            "isCanvas": false,
+            "linkedNodes": {},
+            "nodes": [],
+            "parent": "ROOT",
+            "props": {
+              "data-type": "error-message",
+              "full-width": false,
+              "hide-when-empty": true,
+              "id": "errorMsg",
+              "italic": false,
+              "link-target-blank": true,
+              "mode": "error",
+              "text-align": "center",
+              "variant": "body1"
+            },
+            "type": {
+              "resolvedName": "ErrorMessage"
+            }
+          },
+          "hqGqqjK2Uk": {
+            "custom": {
+              "type": "button"
+            },
+            "displayName": "Button",
+            "hidden": false,
+            "isCanvas": false,
+            "linkedNodes": {},
+            "nodes": [],
+            "parent": "ROOT",
+            "props": {
+              "aria-label": "Use a different account",
+              "children": "Use a different account",
+              "color": "primary",
+              "data-type": "button",
+              "formNoValidate": true,
+              "full-width": true,
+              "id": "hqGqqjK2Uk",
+              "mode": "primary",
+              "size": "md",
+              "tooltipText": "Tooltip text",
+              "variant": "text"
+            },
+            "type": {
+              "resolvedName": "Button"
+            }
+          },
+          "HVl8IS0LWV": {
+            "custom": {
+              "type": "button"
+            },
+            "displayName": "Button",
+            "hidden": false,
+            "isCanvas": false,
+            "linkedNodes": {},
+            "nodes": [],
+            "parent": "ROOT",
+            "props": {
+              "aria-label": "Continue",
+              "children": "Continue",
+              "color": "primary",
+              "data-type": "button",
+              "formNoValidate": true,
+              "full-width": true,
+              "id": "HVl8IS0LWV",
+              "mode": "primary",
+              "size": "md",
+              "tooltipText": "Tooltip text",
+              "variant": "contained"
+            },
+            "type": {
+              "resolvedName": "Button"
+            }
+          },
+          "rmSubtitle": {
+            "custom": {},
+            "displayName": "Text",
+            "hidden": false,
+            "isCanvas": false,
+            "linkedNodes": {},
+            "nodes": [],
+            "parent": "ROOT",
+            "props": {
+              "children": "Welcome back\n\n{{lastAuth.loginId}}\n\n",
+              "full-width": false,
+              "id": "rmSubtitle",
+              "isEnriched": true,
+              "italic": false,
+              "link-target-blank": true,
+              "mode": "body1",
+              "text-align": "center",
+              "tooltipText": "Tooltip text",
+              "variant": "body1"
+            },
+            "type": {
+              "resolvedName": "Text"
+            }
+          },
+          "ROOT": {
+            "custom": {},
+            "displayName": "Container",
+            "hidden": false,
+            "isCanvas": true,
+            "linkedNodes": {},
+            "nodes": [
+              "rmSubtitle",
+              "HVl8IS0LWV",
+              "hqGqqjK2Uk",
+              "errorMsg"
+            ],
+            "props": {
+              "align": "center",
+              "background": "",
+              "data-editor-type": "container",
+              "direction": "column",
+              "id": "ROOT",
+              "justify": "center",
+              "paddingX": "4",
+              "paddingY": "8",
+              "spaceBetween": "4",
+              "st-items-grow": 0,
+              "width": "100%%"
+            },
+            "type": {
+              "resolvedName": "Container"
+            }
+          }
+        },
         "id": "31",
+        "inputsMetadata": [],
+        "interactions": [
+          {
+            "id": "HVl8IS0LWV",
+            "label": "Continue",
+            "type": "button"
+          },
+          {
+            "id": "hqGqqjK2Uk",
+            "label": "Use a different account",
+            "type": "button"
+          }
+        ],
         "name": "Remember Me Screen",
-        "type": "screen",
-        "screenId": "SC2TvN6sqIIsgh2LskZFV5ECv0Et7",
         "next": {
           "rules": [
-            { "interactionId": "HVl8IS0LWV", "taskId": "32" },
-            { "interactionId": "hqGqqjK2Uk", "taskId": "1" }
+            {
+              "interactionId": "HVl8IS0LWV",
+              "taskId": "32"
+            },
+            {
+              "interactionId": "hqGqqjK2Uk",
+              "taskId": "1"
+            }
           ]
         },
-        "view": { "x": 708, "y": 552 }
+        "recoveryCodesData": [],
+        "screenId": "SC2TvN6sqIIsgh2LskZFV5ECv0Et7",
+        "type": "screen",
+        "view": {
+          "x": 468,
+          "y": 120
+        }
       },
       "32": {
-        "id": "32",
-        "name": "Last authentication method",
-        "type": "condition",
         "conditions": [
           {
             "atomicConditions": [
               {
                 "operator": "equal",
-                "predicate": { "ArgType": "", "type": "inline", "value": "saml" },
-                "target": { "ArgType": "", "type": "context", "value": "lastAuth.authMethod" }
+                "predicate": {
+                  "type": "inline",
+                  "value": "saml"
+                },
+                "target": {
+                  "type": "context",
+                  "value": "lastAuth.authMethod"
+                }
               }
             ],
             "interactionId": "8ye60huzeo",
@@ -177,8 +1019,14 @@
             "atomicConditions": [
               {
                 "operator": "equal",
-                "predicate": { "ArgType": "", "type": "inline", "value": "webauthn" },
-                "target": { "ArgType": "", "type": "context", "value": "lastAuth.authMethod" }
+                "predicate": {
+                  "type": "inline",
+                  "value": "webauthn"
+                },
+                "target": {
+                  "type": "context",
+                  "value": "lastAuth.authMethod"
+                }
               }
             ],
             "interactionId": "174suf8ky1n",
@@ -188,833 +1036,565 @@
             "atomicConditions": [
               {
                 "operator": "equal",
-                "predicate": { "ArgType": "", "type": "inline", "value": "oauth" },
-                "target": { "ArgType": "", "type": "context", "value": "lastAuth.authMethod" }
+                "predicate": {
+                  "type": "inline",
+                  "value": "oauth"
+                },
+                "target": {
+                  "type": "context",
+                  "value": "lastAuth.authMethod"
+                }
               }
             ],
             "interactionId": "ro9enjjqck",
             "name": "OAuth"
           },
-          { "interactionId": "ELSE", "name": "Enchanted Link" }
-        ],
-        "next": {
-          "rules": [
-            { "interactionId": "8ye60huzeo", "taskId": "12" },
-            { "interactionId": "174suf8ky1n", "taskId": "35" },
-            { "interactionId": "ro9enjjqck", "taskId": "14" },
-            { "interactionId": "ELSE", "taskId": "36" }
-          ]
-        },
-        "view": { "x": 1164, "y": 372 }
-      },
-      "34": {
-        "id": "34",
-        "name": "Is name available?",
-        "type": "condition",
-        "conditions": [
           {
-            "atomicConditions": [
-              {
-                "operator": "empty",
-                "predicate": { "ArgType": "", "type": "inline", "value": "" },
-                "target": { "ArgType": "", "type": "context", "value": "fullName" }
-              }
-            ],
-            "interactionId": "y82dyy7moh",
-            "name": "Name missing"
-          },
-          { "interactionId": "ELSE", "name": "Name available" }
+            "interactionId": "ELSE",
+            "name": "Enchanted Link"
+          }
         ],
+        "id": "32",
+        "name": "Last authentication method",
         "next": {
           "rules": [
-            { "interactionId": "y82dyy7moh", "taskId": "8" },
-            { "interactionId": "ELSE", "taskId": "100" }
+            {
+              "interactionId": "8ye60huzeo",
+              "taskId": "12"
+            },
+            {
+              "interactionId": "174suf8ky1n",
+              "taskId": "35"
+            },
+            {
+              "interactionId": "ro9enjjqck",
+              "taskId": "14"
+            },
+            {
+              "interactionId": "ELSE",
+              "taskId": "36"
+            }
           ]
         },
-        "view": { "x": 2556, "y": 396 }
+        "type": "condition",
+        "view": {
+          "x": 984,
+          "y": 156
+        }
       },
       "35": {
+        "action": "webauthn-sign-in-start",
+        "arguments": {
+          "finishStepId": {
+            "type": "inline",
+            "value": "35.end"
+          },
+          "userVerificationDiscouraged": {
+            "type": "inline",
+            "value": ""
+          }
+        },
         "id": "35",
         "name": "Sign In/ Passkeys (WebAuthn)",
+        "next": {
+          "rules": [
+            {
+              "interactionId": "success",
+              "taskId": "35.end"
+            }
+          ]
+        },
         "type": "automated",
-        "action": "webauthn-sign-in-start",
-        "arguments": { "finishStepId": { "type": "inline", "value": "35.end" } },
-        "next": { "rules": [{ "interactionId": "success", "taskId": "35.end" }] },
-        "view": { "x": 1632, "y": 1104 }
+        "view": {
+          "x": 2916,
+          "y": 276
+        }
       },
       "35.end": {
+        "action": "webauthn-sign-in-finish",
+        "arguments": {
+          "finishStepId": {
+            "type": "inline",
+            "value": "35.end"
+          },
+          "userVerificationDiscouraged": {
+            "type": "inline",
+            "value": ""
+          }
+        },
         "id": "35.end",
         "name": "Sign In/ Passkeys (WebAuthn)",
+        "next": {
+          "rules": [
+            {
+              "interactionId": "success",
+              "taskId": "100"
+            }
+          ]
+        },
         "type": "automated",
-        "action": "webauthn-sign-in-finish",
-        "arguments": {},
-        "next": { "rules": [{ "interactionId": "success", "taskId": "22" }] },
-        "view": { "x": 1632, "y": 1104 }
+        "view": {
+          "x": 2916,
+          "y": 276
+        }
       },
       "36": {
-        "id": "36",
-        "name": "Sign Up or In / Enchanted Link / Email",
-        "type": "automated",
         "action": "sign-up-or-in-enchanted-link-email",
         "arguments": {
-          "providerId": { "type": "inline", "value": "" },
-          "templateId": { "type": "inline", "value": "" },
-          "uri": { "type": "inline", "value": "" },
-          "verifyStepId": { "type": "inline", "value": "36.end" }
+          "extraTemplateVals": {
+            "type": "inline",
+            "value": ""
+          },
+          "providerId": {
+            "type": "inline",
+            "value": ""
+          },
+          "skipVerify": {
+            "type": "inline",
+            "value": ""
+          },
+          "templateId": {
+            "type": "inline",
+            "value": ""
+          },
+          "uri": {
+            "type": "inline",
+            "value": ""
+          },
+          "verifyStepId": {
+            "type": "inline",
+            "value": "36.end"
+          }
         },
+        "id": "36",
+        "name": "Sign Up or In / Enchanted Link / Email",
         "next": {
           "rules": [
-            { "interactionId": "success", "taskId": "37" },
-            { "interactionId": "success", "taskId": "36.end" }
+            {
+              "interactionId": "success",
+              "taskId": "37"
+            },
+            {
+              "interactionId": "success",
+              "taskId": "36.end"
+            }
           ]
         },
-        "view": { "x": 1632, "y": 36 }
+        "type": "automated",
+        "view": {
+          "x": 1464,
+          "y": 288
+        }
       },
       "36.end": {
+        "action": "verify-enchanted-link",
+        "arguments": {
+          "extraTemplateVals": {
+            "type": "inline",
+            "value": ""
+          },
+          "providerId": {
+            "type": "inline",
+            "value": ""
+          },
+          "skipVerify": {
+            "type": "inline",
+            "value": ""
+          },
+          "templateId": {
+            "type": "inline",
+            "value": ""
+          },
+          "uri": {
+            "type": "inline",
+            "value": ""
+          },
+          "verifyStepId": {
+            "type": "inline",
+            "value": "36.end"
+          }
+        },
         "id": "36.end",
         "name": "Sign Up or In / Enchanted Link / Email",
-        "type": "automated",
-        "action": "verify-enchanted-link",
-        "arguments": {},
-        "next": { "rules": [{ "interactionId": "success", "taskId": "38" }] },
-        "view": { "x": 1632, "y": 36 }
-      },
-      "37": {
-        "id": "37",
-        "name": "Enchanted Link Sent",
-        "type": "screen",
-        "screenId": "SC2TvN6lsDcgko58wIDVu1C6davyi",
         "next": {
           "rules": [
-            { "interactionId": "EbW8KMdjAx", "taskId": "1" },
-            { "interactionId": "polling", "taskId": "22" },
-            { "interactionId": "resend", "taskId": "36" }
+            {
+              "interactionId": "success",
+              "taskId": "38"
+            }
           ]
         },
-        "view": { "x": 1632, "y": -324 }
+        "type": "automated",
+        "view": {
+          "x": 1464,
+          "y": 288
+        }
+      },
+      "37": {
+        "allInputKeys": [],
+        "calculatedInputKeys": true,
+        "clientScripts": [],
+        "componentsConditions": [],
+        "componentsConnectors": {},
+        "contextKeys": [
+          "sentTo.maskedEmail"
+        ],
+        "dynamicSelects": {},
+        "htmlTemplate": {
+          "EbW8KMdjAx": {
+            "custom": {
+              "type": "button"
+            },
+            "displayName": "Button",
+            "hidden": false,
+            "isCanvas": false,
+            "linkedNodes": {},
+            "nodes": [],
+            "parent": "ROOT",
+            "props": {
+              "aria-label": "Back to sign in",
+              "children": "Back to sign in",
+              "color": "primary",
+              "data-type": "button",
+              "formNoValidate": true,
+              "full-width": true,
+              "id": "EbW8KMdjAx",
+              "mode": "primary",
+              "size": "md",
+              "tooltipText": "Tooltip text",
+              "variant": "outline"
+            },
+            "type": {
+              "resolvedName": "Button"
+            }
+          },
+          "elTitle": {
+            "custom": {},
+            "displayName": "Text",
+            "hidden": false,
+            "isCanvas": false,
+            "linkedNodes": {},
+            "nodes": [],
+            "parent": "ROOT",
+            "props": {
+              "children": "Magic link sent to\n\n{{sentTo.maskedEmail}}\n\nClick the link in the email to sign in.\nThis page will update automatically.\n\n",
+              "full-width": false,
+              "id": "elTitle",
+              "isEnriched": true,
+              "italic": false,
+              "link-target-blank": true,
+              "mode": "primary",
+              "text-align": "center",
+              "tooltipText": "Tooltip text",
+              "variant": "body1"
+            },
+            "type": {
+              "resolvedName": "Text"
+            }
+          },
+          "errorMsg": {
+            "custom": {},
+            "displayName": "Error Message",
+            "hidden": false,
+            "isCanvas": false,
+            "linkedNodes": {},
+            "nodes": [],
+            "parent": "ROOT",
+            "props": {
+              "data-type": "error-message",
+              "full-width": false,
+              "hide-when-empty": true,
+              "id": "errorMsg",
+              "italic": false,
+              "link-target-blank": true,
+              "mode": "error",
+              "text-align": "center",
+              "variant": "body1"
+            },
+            "type": {
+              "resolvedName": "ErrorMessage"
+            }
+          },
+          "pollingLoader": {
+            "custom": {
+              "type": "polling"
+            },
+            "displayName": "Polling",
+            "hidden": false,
+            "isCanvas": false,
+            "linkedNodes": {},
+            "nodes": [],
+            "parent": "ROOT",
+            "props": {
+              "color": "primary",
+              "data-type": "polling",
+              "id": "polling",
+              "size": "md",
+              "variant": "linear"
+            },
+            "type": {
+              "resolvedName": "PollingLoader"
+            }
+          },
+          "ROOT": {
+            "custom": {},
+            "displayName": "Container",
+            "hidden": false,
+            "isCanvas": true,
+            "linkedNodes": {},
+            "nodes": [
+              "elTitle",
+              "pollingLoader",
+              "EbW8KMdjAx",
+              "errorMsg"
+            ],
+            "props": {
+              "align": "center",
+              "background": "",
+              "data-editor-type": "container",
+              "direction": "column",
+              "id": "ROOT",
+              "justify": "center",
+              "paddingX": "4",
+              "paddingY": "8",
+              "spaceBetween": "4",
+              "st-items-grow": 0,
+              "width": "100%%"
+            },
+            "type": {
+              "resolvedName": "Container"
+            }
+          }
+        },
+        "id": "37",
+        "inputsMetadata": [],
+        "interactions": [
+          {
+            "id": "EbW8KMdjAx",
+            "label": "Back to sign in",
+            "type": "button"
+          },
+          {
+            "id": "polling",
+            "label": "Polling",
+            "type": "polling"
+          },
+          {
+            "icon": "error",
+            "id": "polling-error",
+            "label": "Polling Expired",
+            "type": "polling"
+          }
+        ],
+        "name": "Enchanted Link Sent",
+        "next": {
+          "rules": [
+            {
+              "interactionId": "EbW8KMdjAx",
+              "taskId": "1"
+            },
+            {
+              "interactionId": "polling",
+              "taskId": "100"
+            },
+            {
+              "interactionId": "polling-error",
+              "taskId": "1"
+            }
+          ]
+        },
+        "recoveryCodesData": [],
+        "screenId": "SC2TvN6lsDcgko58wIDVu1C6davyi",
+        "type": "screen",
+        "view": {
+          "x": 1956,
+          "y": 276
+        }
       },
       "38": {
+        "allInputKeys": [],
+        "calculatedInputKeys": true,
+        "clientScripts": [],
+        "componentsConditions": [],
+        "componentsConnectors": {},
+        "dynamicSelects": {},
+        "htmlTemplate": {
+          "ROOT": {
+            "custom": {},
+            "displayName": "Container",
+            "hidden": false,
+            "isCanvas": true,
+            "linkedNodes": {},
+            "nodes": [
+              "vsTitle"
+            ],
+            "props": {
+              "align": "center",
+              "background": "",
+              "data-editor-type": "container",
+              "direction": "column",
+              "id": "ROOT",
+              "justify": "center",
+              "paddingX": "4",
+              "paddingY": "8",
+              "spaceBetween": "4",
+              "st-items-grow": 0,
+              "width": "100%%"
+            },
+            "type": {
+              "resolvedName": "Container"
+            }
+          },
+          "vsTitle": {
+            "custom": {},
+            "displayName": "Text",
+            "hidden": false,
+            "isCanvas": false,
+            "linkedNodes": {},
+            "nodes": [],
+            "parent": "ROOT",
+            "props": {
+              "children": "Email verified!\n\nYou're being signed in…\n\n",
+              "full-width": true,
+              "hasTooltip": false,
+              "id": "vsTitle",
+              "isEnriched": true,
+              "italic": false,
+              "link-target-blank": true,
+              "mode": "primary",
+              "text-align": "center",
+              "tooltipText": "Tooltip text",
+              "variant": "body1"
+            },
+            "type": {
+              "resolvedName": "Text"
+            }
+          }
+        },
         "id": "38",
+        "inputsMetadata": [],
+        "interactions": [],
         "name": "Verified Successfully",
-        "type": "screen",
+        "next": {},
+        "recoveryCodesData": [],
         "screenId": "SC2TvN6pxFwNTBRheghU5ciPVZxSR",
-        "next": { "rules": [{ "interactionId": "success", "taskId": "22" }] },
-        "view": { "x": 2100, "y": 168 }
+        "type": "screen",
+        "view": {
+          "x": 1956,
+          "y": 612
+        }
       },
       "39": {
-        "id": "39",
-        "name": "Embargoed countries check",
-        "type": "condition",
         "conditions": [
           {
             "atomicConditions": [
               {
                 "operator": "in",
-                "predicate": { "ArgType": "", "type": "inline", "value": ["Embargoed Countries (US EAR)"] },
-                "target": { "ArgType": "", "type": "context", "value": "geoLocation" }
+                "predicate": {
+                  "type": "inline",
+                  "value": [
+                    "Embargoed Countries (US EAR)"
+                  ]
+                },
+                "target": {
+                  "type": "context",
+                  "value": "geoLocation"
+                }
               }
             ],
             "interactionId": "k0vh8muj4k",
             "name": "Embargoed countries"
           },
-          { "interactionId": "ELSE", "name": "Approved countries" }
+          {
+            "interactionId": "ELSE",
+            "name": "Approved countries"
+          }
         ],
+        "id": "39",
+        "name": "Embargoed countries check",
         "next": {
           "rules": [
-            { "interactionId": "k0vh8muj4k", "taskId": "40" },
-            { "interactionId": "ELSE", "taskId": "1" }
+            {
+              "interactionId": "k0vh8muj4k",
+              "taskId": "40"
+            },
+            {
+              "interactionId": "ELSE",
+              "taskId": "1"
+            }
           ]
         },
-        "view": { "x": 300, "y": 864 }
+        "type": "condition",
+        "view": {
+          "x": 504,
+          "y": 564
+        }
       },
       "40": {
         "id": "40",
+        "inputsMetadata": [],
         "name": "Embargoed countries",
-        "type": "screen",
+        "next": {},
         "screenId": "SC2TvN6mWHt9qTQf7ZEYdawiK5lFa",
-        "next": { "rules": [] },
-        "view": { "x": 708, "y": 852 }
-      },
-      "8": {
-        "id": "8",
-        "name": "User Information Screen",
         "type": "screen",
-        "screenId": "SC2TvN6okNFrzlCCxxj9h1BSrc4z3",
-        "next": { "rules": [{ "interactionId": "DHaPxnmBfY", "taskId": "24" }] },
-        "view": { "x": 3012, "y": 468 }
-      },
-      "100": {
-        "id": "100",
-        "name": "Has tenant?",
-        "type": "condition",
-        "conditions": [
-          {
-            "atomicConditions": [
-              {
-                "operator": "empty",
-                "predicate": { "type": "inline", "value": "" },
-                "target": { "type": "context", "value": "authInfo.user.userTenants" }
-              }
-            ],
-            "interactionId": "no-tenant",
-            "name": "No tenant"
-          },
-          { "interactionId": "ELSE", "name": "Has tenant" }
-        ],
-        "next": {
-          "rules": [
-            { "interactionId": "no-tenant", "taskId": "101" },
-            { "interactionId": "ELSE", "taskId": "9" }
-          ]
-        },
-        "view": { "x": 4200, "y": 504 }
-      },
-      "101": {
-        "id": "101",
-        "name": "Create Tenant",
-        "type": "automated",
-        "action": "createTenant",
-        "arguments": {
-          "dynamicName": { "type": "context", "value": "authInfo.user.email" },
-          "setAsSelectedTenant": { "type": "inline", "value": true },
-          "tenantRoles": { "type": "inline", "value": "admin,Tenant Admin" }
-        },
-        "next": { "rules": [{ "interactionId": "success", "taskId": "9" }] },
-        "view": { "x": 4680, "y": 360 }
+        "view": {
+          "x": 984,
+          "y": 612
+        }
       },
       "9": {
+        "action": "logged-in",
         "id": "9",
         "name": "DONE",
+        "next": {},
         "type": "automated",
-        "action": "logged-in",
-        "next": { "rules": [] },
-        "view": { "x": 5160, "y": 504 }
+        "view": {
+          "x": 4368,
+          "y": 432
+        }
+      },
+      "start": {
+        "id": "start",
+        "name": "start",
+        "next": {
+          "rules": [
+            {
+              "taskId": "30"
+            }
+          ]
+        },
+        "view": {
+          "x": -192,
+          "y": 156
+        }
       }
     }
   },
+  "flowId": "sign-up-or-in",
+  "metadata": {
+    "componentsVersion": "3.0.1",
+    "description": "Sign up or sign in with auto tenant provisioning",
+    "managementConfig": {
+      "triggers": {
+        "eventTriggers": {}
+      }
+    },
+    "name": "Sign Up or In",
+    "sharedInteractions": [
+      {
+        "id": "9.success",
+        "type": "success"
+      }
+    ]
+  },
+  "references": {},
   "screens": [
     {
-      "screenId": "SC2TvN6n4WW1LhLm2nRuEAGEL4U9S",
-      "interactions": [
-        { "id": "PiNPGdsZKA", "label": "Continue", "type": "submit", "subType": "", "icon": "" },
-        { "id": "gKDHyrEeGQ", "label": "Continue with Google", "type": "button", "subType": "social", "icon": "google" },
-        { "id": "lMCfAHLBS3", "label": "Continue with GitHub", "type": "button", "subType": "social", "icon": "github" },
-        { "id": "mAGh2EpnlA", "label": "Continue with Microsoft", "type": "button", "subType": "social", "icon": "microsoft" },
-        { "id": "my_KoUs1g1", "label": "Sign in with Passkey", "type": "button", "subType": "", "icon": "" },
-        { "id": "S2pZAnYwxz", "label": "Sign in with SSO", "type": "button", "subType": "", "icon": "" }
-      ],
       "contents": {
-        "ROOT": {
-          "custom": {},
-          "displayName": "Container",
-          "hidden": false,
-          "isCanvas": true,
-          "linkedNodes": {},
-          "nodes": ["titleText", "subtitleText", "emailField", "PiNPGdsZKA", "divider", "socialContainer", "altActionsContainer", "errorMsg"],
-          "props": {
-            "align": "center",
-            "background": "",
-            "data-editor-type": "container",
-            "direction": "column",
-            "id": "ROOT",
-            "justify": "center",
-            "paddingX": "4",
-            "paddingY": "8",
-            "spaceBetween": "4",
-            "st-items-grow": 0,
-            "width": "100%"
-          },
-          "type": { "resolvedName": "Container" }
-        },
-        "titleText": {
-          "custom": {},
-          "displayName": "Text",
-          "hidden": false,
-          "isCanvas": false,
-          "linkedNodes": {},
-          "nodes": [],
-          "parent": "ROOT",
-          "props": {
-            "children": "Welcome to Procella",
-            "full-width": false,
-            "id": "titleText",
-            "isEnriched": true,
-            "italic": false,
-            "link-target-blank": true,
-            "mode": "primary",
-            "text-align": "center",
-            "variant": "h3"
-          },
-          "type": { "resolvedName": "Text" }
-        },
-        "subtitleText": {
-          "custom": {},
-          "displayName": "Text",
-          "hidden": false,
-          "isCanvas": false,
-          "linkedNodes": {},
-          "nodes": [],
-          "parent": "ROOT",
-          "props": {
-            "children": "Sign up or sign in to continue",
-            "full-width": false,
-            "id": "subtitleText",
-            "isEnriched": true,
-            "italic": false,
-            "link-target-blank": true,
-            "mode": "secondary",
-            "text-align": "center",
-            "variant": "body1"
-          },
-          "type": { "resolvedName": "Text" }
-        },
-        "emailField": {
-          "custom": {},
-          "displayName": "Email Field",
-          "hidden": false,
-          "isCanvas": false,
-          "linkedNodes": {},
-          "nodes": [],
-          "parent": "ROOT",
-          "props": {
-            "full-width": true,
-            "id": "emailField",
-            "label": "Email",
-            "name": "email",
-            "placeholder": "Enter your email",
-            "required": true
-          },
-          "type": { "resolvedName": "EmailInput" }
-        },
-        "PiNPGdsZKA": {
-          "custom": { "type": "submit" },
-          "displayName": "Button",
-          "hidden": false,
-          "isCanvas": false,
-          "linkedNodes": {},
-          "nodes": [],
-          "parent": "ROOT",
-          "props": {
-            "aria-label": "Continue",
-            "auto-submit": true,
-            "children": "Continue",
-            "color": "primary",
-            "data-type": "submit",
-            "formNoValidate": false,
-            "full-width": true,
-            "id": "PiNPGdsZKA",
-            "size": "md",
-            "variant": "contained"
-          },
-          "type": { "resolvedName": "Button" }
-        },
-        "divider": {
-          "custom": {},
-          "displayName": "Divider",
-          "hidden": false,
-          "isCanvas": false,
-          "linkedNodes": {},
-          "nodes": [],
-          "parent": "ROOT",
-          "props": {
-            "children": "or",
-            "full-width": true,
-            "id": "divider",
-            "mode": "primary",
-            "variant": "body1",
-            "vertical": false
-          },
-          "type": { "resolvedName": "Divider" }
-        },
-        "socialContainer": {
-          "custom": {},
-          "displayName": "Container",
-          "hidden": false,
-          "isCanvas": true,
-          "linkedNodes": {},
-          "nodes": ["gKDHyrEeGQ", "lMCfAHLBS3", "mAGh2EpnlA"],
-          "parent": "ROOT",
-          "props": {
-            "align": "center",
-            "background": "#ffffff00",
-            "data-editor-type": "container",
-            "direction": "column",
-            "id": "socialContainer",
-            "justify": "start",
-            "paddingX": "0",
-            "paddingY": "0",
-            "spaceBetween": "2",
-            "st-items-grow": 0,
-            "width": "100%"
-          },
-          "type": { "resolvedName": "Container" }
-        },
-        "gKDHyrEeGQ": {
-          "custom": { "subType": "social", "type": "button" },
-          "displayName": "Google Button",
-          "hidden": false,
-          "isCanvas": false,
-          "linkedNodes": {},
-          "nodes": [],
-          "parent": "socialContainer",
-          "props": {
-            "aria-label": "Continue with Google",
-            "children": "Continue with Google",
-            "color": "primary",
-            "data-descope-provider": "google",
-            "data-type": "social",
-            "formNoValidate": true,
-            "full-width": true,
-            "id": "gKDHyrEeGQ",
-            "size": "md",
-            "st-label-spacing": "10px",
-            "startIcon": "google",
-            "startIconColorText": false,
-            "variant": "outline"
-          },
-          "type": { "resolvedName": "GoogleButton" }
-        },
-        "lMCfAHLBS3": {
-          "custom": { "subType": "social", "type": "button" },
-          "displayName": "Button",
-          "hidden": false,
-          "isCanvas": false,
-          "linkedNodes": {},
-          "nodes": [],
-          "parent": "socialContainer",
-          "props": {
-            "aria-label": "Continue with GitHub",
-            "children": "Continue with GitHub",
-            "color": "primary",
-            "data-descope-provider": "github",
-            "data-type": "social",
-            "formNoValidate": true,
-            "full-width": true,
-            "id": "lMCfAHLBS3",
-            "size": "md",
-            "st-label-spacing": "10px",
-            "startIcon": "github",
-            "startIconColorText": false,
-            "variant": "outline"
-          },
-          "type": { "resolvedName": "Button" }
-        },
-        "mAGh2EpnlA": {
-          "custom": { "subType": "social", "type": "button" },
-          "displayName": "Button",
-          "hidden": false,
-          "isCanvas": false,
-          "linkedNodes": {},
-          "nodes": [],
-          "parent": "socialContainer",
-          "props": {
-            "aria-label": "Continue with Microsoft",
-            "children": "Continue with Microsoft",
-            "color": "primary",
-            "data-descope-provider": "microsoft",
-            "data-type": "social",
-            "formNoValidate": true,
-            "full-width": true,
-            "id": "mAGh2EpnlA",
-            "size": "md",
-            "variant": "outline"
-          },
-          "type": { "resolvedName": "Button" }
-        },
-        "altActionsContainer": {
-          "custom": {},
-          "displayName": "Container",
-          "hidden": false,
-          "isCanvas": true,
-          "linkedNodes": {},
-          "nodes": ["my_KoUs1g1", "S2pZAnYwxz"],
-          "parent": "ROOT",
-          "props": {
-            "align": "center",
-            "background": "#ffffff00",
-            "data-editor-type": "container",
-            "direction": "row",
-            "id": "altActionsContainer",
-            "justify": "center",
-            "paddingX": "0",
-            "paddingY": "0",
-            "spaceBetween": "4",
-            "st-items-grow": 0,
-            "width": "100%"
-          },
-          "type": { "resolvedName": "Container" }
-        },
-        "my_KoUs1g1": {
-          "custom": { "type": "button" },
-          "displayName": "Button",
-          "hidden": false,
-          "isCanvas": false,
-          "linkedNodes": {},
-          "nodes": [],
-          "parent": "altActionsContainer",
-          "props": {
-            "aria-label": "Sign in with Passkey",
-            "children": "Sign in with Passkey",
-            "color": "primary",
-            "data-type": "button",
-            "formNoValidate": true,
-            "full-width": false,
-            "id": "my_KoUs1g1",
-            "size": "sm",
-            "variant": "text"
-          },
-          "type": { "resolvedName": "Button" }
-        },
-        "S2pZAnYwxz": {
-          "custom": { "type": "button" },
-          "displayName": "Button",
-          "hidden": false,
-          "isCanvas": false,
-          "linkedNodes": {},
-          "nodes": [],
-          "parent": "altActionsContainer",
-          "props": {
-            "aria-label": "Sign in with SSO",
-            "children": "Sign in with SSO",
-            "color": "primary",
-            "data-type": "button",
-            "formNoValidate": true,
-            "full-width": false,
-            "id": "S2pZAnYwxz",
-            "size": "sm",
-            "variant": "text"
-          },
-          "type": { "resolvedName": "Button" }
-        },
-        "errorMsg": {
-          "custom": {},
-          "displayName": "Error Message",
-          "hidden": false,
-          "isCanvas": false,
-          "linkedNodes": {},
-          "nodes": [],
-          "parent": "ROOT",
-          "props": {
-            "align": "center",
-            "data-type": "error-message",
-            "full-width": false,
-            "hide-when-empty": true,
-            "id": "errorMsg",
-            "italic": false,
-            "link-target-blank": true,
-            "mode": "error",
-            "text-align": "center",
-            "variant": "body1"
-          },
-          "type": { "resolvedName": "ErrorMessage" }
-        }
-      }
-    },
-    {
-      "screenId": "SC2TvN6sqIIsgh2LskZFV5ECv0Et7",
-      "interactions": [
-        { "id": "HVl8IS0LWV", "label": "Continue", "type": "button", "subType": "", "icon": "" },
-        { "id": "hqGqqjK2Uk", "label": "Use a different account", "type": "button", "subType": "", "icon": "" }
-      ],
-      "contents": {
-        "ROOT": {
-          "custom": {},
-          "displayName": "Container",
-          "hidden": false,
-          "isCanvas": true,
-          "linkedNodes": {},
-          "nodes": ["rmTitle", "rmSubtitle", "rmLoginId", "HVl8IS0LWV", "hqGqqjK2Uk", "errorMsg"],
-          "props": {
-            "align": "center",
-            "background": "",
-            "data-editor-type": "container",
-            "direction": "column",
-            "id": "ROOT",
-            "justify": "center",
-            "paddingX": "4",
-            "paddingY": "8",
-            "spaceBetween": "4",
-            "st-items-grow": 0,
-            "width": "100%"
-          },
-          "type": { "resolvedName": "Container" }
-        },
-        "rmTitle": {
-          "custom": {},
-          "displayName": "Text",
-          "hidden": false,
-          "isCanvas": false,
-          "linkedNodes": {},
-          "nodes": [],
-          "parent": "ROOT",
-          "props": {
-            "children": "Welcome back",
-            "full-width": false,
-            "id": "rmTitle",
-            "isEnriched": true,
-            "italic": false,
-            "link-target-blank": true,
-            "mode": "primary",
-            "text-align": "center",
-            "variant": "h3"
-          },
-          "type": { "resolvedName": "Text" }
-        },
-        "rmSubtitle": {
-          "custom": {},
-          "displayName": "Text",
-          "hidden": false,
-          "isCanvas": false,
-          "linkedNodes": {},
-          "nodes": [],
-          "parent": "ROOT",
-          "props": {
-            "children": "Continue as",
-            "full-width": false,
-            "id": "rmSubtitle",
-            "isEnriched": true,
-            "italic": false,
-            "link-target-blank": true,
-            "mode": "secondary",
-            "text-align": "center",
-            "variant": "body1"
-          },
-          "type": { "resolvedName": "Text" }
-        },
-        "rmLoginId": {
-          "custom": {},
-          "displayName": "Text",
-          "hidden": false,
-          "isCanvas": false,
-          "linkedNodes": {},
-          "nodes": [],
-          "parent": "ROOT",
-          "props": {
-            "children": "{{lastAuth.loginId}}",
-            "full-width": false,
-            "id": "rmLoginId",
-            "isEnriched": true,
-            "italic": false,
-            "link-target-blank": true,
-            "mode": "primary",
-            "text-align": "center",
-            "variant": "subtitle1"
-          },
-          "type": { "resolvedName": "Text" }
-        },
-        "HVl8IS0LWV": {
-          "custom": { "type": "button" },
-          "displayName": "Button",
-          "hidden": false,
-          "isCanvas": false,
-          "linkedNodes": {},
-          "nodes": [],
-          "parent": "ROOT",
-          "props": {
-            "aria-label": "Continue",
-            "children": "Continue",
-            "color": "primary",
-            "data-type": "button",
-            "formNoValidate": true,
-            "full-width": true,
-            "id": "HVl8IS0LWV",
-            "size": "md",
-            "variant": "contained"
-          },
-          "type": { "resolvedName": "Button" }
-        },
-        "hqGqqjK2Uk": {
-          "custom": { "type": "button" },
-          "displayName": "Button",
-          "hidden": false,
-          "isCanvas": false,
-          "linkedNodes": {},
-          "nodes": [],
-          "parent": "ROOT",
-          "props": {
-            "aria-label": "Use a different account",
-            "children": "Use a different account",
-            "color": "primary",
-            "data-type": "button",
-            "formNoValidate": true,
-            "full-width": true,
-            "id": "hqGqqjK2Uk",
-            "size": "md",
-            "variant": "text"
-          },
-          "type": { "resolvedName": "Button" }
-        },
-        "errorMsg": {
-          "custom": {},
-          "displayName": "Error Message",
-          "hidden": false,
-          "isCanvas": false,
-          "linkedNodes": {},
-          "nodes": [],
-          "parent": "ROOT",
-          "props": {
-            "align": "center",
-            "data-type": "error-message",
-            "full-width": false,
-            "hide-when-empty": true,
-            "id": "errorMsg",
-            "italic": false,
-            "link-target-blank": true,
-            "mode": "error",
-            "text-align": "center",
-            "variant": "body1"
-          },
-          "type": { "resolvedName": "ErrorMessage" }
-        }
-      }
-    },
-    {
-      "screenId": "SC2TvN6lsDcgko58wIDVu1C6davyi",
-      "interactions": [
-        { "id": "resend", "label": "Resend email", "type": "button", "subType": "", "icon": "" },
-        { "id": "EbW8KMdjAx", "label": "Back to sign in", "type": "button", "subType": "", "icon": "" }
-      ],
-      "contents": {
-        "ROOT": {
-          "custom": {},
-          "displayName": "Container",
-          "hidden": false,
-          "isCanvas": true,
-          "linkedNodes": {},
-          "nodes": ["elTitle", "elSubtitle", "elEmailText", "elInstructions", "pollingLoader", "resend", "EbW8KMdjAx", "errorMsg"],
-          "props": {
-            "align": "center",
-            "background": "",
-            "data-editor-type": "container",
-            "direction": "column",
-            "id": "ROOT",
-            "justify": "center",
-            "paddingX": "4",
-            "paddingY": "8",
-            "spaceBetween": "4",
-            "st-items-grow": 0,
-            "width": "100%"
-          },
-          "type": { "resolvedName": "Container" }
-        },
-        "elTitle": {
-          "custom": {},
-          "displayName": "Text",
-          "hidden": false,
-          "isCanvas": false,
-          "linkedNodes": {},
-          "nodes": [],
-          "parent": "ROOT",
-          "props": {
-            "children": "Check your email",
-            "full-width": false,
-            "id": "elTitle",
-            "isEnriched": true,
-            "italic": false,
-            "link-target-blank": true,
-            "mode": "primary",
-            "text-align": "center",
-            "variant": "h3"
-          },
-          "type": { "resolvedName": "Text" }
-        },
-        "elSubtitle": {
-          "custom": {},
-          "displayName": "Text",
-          "hidden": false,
-          "isCanvas": false,
-          "linkedNodes": {},
-          "nodes": [],
-          "parent": "ROOT",
-          "props": {
-            "children": "We sent a magic link to",
-            "full-width": false,
-            "id": "elSubtitle",
-            "isEnriched": true,
-            "italic": false,
-            "link-target-blank": true,
-            "mode": "secondary",
-            "text-align": "center",
-            "variant": "body1"
-          },
-          "type": { "resolvedName": "Text" }
-        },
-        "elEmailText": {
-          "custom": {},
-          "displayName": "Text",
-          "hidden": false,
-          "isCanvas": false,
-          "linkedNodes": {},
-          "nodes": [],
-          "parent": "ROOT",
-          "props": {
-            "children": "{{user.email}}",
-            "full-width": false,
-            "id": "elEmailText",
-            "isEnriched": true,
-            "italic": false,
-            "link-target-blank": true,
-            "mode": "primary",
-            "text-align": "center",
-            "variant": "subtitle1"
-          },
-          "type": { "resolvedName": "Text" }
-        },
-        "elInstructions": {
-          "custom": {},
-          "displayName": "Text",
-          "hidden": false,
-          "isCanvas": false,
-          "linkedNodes": {},
-          "nodes": [],
-          "parent": "ROOT",
-          "props": {
-            "children": "Click the link in the email to sign in. This page will update automatically.",
-            "full-width": false,
-            "id": "elInstructions",
-            "isEnriched": true,
-            "italic": false,
-            "link-target-blank": true,
-            "mode": "secondary",
-            "text-align": "center",
-            "variant": "body2"
-          },
-          "type": { "resolvedName": "Text" }
-        },
-        "pollingLoader": {
-          "custom": {},
-          "displayName": "Polling Loader",
-          "hidden": false,
-          "isCanvas": false,
-          "linkedNodes": {},
-          "nodes": [],
-          "parent": "ROOT",
-          "props": { "id": "polling" },
-          "type": { "resolvedName": "PollingLoader" }
-        },
-        "resend": {
-          "custom": { "type": "button" },
-          "displayName": "Button",
-          "hidden": false,
-          "isCanvas": false,
-          "linkedNodes": {},
-          "nodes": [],
-          "parent": "ROOT",
-          "props": {
-            "aria-label": "Resend email",
-            "children": "Resend email",
-            "color": "primary",
-            "data-type": "button",
-            "formNoValidate": true,
-            "full-width": true,
-            "id": "resend",
-            "size": "md",
-            "variant": "outlined"
-          },
-          "type": { "resolvedName": "Button" }
-        },
         "EbW8KMdjAx": {
-          "custom": { "type": "button" },
+          "custom": {
+            "type": "button"
+          },
           "displayName": "Button",
           "hidden": false,
           "isCanvas": false,
@@ -1029,10 +1609,38 @@
             "formNoValidate": true,
             "full-width": true,
             "id": "EbW8KMdjAx",
+            "mode": "primary",
             "size": "md",
-            "variant": "text"
+            "tooltipText": "Tooltip text",
+            "variant": "outline"
           },
-          "type": { "resolvedName": "Button" }
+          "type": {
+            "resolvedName": "Button"
+          }
+        },
+        "elTitle": {
+          "custom": {},
+          "displayName": "Text",
+          "hidden": false,
+          "isCanvas": false,
+          "linkedNodes": {},
+          "nodes": [],
+          "parent": "ROOT",
+          "props": {
+            "children": "Magic link sent to\n\n{{sentTo.maskedEmail}}\n\nClick the link in the email to sign in.\nThis page will update automatically.\n\n",
+            "full-width": false,
+            "id": "elTitle",
+            "isEnriched": true,
+            "italic": false,
+            "link-target-blank": true,
+            "mode": "primary",
+            "text-align": "center",
+            "tooltipText": "Tooltip text",
+            "variant": "body1"
+          },
+          "type": {
+            "resolvedName": "Text"
+          }
         },
         "errorMsg": {
           "custom": {},
@@ -1043,7 +1651,6 @@
           "nodes": [],
           "parent": "ROOT",
           "props": {
-            "align": "center",
             "data-type": "error-message",
             "full-width": false,
             "hide-when-empty": true,
@@ -1054,243 +1661,43 @@
             "text-align": "center",
             "variant": "body1"
           },
-          "type": { "resolvedName": "ErrorMessage" }
-        }
-      }
-    },
-    {
-      "screenId": "SC2TvN6pxFwNTBRheghU5ciPVZxSR",
-      "interactions": [],
-      "contents": {
-        "ROOT": {
-          "custom": {},
-          "displayName": "Container",
-          "hidden": false,
-          "isCanvas": true,
-          "linkedNodes": {},
-          "nodes": ["vsTitle", "vsSubtitle"],
-          "props": {
-            "align": "center",
-            "background": "",
-            "data-editor-type": "container",
-            "direction": "column",
-            "id": "ROOT",
-            "justify": "center",
-            "paddingX": "4",
-            "paddingY": "8",
-            "spaceBetween": "4",
-            "st-items-grow": 0,
-            "width": "100%"
-          },
-          "type": { "resolvedName": "Container" }
+          "type": {
+            "resolvedName": "ErrorMessage"
+          }
         },
-        "vsTitle": {
-          "custom": {},
-          "displayName": "Text",
+        "pollingLoader": {
+          "custom": {
+            "type": "polling"
+          },
+          "displayName": "Polling",
           "hidden": false,
           "isCanvas": false,
           "linkedNodes": {},
           "nodes": [],
           "parent": "ROOT",
           "props": {
-            "children": "Email verified!",
-            "full-width": false,
-            "id": "vsTitle",
-            "isEnriched": true,
-            "italic": false,
-            "link-target-blank": true,
-            "mode": "primary",
-            "text-align": "center",
-            "variant": "h3"
-          },
-          "type": { "resolvedName": "Text" }
-        },
-        "vsSubtitle": {
-          "custom": {},
-          "displayName": "Text",
-          "hidden": false,
-          "isCanvas": false,
-          "linkedNodes": {},
-          "nodes": [],
-          "parent": "ROOT",
-          "props": {
-            "children": "You're being signed in\u2026",
-            "full-width": false,
-            "id": "vsSubtitle",
-            "isEnriched": true,
-            "italic": false,
-            "link-target-blank": true,
-            "mode": "secondary",
-            "text-align": "center",
-            "variant": "body1"
-          },
-          "type": { "resolvedName": "Text" }
-        }
-      }
-    },
-    {
-      "screenId": "SC2TvN6okNFrzlCCxxj9h1BSrc4z3",
-      "interactions": [
-        { "id": "DHaPxnmBfY", "label": "Continue", "type": "submit", "subType": "", "icon": "" }
-      ],
-      "contents": {
-        "ROOT": {
-          "custom": {},
-          "displayName": "Container",
-          "hidden": false,
-          "isCanvas": true,
-          "linkedNodes": {},
-          "nodes": ["uiTitle", "uiSubtitle", "uiFirstName", "uiLastName", "DHaPxnmBfY", "errorMsg"],
-          "props": {
-            "align": "center",
-            "background": "",
-            "data-editor-type": "container",
-            "direction": "column",
-            "id": "ROOT",
-            "justify": "center",
-            "paddingX": "4",
-            "paddingY": "8",
-            "spaceBetween": "4",
-            "st-items-grow": 0,
-            "width": "100%"
-          },
-          "type": { "resolvedName": "Container" }
-        },
-        "uiTitle": {
-          "custom": {},
-          "displayName": "Text",
-          "hidden": false,
-          "isCanvas": false,
-          "linkedNodes": {},
-          "nodes": [],
-          "parent": "ROOT",
-          "props": {
-            "children": "One last step",
-            "full-width": false,
-            "id": "uiTitle",
-            "isEnriched": true,
-            "italic": false,
-            "link-target-blank": true,
-            "mode": "primary",
-            "text-align": "center",
-            "variant": "h3"
-          },
-          "type": { "resolvedName": "Text" }
-        },
-        "uiSubtitle": {
-          "custom": {},
-          "displayName": "Text",
-          "hidden": false,
-          "isCanvas": false,
-          "linkedNodes": {},
-          "nodes": [],
-          "parent": "ROOT",
-          "props": {
-            "children": "Tell us your name to complete your profile",
-            "full-width": false,
-            "id": "uiSubtitle",
-            "isEnriched": true,
-            "italic": false,
-            "link-target-blank": true,
-            "mode": "secondary",
-            "text-align": "center",
-            "variant": "body1"
-          },
-          "type": { "resolvedName": "Text" }
-        },
-        "uiFirstName": {
-          "custom": {},
-          "displayName": "Text Field",
-          "hidden": false,
-          "isCanvas": false,
-          "linkedNodes": {},
-          "nodes": [],
-          "parent": "ROOT",
-          "props": {
-            "full-width": true,
-            "id": "uiFirstName",
-            "label": "First name",
-            "name": "firstName",
-            "placeholder": "Enter your first name",
-            "required": true
-          },
-          "type": { "resolvedName": "FullNameInput" }
-        },
-        "uiLastName": {
-          "custom": {},
-          "displayName": "Text Field",
-          "hidden": false,
-          "isCanvas": false,
-          "linkedNodes": {},
-          "nodes": [],
-          "parent": "ROOT",
-          "props": {
-            "full-width": true,
-            "id": "uiLastName",
-            "label": "Last name",
-            "name": "lastName",
-            "placeholder": "Enter your last name",
-            "required": false
-          },
-          "type": { "resolvedName": "FullNameInput" }
-        },
-        "DHaPxnmBfY": {
-          "custom": { "type": "submit" },
-          "displayName": "Button",
-          "hidden": false,
-          "isCanvas": false,
-          "linkedNodes": {},
-          "nodes": [],
-          "parent": "ROOT",
-          "props": {
-            "aria-label": "Continue",
-            "auto-submit": true,
-            "children": "Continue",
             "color": "primary",
-            "data-type": "submit",
-            "formNoValidate": false,
-            "full-width": true,
-            "id": "DHaPxnmBfY",
+            "data-type": "polling",
+            "id": "polling",
             "size": "md",
-            "variant": "contained"
+            "variant": "linear"
           },
-          "type": { "resolvedName": "Button" }
+          "type": {
+            "resolvedName": "PollingLoader"
+          }
         },
-        "errorMsg": {
-          "custom": {},
-          "displayName": "Error Message",
-          "hidden": false,
-          "isCanvas": false,
-          "linkedNodes": {},
-          "nodes": [],
-          "parent": "ROOT",
-          "props": {
-            "align": "center",
-            "data-type": "error-message",
-            "full-width": false,
-            "hide-when-empty": true,
-            "id": "errorMsg",
-            "italic": false,
-            "link-target-blank": true,
-            "mode": "error",
-            "text-align": "center",
-            "variant": "body1"
-          },
-          "type": { "resolvedName": "ErrorMessage" }
-        }
-      }
-    },
-    {
-      "screenId": "SC2TvN6mWHt9qTQf7ZEYdawiK5lFa",
-      "interactions": [],
-      "contents": {
         "ROOT": {
           "custom": {},
           "displayName": "Container",
           "hidden": false,
           "isCanvas": true,
           "linkedNodes": {},
-          "nodes": ["ecTitle", "ecSubtitle"],
+          "nodes": [
+            "elTitle",
+            "pollingLoader",
+            "EbW8KMdjAx",
+            "errorMsg"
+          ],
           "props": {
             "align": "center",
             "background": "",
@@ -1302,9 +1709,56 @@
             "paddingY": "8",
             "spaceBetween": "4",
             "st-items-grow": 0,
-            "width": "100%"
+            "width": "100%%"
           },
-          "type": { "resolvedName": "Container" }
+          "type": {
+            "resolvedName": "Container"
+          }
+        }
+      },
+      "interactions": [
+        {
+          "id": "EbW8KMdjAx",
+          "label": "Back to sign in",
+          "type": "button"
+        },
+        {
+          "id": "polling",
+          "label": "Polling",
+          "type": "polling"
+        },
+        {
+          "icon": "error",
+          "id": "polling-error",
+          "label": "Polling Expired",
+          "type": "polling"
+        }
+      ],
+      "screenId": "SC2TvN6lsDcgko58wIDVu1C6davyi"
+    },
+    {
+      "contents": {
+        "ecSubtitle": {
+          "custom": {},
+          "displayName": "Text",
+          "hidden": false,
+          "isCanvas": false,
+          "linkedNodes": {},
+          "nodes": [],
+          "parent": "ROOT",
+          "props": {
+            "children": "This service is not available in your region.",
+            "full-width": false,
+            "id": "ecSubtitle",
+            "isEnriched": true,
+            "italic": false,
+            "link-target-blank": true,
+            "mode": "body1",
+            "text-align": "center"
+          },
+          "type": {
+            "resolvedName": "Text"
+          }
         },
         "ecTitle": {
           "custom": {},
@@ -1321,13 +1775,455 @@
             "isEnriched": true,
             "italic": false,
             "link-target-blank": true,
-            "mode": "primary",
-            "text-align": "center",
-            "variant": "h3"
+            "mode": "h3",
+            "text-align": "center"
           },
-          "type": { "resolvedName": "Text" }
+          "type": {
+            "resolvedName": "Text"
+          }
         },
-        "ecSubtitle": {
+        "ROOT": {
+          "custom": {},
+          "displayName": "Container",
+          "hidden": false,
+          "isCanvas": true,
+          "linkedNodes": {},
+          "nodes": [
+            "ecTitle",
+            "ecSubtitle"
+          ],
+          "props": {
+            "align": "center",
+            "background": "",
+            "data-editor-type": "container",
+            "direction": "column",
+            "id": "ROOT",
+            "justify": "center",
+            "paddingX": "4",
+            "paddingY": "8",
+            "spaceBetween": "4",
+            "st-items-grow": 0,
+            "width": "100%%"
+          },
+          "type": {
+            "resolvedName": "Container"
+          }
+        }
+      },
+      "screenId": "SC2TvN6mWHt9qTQf7ZEYdawiK5lFa"
+    },
+    {
+      "contents": {
+        "altActionsContainer": {
+          "custom": {},
+          "displayName": "Container",
+          "hidden": false,
+          "isCanvas": true,
+          "linkedNodes": {},
+          "nodes": [],
+          "parent": "ROOT",
+          "props": {
+            "align": "center",
+            "background": "#ffffff00",
+            "data-editor-type": "container",
+            "direction": "row",
+            "id": "altActionsContainer",
+            "justify": "center",
+            "paddingX": "0",
+            "paddingY": "0",
+            "spaceBetween": "4",
+            "st-items-grow": 0,
+            "width": "100%%"
+          },
+          "type": {
+            "resolvedName": "Container"
+          }
+        },
+        "divider": {
+          "custom": {},
+          "displayName": "Divider",
+          "hidden": false,
+          "isCanvas": false,
+          "linkedNodes": {},
+          "nodes": [],
+          "parent": "ROOT",
+          "props": {
+            "children": "or",
+            "full-width": true,
+            "id": "divider",
+            "italic": false,
+            "mode": "primary",
+            "variant": "body1",
+            "vertical": false
+          },
+          "type": {
+            "resolvedName": "Divider"
+          }
+        },
+        "emailField": {
+          "custom": {
+            "type": "input"
+          },
+          "displayName": "Email Input",
+          "hidden": false,
+          "isCanvas": false,
+          "linkedNodes": {},
+          "nodes": [],
+          "parent": "ROOT",
+          "props": {
+            "bordered": true,
+            "copy-to-clipboard": false,
+            "data-errormessage-pattern-mismatch": "Must be a valid email",
+            "data-errormessage-value-missing": "Please fill out this field.",
+            "full-width": true,
+            "id": "emailField",
+            "label": "Email",
+            "label-type": "static",
+            "max": 100,
+            "name": "email",
+            "pattern": "^[\\w\\.\\%\\+\\-']+@[\\w\\.\\-]+\\.[A-Za-z]{2,}$",
+            "placeholder": "Enter your email",
+            "required": true,
+            "size": "md",
+            "type": "email"
+          },
+          "type": {
+            "resolvedName": "EmailInput"
+          }
+        },
+        "errorMsg": {
+          "custom": {},
+          "displayName": "Error Message",
+          "hidden": false,
+          "isCanvas": false,
+          "linkedNodes": {},
+          "nodes": [],
+          "parent": "ROOT",
+          "props": {
+            "data-type": "error-message",
+            "full-width": false,
+            "hide-when-empty": true,
+            "id": "errorMsg",
+            "italic": false,
+            "link-target-blank": true,
+            "mode": "error",
+            "text-align": "center",
+            "variant": "body1"
+          },
+          "type": {
+            "resolvedName": "ErrorMessage"
+          }
+        },
+        "gKDHyrEeGQ": {
+          "custom": {
+            "subType": "social",
+            "type": "button"
+          },
+          "displayName": "Google Button",
+          "hidden": false,
+          "isCanvas": false,
+          "linkedNodes": {},
+          "nodes": [],
+          "parent": "socialContainer",
+          "props": {
+            "aria-label": "Continue with Google",
+            "children": "",
+            "color": "primary",
+            "data-descope-provider": "google",
+            "data-type": "social",
+            "formNoValidate": true,
+            "full-width": false,
+            "id": "gKDHyrEeGQ",
+            "mode": "primary",
+            "shape": "square",
+            "size": "md",
+            "st-label-spacing": "10px",
+            "startIcon": "google",
+            "startIconColorText": false,
+            "tooltipText": "Tooltip text",
+            "variant": "outline"
+          },
+          "type": {
+            "resolvedName": "GoogleButton"
+          }
+        },
+        "LdgRgSLZ0h": {
+          "custom": {
+            "type": "button"
+          },
+          "displayName": "Biometrics Button",
+          "hidden": false,
+          "isCanvas": false,
+          "linkedNodes": {},
+          "nodes": [],
+          "parent": "socialContainer",
+          "props": {
+            "aria-label": "Sign in with biometrics",
+            "children": "",
+            "color": "primary",
+            "data-type": "biometrics",
+            "formNoValidate": false,
+            "full-width": false,
+            "id": "LdgRgSLZ0h",
+            "size": "md",
+            "st-icon-color": "currentColor",
+            "st-label-spacing": "10px",
+            "startIcon": "fingerprint",
+            "startIconColorText": true,
+            "tooltipText": "Tooltip text",
+            "variant": "outline"
+          },
+          "type": {
+            "resolvedName": "BiometricsButton"
+          }
+        },
+        "mCuIwaR6mv": {
+          "custom": {
+            "subType": "social",
+            "type": "button"
+          },
+          "displayName": "Microsoft Button",
+          "hidden": false,
+          "isCanvas": false,
+          "linkedNodes": {},
+          "nodes": [],
+          "parent": "socialContainer",
+          "props": {
+            "aria-label": "Sign in with Microsoft",
+            "children": "",
+            "color": "primary",
+            "data-descope-provider": "microsoft",
+            "data-type": "social",
+            "formNoValidate": true,
+            "full-width": false,
+            "id": "mCuIwaR6mv",
+            "shape": "square",
+            "size": "md",
+            "st-label-spacing": "10px",
+            "startIcon": "microsoft",
+            "startIconColorText": false,
+            "tooltipText": "Tooltip text",
+            "variant": "outline"
+          },
+          "type": {
+            "resolvedName": "MicrosoftButton"
+          }
+        },
+        "mGpwQF8o64": {
+          "custom": {
+            "subType": "social",
+            "type": "button"
+          },
+          "displayName": "Github Button",
+          "hidden": false,
+          "isCanvas": false,
+          "linkedNodes": {},
+          "nodes": [],
+          "parent": "socialContainer",
+          "props": {
+            "aria-label": "Sign in with Github",
+            "children": "",
+            "color": "primary",
+            "data-descope-provider": "github",
+            "data-type": "social",
+            "formNoValidate": true,
+            "full-width": false,
+            "id": "mGpwQF8o64",
+            "shape": "square",
+            "size": "md",
+            "st-label-spacing": "10px",
+            "startIcon": "github",
+            "startIconColorText": false,
+            "tooltipText": "Tooltip text",
+            "variant": "outline"
+          },
+          "type": {
+            "resolvedName": "GithubButton"
+          }
+        },
+        "PiNPGdsZKA": {
+          "custom": {
+            "type": "submit"
+          },
+          "displayName": "Button",
+          "hidden": false,
+          "isCanvas": false,
+          "linkedNodes": {},
+          "nodes": [],
+          "parent": "ROOT",
+          "props": {
+            "aria-label": "Continue",
+            "auto-submit": true,
+            "children": "Continue",
+            "color": "primary",
+            "data-type": "submit",
+            "formNoValidate": false,
+            "full-width": true,
+            "id": "PiNPGdsZKA",
+            "mode": "primary",
+            "size": "md",
+            "tooltipText": "Tooltip text",
+            "variant": "contained"
+          },
+          "type": {
+            "resolvedName": "Button"
+          }
+        },
+        "ROOT": {
+          "custom": {},
+          "displayName": "Container",
+          "hidden": false,
+          "isCanvas": true,
+          "linkedNodes": {},
+          "nodes": [
+            "emailField",
+            "PiNPGdsZKA",
+            "errorMsg",
+            "divider",
+            "socialContainer",
+            "altActionsContainer"
+          ],
+          "props": {
+            "align": "center",
+            "background": "",
+            "data-editor-type": "container",
+            "direction": "column",
+            "id": "ROOT",
+            "justify": "center",
+            "paddingX": "4",
+            "paddingY": "8",
+            "spaceBetween": "4",
+            "st-items-grow": 0,
+            "width": "100%%"
+          },
+          "type": {
+            "resolvedName": "Container"
+          }
+        },
+        "S3lBSkj9NS": {
+          "custom": {
+            "type": "button"
+          },
+          "displayName": "SSO Button",
+          "hidden": false,
+          "isCanvas": false,
+          "linkedNodes": {},
+          "nodes": [],
+          "parent": "socialContainer",
+          "props": {
+            "aria-label": "Sign in with SSO",
+            "children": "",
+            "color": "primary",
+            "data-type": "sso",
+            "formNoValidate": false,
+            "full-width": false,
+            "id": "S3lBSkj9NS",
+            "shape": "square",
+            "size": "md",
+            "st-icon-color": "currentColor",
+            "st-label-spacing": "10px",
+            "startIcon": "sso",
+            "startIconColorText": true,
+            "tooltipText": "Tooltip text",
+            "variant": "outline"
+          },
+          "type": {
+            "resolvedName": "SSOButton"
+          }
+        },
+        "socialContainer": {
+          "custom": {},
+          "displayName": "Container",
+          "hidden": false,
+          "isCanvas": true,
+          "linkedNodes": {},
+          "nodes": [
+            "mCuIwaR6mv",
+            "mGpwQF8o64",
+            "gKDHyrEeGQ",
+            "LdgRgSLZ0h",
+            "S3lBSkj9NS"
+          ],
+          "parent": "ROOT",
+          "props": {
+            "align": "start",
+            "background": "#ffffff00",
+            "data-editor-type": "container",
+            "direction": "row",
+            "id": "socialContainer",
+            "justify": "center",
+            "paddingX": "0",
+            "paddingY": "0",
+            "spaceBetween": "2",
+            "st-items-grow": 0,
+            "width": "100%%"
+          },
+          "type": {
+            "resolvedName": "Container"
+          }
+        }
+      },
+      "interactions": [
+        {
+          "icon": "google",
+          "id": "gKDHyrEeGQ",
+          "subType": "social",
+          "type": "button"
+        },
+        {
+          "icon": "github",
+          "id": "mGpwQF8o64",
+          "subType": "social",
+          "type": "button"
+        },
+        {
+          "icon": "microsoft",
+          "id": "mCuIwaR6mv",
+          "subType": "social",
+          "type": "button"
+        },
+        {
+          "icon": "sso",
+          "id": "S3lBSkj9NS",
+          "type": "button"
+        },
+        {
+          "icon": "fingerprint",
+          "id": "LdgRgSLZ0h",
+          "type": "button"
+        }
+      ],
+      "screenId": "SC2TvN6n4WW1LhLm2nRuEAGEL4U9S"
+    },
+    {
+      "contents": {
+        "ROOT": {
+          "custom": {},
+          "displayName": "Container",
+          "hidden": false,
+          "isCanvas": true,
+          "linkedNodes": {},
+          "nodes": [
+            "vsTitle"
+          ],
+          "props": {
+            "align": "center",
+            "background": "",
+            "data-editor-type": "container",
+            "direction": "column",
+            "id": "ROOT",
+            "justify": "center",
+            "paddingX": "4",
+            "paddingY": "8",
+            "spaceBetween": "4",
+            "st-items-grow": 0,
+            "width": "100%%"
+          },
+          "type": {
+            "resolvedName": "Container"
+          }
+        },
+        "vsTitle": {
           "custom": {},
           "displayName": "Text",
           "hidden": false,
@@ -1336,19 +2232,171 @@
           "nodes": [],
           "parent": "ROOT",
           "props": {
-            "children": "This service is not available in your region.",
-            "full-width": false,
-            "id": "ecSubtitle",
+            "children": "Email verified!\n\nYou're being signed in…\n\n",
+            "full-width": true,
+            "hasTooltip": false,
+            "id": "vsTitle",
             "isEnriched": true,
             "italic": false,
             "link-target-blank": true,
-            "mode": "secondary",
+            "mode": "primary",
+            "text-align": "center",
+            "tooltipText": "Tooltip text",
+            "variant": "body1"
+          },
+          "type": {
+            "resolvedName": "Text"
+          }
+        }
+      },
+      "screenId": "SC2TvN6pxFwNTBRheghU5ciPVZxSR"
+    },
+    {
+      "contents": {
+        "errorMsg": {
+          "custom": {},
+          "displayName": "Error Message",
+          "hidden": false,
+          "isCanvas": false,
+          "linkedNodes": {},
+          "nodes": [],
+          "parent": "ROOT",
+          "props": {
+            "data-type": "error-message",
+            "full-width": false,
+            "hide-when-empty": true,
+            "id": "errorMsg",
+            "italic": false,
+            "link-target-blank": true,
+            "mode": "error",
             "text-align": "center",
             "variant": "body1"
           },
-          "type": { "resolvedName": "Text" }
+          "type": {
+            "resolvedName": "ErrorMessage"
+          }
+        },
+        "hqGqqjK2Uk": {
+          "custom": {
+            "type": "button"
+          },
+          "displayName": "Button",
+          "hidden": false,
+          "isCanvas": false,
+          "linkedNodes": {},
+          "nodes": [],
+          "parent": "ROOT",
+          "props": {
+            "aria-label": "Use a different account",
+            "children": "Use a different account",
+            "color": "primary",
+            "data-type": "button",
+            "formNoValidate": true,
+            "full-width": true,
+            "id": "hqGqqjK2Uk",
+            "mode": "primary",
+            "size": "md",
+            "tooltipText": "Tooltip text",
+            "variant": "text"
+          },
+          "type": {
+            "resolvedName": "Button"
+          }
+        },
+        "HVl8IS0LWV": {
+          "custom": {
+            "type": "button"
+          },
+          "displayName": "Button",
+          "hidden": false,
+          "isCanvas": false,
+          "linkedNodes": {},
+          "nodes": [],
+          "parent": "ROOT",
+          "props": {
+            "aria-label": "Continue",
+            "children": "Continue",
+            "color": "primary",
+            "data-type": "button",
+            "formNoValidate": true,
+            "full-width": true,
+            "id": "HVl8IS0LWV",
+            "mode": "primary",
+            "size": "md",
+            "tooltipText": "Tooltip text",
+            "variant": "contained"
+          },
+          "type": {
+            "resolvedName": "Button"
+          }
+        },
+        "rmSubtitle": {
+          "custom": {},
+          "displayName": "Text",
+          "hidden": false,
+          "isCanvas": false,
+          "linkedNodes": {},
+          "nodes": [],
+          "parent": "ROOT",
+          "props": {
+            "children": "Welcome back\n\n{{lastAuth.loginId}}\n\n",
+            "full-width": false,
+            "id": "rmSubtitle",
+            "isEnriched": true,
+            "italic": false,
+            "link-target-blank": true,
+            "mode": "body1",
+            "text-align": "center",
+            "tooltipText": "Tooltip text",
+            "variant": "body1"
+          },
+          "type": {
+            "resolvedName": "Text"
+          }
+        },
+        "ROOT": {
+          "custom": {},
+          "displayName": "Container",
+          "hidden": false,
+          "isCanvas": true,
+          "linkedNodes": {},
+          "nodes": [
+            "rmSubtitle",
+            "HVl8IS0LWV",
+            "hqGqqjK2Uk",
+            "errorMsg"
+          ],
+          "props": {
+            "align": "center",
+            "background": "",
+            "data-editor-type": "container",
+            "direction": "column",
+            "id": "ROOT",
+            "justify": "center",
+            "paddingX": "4",
+            "paddingY": "8",
+            "spaceBetween": "4",
+            "st-items-grow": 0,
+            "width": "100%%"
+          },
+          "type": {
+            "resolvedName": "Container"
+          }
         }
-      }
+      },
+      "interactions": [
+        {
+          "id": "HVl8IS0LWV",
+          "label": "Continue",
+          "type": "button"
+        },
+        {
+          "id": "hqGqqjK2Uk",
+          "label": "Use a different account",
+          "type": "button"
+        }
+      ],
+      "screenId": "SC2TvN6sqIIsgh2LskZFV5ECv0Et7"
     }
   ]
 }

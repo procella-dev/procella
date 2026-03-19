@@ -1,128 +1,2494 @@
 {
-  "componentsVersion": "2.3.1",
+  "componentsVersion": "3.0.1",
   "references": {},
   "styles": {
     "dark": {
-      "globals": {
-        "fonts": {
-          "font1": {
-            "family": [
-              "Inter",
-              "ui-sans-serif",
-              "system-ui",
-              "-apple-system",
-              "BlinkMacSystemFont",
-              "Segoe UI",
-              "Helvetica Neue",
-              "Arial",
-              "Noto Sans",
-              "sans-serif"
-            ],
-            "label": "Inter",
-            "url": "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-          }
-        },
-        "typography": {
-          "body1": {
-            "font": "var(--descope-fonts-font1-family)",
-            "size": "14px",
-            "weight": "400"
-          },
-          "body2": {
-            "font": "var(--descope-fonts-font1-family)",
-            "size": "12px",
-            "weight": "400"
-          },
-          "subtitle1": {
-            "font": "var(--descope-fonts-font1-family)",
-            "size": "16px",
-            "weight": "500"
-          },
-          "subtitle2": {
-            "font": "var(--descope-fonts-font1-family)",
-            "size": "14px",
-            "weight": "500"
-          },
-          "h1": {
-            "font": "var(--descope-fonts-font1-family)",
-            "size": "36px",
-            "weight": "600"
-          },
-          "h2": {
-            "font": "var(--descope-fonts-font1-family)",
-            "size": "28px",
-            "weight": "600"
-          },
-          "h3": {
-            "font": "var(--descope-fonts-font1-family)",
-            "size": "20px",
-            "weight": "600"
-          }
-        }
-      },
       "components": {
-        "container": {
-          "--descope-container-background-color": "#09090bFF"
+        "addressField": {
+          "--descope-address-field-host-direction": "var(--descope-input-wrapper-direction)",
+          "--descope-address-field-host-width": "var(--descope-input-wrapper-width)",
+          "_fullWidth": {
+            "--descope-address-field-host-width": "100%"
+          }
         },
-        "button": {
-          "--descope-button-border-radius": "8px",
-          "--descope-button-font-family": "var(--descope-fonts-font1-family)",
-          "--descope-button-border-width": "1px",
-          "--descope-button-border-style": "solid",
+        "alert": {
+          "--descope-alert-align-items": "center",
+          "--descope-alert-background-color": "transparent",
+          "--descope-alert-border-radius": "var(--descope-radius-md)",
+          "--descope-alert-font-size": "var(--descope-text-font-size)",
+          "--descope-alert-gap": "0.5em",
+          "--descope-alert-horizontal-padding": "0",
+          "--descope-alert-host-direction": "var(--descope-direction)",
+          "--descope-alert-icon-size": "1.35em",
+          "--descope-alert-vertical-padding": "0",
+          "_bordered": {
+            "--descope-alert-border-color": "transparent",
+            "--descope-alert-border-radius": "var(--descope-radius-sm)",
+            "--descope-alert-border-style": "solid",
+            "--descope-alert-border-width": "var(--descope-border-xs)"
+          },
+          "_fullWidth": {
+            "--descope-alert-host-width": "100%"
+          },
           "mode": {
-            "primary": {
-              "--descope-button-main": "#2563eb",
-              "--descope-button-light": "#60a5fa",
-              "--descope-button-dark": "#1d4ed8",
-              "--descope-button-contrast": "#eff6ff",
-              "--descope-button-border-color": "#2563eb"
+            "error": {
+              "--descope-alert-text-color": "var(--descope-colors-error-main)",
+              "_bordered": {
+                "--descope-alert-border-color": "var(--descope-colors-error-main)"
+              }
             },
-            "secondary": {
-              "--descope-button-main": "#27272a",
-              "--descope-button-light": "#3f3f46",
-              "--descope-button-dark": "#18181b",
-              "--descope-button-contrast": "#f4f4f5",
-              "--descope-button-border-color": "#3f3f46"
+            "success": {
+              "--descope-alert-text-color": "var(--descope-colors-success-main)",
+              "_bordered": {
+                "--descope-alert-border-color": "var(--descope-colors-success-main)"
+              }
+            }
+          },
+          "spacing": {
+            "lg": {
+              "--descope-alert-horizontal-padding": "var(--descope-spacing-lg)",
+              "--descope-alert-vertical-padding": "var(--descope-spacing-lg)"
+            },
+            "md": {
+              "--descope-alert-horizontal-padding": "var(--descope-spacing-md)",
+              "--descope-alert-vertical-padding": "var(--descope-spacing-md)"
+            },
+            "sm": {
+              "--descope-alert-horizontal-padding": "var(--descope-spacing-sm)",
+              "--descope-alert-vertical-padding": "var(--descope-spacing-sm)"
+            },
+            "xl": {
+              "--descope-alert-horizontal-padding": "var(--descope-spacing-xl)",
+              "--descope-alert-vertical-padding": "var(--descope-spacing-xl)"
+            },
+            "xs": {
+              "--descope-alert-horizontal-padding": "var(--descope-spacing-xs)",
+              "--descope-alert-vertical-padding": "var(--descope-spacing-xs)"
+            }
+          },
+          "textAlign": {
+            "center": {
+              "--descope-alert-justify-content": "center"
+            },
+            "left": {
+              "--descope-alert-justify-content": "left"
+            },
+            "right": {
+              "--descope-alert-justify-content": "right"
             }
           }
         },
+        "appsList": {
+          "--descope-apps-list-host-direction": "var(--descope-direction)",
+          "--descope-apps-list-item-hover-background-color": "var(--descope-colors-surface-highlight)",
+          "--descope-apps-list-items-text-align": "start",
+          "--descope-apps-list-max-height": "400px",
+          "_empty": {
+            "--descope-apps-list-min-height": "400px"
+          },
+          "itemPadding": {
+            "lg": {
+              "--descope-apps-list-item-horizontal-padding": "var(--descope-spacing-lg)",
+              "--descope-apps-list-item-vertical-padding": "var(--descope-spacing-lg)"
+            },
+            "md": {
+              "--descope-apps-list-item-horizontal-padding": "var(--descope-spacing-md)",
+              "--descope-apps-list-item-vertical-padding": "var(--descope-spacing-md)"
+            },
+            "sm": {
+              "--descope-apps-list-item-horizontal-padding": "var(--descope-spacing-sm)",
+              "--descope-apps-list-item-vertical-padding": "var(--descope-spacing-sm)"
+            },
+            "xl": {
+              "--descope-apps-list-item-horizontal-padding": "var(--descope-spacing-xl)",
+              "--descope-apps-list-item-vertical-padding": "var(--descope-spacing-xl)"
+            },
+            "xs": {
+              "--descope-apps-list-item-horizontal-padding": "var(--descope-spacing-xs)",
+              "--descope-apps-list-item-vertical-padding": "var(--descope-spacing-xs)"
+            }
+          },
+          "size": {
+            "lg": {
+              "--descope-apps-list-items-font-size": "20px",
+              "--descope-apps-list-items-font-weight": "normal"
+            },
+            "md": {
+              "--descope-apps-list-items-font-size": "16px",
+              "--descope-apps-list-items-font-weight": "normal"
+            },
+            "sm": {
+              "--descope-apps-list-items-font-size": "14px",
+              "--descope-apps-list-items-font-weight": "normal"
+            },
+            "xs": {
+              "--descope-apps-list-items-font-size": "14px",
+              "--descope-apps-list-items-font-weight": "normal"
+            }
+          }
+        },
+        "autocompleteField": {
+          "--descope-autocomplete-field-checkmark-display": "none",
+          "--descope-autocomplete-field-font-size": "var(--descope-input-wrapper-font-size)",
+          "--descope-autocomplete-field-host-direction": "var(--descope-input-wrapper-direction)",
+          "--descope-autocomplete-field-host-width": "var(--descope-input-wrapper-width)",
+          "--descope-autocomplete-field-item-hover-background": "var(--descope-colors-primary-highlight)",
+          "--descope-autocomplete-field-item-padding-inline-end": "var(--descope-spacing-lg)",
+          "--descope-autocomplete-field-item-padding-inline-start": "var(--descope-spacing-lg)",
+          "--descope-autocomplete-field-selected-item-background": "var(--descope-colors-primary-light)",
+          "--descope-autocomplete-field-selected-item-focus-background": "var(--descope-colors-primary-light)",
+          "--descope-autocomplete-field-selected-item-hover-background": "var(--descope-colors-primary-light)",
+          "_fullWidth": {
+            "--descope-autocomplete-field-host-width": "100%"
+          }
+        },
+        "avatar": {
+          "--descope-avatar-avatar-background-color": "var(--descope-colors-surface-dark)",
+          "--descope-avatar-avatar-text-color": "var(--descope-colors-surface-main)",
+          "--descope-avatar-editable-background-color": "var(--descope-colors-surface-main)",
+          "--descope-avatar-editable-border-color": "var(--descope-colors-surface-dark)",
+          "--descope-avatar-editable-icon-color": "var(--descope-colors-surface-dark)",
+          "--descope-avatar-host-direction": "var(--descope-direction)",
+          "_editable": {
+            "--descope-avatar-cursor": "pointer"
+          },
+          "size": {
+            "2xl": {
+              "--descope-avatar-host-height": "140px",
+              "--descope-avatar-host-width": "140px"
+            },
+            "lg": {
+              "--descope-avatar-host-height": "98px",
+              "--descope-avatar-host-width": "98px"
+            },
+            "md": {
+              "--descope-avatar-host-height": "60px",
+              "--descope-avatar-host-width": "60px"
+            },
+            "sm": {
+              "--descope-avatar-host-height": "40px",
+              "--descope-avatar-host-width": "40px"
+            },
+            "xl": {
+              "--descope-avatar-host-height": "120px",
+              "--descope-avatar-host-width": "120px"
+            },
+            "xs": {
+              "--descope-avatar-host-height": "30px",
+              "--descope-avatar-host-width": "30px"
+            }
+          }
+        },
+        "badge": {
+          "--descope-badge-border-color": "transparent",
+          "--descope-badge-border-radius": "var(--descope-radius-xs)",
+          "--descope-badge-border-style": "solid",
+          "--descope-badge-border-width": "var(--descope-border-xs)",
+          "--descope-badge-font-family": "var(--descope-fonts-font1-family)",
+          "--descope-badge-font-weight": "400",
+          "--descope-badge-horizontal-padding": "0.5em",
+          "--descope-badge-host-direction": "var(--descope-direction)",
+          "--descope-badge-host-width": "fit-content",
+          "--descope-badge-text-align": "center",
+          "--descope-badge-vertical-padding": "0.25em",
+          "_fullWidth": {
+            "--descope-badge-host-width": "100%"
+          },
+          "mode": {
+            "default": {
+              "--descope-badge-text-color": "var(--descope-colors-surface-dark)",
+              "_bordered": {
+                "--descope-badge-border-color": "var(--descope-colors-surface-light)"
+              }
+            },
+            "error": {
+              "--descope-badge-text-color": "var(--descope-colors-error-main)",
+              "_bordered": {
+                "--descope-badge-border-color": "var(--descope-colors-error-light)"
+              }
+            },
+            "primary": {
+              "--descope-badge-text-color": "var(--descope-colors-primary-main)",
+              "_bordered": {
+                "--descope-badge-border-color": "var(--descope-colors-primary-light)"
+              }
+            },
+            "secondary": {
+              "--descope-badge-text-color": "var(--descope-colors-secondary-main)",
+              "_bordered": {
+                "--descope-badge-border-color": "var(--descope-colors-secondary-light)"
+              }
+            },
+            "success": {
+              "--descope-badge-text-color": "var(--descope-colors-success-main)",
+              "_bordered": {
+                "--descope-badge-border-color": "var(--descope-colors-success-light)"
+              }
+            }
+          },
+          "size": {
+            "lg": {
+              "--descope-badge-font-size": "18px"
+            },
+            "md": {
+              "--descope-badge-font-size": "16px"
+            },
+            "sm": {
+              "--descope-badge-font-size": "14px"
+            },
+            "xs": {
+              "--descope-badge-font-size": "12px"
+            }
+          }
+        },
+        "button": {
+          "--descope-button-border-color": "transparent",
+          "--descope-button-border-radius": "8px",
+          "--descope-button-border-style": "solid",
+          "--descope-button-border-width": "1px",
+          "--descope-button-cursor": "pointer",
+          "--descope-button-font-family": "var(--descope-fonts-font1-family)",
+          "--descope-button-horizontal-padding": "0.875em",
+          "--descope-button-host-direction": "var(--descope-direction)",
+          "--descope-button-host-height": "3em",
+          "--descope-button-host-width": "auto",
+          "--descope-button-icon-size": "1.5em",
+          "--descope-button-label-spacing": "0.25em",
+          "--descope-button-outline-color": "transparent",
+          "--descope-button-outline-offset": "0px",
+          "--descope-button-outline-style": "solid",
+          "--descope-button-outline-width": "2px",
+          "--descope-button-text-align": "center",
+          "--descope-button-vertical-padding": "1em",
+          "_disabled": {
+            "--descope-button-contrast": "var(--descope-colors-surface-main)",
+            "--descope-button-dark": "var(--descope-colors-surface-dark)",
+            "--descope-button-icon-color": "var(--descope-colors-surface-main)",
+            "--descope-button-light": "var(--descope-colors-surface-light)",
+            "--descope-button-main": "var(--descope-colors-surface-light)"
+          },
+          "_focused": {
+            "--descope-button-outline-color": "var(--descope-button-light)"
+          },
+          "_fullWidth": {
+            "--descope-button-host-width": "100%"
+          },
+          "_loading": {
+            "--descope-button-cursor": "wait",
+            "--descope-button-label-text-color": "var(--descope-button-main)"
+          },
+          "_square": {
+            "--descope-button-host-height": "3em",
+            "--descope-button-host-width": "3em",
+            "--descope-button-vertical-padding": "0"
+          },
+          "data-descope-provider": {
+            "apple": {
+              "--descope-button-icon-color": "var(--descope-colors-surface-contrast)"
+            },
+            "discord": {
+              "--descope-button-icon-color": "var(--descope-colors-surface-contrast)"
+            },
+            "facebook": {
+              "--descope-button-icon-color": "var(--descope-colors-surface-contrast)"
+            },
+            "github": {
+              "--descope-button-icon-color": "var(--descope-colors-surface-contrast)"
+            },
+            "gitlab": {
+              "--descope-button-icon-color": "var(--descope-colors-surface-contrast)"
+            },
+            "google": {
+              "--descope-button-icon-color": "var(--descope-colors-surface-contrast)"
+            },
+            "linkedin": {
+              "--descope-button-icon-color": "var(--descope-colors-surface-contrast)"
+            },
+            "microsoft": {
+              "--descope-button-icon-color": "var(--descope-colors-surface-contrast)"
+            },
+            "slack": {
+              "--descope-button-icon-color": "var(--descope-colors-surface-contrast)"
+            }
+          },
+          "mode": {
+            "error": {
+              "--descope-button-contrast": "var(--descope-colors-error-contrast)",
+              "--descope-button-dark": "var(--descope-colors-error-dark)",
+              "--descope-button-highlight": "var(--descope-colors-error-highlight)",
+              "--descope-button-light": "var(--descope-colors-error-light)",
+              "--descope-button-main": "var(--descope-colors-error-main)"
+            },
+            "primary": {
+              "--descope-button-border-color": "#2563eb",
+              "--descope-button-contrast": "#eff6ff",
+              "--descope-button-dark": "#1d4ed8",
+              "--descope-button-font-family": "var(--descope-fonts-font1-family)",
+              "--descope-button-highlight": "var(--descope-colors-primary-highlight)",
+              "--descope-button-light": "#60a5fa",
+              "--descope-button-main": "#2563eb"
+            },
+            "secondary": {
+              "--descope-button-border-color": "#3f3f46",
+              "--descope-button-contrast": "#f4f4f5",
+              "--descope-button-dark": "#18181b",
+              "--descope-button-highlight": "var(--descope-colors-secondary-highlight)",
+              "--descope-button-light": "#3f3f46",
+              "--descope-button-main": "#27272a"
+            },
+            "success": {
+              "--descope-button-contrast": "var(--descope-colors-success-contrast)",
+              "--descope-button-dark": "var(--descope-colors-success-dark)",
+              "--descope-button-highlight": "var(--descope-colors-success-highlight)",
+              "--descope-button-light": "var(--descope-colors-success-light)",
+              "--descope-button-main": "var(--descope-colors-success-main)"
+            },
+            "surface": {
+              "--descope-button-contrast": "var(--descope-colors-surface-contrast)",
+              "--descope-button-dark": "var(--descope-colors-surface-dark)",
+              "--descope-button-highlight": "var(--descope-colors-surface-highlight)",
+              "--descope-button-light": "var(--descope-colors-surface-light)",
+              "--descope-button-main": "var(--descope-colors-surface-main)"
+            }
+          },
+          "size": {
+            "lg": {
+              "--descope-button-font-size": "18px"
+            },
+            "md": {
+              "--descope-button-font-size": "16px"
+            },
+            "sm": {
+              "--descope-button-font-size": "14px"
+            },
+            "xs": {
+              "--descope-button-font-size": "12px"
+            }
+          },
+          "textAlign": {
+            "center": {
+              "--descope-button-text-align": "center"
+            },
+            "left": {
+              "--descope-button-text-align": "left"
+            },
+            "right": {
+              "--descope-button-text-align": "right"
+            }
+          },
+          "variant": {
+            "contained": {
+              "--descope-button-background-color": "var(--descope-button-main)",
+              "--descope-button-label-text-color": "var(--descope-button-contrast)",
+              "_active": {
+                "--descope-button-background-color": "var(--descope-button-main)"
+              },
+              "_hover": {
+                "--descope-button-background-color": "var(--descope-button-dark)",
+                "_loading": {
+                  "--descope-button-background-color": "var(--descope-button-main)"
+                }
+              }
+            },
+            "link": {
+              "--descope-button-horizontal-padding": "0.125em",
+              "--descope-button-label-text-color": "var(--descope-button-main)",
+              "_active": {
+                "--descope-button-label-text-color": "var(--descope-button-main)"
+              },
+              "_hover": {
+                "--descope-button-label-text-color": "var(--descope-button-dark)",
+                "--descope-button-label-text-decoration": "underline"
+              }
+            },
+            "outline": {
+              "--descope-button-border-color": "var(--descope-button-main)",
+              "--descope-button-label-text-color": "var(--descope-button-main)",
+              "_active": {
+                "--descope-button-border-color": "var(--descope-button-main)",
+                "--descope-button-label-text-color": "var(--descope-button-main)"
+              },
+              "_hover": {
+                "--descope-button-border-color": "var(--descope-button-dark)",
+                "--descope-button-label-text-color": "var(--descope-button-dark)"
+              }
+            }
+          }
+        },
+        "buttonMultiSelectionGroup": {
+          "--descope-button-multi-selection-group-error-message-font-size": "var(--descope-input-wrapper-error-message-font-size)",
+          "--descope-button-multi-selection-group-error-message-icon": "var(--descope-input-wrapper-error-message-icon)",
+          "--descope-button-multi-selection-group-error-message-icon-padding": "var(--descope-input-wrapper-error-message-icon-padding)",
+          "--descope-button-multi-selection-group-error-message-icon-position": "var(--descope-input-wrapper-error-message-icon-position)",
+          "--descope-button-multi-selection-group-error-message-icon-repeat": "var(--descope-input-wrapper-error-message-icon-repeat)",
+          "--descope-button-multi-selection-group-error-message-icon-size": "var(--descope-input-wrapper-error-message-icon-size)",
+          "--descope-button-multi-selection-group-error-message-text-color": "var(--descope-input-wrapper-error-message-text-color)",
+          "--descope-button-multi-selection-group-font-family": "var(--descope-input-wrapper-font-family)",
+          "--descope-button-multi-selection-group-host-direction": "var(--descope-input-wrapper-direction)",
+          "--descope-button-multi-selection-group-host-width": "var(--descope-input-wrapper-width)",
+          "--descope-button-multi-selection-group-items-spacing": "var(--descope-spacing-sm)",
+          "--descope-button-multi-selection-group-label-required-indicator": "var(--descope-input-wrapper-required-indicator)",
+          "--descope-button-multi-selection-group-label-text-color": "var(--descope-input-wrapper-label-text-color)"
+        },
+        "buttonSelectionGroup": {
+          "--descope-button-selection-group-error-message-font-size": "var(--descope-input-wrapper-error-message-font-size)",
+          "--descope-button-selection-group-error-message-icon": "var(--descope-input-wrapper-error-message-icon)",
+          "--descope-button-selection-group-error-message-icon-padding": "var(--descope-input-wrapper-error-message-icon-padding)",
+          "--descope-button-selection-group-error-message-icon-position": "var(--descope-input-wrapper-error-message-icon-position)",
+          "--descope-button-selection-group-error-message-icon-repeat": "var(--descope-input-wrapper-error-message-icon-repeat)",
+          "--descope-button-selection-group-error-message-icon-size": "var(--descope-input-wrapper-error-message-icon-size)",
+          "--descope-button-selection-group-error-message-text-color": "var(--descope-input-wrapper-error-message-text-color)",
+          "--descope-button-selection-group-font-family": "var(--descope-input-wrapper-font-family)",
+          "--descope-button-selection-group-host-direction": "var(--descope-input-wrapper-direction)",
+          "--descope-button-selection-group-host-width": "var(--descope-input-wrapper-width)",
+          "--descope-button-selection-group-items-spacing": "var(--descope-spacing-sm)",
+          "--descope-button-selection-group-label-required-indicator": "var(--descope-input-wrapper-required-indicator)",
+          "--descope-button-selection-group-label-text-color": "var(--descope-input-wrapper-label-text-color)"
+        },
+        "buttonSelectionGroupItem": {
+          "--descope-button-selection-group-item-background-color": "var(--descope-colors-surface-main)",
+          "--descope-button-selection-group-item-border-color": "var(--descope-colors-surface-light)",
+          "--descope-button-selection-group-item-border-radius": "var(--descope-radius-sm)",
+          "--descope-button-selection-group-item-border-style": "solid",
+          "--descope-button-selection-group-item-border-width": "var(--descope-border-xs)",
+          "--descope-button-selection-group-item-host-direction": "inherit",
+          "--descope-button-selection-group-item-label-text-color": "var(--descope-colors-surface-contrast)",
+          "--descope-button-selection-group-item-outline-color": "transparent",
+          "_focused": {
+            "--descope-button-selection-group-item-outline-color": "var(--descope-colors-surface-light)"
+          },
+          "_hover": {
+            "--descope-button-selection-group-item-background-color": "var(--descope-colors-surface-highlight)"
+          },
+          "_selected": {
+            "--descope-button-selection-group-item-background-color": "var(--descope-colors-surface-contrast)",
+            "--descope-button-selection-group-item-border-color": "var(--descope-colors-surface-contrast)",
+            "--descope-button-selection-group-item-label-text-color": "var(--descope-colors-surface-main)"
+          }
+        },
+        "calendar": {
+          "--descope-calendar-bottom-nav-alignment": "space-between",
+          "--descope-calendar-bottom-nav-gap": "0.5em",
+          "--descope-calendar-bottom-nav-horizontal-padding": "1.5em",
+          "--descope-calendar-bottom-nav-vertical-padding": "0.75em",
+          "--descope-calendar-calendar-padding": "1em",
+          "--descope-calendar-current-day-border-color": "var(--descope-colors-surface-light)",
+          "--descope-calendar-current-day-border-style": "solid",
+          "--descope-calendar-current-day-border-width": "1px",
+          "--descope-calendar-day-background-color": "transparent",
+          "--descope-calendar-day-background-color-hover": "var(--descope-colors-primary-highlight)",
+          "--descope-calendar-day-cursor": "pointer",
+          "--descope-calendar-day-disabled-textd-color": "var(--descope-colors-surface-light)",
+          "--descope-calendar-day-font-size": "1em",
+          "--descope-calendar-day-font-weight": "500",
+          "--descope-calendar-day-height": "3.125em",
+          "--descope-calendar-day-padding": "0",
+          "--descope-calendar-day-radius": "50%",
+          "--descope-calendar-day-selected-background-color": "var(--descope-colors-primary-main)",
+          "--descope-calendar-day-selected-textd-color": "var(--descope-colors-primary-contrast)",
+          "--descope-calendar-day-size": "2.125em",
+          "--descope-calendar-day-text-align": "center",
+          "--descope-calendar-day-text-color": "var(--descope-colors-surface-contrast)",
+          "--descope-calendar-font-family": "var(--descope-input-wrapper-font-family)",
+          "--descope-calendar-font-size": "var(--descope-input-wrapper-font-size)",
+          "--descope-calendar-host-direction": "var(--descope-input-wrapper-direction)",
+          "--descope-calendar-month-input-width": "8em",
+          "--descope-calendar-nav-border-bottom-color": "var(--descope-colors-surface-highlight)",
+          "--descope-calendar-nav-border-bottom-style": "solid",
+          "--descope-calendar-nav-border-bottom-width": "1px",
+          "--descope-calendar-nav-button-cursor": "pointer",
+          "--descope-calendar-nav-button-rotation": "rotate(180deg)",
+          "--descope-calendar-nav-button-size": "24px",
+          "--descope-calendar-nav-margin-bottom": "0.75em",
+          "--descope-calendar-top-nav-alignment": "space-between",
+          "--descope-calendar-top-nav-gap": "0",
+          "--descope-calendar-top-nav-selectors-gap": "0.5em",
+          "--descope-calendar-top-nav-vertical-padding": "1em",
+          "--descope-calendar-weekday-font-size": "0.875em",
+          "--descope-calendar-weekday-font-weight": "500",
+          "--descope-calendar-year-input-width": "6em",
+          "_disabled": {
+            "--descope-calendar-day-background-color-hover": "none",
+            "--descope-calendar-day-cursor": "default",
+            "--descope-calendar-nav-button-cursor": "default",
+            "--descope-calendar-nav-button-opacity": "0.5"
+          },
+          "_fullWidth": {
+            "--descope-calendar-day-block-align": "0 auto",
+            "--descope-calendar-host-width": "100%"
+          },
+          "size": {
+            "lg": {
+              "--descope-calendar-font-size": "18px"
+            },
+            "md": {
+              "--descope-calendar-font-size": "16px"
+            },
+            "sm": {
+              "--descope-calendar-font-size": "14px"
+            },
+            "xs": {
+              "--descope-calendar-font-size": "12px"
+            }
+          }
+        },
+        "checkbox": {
+          "--descope-checkbox-error-message-font-size": "var(--descope-input-wrapper-error-message-font-size)",
+          "--descope-checkbox-error-message-icon": "var(--descope-input-wrapper-error-message-icon)",
+          "--descope-checkbox-error-message-icon-padding": "var(--descope-input-wrapper-error-message-icon-padding)",
+          "--descope-checkbox-error-message-icon-position": "var(--descope-input-wrapper-error-message-icon-position)",
+          "--descope-checkbox-error-message-icon-repeat": "var(--descope-input-wrapper-error-message-icon-repeat)",
+          "--descope-checkbox-error-message-icon-size": "var(--descope-input-wrapper-error-message-icon-size)",
+          "--descope-checkbox-error-message-text-color": "var(--descope-input-wrapper-error-message-text-color)",
+          "--descope-checkbox-font-family": "var(--descope-input-wrapper-font-family)",
+          "--descope-checkbox-font-size": "var(--descope-input-wrapper-font-size)",
+          "--descope-checkbox-host-direction": "var(--descope-input-wrapper-direction)",
+          "--descope-checkbox-host-width": "var(--descope-input-wrapper-width)",
+          "--descope-checkbox-input-background-color": "var(--descope-input-wrapper-background-color)",
+          "--descope-checkbox-input-border-color": "var(--descope-input-wrapper-border-color)",
+          "--descope-checkbox-input-border-radius": "var(--descope-input-wrapper-border-radius)",
+          "--descope-checkbox-input-border-style": "var(--descope-input-wrapper-border-style)",
+          "--descope-checkbox-input-border-width": "var(--descope-input-wrapper-border-width)",
+          "--descope-checkbox-input-outline-color": "var(--descope-input-wrapper-outline-color)",
+          "--descope-checkbox-input-outline-offset": "var(--descope-input-wrapper-outline-offset)",
+          "--descope-checkbox-input-outline-style": "var(--descope-input-wrapper-outline-style)",
+          "--descope-checkbox-input-outline-width": "var(--descope-input-wrapper-outline-width)",
+          "--descope-checkbox-input-size": "1.35em",
+          "--descope-checkbox-input-value-text-color": "var(--descope-input-wrapper-value-text-color)",
+          "--descope-checkbox-label-font-weight": "400",
+          "--descope-checkbox-label-line-height": "1.35em",
+          "--descope-checkbox-label-required-indicator": "var(--descope-input-wrapper-required-indicator)",
+          "--descope-checkbox-label-spacing": "1em",
+          "--descope-checkbox-label-text-color": "var(--descope-input-wrapper-label-text-color)"
+        },
+        "codeSnippet": {
+          "--descope-code-snippet-addition-bg-color": "#f0fff4",
+          "--descope-code-snippet-addition-text-color": "#7ee787",
+          "--descope-code-snippet-attr-text-color": "#79c0ff",
+          "--descope-code-snippet-attribute-text-color": "#79c0ff",
+          "--descope-code-snippet-built-in-text-color": "#ffa657",
+          "--descope-code-snippet-bullet-text-color": "#735c0f",
+          "--descope-code-snippet-code-text-color": "#8b949e",
+          "--descope-code-snippet-comment-text-color": "#8b949e",
+          "--descope-code-snippet-deletion-bg-color": "#f0fff4",
+          "--descope-code-snippet-deletion-text-color": "#ff7b72",
+          "--descope-code-snippet-doc-tag-text-color": "#ff7b72",
+          "--descope-code-snippet-emphasis-text-color": "#c9d1d9",
+          "--descope-code-snippet-formula-text-color": "#8b949e",
+          "--descope-code-snippet-keyword-text-color": "#ff7b72",
+          "--descope-code-snippet-literal-text-color": "#79c0ff",
+          "--descope-code-snippet-meta-keyword-text-color": "#ff7b72",
+          "--descope-code-snippet-meta-string-text-color": "#a5d6ff",
+          "--descope-code-snippet-meta-text-color": "#79c0ff",
+          "--descope-code-snippet-name-text-color": "#7ee787",
+          "--descope-code-snippet-number-text-color": "#79c0ff",
+          "--descope-code-snippet-operator-text-color": "#79c0ff",
+          "--descope-code-snippet-quote-text-color": "#7ee787",
+          "--descope-code-snippet-regexp-text-color": "#a5d6ff",
+          "--descope-code-snippet-root-bg-color": "var(--descope-colors-surface-main)",
+          "--descope-code-snippet-root-text-color": "var(--descope-colors-surface-contrast)",
+          "--descope-code-snippet-section-text-color": "#79c0ff",
+          "--descope-code-snippet-selector-attr-text-color": "#79c0ff",
+          "--descope-code-snippet-selector-class-text-color": "#79c0ff",
+          "--descope-code-snippet-selector-id-text-color": "#79c0ff",
+          "--descope-code-snippet-selector-pseudo-text-color": "#7ee787",
+          "--descope-code-snippet-selector-tag-text-color": "#7ee787",
+          "--descope-code-snippet-string-text-color": "#a5d6ff",
+          "--descope-code-snippet-strong-text-color": "#c9d1d9",
+          "--descope-code-snippet-subst-text-color": "#c9d1d9",
+          "--descope-code-snippet-symbol-text-color": "#ffa657",
+          "--descope-code-snippet-template-tag-text-color": "#ff7b72",
+          "--descope-code-snippet-template-variable-text-color": "#ff7b72",
+          "--descope-code-snippet-title-class-inherited-text-color": "#d2a8ff",
+          "--descope-code-snippet-title-class-text-color": "#d2a8ff",
+          "--descope-code-snippet-title-function-text-color": "#d2a8ff",
+          "--descope-code-snippet-title-text-color": "#d2a8ff",
+          "--descope-code-snippet-type-text-color": "#ff7b72",
+          "--descope-code-snippet-variable-language-text-color": "#ff7b72",
+          "--descope-code-snippet-variable-text-color": "#79c0ff"
+        },
+        "collapsibleContainer": {
+          "--descope-collapsible-container-align-items": "flex-start",
+          "--descope-collapsible-container-background-color": "var(--descope-colors-surface-main)",
+          "--descope-collapsible-container-background-image": "",
+          "--descope-collapsible-container-background-position-x": "center",
+          "--descope-collapsible-container-background-position-y": "center",
+          "--descope-collapsible-container-background-repeat": "no-repeat",
+          "--descope-collapsible-container-background-size": "cover",
+          "--descope-collapsible-container-border-radius": "0px",
+          "--descope-collapsible-container-border-width": "0px",
+          "--descope-collapsible-container-box-shadow": "none",
+          "--descope-collapsible-container-content-animation-duration": "0.1s",
+          "--descope-collapsible-container-flex-direction": "column",
+          "--descope-collapsible-container-header-gap": "var(--descope-spacing-md)",
+          "--descope-collapsible-container-host-direction": "var(--descope-direction)",
+          "--descope-collapsible-container-host-width": "100%",
+          "--descope-collapsible-container-icon-animation-duration": "0.1s",
+          "--descope-collapsible-container-justify-content": "flex-start",
+          "--descope-collapsible-container-shadow-color": "#00000020",
+          "--descope-collapsible-container-text-grow": "0",
+          "_border": {
+            "--descope-collapsible-container-border-color": "var(--descope-colors-surface-light)",
+            "--descope-collapsible-container-border-style": "solid",
+            "--descope-collapsible-container-border-width": "var(--descope-border-xs)"
+          },
+          "_collapsible": {
+            "--descope-collapsible-container-header-cursor": "pointer"
+          },
+          "_fillTitle": {
+            "--descope-collapsible-container-text-grow": "1"
+          },
+          "borderRadius": {
+            "2xl": {
+              "--descope-collapsible-container-border-radius": "var(--descope-radius-2xl)"
+            },
+            "3xl": {
+              "--descope-collapsible-container-border-radius": "var(--descope-radius-3xl)"
+            },
+            "lg": {
+              "--descope-collapsible-container-border-radius": "var(--descope-radius-lg)"
+            },
+            "md": {
+              "--descope-collapsible-container-border-radius": "var(--descope-radius-md)"
+            },
+            "sm": {
+              "--descope-collapsible-container-border-radius": "var(--descope-radius-sm)"
+            },
+            "xl": {
+              "--descope-collapsible-container-border-radius": "var(--descope-radius-xl)"
+            }
+          },
+          "horizontalPadding": {
+            "lg": {
+              "--descope-collapsible-container-horizontal-padding": "20px"
+            },
+            "md": {
+              "--descope-collapsible-container-horizontal-padding": "10px"
+            },
+            "sm": {
+              "--descope-collapsible-container-horizontal-padding": "5px"
+            }
+          },
+          "iconPosition": {
+            "left": {
+              "--descope-collapsible-container-header-icon-order": "0"
+            },
+            "right": {
+              "--descope-collapsible-container-header-icon-order": "1"
+            }
+          },
+          "shadow": {
+            "2xl": {
+              "--descope-collapsible-container-box-shadow": "var(--descope-shadow-wide-2xl) var(--descope-collapsible-container-shadow-color)",
+              "--descope-collapsible-container-shadow-color": "#00000050"
+            },
+            "lg": {
+              "--descope-collapsible-container-box-shadow": "var(--descope-shadow-wide-lg) var(--descope-collapsible-container-shadow-color), var(--descope-shadow-narrow-lg) var(--descope-collapsible-container-shadow-color)"
+            },
+            "md": {
+              "--descope-collapsible-container-box-shadow": "var(--descope-shadow-wide-md) var(--descope-collapsible-container-shadow-color), var(--descope-shadow-narrow-md) var(--descope-collapsible-container-shadow-color)"
+            },
+            "sm": {
+              "--descope-collapsible-container-box-shadow": "var(--descope-shadow-wide-sm) var(--descope-collapsible-container-shadow-color), var(--descope-shadow-narrow-sm) var(--descope-collapsible-container-shadow-color)"
+            },
+            "xl": {
+              "--descope-collapsible-container-box-shadow": "var(--descope-shadow-wide-xl) var(--descope-collapsible-container-shadow-color), var(--descope-shadow-narrow-xl) var(--descope-collapsible-container-shadow-color)"
+            }
+          },
+          "spaceBetween": {
+            "lg": {
+              "--descope-collapsible-container-gap": "30px"
+            },
+            "md": {
+              "--descope-collapsible-container-gap": "20px"
+            },
+            "sm": {
+              "--descope-collapsible-container-gap": "10px"
+            }
+          },
+          "verticalPadding": {
+            "lg": {
+              "--descope-collapsible-container-vertical-padding": "20px"
+            },
+            "md": {
+              "--descope-collapsible-container-vertical-padding": "10px"
+            },
+            "sm": {
+              "--descope-collapsible-container-vertical-padding": "5px"
+            }
+          }
+        },
+        "comboBox": {
+          "--descope-combo-box--overlay-content-height": "100%",
+          "--descope-combo-box--overlay-content-opacity": "1",
+          "--descope-combo-box--overlay-margin": "0",
+          "--descope-combo-box--overlay-min-height": "400px",
+          "--descope-combo-box--overlay-scroller-min-height": "1px",
+          "--descope-combo-box-error-message-font-size": "var(--descope-input-wrapper-error-message-font-size)",
+          "--descope-combo-box-error-message-icon": "var(--descope-input-wrapper-error-message-icon)",
+          "--descope-combo-box-error-message-icon-padding": "var(--descope-input-wrapper-error-message-icon-padding)",
+          "--descope-combo-box-error-message-icon-position": "var(--descope-input-wrapper-error-message-icon-position)",
+          "--descope-combo-box-error-message-icon-repeat": "var(--descope-input-wrapper-error-message-icon-repeat)",
+          "--descope-combo-box-error-message-icon-size": "var(--descope-input-wrapper-error-message-icon-size)",
+          "--descope-combo-box-error-message-text-color": "var(--descope-input-wrapper-error-message-text-color)",
+          "--descope-combo-box-font-family": "var(--descope-input-wrapper-font-family)",
+          "--descope-combo-box-font-size": "var(--descope-input-wrapper-font-size)",
+          "--descope-combo-box-host-direction": "var(--descope-input-wrapper-direction)",
+          "--descope-combo-box-host-width": "var(--descope-input-wrapper-width)",
+          "--descope-combo-box-input-background-color": "var(--descope-input-wrapper-background-color)",
+          "--descope-combo-box-input-border-color": "var(--descope-input-wrapper-border-color)",
+          "--descope-combo-box-input-border-radius": "var(--descope-input-wrapper-border-radius)",
+          "--descope-combo-box-input-border-style": "var(--descope-input-wrapper-border-style)",
+          "--descope-combo-box-input-border-width": "var(--descope-input-wrapper-border-width)",
+          "--descope-combo-box-input-dropdown-button-color": "var(--descope-colors-surface-dark)",
+          "--descope-combo-box-input-dropdown-button-cursor": "pointer",
+          "--descope-combo-box-input-dropdown-button-offset": "var(--descope-spacing-xs)",
+          "--descope-combo-box-input-dropdown-button-size": "var(--descope-input-wrapper-toggle-button-size)",
+          "--descope-combo-box-input-height": "var(--descope-input-wrapper-input-height)",
+          "--descope-combo-box-input-horizontal-padding": "var(--descope-input-wrapper-horizontal-padding)",
+          "--descope-combo-box-input-outline-color": "var(--descope-input-wrapper-outline-color)",
+          "--descope-combo-box-input-outline-offset": "var(--descope-input-wrapper-outline-offset)",
+          "--descope-combo-box-input-outline-style": "var(--descope-input-wrapper-outline-style)",
+          "--descope-combo-box-input-outline-width": "var(--descope-input-wrapper-outline-width)",
+          "--descope-combo-box-input-placeholder-text-color": "var(--descope-input-wrapper-placeholder-text-color)",
+          "--descope-combo-box-input-transform-y": "var(--descope-input-wrapper-input-transform-y)",
+          "--descope-combo-box-input-transition": "var(--descope-input-wrapper-input-transition)",
+          "--descope-combo-box-input-value-text-color": "var(--descope-input-wrapper-value-text-color)",
+          "--descope-combo-box-input-vertical-alignment": "var(--descope-input-wrapper-input-vertical-alignment)",
+          "--descope-combo-box-label-font-size": "var(--descope-input-wrapper-label-font-size)",
+          "--descope-combo-box-label-font-weight": "var(--descope-input-wrapper-label-font-weight)",
+          "--descope-combo-box-label-horizontal-position": "var(--descope-input-wrapper-label-horizontal-position)",
+          "--descope-combo-box-label-position": "var(--descope-input-wrapper-label-position)",
+          "--descope-combo-box-label-required-indicator": "var(--descope-input-wrapper-required-indicator)",
+          "--descope-combo-box-label-text-color": "var(--descope-input-wrapper-label-text-color)",
+          "--descope-combo-box-label-top-position": "var(--descope-input-wrapper-label-top-position)",
+          "--descope-combo-box-margin-inline-start": "var(--descope-input-wrapper-margin-inline-start)",
+          "--descope-combo-box-overlay-background": "var(--descope-input-wrapper-background-color)",
+          "--descope-combo-box-overlay-checkmark-display": "initial",
+          "--descope-combo-box-overlay-cursor": "pointer",
+          "--descope-combo-box-overlay-font-family": "var(--descope-input-wrapper-font-family)",
+          "--descope-combo-box-overlay-font-size": "var(--descope-input-wrapper-font-size)",
+          "--descope-combo-box-overlay-item-box-shadow": "none",
+          "--descope-combo-box-overlay-item-focus-background": "var(--descope-colors-primary-highlight)",
+          "--descope-combo-box-overlay-item-hover-background": "var(--descope-colors-primary-highlight)",
+          "--descope-combo-box-overlay-item-padding-inline-end": "var(--descope-spacing-lg)",
+          "--descope-combo-box-overlay-item-padding-inline-start": "var(--descope-spacing-xs)",
+          "--descope-combo-box-overlay-selected-item-background": "initial",
+          "--descope-combo-box-overlay-selected-item-focus-background": "var(--descope-colors-primary-highlight)",
+          "--descope-combo-box-overlay-selected-item-hover-background": "var(--descope-colors-primary-highlight)",
+          "--descope-combo-box-overlay-text-color": "var(--descope-input-wrapper-value-text-color)",
+          "--descope-combo-box-placeholder-opacity": "var(--descope-input-wrapper-placeholder-opacity)",
+          "--descope-combo-box-value-input-height": "var(--descope-input-wrapper-value-input-height)",
+          "--descope-combo-box-value-input-margin-bottom": "var(--descope-input-wrapper-value-input-margin-bottom)",
+          "_loading": {
+            "--descope-combo-box--overlay-content-height": "100px",
+            "--descope-combo-box--overlay-content-opacity": "0",
+            "--descope-combo-box--overlay-loader-border": "2px solid transparent",
+            "--descope-combo-box--overlay-loader-border-color": "var(--descope-colors-primary-highlight) var(--descope-colors-primary-highlight) var(--descope-colors-primary-main) var(--descope-colors-primary-main)",
+            "--descope-combo-box--overlay-loader-border-radius": "50%",
+            "--descope-combo-box--overlay-loader-height": "30px",
+            "--descope-combo-box--overlay-loader-left": "50%",
+            "--descope-combo-box--overlay-loader-margin": "-15px 0 0 -15px",
+            "--descope-combo-box--overlay-loader-right": "auto",
+            "--descope-combo-box--overlay-loader-top": "50%",
+            "--descope-combo-box--overlay-loader-width": "30px",
+            "--descope-combo-box--overlay-scroller-min-height": "100px"
+          },
+          "_readonly": {
+            "--descope-combo-box-input-dropdown-button-cursor": "default"
+          }
+        },
+        "container": {
+          "&borderRadius": {
+            "2xl": {
+              "--descope-container-border-radius": "var(--descope-radius-2xl)"
+            },
+            "3xl": {
+              "--descope-container-border-radius": "var(--descope-radius-3xl)"
+            },
+            "lg": {
+              "--descope-container-border-radius": "var(--descope-radius-lg)"
+            },
+            "md": {
+              "--descope-container-border-radius": "var(--descope-radius-md)"
+            },
+            "sm": {
+              "--descope-container-border-radius": "var(--descope-radius-sm)"
+            },
+            "xl": {
+              "--descope-container-border-radius": "var(--descope-radius-xl)"
+            }
+          },
+          "--descope-container-background-color": "#09090bFF",
+          "--descope-container-background-image": "",
+          "--descope-container-background-position-x": "center",
+          "--descope-container-background-position-y": "center",
+          "--descope-container-background-repeat": "no-repeat",
+          "--descope-container-background-size": "cover",
+          "--descope-container-border-color": "unset",
+          "--descope-container-border-radius": "0px",
+          "--descope-container-border-style": "none",
+          "--descope-container-border-width": "unset",
+          "--descope-container-box-shadow": "none",
+          "--descope-container-color": "var(--descope-colors-surface-contrast)",
+          "--descope-container-host-direction": "var(--descope-direction)",
+          "--descope-container-host-width": "100%",
+          "--descope-container-items-grow": "0",
+          "--descope-container-shadow-color": "#00000020",
+          "direction": {
+            "column": {
+              "--descope-container-align-items": "var(--descope-container-horizontal-alignment)",
+              "--descope-container-flex-direction": "column",
+              "--descope-container-justify-content": "var(--descope-container-vertical-alignment)",
+              "verticalAlignment": {
+                "spaceBetween": {
+                  "--descope-container-vertical-alignment": "space-between"
+                }
+              }
+            },
+            "row": {
+              "--descope-container-align-items": "var(--descope-container-vertical-alignment)",
+              "--descope-container-flex-direction": "row",
+              "--descope-container-flex-wrap": "wrap",
+              "--descope-container-justify-content": "var(--descope-container-horizontal-alignment)",
+              "horizontalAlignment": {
+                "spaceBetween": {
+                  "--descope-container-horizontal-alignment": "space-between"
+                }
+              }
+            }
+          },
+          "horizontalAlignment": {
+            "center": {
+              "--descope-container-horizontal-alignment": "safe center"
+            },
+            "end": {
+              "--descope-container-horizontal-alignment": "end"
+            },
+            "start": {
+              "--descope-container-horizontal-alignment": "start"
+            }
+          },
+          "horizontalPadding": {
+            "lg": {
+              "--descope-container-horizontal-padding": "20px"
+            },
+            "md": {
+              "--descope-container-horizontal-padding": "10px"
+            },
+            "sm": {
+              "--descope-container-horizontal-padding": "5px"
+            }
+          },
+          "shadow": {
+            "2xl": {
+              "--descope-container-box-shadow": "var(--descope-shadow-wide-2xl) var(--descope-container-shadow-color)",
+              "--descope-container-shadow-color": "#00000050"
+            },
+            "lg": {
+              "--descope-container-box-shadow": "var(--descope-shadow-wide-lg) var(--descope-container-shadow-color), var(--descope-shadow-narrow-lg) var(--descope-container-shadow-color)"
+            },
+            "md": {
+              "--descope-container-box-shadow": "var(--descope-shadow-wide-md) var(--descope-container-shadow-color), var(--descope-shadow-narrow-md) var(--descope-container-shadow-color)"
+            },
+            "sm": {
+              "--descope-container-box-shadow": "var(--descope-shadow-wide-sm) var(--descope-container-shadow-color), var(--descope-shadow-narrow-sm) var(--descope-container-shadow-color)"
+            },
+            "xl": {
+              "--descope-container-box-shadow": "var(--descope-shadow-wide-xl) var(--descope-container-shadow-color), var(--descope-shadow-narrow-xl) var(--descope-container-shadow-color)"
+            }
+          },
+          "spaceBetween": {
+            "lg": {
+              "--descope-container-gap": "30px"
+            },
+            "md": {
+              "--descope-container-gap": "20px"
+            },
+            "sm": {
+              "--descope-container-gap": "10px"
+            }
+          },
+          "verticalAlignment": {
+            "center": {
+              "--descope-container-vertical-alignment": "safe center"
+            },
+            "end": {
+              "--descope-container-vertical-alignment": "end"
+            },
+            "start": {
+              "--descope-container-vertical-alignment": "start"
+            }
+          },
+          "verticalPadding": {
+            "lg": {
+              "--descope-container-vertical-padding": "20px"
+            },
+            "md": {
+              "--descope-container-vertical-padding": "10px"
+            },
+            "sm": {
+              "--descope-container-vertical-padding": "5px"
+            }
+          }
+        },
+        "dateField": {
+          "--descope-date-field--overlay-backdrop-background-color": "transparent",
+          "--descope-date-field--overlay-backdrop-pointer-events": "all",
+          "--descope-date-field--overlay-background-color": "var(--descope-input-wrapper-background-color)",
+          "--descope-date-field--overlay-box-shadow": "var(--descope-shadow-wide-xl) #00000020, var(--descope-shadow-narrow-xl) #00000020",
+          "--descope-date-field--overlay-margin-top": "calc(var(--descope-input-wrapper-outline-width) + 1px)",
+          "--descope-date-field--overlay-outline-color": "transparent",
+          "--descope-date-field--overlay-outline-style": "none",
+          "--descope-date-field--overlay-outline-width": "0",
+          "--descope-date-field--overlay-padding": "0",
+          "--descope-date-field-error-message-font-size": "var(--descope-input-wrapper-error-message-font-size)",
+          "--descope-date-field-error-message-icon": "var(--descope-input-wrapper-error-message-icon)",
+          "--descope-date-field-error-message-icon-padding": "var(--descope-input-wrapper-error-message-icon-padding)",
+          "--descope-date-field-error-message-icon-position": "var(--descope-input-wrapper-error-message-icon-position)",
+          "--descope-date-field-error-message-icon-repeat": "var(--descope-input-wrapper-error-message-icon-repeat)",
+          "--descope-date-field-error-message-icon-size": "var(--descope-input-wrapper-error-message-icon-size)",
+          "--descope-date-field-host-direction": "var(--descope-input-wrapper-direction)",
+          "--descope-date-field-host-width": "var(--descope-input-wrapper-width)",
+          "--descope-date-field-icon-margin": "0.375em",
+          "--descope-date-field-rtl-input-alignment": "right",
+          "--descope-date-field-rtl-input-direction": "ltr"
+        },
+        "divider": {
+          "--descope-divider-align-items": "center",
+          "--descope-divider-align-self": "stretch",
+          "--descope-divider-flex-direction": "row",
+          "--descope-divider-host-direction": "var(--descope-direction)",
+          "--descope-divider-host-width": "100%",
+          "--descope-divider-label-text-horizontal-spacing": "var(--descope-divider-spacing)",
+          "--descope-divider-label-text-max-width": "calc(100% - 100px)",
+          "--descope-divider-label-text-width": "fit-content",
+          "--descope-divider-spacing": "10px",
+          "--descope-divider-stripe-color": "var(--descope-colors-surface-light)",
+          "--descope-divider-stripe-color-opacity": "0.5",
+          "--descope-divider-stripe-horizontal-thickness": "var(--descope-divider-thickness)",
+          "--descope-divider-text-align": "center",
+          "--descope-divider-thickness": "2px",
+          "_vertical": {
+            "--descope-divider-flex-direction": "column",
+            "--descope-divider-host-padding": "0 calc(var(--descope-divider-thickness) * 3)",
+            "--descope-divider-host-width": "fit-content",
+            "--descope-divider-label-text-max-width": "100%",
+            "--descope-divider-label-text-vertical-spacing": "var(--descope-divider-spacing)",
+            "--descope-divider-label-text-width": "fit-content",
+            "--descope-divider-min-height": "200px",
+            "--descope-divider-stripe-vertical-thickness": "var(--descope-divider-thickness)"
+          }
+        },
+        "emailField": {
+          "--descope-email-field-error-message-font-size": "var(--descope-input-wrapper-error-message-font-size)",
+          "--descope-email-field-error-message-icon": "var(--descope-input-wrapper-error-message-icon)",
+          "--descope-email-field-error-message-icon-padding": "var(--descope-input-wrapper-error-message-icon-padding)",
+          "--descope-email-field-error-message-icon-position": "var(--descope-input-wrapper-error-message-icon-position)",
+          "--descope-email-field-error-message-icon-repeat": "var(--descope-input-wrapper-error-message-icon-repeat)",
+          "--descope-email-field-error-message-icon-size": "var(--descope-input-wrapper-error-message-icon-size)",
+          "--descope-email-field-error-message-text-color": "var(--descope-input-wrapper-error-message-text-color)",
+          "--descope-email-field-font-family": "var(--descope-input-wrapper-font-family)",
+          "--descope-email-field-font-size": "var(--descope-input-wrapper-font-size)",
+          "--descope-email-field-host-direction": "var(--descope-input-wrapper-direction)",
+          "--descope-email-field-host-min-width": "var(--descope-input-wrapper-min-width)",
+          "--descope-email-field-host-width": "var(--descope-input-wrapper-width)",
+          "--descope-email-field-input-background-color": "var(--descope-input-wrapper-background-color)",
+          "--descope-email-field-input-border-color": "var(--descope-input-wrapper-border-color)",
+          "--descope-email-field-input-border-radius": "var(--descope-input-wrapper-border-radius)",
+          "--descope-email-field-input-border-style": "var(--descope-input-wrapper-border-style)",
+          "--descope-email-field-input-border-width": "var(--descope-input-wrapper-border-width)",
+          "--descope-email-field-input-height": "var(--descope-input-wrapper-input-height)",
+          "--descope-email-field-input-horizontal-padding": "var(--descope-input-wrapper-horizontal-padding)",
+          "--descope-email-field-input-outline-color": "var(--descope-input-wrapper-outline-color)",
+          "--descope-email-field-input-outline-offset": "var(--descope-input-wrapper-outline-offset)",
+          "--descope-email-field-input-outline-style": "var(--descope-input-wrapper-outline-style)",
+          "--descope-email-field-input-outline-width": "var(--descope-input-wrapper-outline-width)",
+          "--descope-email-field-input-placeholder-color": "var(--descope-input-wrapper-placeholder-text-color)",
+          "--descope-email-field-input-transform-y": "var(--descope-input-wrapper-input-transform-y)",
+          "--descope-email-field-input-transition": "var(--descope-input-wrapper-input-transition)",
+          "--descope-email-field-input-value-text-color": "var(--descope-input-wrapper-value-text-color)",
+          "--descope-email-field-input-vertical-alignment": "var(--descope-input-wrapper-input-vertical-alignment)",
+          "--descope-email-field-label-font-size": "var(--descope-input-wrapper-label-font-size)",
+          "--descope-email-field-label-font-weight": "var(--descope-input-wrapper-label-font-weight)",
+          "--descope-email-field-label-horizontal-position": "var(--descope-input-wrapper-label-horizontal-position)",
+          "--descope-email-field-label-position": "var(--descope-input-wrapper-label-position)",
+          "--descope-email-field-label-required-indicator": "var(--descope-input-wrapper-required-indicator)",
+          "--descope-email-field-label-text-color": "var(--descope-input-wrapper-label-text-color)",
+          "--descope-email-field-label-top-position": "var(--descope-input-wrapper-label-top-position)",
+          "--descope-email-field-margin-inline-start": "var(--descope-input-wrapper-margin-inline-start)",
+          "--descope-email-field-placeholder-opacity": "var(--descope-input-wrapper-placeholder-opacity)",
+          "--descope-email-field-value-input-height": "var(--descope-input-wrapper-value-input-height)",
+          "--descope-email-field-value-input-margin-bottom": "var(--descope-input-wrapper-value-input-margin-bottom)"
+        },
+        "enrichedText": {
+          "--descope-enriched-text-font-family": "var(--descope-text-font-family)",
+          "--descope-enriched-text-font-size": "var(--descope-text-font-size)",
+          "--descope-enriched-text-font-weight": "var(--descope-text-font-weight)",
+          "--descope-enriched-text-font-weight-bold": "900",
+          "--descope-enriched-text-host-direction": "var(--descope-direction)",
+          "--descope-enriched-text-host-display": "inline-block",
+          "--descope-enriched-text-host-width": "var(--descope-text-host-width)",
+          "--descope-enriched-text-link-color": "var(--descope-link-text-color)",
+          "--descope-enriched-text-link-hover-text-decoration": "underline",
+          "--descope-enriched-text-link-text-decoration": "none",
+          "--descope-enriched-text-min-height": "1.35em",
+          "--descope-enriched-text-min-width": "0.25em",
+          "--descope-enriched-text-text-align": "var(--descope-text-text-align)",
+          "--descope-enriched-text-text-color": "var(--descope-text-text-color)",
+          "--descope-enriched-text-text-line-height": "var(--descope-text-text-line-height)",
+          "_empty": {
+            "_hideWhenEmpty": {
+              "--descope-enriched-text-host-display": "none"
+            }
+          }
+        },
+        "grid": {
+          "--descope-grid-active-sort-indicator": "var(--descope-colors-surface-dark)",
+          "--descope-grid-background-color": "var(--descope-colors-surface-main)",
+          "--descope-grid-border-color": "transparent",
+          "--descope-grid-border-radius": "var(--descope-input-wrapper-border-radius)",
+          "--descope-grid-border-style": "var(--descope-input-wrapper-border-style)",
+          "--descope-grid-border-width": "var(--descope-input-wrapper-border-width)",
+          "--descope-grid-details-panel-background-color": "var(--descope-colors-surface-highlight)",
+          "--descope-grid-details-panel-border-top-color": "var(--descope-colors-surface-light)",
+          "--descope-grid-details-panel-items-gap": "2em",
+          "--descope-grid-details-panel-labels-color": "var(--descope-colors-surface-dark)",
+          "--descope-grid-details-panel-labels-font-size": "0.8em",
+          "--descope-grid-details-panel-padding": "12px 0",
+          "--descope-grid-font-family": "var(--descope-input-wrapper-font-family)",
+          "--descope-grid-font-size": "var(--descope-input-wrapper-font-size)",
+          "--descope-grid-font-weight": "400",
+          "--descope-grid-header-row-text-color": "var(--descope-colors-surface-dark)",
+          "--descope-grid-host-direction": "var(--descope-direction)",
+          "--descope-grid-host-height": "100%",
+          "--descope-grid-host-min-height": "400px",
+          "--descope-grid-host-width": "100%",
+          "--descope-grid-resize-handle-color": "var(--descope-colors-surface-light)",
+          "--descope-grid-selected-background-color": "var(--descope-colors-surface-highlight)",
+          "--descope-grid-separator-color": "var(--descope-colors-surface-light)",
+          "--descope-grid-sort-indicators-color": "var(--descope-colors-surface-light)",
+          "--descope-grid-toggle-details-panel-button-closed-color": "var(--descope-colors-surface-light)",
+          "--descope-grid-toggle-details-panel-button-cursor": "pointer",
+          "--descope-grid-toggle-details-panel-button-opened-color": "var(--descope-colors-surface-contrast)",
+          "--descope-grid-toggle-details-panel-button-size": "1em",
+          "--descope-grid-value-text-color": "var(--descope-colors-surface-contrast)",
+          "_bordered": {
+            "--descope-grid-border-color": "var(--descope-input-wrapper-border-color)"
+          }
+        },
+        "hcaptcha": {
+          "enabled": {
+            "false": {
+              "--descope-hcaptcha-max-height": "70px"
+            }
+          }
+        },
+        "hybridField": {
+          "--descope-hybrid-field-error-message-font-size": "var(--descope-input-wrapper-error-message-font-size)",
+          "--descope-hybrid-field-error-message-icon": "var(--descope-input-wrapper-error-message-icon)",
+          "--descope-hybrid-field-error-message-icon-padding": "var(--descope-input-wrapper-error-message-icon-padding)",
+          "--descope-hybrid-field-error-message-icon-position": "var(--descope-input-wrapper-error-message-icon-position)",
+          "--descope-hybrid-field-error-message-icon-repeat": "var(--descope-input-wrapper-error-message-icon-repeat)",
+          "--descope-hybrid-field-error-message-icon-size": "var(--descope-input-wrapper-error-message-icon-size)",
+          "--descope-hybrid-field-host-direction": "var(--descope-input-wrapper-direction)",
+          "_fullWidth": {
+            "--descope-hybrid-field-host-width": "100%"
+          }
+        },
+        "icon": {},
+        "image": {},
         "inputWrapper": {
           "--descope-input-wrapper-background-color": "#18181bFF",
-          "--descope-input-wrapper-border-radius": "8px",
-          "--descope-input-wrapper-font-family": "var(--descope-fonts-font1-family)",
-          "--descope-input-wrapper-label-text-color": "#a1a1aaFF",
-          "--descope-input-wrapper-placeholder-text-color": "#71717aFF",
-          "--descope-input-wrapper-value-text-color": "#f4f4f5FF",
           "--descope-input-wrapper-border-color": "#3f3f46FF",
-          "_bordered": {}
+          "--descope-input-wrapper-border-radius": "8px",
+          "--descope-input-wrapper-border-width": "var(--descope-border-xs)",
+          "--descope-input-wrapper-direction": "var(--descope-direction)",
+          "--descope-input-wrapper-error-message-font-size": "0.8125rem",
+          "--descope-input-wrapper-error-message-icon": "",
+          "--descope-input-wrapper-error-message-icon-padding": "0",
+          "--descope-input-wrapper-error-message-icon-position": "0 0.4em",
+          "--descope-input-wrapper-error-message-icon-repeat": "no-repeat",
+          "--descope-input-wrapper-error-message-icon-size": "0",
+          "--descope-input-wrapper-error-message-text-color": "var(--descope-colors-error-main)",
+          "--descope-input-wrapper-font-family": "var(--descope-fonts-font1-family)",
+          "--descope-input-wrapper-helper-text-color": "var(--descope-colors-surface-dark)",
+          "--descope-input-wrapper-horizontal-padding": "0.5em",
+          "--descope-input-wrapper-input-height": "3em",
+          "--descope-input-wrapper-input-icon-size": "1em",
+          "--descope-input-wrapper-label-font-size": "14px",
+          "--descope-input-wrapper-label-font-weight": "500",
+          "--descope-input-wrapper-label-text-color": "#a1a1aaFF",
+          "--descope-input-wrapper-min-width": "10em",
+          "--descope-input-wrapper-outline-color": "transparent",
+          "--descope-input-wrapper-outline-offset": "0px",
+          "--descope-input-wrapper-outline-style": "solid",
+          "--descope-input-wrapper-outline-width": "var(--descope-border-sm)",
+          "--descope-input-wrapper-overlay-opacity": "0.3",
+          "--descope-input-wrapper-placeholder-text-color": "#71717aFF",
+          "--descope-input-wrapper-required-indicator": "'*'",
+          "--descope-input-wrapper-success-message-text-color": "var(--descope-colors-success-main)",
+          "--descope-input-wrapper-text-align": "start",
+          "--descope-input-wrapper-toggle-button-size": "1.5em",
+          "--descope-input-wrapper-value-text-color": "#f4f4f5FF",
+          "--descope-input-wrapper-vertical-padding": "0.5em",
+          "_bordered": {
+            "--descope-input-wrapper-border-color": "var(--descope-colors-surface-light)",
+            "--descope-input-wrapper-border-style": "solid",
+            "--descope-input-wrapper-outline-width": "var(--descope-border-xs)",
+            "_invalid": {
+              "--descope-input-wrapper-border-color": "var(--descope-colors-error-main)"
+            }
+          },
+          "_disabled": {
+            "--descope-input-wrapper-background-color": "var(--descope-colors-surface-main)",
+            "--descope-input-wrapper-border-color": "var(--descope-colors-surface-light)",
+            "--descope-input-wrapper-helper-text-color": "var(--descope-colors-surface-light)",
+            "--descope-input-wrapper-label-text-color": "var(--descope-colors-surface-light)",
+            "--descope-input-wrapper-placeholder-text-color": "var(--descope-colors-surface-light)",
+            "--descope-input-wrapper-value-text-color": "var(--descope-colors-surface-light)"
+          },
+          "_focused": {
+            "--descope-input-wrapper-outline-color": "var(--descope-colors-surface-light)",
+            "_invalid": {
+              "--descope-input-wrapper-outline-color": "var(--descope-colors-error-main)"
+            }
+          },
+          "_fullWidth": {
+            "--descope-input-wrapper-width": "100%"
+          },
+          "_obfuscated": {
+            "--descope-input-wrapper-input-text-security": "disc"
+          },
+          "labelType": {
+            "floating": {
+              "--descope-input-wrapper-input-height": "3.5em",
+              "--descope-input-wrapper-input-transform-y": "translateY(1.55em)",
+              "--descope-input-wrapper-input-transition": "all 75ms ease-in-out",
+              "--descope-input-wrapper-input-vertical-alignment": "flex-end",
+              "--descope-input-wrapper-label-font-size": "1em",
+              "--descope-input-wrapper-label-horizontal-position": "0.9em",
+              "--descope-input-wrapper-label-position": "absolute",
+              "--descope-input-wrapper-label-top-position": "0",
+              "--descope-input-wrapper-margin-inline-start": "0",
+              "--descope-input-wrapper-placeholder-opacity": 0,
+              "--descope-input-wrapper-value-input-height": "1.5702em",
+              "--descope-input-wrapper-value-input-margin-bottom": "0.5em",
+              "_focused": {
+                "--descope-input-wrapper-input-transform-y": "translateY(1.05em)",
+                "--descope-input-wrapper-label-font-size": "0.75em",
+                "--descope-input-wrapper-label-font-weight": "400",
+                "--descope-input-wrapper-placeholder-opacity": 1
+              },
+              "_hasValue": {
+                "--descope-input-wrapper-input-transform-y": "translateY(1.05em)",
+                "--descope-input-wrapper-label-font-size": "0.75em",
+                "--descope-input-wrapper-label-font-weight": "400"
+              },
+              "_readOnly": {
+                "--descope-input-wrapper-placeholder-opacity": 0
+              }
+            },
+            "static": {
+              "--descope-input-wrapper-value-input-height": "3em",
+              "--descope-input-wrapper-value-input-margin-bottom": "auto"
+            }
+          },
+          "size": {
+            "lg": {
+              "--descope-input-wrapper-chip-font-size": "16px",
+              "--descope-input-wrapper-font-size": "18px"
+            },
+            "md": {
+              "--descope-input-wrapper-chip-font-size": "14px",
+              "--descope-input-wrapper-font-size": "16px"
+            },
+            "sm": {
+              "--descope-input-wrapper-chip-font-size": "12px",
+              "--descope-input-wrapper-font-size": "14px"
+            },
+            "xs": {
+              "--descope-input-wrapper-chip-font-size": "10px",
+              "--descope-input-wrapper-font-size": "12px"
+            }
+          }
+        },
+        "link": {
+          "--descope-link-cursor": "pointer",
+          "--descope-link-host-direction": "var(--descope-direction)",
+          "--descope-link-text-color": "var(--descope-colors-primary-main)",
+          "_fullWidth": {
+            "--descope-link-host-width": "100%"
+          },
+          "_hover": {
+            "--descope-link-text-decoration": "underline"
+          },
+          "mode": {
+            "primary": {
+              "--descope-link-text-color": "#60a5faFF"
+            },
+            "secondary": {
+              "--descope-link-text-color": "var(--descope-colors-secondary-main)"
+            }
+          },
+          "textAlign": {
+            "center": {
+              "--descope-link-text-align": "center"
+            },
+            "left": {
+              "--descope-link-text-align": "left"
+            },
+            "right": {
+              "--descope-link-text-align": "right"
+            }
+          }
+        },
+        "list": {
+          "--descope-list-background-color": "var(--descope-colors-surface-main)",
+          "--descope-list-border-color": "var(--descope-colors-surface-light)",
+          "--descope-list-border-radius": "var(--descope-radius-sm)",
+          "--descope-list-border-style": "solid",
+          "--descope-list-border-width": "var(--descope-border-xs)",
+          "--descope-list-box-shadow": "var(--descope-shadow-wide-sm) var(--descope-list-shadow-color), var(--descope-shadow-narrow-sm) var(--descope-list-shadow-color)",
+          "--descope-list-font-family": "var(--descope-fonts-font1-family)",
+          "--descope-list-gap": "var(--descope-spacing-md)",
+          "--descope-list-horizontal-padding": "var(--descope-spacing-lg)",
+          "--descope-list-host-direction": "var(--descope-direction)",
+          "--descope-list-host-width": "100%",
+          "--descope-list-max-height": "100%",
+          "--descope-list-max-row-items": "1000",
+          "--descope-list-min-items-width": "150px",
+          "--descope-list-shadow-color": "#00000020",
+          "--descope-list-vertical-padding": "var(--descope-spacing-lg)",
+          "_empty": {
+            "--descope-list-empty-state-text-color": "var(--descope-colors-surface-dark)",
+            "--descope-list-empty-state-text-font-family": "var(--descope-fonts-font1-family)",
+            "--descope-list-min-height": "150px"
+          },
+          "gap": {
+            "lg": {
+              "--descope-list-gap": "var(--descope-spacing-lg)"
+            },
+            "md": {
+              "--descope-list-gap": "var(--descope-spacing-md)"
+            },
+            "sm": {
+              "--descope-list-gap": "var(--descope-spacing-sm)"
+            },
+            "xl": {
+              "--descope-list-gap": "var(--descope-spacing-xl)"
+            },
+            "xs": {
+              "--descope-list-gap": "var(--descope-spacing-xs)"
+            }
+          },
+          "variant": {
+            "tiles": {
+              "--descope-list-grid-template-columns": "repeat(auto-fit, minmax(\n        max(\n            min(var(--descope-list-min-items-width), 100%),\n                calc((100% - (var(--descope-list-max-row-items) - 1) * var(--descope-list-gap)) / var(--descope-list-max-row-items))),\n        1fr))",
+              "--descope-list-items-horizontal-align": "center",
+              "--descope-list-max-items-width": "200px"
+            }
+          }
+        },
+        "listItem": {
+          "--descope-list-item-align-items": "center",
+          "--descope-list-item-background-color": "var(--descope-colors-surface-main)",
+          "--descope-list-item-border-color": "var(--descope-colors-surface-main)",
+          "--descope-list-item-border-radius": "var(--descope-radius-sm)",
+          "--descope-list-item-border-style": "solid",
+          "--descope-list-item-border-width": "var(--descope-border-xs)",
+          "--descope-list-item-cursor": "pointer",
+          "--descope-list-item-flex-direction": "row",
+          "--descope-list-item-gap": "var(--descope-spacing-md)",
+          "--descope-list-item-horizontal-padding": "var(--descope-spacing-lg)",
+          "--descope-list-item-transition": "border-color 0.2s, background-color 0.2s",
+          "--descope-list-item-vertical-padding": "var(--descope-spacing-lg)",
+          "_active": {
+            "--descope-list-item-background-color": "var(--descope-colors-surface-main)",
+            "--descope-list-item-border-color": "var(--descope-colors-primary-light)",
+            "--descope-list-item-outline": "1px solid var(--descope-colors-primary-light)"
+          },
+          "_hover": {
+            "--descope-list-item-background-color": "var(--descope-colors-surface-highlight)"
+          },
+          "variant": {
+            "tile": {
+              "--descope-list-item-align-items": "flex-start",
+              "--descope-list-item-border-color": "var(--descope-colors-surface-light)",
+              "--descope-list-item-flex-direction": "column"
+            }
+          }
+        },
+        "loaderLinear": {
+          "--descope-loader-linear-animation-duration": "2s",
+          "--descope-loader-linear-animation-iteration-count": "infinite",
+          "--descope-loader-linear-animation-timing-function": "linear",
+          "--descope-loader-linear-bar-background-color": "var(--descope-colors-surface-light)",
+          "--descope-loader-linear-bar-border-radius": "4px",
+          "--descope-loader-linear-bar-color": "var(--descope-colors-surface-contrast)",
+          "--descope-loader-linear-bar-width": "20%",
+          "--descope-loader-linear-host-display": "inline-block",
+          "--descope-loader-linear-host-width": "100%",
+          "--descope-loader-linear-vertical-padding": "0.25em",
+          "_hidden": {
+            "--descope-loader-linear-host-display": "none"
+          },
+          "mode": {
+            "primary": {
+              "--descope-loader-linear-bar-color": "var(--descope-colors-primary-main)"
+            },
+            "secondary": {
+              "--descope-loader-linear-bar-color": "var(--descope-colors-secondary-main)"
+            }
+          },
+          "size": {
+            "lg": {
+              "--descope-loader-linear-bar-height": "8px"
+            },
+            "md": {
+              "--descope-loader-linear-bar-height": "6px"
+            },
+            "sm": {
+              "--descope-loader-linear-bar-height": "4px"
+            },
+            "xs": {
+              "--descope-loader-linear-bar-height": "2px"
+            }
+          }
+        },
+        "loaderRadial": {
+          "--descope-loader-radial-animation-duration": "2s",
+          "--descope-loader-radial-animation-iteration-count": "infinite",
+          "--descope-loader-radial-animation-timing-function": "linear",
+          "--descope-loader-radial-spinner-border-radius": "50%",
+          "--descope-loader-radial-spinner-border-style": "solid",
+          "--descope-loader-radial-spinner-border-width": "0.2em",
+          "--descope-loader-radial-spinner-color": "var(--descope-colors-surface-contrast)",
+          "--descope-loader-radial-spinner-quadrant1color": "var(--descope-loader-radial-spinner-color)",
+          "--descope-loader-radial-spinner-quadrant2color": "transparent",
+          "--descope-loader-radial-spinner-quadrant3color": "var(--descope-loader-radial-spinner-color)",
+          "--descope-loader-radial-spinner-quadrant4color": "transparent",
+          "_hidden": {
+            "--descope-loader-radial-host-display": "none"
+          },
+          "mode": {
+            "primary": {
+              "--descope-loader-radial-spinner-color": "var(--descope-colors-primary-main)"
+            },
+            "secondary": {
+              "--descope-loader-radial-spinner-color": "var(--descope-colors-secondary-main)"
+            }
+          },
+          "size": {
+            "lg": {
+              "--descope-loader-radial-spinner-size": "60px"
+            },
+            "md": {
+              "--descope-loader-radial-spinner-size": "40px"
+            },
+            "sm": {
+              "--descope-loader-radial-spinner-size": "30px"
+            },
+            "xl": {
+              "--descope-loader-radial-spinner-size": "80px"
+            },
+            "xs": {
+              "--descope-loader-radial-spinner-size": "20px"
+            }
+          }
+        },
+        "logo": {
+          "--descope-logo-fallback-url": "url(https://imgs.descope.com/components/no-logo-placeholder.svg)"
+        },
+        "mappingsField": {
+          "--descope-mappings-field-attr-label-min-width": "calc(12em + 2 * var(--descope-border-xs))",
+          "--descope-mappings-field-font-family": "var(--descope-input-wrapper-font-family)",
+          "--descope-mappings-field-font-size": "var(--descope-input-wrapper-font-size)",
+          "--descope-mappings-field-host-direction": "var(--descope-input-wrapper-direction)",
+          "--descope-mappings-field-host-width": "var(--descope-input-wrapper-width)",
+          "--descope-mappings-field-item-margin-bottom": "1em",
+          "--descope-mappings-field-label-text-color": "var(--descope-input-wrapper-label-text-color)",
+          "--descope-mappings-field-labels-font-size": "14px",
+          "--descope-mappings-field-labels-line-height": "1",
+          "--descope-mappings-field-labels-margin-bottom": "6px",
+          "--descope-mappings-field-remove-button-width": "60px",
+          "--descope-mappings-field-separator-font-size": "14px",
+          "--descope-mappings-field-separator-width": "70px",
+          "--descope-mappings-field-value-label-min-width": "var(--descope-input-wrapper-min-width)"
+        },
+        "modal": {
+          "--descope-modal-overlay-backdrop-color": "hsla(214, 53%, 23%, 0.16)",
+          "--descope-modal-overlay-background-color": "var(--descope-colors-surface-main)",
+          "--descope-modal-overlay-shadow": "var(--descope-shadow-wide-2xl)",
+          "--descope-modal-overlay-width": "540px"
+        },
+        "multiSelectComboBox": {
+          "--descope-multi-select-combo-box--overlay-margin": "0",
+          "--descope-multi-select-combo-box--overlay-min-height": "400px",
+          "--descope-multi-select-combo-box-chip-background-color": "var(--descope-colors-surface-light)",
+          "--descope-multi-select-combo-box-chip-font-size": "var(--descope-input-wrapper-chip-font-size)",
+          "--descope-multi-select-combo-box-chip-text-color": "var(--descope-colors-surface-contrast)",
+          "--descope-multi-select-combo-box-error-message-font-size": "var(--descope-input-wrapper-error-message-font-size)",
+          "--descope-multi-select-combo-box-error-message-icon": "var(--descope-input-wrapper-error-message-icon)",
+          "--descope-multi-select-combo-box-error-message-icon-padding": "var(--descope-input-wrapper-error-message-icon-padding)",
+          "--descope-multi-select-combo-box-error-message-icon-position": "var(--descope-input-wrapper-error-message-icon-position)",
+          "--descope-multi-select-combo-box-error-message-icon-repeat": "var(--descope-input-wrapper-error-message-icon-repeat)",
+          "--descope-multi-select-combo-box-error-message-icon-size": "var(--descope-input-wrapper-error-message-icon-size)",
+          "--descope-multi-select-combo-box-error-message-text-color": "var(--descope-input-wrapper-error-message-text-color)",
+          "--descope-multi-select-combo-box-font-family": "var(--descope-input-wrapper-font-family)",
+          "--descope-multi-select-combo-box-font-size": "var(--descope-input-wrapper-font-size)",
+          "--descope-multi-select-combo-box-host-direction": "var(--descope-input-wrapper-direction)",
+          "--descope-multi-select-combo-box-host-width": "var(--descope-input-wrapper-width)",
+          "--descope-multi-select-combo-box-input-background-color": "var(--descope-input-wrapper-background-color)",
+          "--descope-multi-select-combo-box-input-border-color": "var(--descope-input-wrapper-border-color)",
+          "--descope-multi-select-combo-box-input-border-radius": "var(--descope-input-wrapper-border-radius)",
+          "--descope-multi-select-combo-box-input-border-style": "var(--descope-input-wrapper-border-style)",
+          "--descope-multi-select-combo-box-input-border-width": "var(--descope-input-wrapper-border-width)",
+          "--descope-multi-select-combo-box-input-dropdown-button-color": "var(--descope-colors-surface-dark)",
+          "--descope-multi-select-combo-box-input-dropdown-button-cursor": "pointer",
+          "--descope-multi-select-combo-box-input-dropdown-button-offset": "var(--descope-spacing-xs)",
+          "--descope-multi-select-combo-box-input-dropdown-button-size": "var(--descope-input-wrapper-toggle-button-size)",
+          "--descope-multi-select-combo-box-input-height": "var(--descope-input-wrapper-input-height)",
+          "--descope-multi-select-combo-box-input-horizontal-padding": "var(--descope-input-wrapper-horizontal-padding)",
+          "--descope-multi-select-combo-box-input-outline-color": "var(--descope-input-wrapper-outline-color)",
+          "--descope-multi-select-combo-box-input-outline-offset": "var(--descope-input-wrapper-outline-offset)",
+          "--descope-multi-select-combo-box-input-outline-style": "var(--descope-input-wrapper-outline-style)",
+          "--descope-multi-select-combo-box-input-outline-width": "var(--descope-input-wrapper-outline-width)",
+          "--descope-multi-select-combo-box-input-placeholder-text-color": "var(--descope-input-wrapper-placeholder-text-color)",
+          "--descope-multi-select-combo-box-input-transform-y": "var(--descope-input-wrapper-input-transform-y)",
+          "--descope-multi-select-combo-box-input-transition": "var(--descope-input-wrapper-input-transition)",
+          "--descope-multi-select-combo-box-input-value-text-color": "var(--descope-input-wrapper-value-text-color)",
+          "--descope-multi-select-combo-box-input-vertical-alignment": "var(--descope-input-wrapper-input-vertical-alignment)",
+          "--descope-multi-select-combo-box-input-vertical-padding": "var(--descope-input-wrapper-vertical-padding)",
+          "--descope-multi-select-combo-box-label-font-size": "var(--descope-input-wrapper-label-font-size)",
+          "--descope-multi-select-combo-box-label-font-weight": "var(--descope-input-wrapper-label-font-weight)",
+          "--descope-multi-select-combo-box-label-horizontal-position": "var(--descope-input-wrapper-label-horizontal-position)",
+          "--descope-multi-select-combo-box-label-position": "var(--descope-input-wrapper-label-position)",
+          "--descope-multi-select-combo-box-label-required-indicator": "var(--descope-input-wrapper-required-indicator)",
+          "--descope-multi-select-combo-box-label-text-color": "var(--descope-input-wrapper-label-text-color)",
+          "--descope-multi-select-combo-box-label-top-position": "var(--descope-input-wrapper-label-top-position)",
+          "--descope-multi-select-combo-box-margin-inline-start": "var(--descope-input-wrapper-margin-inline-start)",
+          "--descope-multi-select-combo-box-overlay-background": "var(--descope-input-wrapper-background-color)",
+          "--descope-multi-select-combo-box-overlay-cursor": "pointer",
+          "--descope-multi-select-combo-box-overlay-font-family": "var(--descope-input-wrapper-font-family)",
+          "--descope-multi-select-combo-box-overlay-font-size": "var(--descope-input-wrapper-font-size)",
+          "--descope-multi-select-combo-box-overlay-item-box-shadow": "none",
+          "--descope-multi-select-combo-box-overlay-item-padding-inline-end": "var(--descope-spacing-lg)",
+          "--descope-multi-select-combo-box-overlay-item-padding-inline-start": "var(--descope-spacing-xs)",
+          "--descope-multi-select-combo-box-overlay-text-color": "var(--descope-input-wrapper-value-text-color)",
+          "--descope-multi-select-combo-box-placeholder-opacity": "var(--descope-input-wrapper-placeholder-opacity)",
+          "_readonly": {
+            "--descope-multi-select-combo-box-input-dropdown-button-cursor": "default"
+          },
+          "labelType": {
+            "floating": {
+              "--descope-multi-select-combo-box-input-horizontal-padding": "0.25em",
+              "_hasValue": {
+                "--descope-multi-select-combo-box-input-horizontal-padding": "0.45em"
+              }
+            }
+          }
+        },
+        "newPassword": {
+          "--descope-new-password-error-message-font-size": "var(--descope-input-wrapper-error-message-font-size)",
+          "--descope-new-password-error-message-icon": "var(--descope-input-wrapper-error-message-icon)",
+          "--descope-new-password-error-message-icon-padding": "var(--descope-input-wrapper-error-message-icon-padding)",
+          "--descope-new-password-error-message-icon-position": "var(--descope-input-wrapper-error-message-icon-position)",
+          "--descope-new-password-error-message-icon-repeat": "var(--descope-input-wrapper-error-message-icon-repeat)",
+          "--descope-new-password-error-message-icon-size": "var(--descope-input-wrapper-error-message-icon-size)",
+          "--descope-new-password-error-message-text-color": "var(--descope-input-wrapper-error-message-text-color)",
+          "--descope-new-password-font-family": "var(--descope-input-wrapper-font-family)",
+          "--descope-new-password-font-size": "var(--descope-input-wrapper-font-size)",
+          "--descope-new-password-host-direction": "var(--descope-input-wrapper-direction)",
+          "--descope-new-password-host-min-width": "var(--descope-input-wrapper-min-width)",
+          "--descope-new-password-host-width": "var(--descope-input-wrapper-width)",
+          "--descope-new-password-label-font-size": "var(--descope-input-wrapper-label-font-size)",
+          "--descope-new-password-label-font-weight": "var(--descope-input-wrapper-label-font-weight)",
+          "--descope-new-password-label-text-color": "var(--descope-input-wrapper-label-text-color)",
+          "--descope-new-password-policy-preview-background-color": "none",
+          "--descope-new-password-policy-preview-padding": "var(--descope-spacing-lg)",
+          "--descope-new-password-space-between-inputs": "1em",
+          "--descope-new-password-value-input-height": "var(--descope-input-wrapper-value-input-height)",
+          "_required": {
+            "--descope-new-password-inputs-required-indicator": "var(--descope-input-wrapper-required-indicator)"
+          }
+        },
+        "notificationCard": {
+          "--descope-notification-card-background-color": "var(--descope-colors-surface-main)",
+          "--descope-notification-card-border-radius": "var(--descope-radius-xs)",
+          "--descope-notification-card-box-shadow": "var(--descope-shadow-wide-xl) #00000020, var(--descope-shadow-narrow-xl) #00000020",
+          "--descope-notification-card-font-family": "var(--descope-fonts-font1-family)",
+          "--descope-notification-card-font-size": "var(--descope-typography-body1-size)",
+          "--descope-notification-card-horizontal-padding": "1.5em",
+          "--descope-notification-card-host-min-width": "415px",
+          "--descope-notification-card-text-color": "var(--descope-colors-surface-contrast)",
+          "--descope-notification-card-vertical-padding": "0.625em",
+          "_bordered": {
+            "--descope-notification-card-border-color": "transparent",
+            "--descope-notification-card-border-style": "solid",
+            "--descope-notification-card-border-width": "var(--descope-border-sm)"
+          },
+          "mode": {
+            "error": {
+              "--descope-notification-card-background-color": "var(--descope-colors-error-main)",
+              "--descope-notification-card-border-color": "var(--descope-colors-error-light)",
+              "--descope-notification-card-text-color": "var(--descope-colors-error-contrast)"
+            },
+            "primary": {
+              "--descope-notification-card-background-color": "var(--descope-colors-primary-main)",
+              "--descope-notification-card-border-color": "var(--descope-colors-primary-light)",
+              "--descope-notification-card-text-color": "var(--descope-colors-primary-contrast)"
+            },
+            "success": {
+              "--descope-notification-card-background-color": "var(--descope-colors-success-main)",
+              "--descope-notification-card-border-color": "var(--descope-colors-success-light)",
+              "--descope-notification-card-text-color": "var(--descope-colors-success-contrast)"
+            }
+          },
+          "size": {
+            "lg": {
+              "--descope-notification-card-font-size": "18px"
+            },
+            "md": {
+              "--descope-notification-card-font-size": "16px"
+            },
+            "sm": {
+              "--descope-notification-card-font-size": "14px"
+            },
+            "xs": {
+              "--descope-notification-card-font-size": "12px"
+            }
+          }
+        },
+        "notpImage": {
+          "--descope-notp-image-fallback-url": "url(https://imgs.descope.com/components/notp-placeholder.svg)"
+        },
+        "numberField": {
+          "--descope-number-field-error-message-font-size": "var(--descope-input-wrapper-error-message-font-size)",
+          "--descope-number-field-error-message-icon": "var(--descope-input-wrapper-error-message-icon)",
+          "--descope-number-field-error-message-icon-padding": "var(--descope-input-wrapper-error-message-icon-padding)",
+          "--descope-number-field-error-message-icon-position": "var(--descope-input-wrapper-error-message-icon-position)",
+          "--descope-number-field-error-message-icon-repeat": "var(--descope-input-wrapper-error-message-icon-repeat)",
+          "--descope-number-field-error-message-icon-size": "var(--descope-input-wrapper-error-message-icon-size)",
+          "--descope-number-field-error-message-text-color": "var(--descope-input-wrapper-error-message-text-color)",
+          "--descope-number-field-font-family": "var(--descope-input-wrapper-font-family)",
+          "--descope-number-field-font-size": "var(--descope-input-wrapper-font-size)",
+          "--descope-number-field-host-direction": "var(--descope-input-wrapper-direction)",
+          "--descope-number-field-host-min-width": "var(--descope-input-wrapper-min-width)",
+          "--descope-number-field-host-width": "var(--descope-input-wrapper-width)",
+          "--descope-number-field-input-background-color": "var(--descope-input-wrapper-background-color)",
+          "--descope-number-field-input-border-color": "var(--descope-input-wrapper-border-color)",
+          "--descope-number-field-input-border-radius": "var(--descope-input-wrapper-border-radius)",
+          "--descope-number-field-input-border-style": "var(--descope-input-wrapper-border-style)",
+          "--descope-number-field-input-border-width": "var(--descope-input-wrapper-border-width)",
+          "--descope-number-field-input-height": "var(--descope-input-wrapper-input-height)",
+          "--descope-number-field-input-horizontal-padding": "var(--descope-input-wrapper-horizontal-padding)",
+          "--descope-number-field-input-outline-color": "var(--descope-input-wrapper-outline-color)",
+          "--descope-number-field-input-outline-offset": "var(--descope-input-wrapper-outline-offset)",
+          "--descope-number-field-input-outline-style": "var(--descope-input-wrapper-outline-style)",
+          "--descope-number-field-input-outline-width": "var(--descope-input-wrapper-outline-width)",
+          "--descope-number-field-input-placeholder-color": "var(--descope-input-wrapper-placeholder-text-color)",
+          "--descope-number-field-input-transform-y": "var(--descope-input-wrapper-input-transform-y)",
+          "--descope-number-field-input-transition": "var(--descope-input-wrapper-input-transition)",
+          "--descope-number-field-input-value-text-color": "var(--descope-input-wrapper-value-text-color)",
+          "--descope-number-field-input-vertical-alignment": "var(--descope-input-wrapper-input-vertical-alignment)",
+          "--descope-number-field-label-font-size": "var(--descope-input-wrapper-label-font-size)",
+          "--descope-number-field-label-font-weight": "var(--descope-input-wrapper-label-font-weight)",
+          "--descope-number-field-label-horizontal-position": "var(--descope-input-wrapper-label-horizontal-position)",
+          "--descope-number-field-label-position": "var(--descope-input-wrapper-label-position)",
+          "--descope-number-field-label-required-indicator": "var(--descope-input-wrapper-required-indicator)",
+          "--descope-number-field-label-text-color": "var(--descope-input-wrapper-label-text-color)",
+          "--descope-number-field-label-top-position": "var(--descope-input-wrapper-label-top-position)",
+          "--descope-number-field-margin-inline-start": "var(--descope-input-wrapper-margin-inline-start)",
+          "--descope-number-field-placeholder-opacity": "var(--descope-input-wrapper-placeholder-opacity)",
+          "--descope-number-field-value-input-height": "var(--descope-input-wrapper-value-input-height)",
+          "--descope-number-field-value-input-margin-bottom": "var(--descope-input-wrapper-value-input-margin-bottom)"
+        },
+        "outboundAppButton": {
+          "--descope-outbound-app-button-icon-fill-current-color": "inherit",
+          "_fullWidth": {
+            "--descope-outbound-app-button-host-width": "100%"
+          },
+          "_iconFillCurrentColor": {
+            "--descope-outbound-app-button-icon-fill-current-color": "currentColor"
+          }
+        },
+        "outboundApps": {
+          "--descope-outbound-apps-app-logo-gap": "8px",
+          "--descope-outbound-apps-content-gap": "2px",
+          "--descope-outbound-apps-error-icon-color": "#E21D12",
+          "--descope-outbound-apps-icon-color": "#006AF5",
+          "--descope-outbound-apps-item-border-color": "transparent",
+          "--descope-outbound-apps-item-cursor": "default",
+          "--descope-outbound-apps-item-outline": "none",
+          "--descope-outbound-apps-list-border-width": "0",
+          "--descope-outbound-apps-list-box-shadow": "none",
+          "--descope-outbound-apps-list-padding": "0",
+          "size": {
+            "lg": {
+              "--descope-outbound-apps-font-size": "1.5em"
+            },
+            "md": {
+              "--descope-outbound-apps-font-size": "1em"
+            },
+            "sm": {
+              "--descope-outbound-apps-font-size": "0.8em"
+            },
+            "xs": {
+              "--descope-outbound-apps-font-size": "0.6em"
+            }
+          }
+        },
+        "passcode": {
+          "--descope-passcode-digit-outline-color": "transparent",
+          "--descope-passcode-digit-outline-width": "var(--descope-input-wrapper-outline-width)",
+          "--descope-passcode-digit-padding": "0",
+          "--descope-passcode-digit-size": "var(--descope-input-wrapper-input-height)",
+          "--descope-passcode-digit-spacing": "4px",
+          "--descope-passcode-digit-text-align": "center",
+          "--descope-passcode-digit-value-text-color": "var(--descope-input-wrapper-value-text-color)",
+          "--descope-passcode-error-message-font-size": "var(--descope-input-wrapper-error-message-font-size)",
+          "--descope-passcode-error-message-icon": "var(--descope-input-wrapper-error-message-icon)",
+          "--descope-passcode-error-message-icon-padding": "var(--descope-input-wrapper-error-message-icon-padding)",
+          "--descope-passcode-error-message-icon-position": "var(--descope-input-wrapper-error-message-icon-position)",
+          "--descope-passcode-error-message-icon-repeat": "var(--descope-input-wrapper-error-message-icon-repeat)",
+          "--descope-passcode-error-message-icon-size": "var(--descope-input-wrapper-error-message-icon-size)",
+          "--descope-passcode-error-message-text-color": "var(--descope-input-wrapper-error-message-text-color)",
+          "--descope-passcode-focused-digit-field-outline-color": "var(--descope-input-wrapper-outline-color)",
+          "--descope-passcode-font-family": "var(--descope-input-wrapper-font-family)",
+          "--descope-passcode-font-size": "var(--descope-input-wrapper-font-size)",
+          "--descope-passcode-host-direction": "var(--descope-input-wrapper-direction)",
+          "--descope-passcode-host-width": "var(--descope-input-wrapper-width)",
+          "--descope-passcode-label-required-indicator": "var(--descope-input-wrapper-required-indicator)",
+          "--descope-passcode-label-text-color": "var(--descope-input-wrapper-label-text-color)",
+          "_hideCursor": {
+            "--descope-passcode-digit-caret-text-color": "transparent"
+          },
+          "_loading": {
+            "--descope-passcode-overlay-opacity": "var(--descope-input-wrapper-overlay-opacity)"
+          },
+          "size": {
+            "lg": {
+              "--descope-passcode-spinner-size": "20px"
+            },
+            "md": {
+              "--descope-passcode-spinner-size": "20px"
+            },
+            "sm": {
+              "--descope-passcode-spinner-size": "20px"
+            },
+            "xs": {
+              "--descope-passcode-spinner-size": "15px"
+            }
+          }
+        },
+        "password": {
+          "--descope-password-error-message-font-size": "var(--descope-input-wrapper-error-message-font-size)",
+          "--descope-password-error-message-icon": "var(--descope-input-wrapper-error-message-icon)",
+          "--descope-password-error-message-icon-padding": "var(--descope-input-wrapper-error-message-icon-padding)",
+          "--descope-password-error-message-icon-position": "var(--descope-input-wrapper-error-message-icon-position)",
+          "--descope-password-error-message-icon-repeat": "var(--descope-input-wrapper-error-message-icon-repeat)",
+          "--descope-password-error-message-icon-size": "var(--descope-input-wrapper-error-message-icon-size)",
+          "--descope-password-error-message-text-color": "var(--descope-input-wrapper-error-message-text-color)",
+          "--descope-password-font-family": "var(--descope-input-wrapper-font-family)",
+          "--descope-password-font-size": "var(--descope-input-wrapper-font-size)",
+          "--descope-password-host-direction": "var(--descope-input-wrapper-direction)",
+          "--descope-password-host-min-width": "var(--descope-input-wrapper-min-width)",
+          "--descope-password-host-width": "var(--descope-input-wrapper-width)",
+          "--descope-password-input-background-color": "var(--descope-input-wrapper-background-color)",
+          "--descope-password-input-border-color": "var(--descope-input-wrapper-border-color)",
+          "--descope-password-input-border-radius": "var(--descope-input-wrapper-border-radius)",
+          "--descope-password-input-border-style": "var(--descope-input-wrapper-border-style)",
+          "--descope-password-input-border-width": "var(--descope-input-wrapper-border-width)",
+          "--descope-password-input-height": "var(--descope-input-wrapper-input-height)",
+          "--descope-password-input-horizontal-padding": "var(--descope-input-wrapper-horizontal-padding)",
+          "--descope-password-input-outline-color": "var(--descope-input-wrapper-outline-color)",
+          "--descope-password-input-outline-offset": "var(--descope-input-wrapper-outline-offset)",
+          "--descope-password-input-outline-style": "var(--descope-input-wrapper-outline-style)",
+          "--descope-password-input-outline-width": "var(--descope-input-wrapper-outline-width)",
+          "--descope-password-input-placeholder-text-color": "var(--descope-input-wrapper-placeholder-text-color)",
+          "--descope-password-input-transform-y": "var(--descope-input-wrapper-input-transform-y)",
+          "--descope-password-input-transition": "var(--descope-input-wrapper-input-transition)",
+          "--descope-password-input-value-text-color": "var(--descope-input-wrapper-value-text-color)",
+          "--descope-password-input-vertical-alignment": "var(--descope-input-wrapper-input-vertical-alignment)",
+          "--descope-password-label-font-size": "var(--descope-input-wrapper-label-font-size)",
+          "--descope-password-label-font-weight": "var(--descope-input-wrapper-label-font-weight)",
+          "--descope-password-label-horizontal-position": "var(--descope-input-wrapper-label-horizontal-position)",
+          "--descope-password-label-position": "var(--descope-input-wrapper-label-position)",
+          "--descope-password-label-required-indicator": "var(--descope-input-wrapper-required-indicator)",
+          "--descope-password-label-text-color": "var(--descope-input-wrapper-label-text-color)",
+          "--descope-password-label-top-position": "var(--descope-input-wrapper-label-top-position)",
+          "--descope-password-margin-inline-start": "var(--descope-input-wrapper-margin-inline-start)",
+          "--descope-password-placeholder-opacity": "var(--descope-input-wrapper-placeholder-opacity)",
+          "--descope-password-reveal-button-color": "var(--descope-input-wrapper-value-text-color)",
+          "--descope-password-reveal-button-offset": "var(--descope-spacing-md)",
+          "--descope-password-reveal-button-size": "var(--descope-input-wrapper-toggle-button-size)",
+          "--descope-password-value-input-height": "var(--descope-input-wrapper-value-input-height)"
+        },
+        "passwordStrength": {
+          "--descope-password-strength-bar-border-radius": "var(--descope-radius-sm)",
+          "--descope-password-strength-bar-height": "4px",
+          "--descope-password-strength-bar-spacing": "var(--descope-spacing-sm)",
+          "--descope-password-strength-bar-transition": "background-color 0.3s",
+          "--descope-password-strength-empty-bar-color": "var(--descope-colors-surface-light)",
+          "--descope-password-strength-font-family": "var(--descope-input-wrapper-font-family)",
+          "--descope-password-strength-font-size": "var(--descope-input-wrapper-label-font-size)",
+          "--descope-password-strength-font-weight": "var(--descope-input-wrapper-label-font-weight)",
+          "--descope-password-strength-host-direction": "var(--descope-direction)",
+          "--descope-password-strength-host-min-width": "var(--descope-input-wrapper-min-width)",
+          "--descope-password-strength-spacing": "var(--descope-spacing-sm)",
+          "_fullWidth": {
+            "--descope-password-strength-host-width": "100%"
+          },
+          "score": {
+            "0": {
+              "--descope-password-strength-filled-bar-color": "var(--descope-colors-error-light)",
+              "--descope-password-strength-text-color": "var(--descope-colors-error-light)"
+            },
+            "1": {
+              "--descope-password-strength-filled-bar-color": "var(--descope-colors-error-main)",
+              "--descope-password-strength-text-color": "var(--descope-colors-error-main)"
+            },
+            "2": {
+              "--descope-password-strength-filled-bar-color": "var(--descope-colors-error-dark)",
+              "--descope-password-strength-text-color": "var(--descope-colors-error-dark)"
+            },
+            "3": {
+              "--descope-password-strength-filled-bar-color": "var(--descope-colors-success-dark)",
+              "--descope-password-strength-text-color": "var(--descope-colors-success-dark)"
+            },
+            "4": {
+              "--descope-password-strength-filled-bar-color": "var(--descope-colors-success-main)",
+              "--descope-password-strength-text-color": "var(--descope-colors-success-main)"
+            }
+          }
+        },
+        "phoneField": {
+          "--descope-phone-field-country-code-dropdown-width": "20em",
+          "--descope-phone-field-country-code-input-width": "5em",
+          "--descope-phone-field-error-message-font-size": "var(--descope-input-wrapper-error-message-font-size)",
+          "--descope-phone-field-error-message-icon": "var(--descope-input-wrapper-error-message-icon)",
+          "--descope-phone-field-error-message-icon-padding": "var(--descope-input-wrapper-error-message-icon-padding)",
+          "--descope-phone-field-error-message-icon-position": "var(--descope-input-wrapper-error-message-icon-position)",
+          "--descope-phone-field-error-message-icon-repeat": "var(--descope-input-wrapper-error-message-icon-repeat)",
+          "--descope-phone-field-error-message-icon-size": "var(--descope-input-wrapper-error-message-icon-size)",
+          "--descope-phone-field-error-message-text-color": "var(--descope-input-wrapper-error-message-text-color)",
+          "--descope-phone-field-font-family": "var(--descope-input-wrapper-font-family)",
+          "--descope-phone-field-font-size": "var(--descope-input-wrapper-font-size)",
+          "--descope-phone-field-host-direction": "var(--descope-input-wrapper-direction)",
+          "--descope-phone-field-host-width": "var(--descope-input-wrapper-width)",
+          "--descope-phone-field-input-border-color": "var(--descope-input-wrapper-border-color)",
+          "--descope-phone-field-input-border-radius": "var(--descope-input-wrapper-border-radius)",
+          "--descope-phone-field-input-border-style": "var(--descope-input-wrapper-border-style)",
+          "--descope-phone-field-input-border-width": "var(--descope-input-wrapper-border-width)",
+          "--descope-phone-field-input-outline-color": "var(--descope-input-wrapper-outline-color)",
+          "--descope-phone-field-input-outline-offset": "var(--descope-input-wrapper-outline-offset)",
+          "--descope-phone-field-input-outline-style": "var(--descope-input-wrapper-outline-style)",
+          "--descope-phone-field-input-outline-width": "var(--descope-input-wrapper-outline-width)",
+          "--descope-phone-field-input-placeholder-text-color": "var(--descope-input-wrapper-placeholder-text-color)",
+          "--descope-phone-field-input-value-text-color": "var(--descope-input-wrapper-value-text-color)",
+          "--descope-phone-field-label-required-indicator": "var(--descope-input-wrapper-required-indicator)",
+          "--descope-phone-field-label-text-color": "var(--descope-input-wrapper-label-text-color)",
+          "--descope-phone-field-margin-inline-start": "-0.25em",
+          "--descope-phone-field-phone-input-width": "var(--descope-input-wrapper-min-width)",
+          "--descope-phone-field-value-input-height": "var(--descope-input-wrapper-value-input-height)",
+          "--descope-phone-field-value-input-margin-bottom": "var(--descope-input-wrapper-value-input-margin-bottom)"
+        },
+        "phoneInputBoxField": {
+          "--descope-phone-input-box-field-error-message-font-size": "var(--descope-input-wrapper-error-message-font-size)",
+          "--descope-phone-input-box-field-error-message-icon": "var(--descope-input-wrapper-error-message-icon)",
+          "--descope-phone-input-box-field-error-message-icon-padding": "var(--descope-input-wrapper-error-message-icon-padding)",
+          "--descope-phone-input-box-field-error-message-icon-position": "var(--descope-input-wrapper-error-message-icon-position)",
+          "--descope-phone-input-box-field-error-message-icon-repeat": "var(--descope-input-wrapper-error-message-icon-repeat)",
+          "--descope-phone-input-box-field-error-message-icon-size": "var(--descope-input-wrapper-error-message-icon-size)",
+          "--descope-phone-input-box-field-error-message-text-color": "var(--descope-input-wrapper-error-message-text-color)",
+          "--descope-phone-input-box-field-font-family": "var(--descope-input-wrapper-font-family)",
+          "--descope-phone-input-box-field-font-size": "var(--descope-input-wrapper-font-size)",
+          "--descope-phone-input-box-field-host-direction": "var(--descope-input-wrapper-direction)",
+          "--descope-phone-input-box-field-host-min-width": "var(--descope-input-wrapper-min-width)",
+          "--descope-phone-input-box-field-host-width": "16em",
+          "--descope-phone-input-box-field-input-border-color": "var(--descope-input-wrapper-border-color)",
+          "--descope-phone-input-box-field-input-border-radius": "var(--descope-input-wrapper-border-radius)",
+          "--descope-phone-input-box-field-input-border-style": "var(--descope-input-wrapper-border-style)",
+          "--descope-phone-input-box-field-input-border-width": "var(--descope-input-wrapper-border-width)",
+          "--descope-phone-input-box-field-input-horizontal-padding": "0",
+          "--descope-phone-input-box-field-input-outline-color": "var(--descope-input-wrapper-outline-color)",
+          "--descope-phone-input-box-field-input-outline-offset": "var(--descope-input-wrapper-outline-offset)",
+          "--descope-phone-input-box-field-input-outline-style": "var(--descope-input-wrapper-outline-style)",
+          "--descope-phone-input-box-field-input-outline-width": "var(--descope-input-wrapper-outline-width)",
+          "--descope-phone-input-box-field-input-placeholder-text-color": "var(--descope-input-wrapper-placeholder-text-color)",
+          "--descope-phone-input-box-field-input-transform-y": "var(--descope-input-wrapper-input-transform-y)",
+          "--descope-phone-input-box-field-input-transition": "var(--descope-input-wrapper-input-transition)",
+          "--descope-phone-input-box-field-input-value-text-color": "var(--descope-input-wrapper-value-text-color)",
+          "--descope-phone-input-box-field-label-font-size": "var(--descope-input-wrapper-label-font-size)",
+          "--descope-phone-input-box-field-label-font-weight": "var(--descope-input-wrapper-label-font-weight)",
+          "--descope-phone-input-box-field-label-horizontal-position": "var(--descope-input-wrapper-label-horizontal-position)",
+          "--descope-phone-input-box-field-label-position": "var(--descope-input-wrapper-label-position)",
+          "--descope-phone-input-box-field-label-required-indicator": "var(--descope-input-wrapper-required-indicator)",
+          "--descope-phone-input-box-field-label-text-color": "var(--descope-input-wrapper-label-text-color)",
+          "--descope-phone-input-box-field-label-top-position": "var(--descope-input-wrapper-label-top-position)",
+          "--descope-phone-input-box-field-margin-inline-start": "var(--descope-input-wrapper-margin-inline-start)",
+          "--descope-phone-input-box-field-value-input-height": "var(--descope-input-wrapper-value-input-height)",
+          "--descope-phone-input-box-field-value-input-margin-bottom": "var(--descope-input-wrapper-value-input-margin-bottom)",
+          "_fullWidth": {
+            "--descope-phone-input-box-field-host-width": "var(--descope-input-wrapper-width)"
+          }
+        },
+        "policyValidation": {
+          "--descope-policy-validation-background-color": "none",
+          "--descope-policy-validation-border-color": "var(--descope-input-wrapper-border-color)",
+          "--descope-policy-validation-border-radius": "var(--descope-radius-sm)",
+          "--descope-policy-validation-border-style": "var(--descope-input-wrapper-border-style)",
+          "--descope-policy-validation-border-width": "var(--descope-input-wrapper-border-width)",
+          "--descope-policy-validation-font-family": "var(--descope-input-wrapper-font-family)",
+          "--descope-policy-validation-font-size": "var(--descope-input-wrapper-label-font-size)",
+          "--descope-policy-validation-item-symbol-default": "'\\2022'",
+          "--descope-policy-validation-item-symbol-error": "'\\2A09'",
+          "--descope-policy-validation-item-symbol-error-color": "var(--descope-colors-error-main)",
+          "--descope-policy-validation-item-symbol-success": "'\\2713'",
+          "--descope-policy-validation-item-symbol-success-color": "var(--descope-colors-success-main)",
+          "--descope-policy-validation-items-spacing": "var(--descope-spacing-lg)",
+          "--descope-policy-validation-label-margin": "var(--descope-spacing-sm)",
+          "--descope-policy-validation-padding": "0px",
+          "--descope-policy-validation-text-color": "var(--descope-input-wrapper-label-text-color)"
+        },
+        "radioButton": {
+          "--descope-radio-button-font-family": "var(--descope-input-wrapper-font-family)",
+          "--descope-radio-button-radio-background-color": "var(--descope-colors-surface-light)",
+          "--descope-radio-button-radio-border-color": "none",
+          "--descope-radio-button-radio-border-width": 0,
+          "--descope-radio-button-radio-checked-color": "var(--descope-colors-surface-light)",
+          "--descope-radio-button-radio-checked-size": "calc(var(--descope-radio-button-radio-size)/5)",
+          "--descope-radio-button-radio-margin": "auto 4px",
+          "--descope-radio-button-radio-size": "calc(1em + 6px)",
+          "_checked": {
+            "--descope-radio-button-radio-background-color": "var(--descope-colors-surface-contrast)"
+          },
+          "_hover": {
+            "cursor": "pointer"
+          },
+          "size": {
+            "lg": {
+              "--descope-radio-button-font-size": "18px"
+            },
+            "md": {
+              "--descope-radio-button-font-size": "16px"
+            },
+            "sm": {
+              "--descope-radio-button-font-size": "14px"
+            },
+            "xs": {
+              "--descope-radio-button-font-size": "12px"
+            }
+          }
+        },
+        "radioGroup": {
+          "--descope-radio-group-buttons-row-gap": "9px",
+          "--descope-radio-group-error-message-font-size": "var(--descope-input-wrapper-error-message-font-size)",
+          "--descope-radio-group-error-message-icon": "var(--descope-input-wrapper-error-message-icon)",
+          "--descope-radio-group-error-message-icon-padding": "var(--descope-input-wrapper-error-message-icon-padding)",
+          "--descope-radio-group-error-message-icon-position": "var(--descope-input-wrapper-error-message-icon-position)",
+          "--descope-radio-group-error-message-icon-repeat": "var(--descope-input-wrapper-error-message-icon-repeat)",
+          "--descope-radio-group-error-message-icon-size": "var(--descope-input-wrapper-error-message-icon-size)",
+          "--descope-radio-group-error-message-text-color": "var(--descope-input-wrapper-error-message-text-color)",
+          "--descope-radio-group-font-family": "var(--descope-input-wrapper-font-family)",
+          "--descope-radio-group-font-size": "var(--descope-input-wrapper-font-size)",
+          "--descope-radio-group-helper-text-color": "var(--descope-input-wrapper-helper-text-color)",
+          "--descope-radio-group-host-direction": "var(--descope-input-wrapper-direction)",
+          "--descope-radio-group-host-width": "var(--descope-input-wrapper-width)",
+          "--descope-radio-group-items-label-color": "var(--descope-colors-surface-contrast)",
+          "--descope-radio-group-label-required-indicator": "var(--descope-input-wrapper-required-indicator)",
+          "--descope-radio-group-label-text-color": "var(--descope-input-wrapper-label-text-color)",
+          "_disabled": {
+            "--descope-radio-group-items-label-color": "var(--descope-colors-surface-light)"
+          },
+          "_fullWidth": {
+            "--descope-radio-group-buttons-spacing": "space-between"
+          },
+          "textAlign": {
+            "center": {
+              "--descope-radio-group-input-text-align": "center"
+            },
+            "left": {
+              "--descope-radio-group-input-text-align": "left"
+            },
+            "right": {
+              "--descope-radio-group-input-text-align": "right"
+            }
+          }
+        },
+        "recoveryCodes": {
+          "--descope-recovery-codes-bullet-gap": "0.35em",
+          "--descope-recovery-codes-host-direction": "var(--descope-direction)",
+          "--descope-recovery-codes-host-min-width": "190px",
+          "--descope-recovery-codes-icon-color": "var(--descope-text-text-color)",
+          "--descope-recovery-codes-icon-gap": "8px",
+          "--descope-recovery-codes-icon-size": "var(--descope-text-font-size)",
+          "_fullWidth": {
+            "--descope-recovery-codes-host-width": "100%"
+          },
+          "textAlign": {
+            "center": {
+              "--descope-recovery-codes-text-align": "center"
+            },
+            "left": {
+              "--descope-recovery-codes-text-align": "flex-start"
+            },
+            "right": {
+              "--descope-recovery-codes-text-align": "flex-end"
+            }
+          }
+        },
+        "samlGroupMappings": {
+          "--descope-saml-group-mappings-error-message-font-size": "var(--descope-input-wrapper-error-message-font-size)",
+          "--descope-saml-group-mappings-error-message-icon": "var(--descope-input-wrapper-error-message-icon)",
+          "--descope-saml-group-mappings-error-message-icon-padding": "var(--descope-input-wrapper-error-message-icon-padding)",
+          "--descope-saml-group-mappings-error-message-icon-position": "var(--descope-input-wrapper-error-message-icon-position)",
+          "--descope-saml-group-mappings-error-message-icon-repeat": "var(--descope-input-wrapper-error-message-icon-repeat)",
+          "--descope-saml-group-mappings-error-message-icon-size": "var(--descope-input-wrapper-error-message-icon-size)",
+          "--descope-saml-group-mappings-group-name-input-margin-bottom": "1em",
+          "--descope-saml-group-mappings-host-direction": "var(--descope-input-wrapper-direction)",
+          "--descope-saml-group-mappings-host-width": "var(--descope-input-wrapper-width)"
+        },
+        "scopesList": {
+          "--descope-scopes-list-host-width": "280px",
+          "--descope-scopes-list-required-input-border-color": "var(--descope-colors-surface-light)",
+          "--descope-scopes-list-required-input-value-text-color": "var(--descope-colors-surface-light)",
+          "_fullWidth": {
+            "--descope-scopes-list-host-width": "100%"
+          }
+        },
+        "securityQuestionsSetup": {
+          "--descope-security-questions-setup-host-width": "fit-content",
+          "_fullWidth": {
+            "--descope-security-questions-setup-host-width": "100%"
+          }
+        },
+        "securityQuestionsVerify": {
+          "--descope-security-questions-verify-host-width": "min-content",
+          "--descope-security-questions-verify-question-cursor": "pointer",
+          "--descope-security-questions-verify-question-font-family": "var(--descope-input-wrapper-font-family)",
+          "--descope-security-questions-verify-question-font-size": "var(--descope-input-wrapper-font-size)",
+          "_fullWidth": {
+            "--descope-security-questions-verify-host-width": "100%"
+          }
+        },
+        "switchToggle": {
+          "--descope-switch-toggle-error-message-font-size": "var(--descope-input-wrapper-error-message-font-size)",
+          "--descope-switch-toggle-error-message-icon": "var(--descope-input-wrapper-error-message-icon)",
+          "--descope-switch-toggle-error-message-icon-padding": "var(--descope-input-wrapper-error-message-icon-padding)",
+          "--descope-switch-toggle-error-message-icon-position": "var(--descope-input-wrapper-error-message-icon-position)",
+          "--descope-switch-toggle-error-message-icon-repeat": "var(--descope-input-wrapper-error-message-icon-repeat)",
+          "--descope-switch-toggle-error-message-icon-size": "var(--descope-input-wrapper-error-message-icon-size)",
+          "--descope-switch-toggle-error-message-text-color": "var(--descope-input-wrapper-error-message-text-color)",
+          "--descope-switch-toggle-font-family": "var(--descope-input-wrapper-font-family)",
+          "--descope-switch-toggle-font-size": "var(--descope-input-wrapper-font-size)",
+          "--descope-switch-toggle-host-direction": "var(--descope-input-wrapper-direction)",
+          "--descope-switch-toggle-host-width": "var(--descope-input-wrapper-width)",
+          "--descope-switch-toggle-input-outline-color": "var(--descope-input-wrapper-outline-color)",
+          "--descope-switch-toggle-input-outline-offset": "var(--descope-input-wrapper-outline-offset)",
+          "--descope-switch-toggle-input-outline-style": "var(--descope-input-wrapper-outline-style)",
+          "--descope-switch-toggle-input-outline-width": "var(--descope-input-wrapper-outline-width)",
+          "--descope-switch-toggle-knob-color": "var(--descope-input-wrapper-label-text-color)",
+          "--descope-switch-toggle-knob-left-offset": "2px",
+          "--descope-switch-toggle-knob-radius": "50%",
+          "--descope-switch-toggle-knob-size": "calc(1em - 2px)",
+          "--descope-switch-toggle-knob-top-offset": "1px",
+          "--descope-switch-toggle-knob-transition-duration": "0.3s",
+          "--descope-switch-toggle-label-font-weight": "400",
+          "--descope-switch-toggle-label-line-height": "1.35em",
+          "--descope-switch-toggle-label-required-indicator": "var(--descope-input-wrapper-required-indicator)",
+          "--descope-switch-toggle-label-spacing": "1em",
+          "--descope-switch-toggle-label-text-color": "var(--descope-input-wrapper-label-text-color)",
+          "--descope-switch-toggle-track-background-color": "var(--descope-input-wrapper-background-color)",
+          "--descope-switch-toggle-track-border-color": "var(--descope-input-wrapper-border-color)",
+          "--descope-switch-toggle-track-border-radius": "var(--descope-radius-md)",
+          "--descope-switch-toggle-track-border-style": "var(--descope-input-wrapper-border-style)",
+          "--descope-switch-toggle-track-border-width": "var(--descope-input-wrapper-border-width)",
+          "--descope-switch-toggle-track-height": "1.25em",
+          "--descope-switch-toggle-track-width": "2.5em",
+          "_checked": {
+            "--descope-switch-toggle-knob-color": "var(--descope-input-wrapper-value-text-color)",
+            "--descope-switch-toggle-knob-left-offset": "calc(100% - var(--descope-switch-toggle-knob-size) - 2px)",
+            "--descope-switch-toggle-knob-text-color": "var(--descope-input-wrapper-value-text-color)",
+            "--descope-switch-toggle-track-border-color": "var(--descope-input-wrapper-border-color)"
+          },
+          "_disabled": {
+            "--descope-switch-toggle-knob-color": "var(--descope-colors-surface-light)",
+            "--descope-switch-toggle-label-text-color": "var(--descope-input-wrapper-label-text-color)",
+            "--descope-switch-toggle-track-background-color": "var(--descope-colors-surface-main)",
+            "--descope-switch-toggle-track-border-color": "var(--descope-colors-surface-light)",
+            "_checked": {
+              "--descope-switch-toggle-knob-color": "var(--descope-colors-surface-light)",
+              "--descope-switch-toggle-track-background-color": "var(--descope-colors-surface-main)"
+            }
+          },
+          "_invalid": {
+            "--descope-switch-toggle-knob-color": "var(--descope-colors-error-main)",
+            "--descope-switch-toggle-track-border-color": "var(--descope-colors-error-main)"
+          }
         },
         "text": {
+          "--descope-text-host-direction": "var(--descope-direction)",
+          "--descope-text-text-align": "start",
+          "--descope-text-text-color": "var(--descope-colors-surface-dark)",
+          "--descope-text-text-line-height": "1.35em",
+          "_fullWidth": {
+            "--descope-text-host-width": "100%"
+          },
+          "_italic": {
+            "--descope-text-font-style": "italic"
+          },
+          "_lowercase": {
+            "--descope-text-text-transform": "lowercase"
+          },
+          "_uppercase": {
+            "--descope-text-text-transform": "uppercase"
+          },
           "mode": {
+            "error": {
+              "--descope-text-text-color": "#f87171FF"
+            },
+            "error-dark": {
+              "--descope-text-text-color": "var(--descope-colors-error-dark)"
+            },
             "primary": {
               "--descope-text-text-color": "#f4f4f5"
             },
             "secondary": {
               "--descope-text-text-color": "#a1a1aaFF"
             },
-            "error": {
-              "--descope-text-text-color": "#f87171FF"
+            "success": {
+              "--descope-text-text-color": "var(--descope-colors-success-main)"
+            },
+            "success-dark": {
+              "--descope-text-text-color": "var(--descope-colors-success-dark)"
+            },
+            "warning": {
+              "--descope-text-text-color": "var(--descope-colors-warning-main)"
+            },
+            "warning-dark": {
+              "--descope-text-text-color": "var(--descope-colors-warning-dark)"
+            }
+          },
+          "textAlign": {
+            "center": {
+              "--descope-text-text-align": "center"
+            },
+            "left": {
+              "--descope-text-text-align": "left"
+            },
+            "right": {
+              "--descope-text-text-align": "right"
+            }
+          },
+          "variant": {
+            "body1": {
+              "--descope-text-font-family": "var(--descope-typography-body1-font)",
+              "--descope-text-font-size": "var(--descope-typography-body1-size)",
+              "--descope-text-font-weight": "var(--descope-typography-body1-weight)"
+            },
+            "body2": {
+              "--descope-text-font-family": "var(--descope-typography-body2-font)",
+              "--descope-text-font-size": "var(--descope-typography-body2-size)",
+              "--descope-text-font-weight": "var(--descope-typography-body2-weight)"
+            },
+            "h1": {
+              "--descope-text-font-family": "var(--descope-typography-h1-font)",
+              "--descope-text-font-size": "var(--descope-typography-h1-size)",
+              "--descope-text-font-weight": "var(--descope-typography-h1-weight)"
+            },
+            "h2": {
+              "--descope-text-font-family": "var(--descope-typography-h2-font)",
+              "--descope-text-font-size": "var(--descope-typography-h2-size)",
+              "--descope-text-font-weight": "var(--descope-typography-h2-weight)"
+            },
+            "h3": {
+              "--descope-text-font-family": "var(--descope-typography-h3-font)",
+              "--descope-text-font-size": "var(--descope-typography-h3-size)",
+              "--descope-text-font-weight": "var(--descope-typography-h3-weight)"
+            },
+            "subtitle1": {
+              "--descope-text-font-family": "var(--descope-typography-subtitle1-font)",
+              "--descope-text-font-size": "var(--descope-typography-subtitle1-size)",
+              "--descope-text-font-weight": "var(--descope-typography-subtitle1-weight)"
+            },
+            "subtitle2": {
+              "--descope-text-font-family": "var(--descope-typography-subtitle2-font)",
+              "--descope-text-font-size": "var(--descope-typography-subtitle2-size)",
+              "--descope-text-font-weight": "var(--descope-typography-subtitle2-weight)"
             }
           }
         },
-        "link": {
-          "mode": {
-            "primary": {
-              "--descope-link-text-color": "#60a5faFF"
+        "textArea": {
+          "--descope-text-area-error-message-font-size": "var(--descope-input-wrapper-error-message-font-size)",
+          "--descope-text-area-error-message-icon": "var(--descope-input-wrapper-error-message-icon)",
+          "--descope-text-area-error-message-icon-padding": "var(--descope-input-wrapper-error-message-icon-padding)",
+          "--descope-text-area-error-message-icon-position": "var(--descope-input-wrapper-error-message-icon-position)",
+          "--descope-text-area-error-message-icon-repeat": "var(--descope-input-wrapper-error-message-icon-repeat)",
+          "--descope-text-area-error-message-icon-size": "var(--descope-input-wrapper-error-message-icon-size)",
+          "--descope-text-area-error-message-text-color": "var(--descope-input-wrapper-error-message-text-color)",
+          "--descope-text-area-font-family": "var(--descope-input-wrapper-font-family)",
+          "--descope-text-area-font-size": "var(--descope-input-wrapper-font-size)",
+          "--descope-text-area-host-direction": "var(--descope-input-wrapper-direction)",
+          "--descope-text-area-host-min-width": "var(--descope-input-wrapper-min-width)",
+          "--descope-text-area-host-width": "var(--descope-input-wrapper-width)",
+          "--descope-text-area-input-background-color": "var(--descope-input-wrapper-background-color)",
+          "--descope-text-area-input-border-color": "var(--descope-input-wrapper-border-color)",
+          "--descope-text-area-input-border-radius": "var(--descope-input-wrapper-border-radius)",
+          "--descope-text-area-input-border-style": "var(--descope-input-wrapper-border-style)",
+          "--descope-text-area-input-border-width": "var(--descope-input-wrapper-border-width)",
+          "--descope-text-area-input-min-height": "5em",
+          "--descope-text-area-input-outline-color": "var(--descope-input-wrapper-outline-color)",
+          "--descope-text-area-input-outline-offset": "var(--descope-input-wrapper-outline-offset)",
+          "--descope-text-area-input-outline-style": "var(--descope-input-wrapper-outline-style)",
+          "--descope-text-area-input-outline-width": "var(--descope-input-wrapper-outline-width)",
+          "--descope-text-area-input-placeholder-text-color": "var(--descope-input-wrapper-placeholder-text-color)",
+          "--descope-text-area-input-resize-type": "vertical",
+          "--descope-text-area-input-value-text-color": "var(--descope-input-wrapper-value-text-color)",
+          "--descope-text-area-label-required-indicator": "var(--descope-input-wrapper-required-indicator)",
+          "--descope-text-area-label-text-color": "var(--descope-input-wrapper-label-text-color)",
+          "_readonly": {
+            "--descope-text-area-input-resize-type": "none"
+          },
+          "textAlign": {
+            "center": {
+              "--descope-text-area-input-text-align": "center"
+            },
+            "left": {
+              "--descope-text-area-input-text-align": "left"
+            },
+            "right": {
+              "--descope-text-area-input-text-align": "right"
             }
           }
         },
-        "password": {
-          "--descope-password-reveal-button-color": "var(--descope-input-wrapper-value-text-color)"
+        "textField": {
+          "--descope-text-field-error-message-font-size": "var(--descope-input-wrapper-error-message-font-size)",
+          "--descope-text-field-error-message-icon": "var(--descope-input-wrapper-error-message-icon)",
+          "--descope-text-field-error-message-icon-padding": "var(--descope-input-wrapper-error-message-icon-padding)",
+          "--descope-text-field-error-message-icon-position": "var(--descope-input-wrapper-error-message-icon-position)",
+          "--descope-text-field-error-message-icon-repeat": "var(--descope-input-wrapper-error-message-icon-repeat)",
+          "--descope-text-field-error-message-icon-size": "var(--descope-input-wrapper-error-message-icon-size)",
+          "--descope-text-field-error-message-text-color": "var(--descope-input-wrapper-error-message-text-color)",
+          "--descope-text-field-font-family": "var(--descope-input-wrapper-font-family)",
+          "--descope-text-field-font-size": "var(--descope-input-wrapper-font-size)",
+          "--descope-text-field-helper-text-color": "var(--descope-input-wrapper-helper-text-color)",
+          "--descope-text-field-host-direction": "var(--descope-input-wrapper-direction)",
+          "--descope-text-field-host-min-width": "var(--descope-input-wrapper-min-width)",
+          "--descope-text-field-host-width": "var(--descope-input-wrapper-width)",
+          "--descope-text-field-input-background-color": "var(--descope-input-wrapper-background-color)",
+          "--descope-text-field-input-border-color": "var(--descope-input-wrapper-border-color)",
+          "--descope-text-field-input-border-radius": "var(--descope-input-wrapper-border-radius)",
+          "--descope-text-field-input-border-style": "var(--descope-input-wrapper-border-style)",
+          "--descope-text-field-input-border-width": "var(--descope-input-wrapper-border-width)",
+          "--descope-text-field-input-height": "var(--descope-input-wrapper-input-height)",
+          "--descope-text-field-input-horizontal-padding": "var(--descope-input-wrapper-horizontal-padding)",
+          "--descope-text-field-input-icon-color": "var(--descope-input-wrapper-placeholder-text-color)",
+          "--descope-text-field-input-icon-offset": "var(--descope-spacing-md)",
+          "--descope-text-field-input-icon-size": "var(--descope-input-wrapper-input-icon-size)",
+          "--descope-text-field-input-outline-color": "var(--descope-input-wrapper-outline-color)",
+          "--descope-text-field-input-outline-offset": "var(--descope-input-wrapper-outline-offset)",
+          "--descope-text-field-input-outline-style": "var(--descope-input-wrapper-outline-style)",
+          "--descope-text-field-input-outline-width": "var(--descope-input-wrapper-outline-width)",
+          "--descope-text-field-input-placeholder-color": "var(--descope-input-wrapper-placeholder-text-color)",
+          "--descope-text-field-input-text-security": "var(--descope-input-wrapper-input-text-security)",
+          "--descope-text-field-input-transform-y": "var(--descope-input-wrapper-input-transform-y)",
+          "--descope-text-field-input-transition": "var(--descope-input-wrapper-input-transition)",
+          "--descope-text-field-input-value-text-color": "var(--descope-input-wrapper-value-text-color)",
+          "--descope-text-field-input-vertical-alignment": "var(--descope-input-wrapper-input-vertical-alignment)",
+          "--descope-text-field-label-font-size": "var(--descope-input-wrapper-label-font-size)",
+          "--descope-text-field-label-font-weight": "var(--descope-input-wrapper-label-font-weight)",
+          "--descope-text-field-label-horizontal-position": "var(--descope-input-wrapper-label-horizontal-position)",
+          "--descope-text-field-label-position": "var(--descope-input-wrapper-label-position)",
+          "--descope-text-field-label-required-indicator": "var(--descope-input-wrapper-required-indicator)",
+          "--descope-text-field-label-text-color": "var(--descope-input-wrapper-label-text-color)",
+          "--descope-text-field-label-top-position": "var(--descope-input-wrapper-label-top-position)",
+          "--descope-text-field-margin-inline-start": "var(--descope-input-wrapper-margin-inline-start)",
+          "--descope-text-field-placeholder-opacity": "var(--descope-input-wrapper-placeholder-opacity)",
+          "--descope-text-field-text-align": "var(--descope-input-wrapper-text-align)",
+          "--descope-text-field-value-input-height": "var(--descope-input-wrapper-value-input-height)",
+          "--descope-text-field-value-input-margin-bottom": "var(--descope-input-wrapper-value-input-margin-bottom)",
+          "textAlign": {
+            "center": {
+              "--descope-text-field-input-text-align": "center"
+            },
+            "left": {
+              "--descope-text-field-input-text-align": "left"
+            },
+            "right": {
+              "--descope-text-field-input-text-align": "right"
+            }
+          }
+        },
+        "thirdPartyAppLogo": {
+          "--descope-third-party-app-logo-arrows-color": "var(--descope-colors-surface-dark)",
+          "--descope-third-party-app-logo-company-logo-fallback": "url(https://imgs.descope.com/components/project-logo-placeholder.svg)",
+          "--descope-third-party-app-logo-gap": "var(--descope-spacing-lg)",
+          "--descope-third-party-app-logo-third-party-app-logo-fallback": "url(https://imgs.descope.com/components/third-party-app-logo-placeholder.svg)",
+          "size": {
+            "lg": {
+              "--descope-third-party-app-logo-logo-max-height": "60px",
+              "--descope-third-party-app-logo-logo-max-width": "240px"
+            },
+            "md": {
+              "--descope-third-party-app-logo-logo-max-height": "48px",
+              "--descope-third-party-app-logo-logo-max-width": "200px"
+            },
+            "sm": {
+              "--descope-third-party-app-logo-logo-max-height": "40px",
+              "--descope-third-party-app-logo-logo-max-width": "160px"
+            },
+            "xs": {
+              "--descope-third-party-app-logo-logo-max-height": "30px",
+              "--descope-third-party-app-logo-logo-max-width": "120px"
+            }
+          }
+        },
+        "timer": {
+          "--descope-timer-font-family": "var(--descope-fonts-font1-family)",
+          "--descope-timer-gap": "0.25em",
+          "--descope-timer-host-direction": "var(--descope-direction)",
+          "--descope-timer-icon-color": "var(--descope-colors-surface-contrast)",
+          "--descope-timer-icon-size": "1em",
+          "--descope-timer-line-height": "1em",
+          "--descope-timer-min-height": "1.5em",
+          "--descope-timer-text-color": "var(--descope-colors-surface-contrast)",
+          "_fullWidth": {
+            "--descope-timer-host-width": "100%"
+          },
+          "size": {
+            "lg": {
+              "--descope-timer-font-size": "18px"
+            },
+            "md": {
+              "--descope-timer-font-size": "16px"
+            },
+            "sm": {
+              "--descope-timer-font-size": "14px"
+            },
+            "xs": {
+              "--descope-timer-font-size": "12px"
+            }
+          },
+          "textAlign": {
+            "center": {
+              "--descope-timer-text-align": "center"
+            },
+            "left": {
+              "--descope-timer-text-align": "left"
+            },
+            "right": {
+              "--descope-timer-text-align": "right"
+            }
+          }
+        },
+        "timerButton": {
+          "--descope-timer-button-flex-direction": "column",
+          "--descope-timer-button-gap": "var(--descope-spacing-sm)",
+          "_fullWidth": {
+            "--descope-timer-button-host-width": "100%"
+          },
+          "_horizontal": {
+            "--descope-timer-button-flex-direction": "row"
+          }
+        },
+        "tooltip": {
+          "--descope-tooltip-background-color": "var(--descope-colors-surface-main)",
+          "--descope-tooltip-border-color": "var(--descope-colors-surface-light)",
+          "--descope-tooltip-border-radius": "var(--descope-radius-xs)",
+          "--descope-tooltip-border-style": "solid",
+          "--descope-tooltip-border-width": "var(--descope-border-xs)",
+          "--descope-tooltip-box-shadow": "var(--descope-shadow-wide-sm) var(--descope-tooltip-shadow-color), var(--descope-shadow-narrow-sm) var(--descope-tooltip-shadow-color)",
+          "--descope-tooltip-font-family": "var(--descope-fonts-font1-family)",
+          "--descope-tooltip-font-size": "14px",
+          "--descope-tooltip-font-weight": "400",
+          "--descope-tooltip-horizontal-padding": "var(--descope-spacing-md)",
+          "--descope-tooltip-host-direction": "var(--descope-direction)",
+          "--descope-tooltip-shadow-color": "#00000020",
+          "--descope-tooltip-text-color": "var(--descope-colors-surface-contrast)",
+          "--descope-tooltip-vertical-padding": "var(--descope-spacing-sm)",
+          "shadow": {
+            "2xl": {
+              "--descope-tooltip-box-shadow": "var(--descope-shadow-wide-2xl) var(--descope-tooltip-shadow-color)",
+              "--descope-tooltip-shadow-color": "#00000050"
+            },
+            "lg": {
+              "--descope-tooltip-box-shadow": "var(--descope-shadow-wide-lg) var(--descope-tooltip-shadow-color), var(--descope-shadow-narrow-lg) var(--descope-tooltip-shadow-color)"
+            },
+            "md": {
+              "--descope-tooltip-box-shadow": "var(--descope-shadow-wide-md) var(--descope-tooltip-shadow-color), var(--descope-shadow-narrow-md) var(--descope-tooltip-shadow-color)"
+            },
+            "sm": {
+              "--descope-tooltip-box-shadow": "var(--descope-shadow-wide-sm) var(--descope-tooltip-shadow-color), var(--descope-shadow-narrow-sm) var(--descope-tooltip-shadow-color)"
+            },
+            "xl": {
+              "--descope-tooltip-box-shadow": "var(--descope-shadow-wide-xl) var(--descope-tooltip-shadow-color), var(--descope-shadow-narrow-xl) var(--descope-tooltip-shadow-color)"
+            }
+          }
+        },
+        "totpImage": {
+          "--descope-totp-image-fallback-url": "url(https://imgs.descope.com/components/totp-placeholder.svg)"
+        },
+        "trustedDevices": {
+          "--descope-trusted-devices-badge-background-color": "#FFFFFF",
+          "--descope-trusted-devices-badge-border-color": "#cfd3d7",
+          "--descope-trusted-devices-badge-border-radius": "5px",
+          "--descope-trusted-devices-badge-text-color": "#636c74",
+          "--descope-trusted-devices-device-icon-gap": "8px",
+          "--descope-trusted-devices-device-icon-size": "24px",
+          "--descope-trusted-devices-device-panel-gap": "8px",
+          "--descope-trusted-devices-host-min-width": "300px",
+          "--descope-trusted-devices-host-width": "300px",
+          "--descope-trusted-devices-item-background-color": "transparent",
+          "--descope-trusted-devices-item-border-color": "#cfd3d7",
+          "--descope-trusted-devices-item-border-radius": "5px",
+          "--descope-trusted-devices-item-content-gap": "4px",
+          "--descope-trusted-devices-item-cursor": "default",
+          "--descope-trusted-devices-item-horizontal-padding": "16px",
+          "--descope-trusted-devices-item-outline": "transparent",
+          "--descope-trusted-devices-item-vertical-padding": "16px",
+          "--descope-trusted-devices-last-login-label-gap": "2px",
+          "--descope-trusted-devices-list-background-color": "transparent",
+          "--descope-trusted-devices-list-border-radius": "0",
+          "--descope-trusted-devices-list-border-width": "0",
+          "--descope-trusted-devices-list-box-shadow": "none",
+          "--descope-trusted-devices-list-items-gap": "16px",
+          "--descope-trusted-devices-list-padding": "0",
+          "_fullWidth": {
+            "--descope-trusted-devices-host-width": "100%"
+          }
+        },
+        "uploadFile": {
+          "--descope-upload-file-border-color": "var(--descope-input-wrapper-border-color)",
+          "--descope-upload-file-border-radius": "var(--descope-input-wrapper-border-radius)",
+          "--descope-upload-file-border-style": "dashed",
+          "--descope-upload-file-border-width": "var(--descope-input-wrapper-border-width)",
+          "--descope-upload-file-font-family": "var(--descope-input-wrapper-font-family)",
+          "--descope-upload-file-font-size": "16px",
+          "--descope-upload-file-gap": "0.5em",
+          "--descope-upload-file-host-direction": "var(--descope-input-wrapper-direction)",
+          "--descope-upload-file-host-padding": "0.75em",
+          "--descope-upload-file-icon-size": "2em",
+          "--descope-upload-file-label-text-color": "var(--descope-input-wrapper-label-text-color)",
+          "--descope-upload-file-line-height": "1em",
+          "--descope-upload-file-title-font-weight": "500",
+          "_fullWidth": {
+            "--descope-upload-file-host-width": "var(--descope-input-wrapper-width)"
+          },
+          "_required": {
+            "--descope-upload-file-required-indicator": "var(--descope-input-wrapper-required-indicator)"
+          },
+          "size": {
+            "lg": {
+              "--descope-upload-file-description-font-size": "1.125em",
+              "--descope-upload-file-host-height": "280px",
+              "--descope-upload-file-host-width": "336px",
+              "--descope-upload-file-line-height": "1.75em",
+              "--descope-upload-file-title-font-size": "1.125em"
+            },
+            "md": {
+              "--descope-upload-file-description-font-size": "1em",
+              "--descope-upload-file-host-height": "256px",
+              "--descope-upload-file-host-width": "312px",
+              "--descope-upload-file-line-height": "1.5em",
+              "--descope-upload-file-title-font-size": "1.125em"
+            },
+            "sm": {
+              "--descope-upload-file-description-font-size": "0.875em",
+              "--descope-upload-file-host-height": "216px",
+              "--descope-upload-file-host-width": "230px",
+              "--descope-upload-file-line-height": "1.25em",
+              "--descope-upload-file-title-font-size": "1em"
+            },
+            "xs": {
+              "--descope-upload-file-description-font-size": "0.875em",
+              "--descope-upload-file-host-height": "196px",
+              "--descope-upload-file-host-width": "200px",
+              "--descope-upload-file-line-height": "1.25em",
+              "--descope-upload-file-title-font-size": "0.875em"
+            }
+          }
+        },
+        "userAttribute": {
+          "--descope-user-attribute-badge-max-width": "85px",
+          "--descope-user-attribute-content-min-width": "calc(100% - var(--descope-user-attribute-label-min-width) - var(--descope-user-attribute-items-gap))",
+          "--descope-user-attribute-host-direction": "var(--descope-direction)",
+          "--descope-user-attribute-host-max-width": "100%",
+          "--descope-user-attribute-host-min-width": "310px",
+          "--descope-user-attribute-host-width": "530px",
+          "--descope-user-attribute-items-gap": "4px",
+          "--descope-user-attribute-label-min-width": "150px",
+          "_fullWidth": {
+            "--descope-user-attribute-host-width": "100%"
+          }
+        },
+        "userAuthMethod": {
+          "--descope-user-auth-method-host-direction": "var(--descope-direction)",
+          "--descope-user-auth-method-host-max-width": "100%",
+          "--descope-user-auth-method-host-min-width": "310px",
+          "--descope-user-auth-method-host-width": "530px",
+          "--descope-user-auth-method-icon-color": "currentcolor",
+          "--descope-user-auth-method-icon-size": "24px",
+          "--descope-user-auth-method-items-gap": "16px",
+          "_fullWidth": {
+            "--descope-user-auth-method-host-width": "100%"
+          }
         }
-      }
-    },
-    "light": {
+      },
       "globals": {
+        "border": {
+          "lg": "4px",
+          "md": "3px",
+          "sm": "2px",
+          "xl": "5px",
+          "xs": "1px"
+        },
+        "colors": {
+          "error": {
+            "contrast": "#000000",
+            "dark": "#fa7c75",
+            "highlight": "#4a0603",
+            "light": "#c51107",
+            "main": "#f85249"
+          },
+          "primary": {
+            "contrast": "#000000",
+            "dark": "#71aeff",
+            "highlight": "#00214d",
+            "light": "#004094",
+            "main": "#1f80ff"
+          },
+          "secondary": {
+            "contrast": "#000000",
+            "dark": "#b9a0f3",
+            "highlight": "#361299",
+            "light": "#683ae6",
+            "main": "#a665eb"
+          },
+          "success": {
+            "contrast": "#000000",
+            "dark": "#8bc3a2",
+            "highlight": "#001f00",
+            "light": "#004d0f",
+            "main": "#27963c"
+          },
+          "surface": {
+            "contrast": "#f5f6f7",
+            "dark": "#bec4ca",
+            "highlight": "#22262a",
+            "light": "#555f68",
+            "main": "#181a1c"
+          },
+          "warning": {
+            "contrast": "#000000",
+            "dark": "#FF985A",
+            "highlight": "#C45512",
+            "light": "#FF6304",
+            "main": "#EF7A33"
+          }
+        },
+        "direction": "ltr",
         "fonts": {
           "font1": {
             "family": [
@@ -132,14 +2498,70 @@
               "-apple-system",
               "BlinkMacSystemFont",
               "Segoe UI",
+              "Roboto",
               "Helvetica Neue",
               "Arial",
               "Noto Sans",
-              "sans-serif"
+              "sans-serif",
+              "Apple Color Emoji",
+              "Segoe UI Emoji",
+              "Segoe UI Symbol",
+              "Noto Color Emoji"
             ],
             "label": "Inter",
-            "url": "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+            "url": "https://fonts.googleapis.com/css?family=Inter:100,200,300,400,500,600,700,800,900"
+          },
+          "font2": {
+            "family": [
+              "ui-sans-serif",
+              "system-ui",
+              "-apple-system",
+              "BlinkMacSystemFont",
+              "Segoe UI",
+              "Roboto",
+              "Helvetica Neue",
+              "Arial",
+              "Noto Sans",
+              "sans-serif",
+              "Apple Color Emoji",
+              "Segoe UI Emoji",
+              "Segoe UI Symbol",
+              "Noto Color Emoji"
+            ],
+            "label": "Sans Serif"
           }
+        },
+        "radius": {
+          "2xl": "30px",
+          "3xl": "35px",
+          "lg": "20px",
+          "md": "15px",
+          "sm": "10px",
+          "xl": "25px",
+          "xs": "5px"
+        },
+        "shadow": {
+          "narrow": {
+            "2xl": "0 16px 16px -8px",
+            "lg": "0 4px 6px -4px",
+            "md": "0 2px 4px -2px",
+            "sm": "0 1px 2px -1px",
+            "xl": "0 8px 10px -6px"
+          },
+          "wide": {
+            "2xl": "0 25px 50px -12px",
+            "lg": "0 10px 15px -3px",
+            "md": "0 4px 6px -1px",
+            "sm": "0 2px 3px -0.5px",
+            "xl": "0 20px 25px -5px"
+          }
+        },
+        "spacing": {
+          "lg": "16px",
+          "md": "8px",
+          "sm": "4px",
+          "xl": "32px",
+          "xs": "2px"
         },
         "typography": {
           "body1": {
@@ -151,16 +2573,6 @@
             "font": "var(--descope-fonts-font1-family)",
             "size": "12px",
             "weight": "400"
-          },
-          "subtitle1": {
-            "font": "var(--descope-fonts-font1-family)",
-            "size": "16px",
-            "weight": "500"
-          },
-          "subtitle2": {
-            "font": "var(--descope-fonts-font1-family)",
-            "size": "14px",
-            "weight": "500"
           },
           "h1": {
             "font": "var(--descope-fonts-font1-family)",
@@ -176,57 +2588,56 @@
             "font": "var(--descope-fonts-font1-family)",
             "size": "20px",
             "weight": "600"
+          },
+          "subtitle1": {
+            "font": "var(--descope-fonts-font1-family)",
+            "size": "16px",
+            "weight": "500"
+          },
+          "subtitle2": {
+            "font": "var(--descope-fonts-font1-family)",
+            "size": "14px",
+            "weight": "500"
           }
         }
-      },
+      }
+    },
+    "light": {
       "components": {
-        "container": {
-          "--descope-container-background-color": "#FFFFFF"
-        },
         "button": {
           "--descope-button-border-radius": "8px",
-          "--descope-button-font-family": "var(--descope-fonts-font1-family)",
-          "--descope-button-border-width": "1px",
           "--descope-button-border-style": "solid",
+          "--descope-button-border-width": "1px",
+          "--descope-button-font-family": "var(--descope-fonts-font1-family)",
           "mode": {
             "primary": {
-              "--descope-button-main": "#2563eb",
-              "--descope-button-light": "#60a5fa",
-              "--descope-button-dark": "#1d4ed8",
+              "--descope-button-border-color": "#2563eb",
               "--descope-button-contrast": "#eff6ff",
-              "--descope-button-border-color": "#2563eb"
+              "--descope-button-dark": "#1d4ed8",
+              "--descope-button-light": "#60a5fa",
+              "--descope-button-main": "#2563eb"
             },
             "secondary": {
-              "--descope-button-main": "#e4e4e7",
-              "--descope-button-light": "#f4f4f5",
-              "--descope-button-dark": "#d4d4d8",
+              "--descope-button-border-color": "#d4d4d8",
               "--descope-button-contrast": "#18181b",
-              "--descope-button-border-color": "#d4d4d8"
+              "--descope-button-dark": "#d4d4d8",
+              "--descope-button-light": "#f4f4f5",
+              "--descope-button-main": "#e4e4e7"
             }
           }
         },
+        "container": {
+          "--descope-container-background-color": "#FFFFFF"
+        },
         "inputWrapper": {
           "--descope-input-wrapper-background-color": "#FFFFFF",
+          "--descope-input-wrapper-border-color": "#d4d4d8FF",
           "--descope-input-wrapper-border-radius": "8px",
           "--descope-input-wrapper-font-family": "var(--descope-fonts-font1-family)",
           "--descope-input-wrapper-label-text-color": "#71717aFF",
           "--descope-input-wrapper-placeholder-text-color": "#a1a1aaFF",
           "--descope-input-wrapper-value-text-color": "#09090bFF",
-          "--descope-input-wrapper-border-color": "#d4d4d8FF",
           "_bordered": {}
-        },
-        "text": {
-          "mode": {
-            "primary": {
-              "--descope-text-text-color": "#09090b"
-            },
-            "secondary": {
-              "--descope-text-text-color": "#71717aFF"
-            },
-            "error": {
-              "--descope-text-text-color": "#dc2626FF"
-            }
-          }
         },
         "link": {
           "mode": {
@@ -237,8 +2648,91 @@
         },
         "password": {
           "--descope-password-reveal-button-color": "var(--descope-input-wrapper-value-text-color)"
+        },
+        "text": {
+          "mode": {
+            "error": {
+              "--descope-text-text-color": "#dc2626FF"
+            },
+            "primary": {
+              "--descope-text-text-color": "#09090b"
+            },
+            "secondary": {
+              "--descope-text-text-color": "#71717aFF"
+            }
+          }
+        }
+      },
+      "globals": {
+        "fonts": {
+          "font1": {
+            "family": [
+              "Inter",
+              "ui-sans-serif",
+              "system-ui",
+              "-apple-system",
+              "BlinkMacSystemFont",
+              "Segoe UI",
+              "Roboto",
+              "Helvetica Neue",
+              "Arial",
+              "Noto Sans",
+              "sans-serif",
+              "Apple Color Emoji",
+              "Segoe UI Emoji",
+              "Segoe UI Symbol",
+              "Noto Color Emoji"
+            ],
+            "label": "Inter",
+            "url": "https://fonts.googleapis.com/css?family=Inter:100,200,300,400,500,600,700,800,900"
+          }
+        },
+        "typography": {
+          "body1": {
+            "font": "var(--descope-fonts-font1-family)",
+            "size": "14px",
+            "weight": "400"
+          },
+          "body2": {
+            "font": "var(--descope-fonts-font1-family)",
+            "size": "12px",
+            "weight": "400"
+          },
+          "h1": {
+            "font": "var(--descope-fonts-font1-family)",
+            "size": "36px",
+            "weight": "600"
+          },
+          "h2": {
+            "font": "var(--descope-fonts-font1-family)",
+            "size": "28px",
+            "weight": "600"
+          },
+          "h3": {
+            "font": "var(--descope-fonts-font1-family)",
+            "size": "20px",
+            "weight": "600"
+          },
+          "subtitle1": {
+            "font": "var(--descope-fonts-font1-family)",
+            "size": "16px",
+            "weight": "500"
+          },
+          "subtitle2": {
+            "font": "var(--descope-fonts-font1-family)",
+            "size": "14px",
+            "weight": "500"
+          }
         }
       }
+    },
+    "sso-suite-default-dark": {
+      "name": "SSO Suite Default",
+      "type": "ssoSuite"
+    },
+    "sso-suite-default-light": {
+      "name": "SSO Suite Default",
+      "type": "ssoSuite"
     }
   }
 }
