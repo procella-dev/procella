@@ -1,0 +1,48 @@
+---
+/**
+ * SiteTitle override — matches ProcellaLogo from apps/ui:
+ *   stacked-layers SVG icon in blue-500 + "Procella" wordmark in zinc-100
+ */
+import type { Props } from '@astrojs/starlight/props';
+
+const { siteTitle } = Astro.props;
+---
+
+<a href="/" class="site-title">
+  <!-- Stacked layers icon — same SVG path as ProcellaLogo.tsx -->
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    width="20"
+    height="20"
+    aria-hidden="true"
+    style="color: #3b82f6; flex-shrink: 0;"
+  >
+    <path
+      d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  </svg>
+  <span>{siteTitle}</span>
+</a>
+
+<style>
+  .site-title {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;        /* gap-2.5 */
+    text-decoration: none;
+    white-space: nowrap;
+    font-size: 0.9375rem; /* 15px — matches ProcellaLogo size="sm" */
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: #f4f4f5;       /* zinc-100 */
+  }
+
+  .site-title:hover {
+    color: #ffffff;
+  }
+</style>
