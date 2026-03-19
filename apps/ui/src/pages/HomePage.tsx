@@ -163,6 +163,14 @@ export function HomePage() {
 					</div>
 					<div className="flex items-center gap-4">
 						<a
+							href="https://docs.procella.dev"
+							target="_blank"
+							rel="noopener noreferrer"
+							className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
+						>
+							Docs
+						</a>
+						<a
 							href="https://github.com/procella-dev/procella"
 							target="_blank"
 							rel="noopener noreferrer"
@@ -367,6 +375,14 @@ export function HomePage() {
 						<span>Self-hosted Pulumi backend</span>
 					</div>
 					<div className="flex items-center gap-4">
+						<a
+							href="https://docs.procella.dev"
+							target="_blank"
+							rel="noopener noreferrer"
+							className="text-sm text-zinc-600 hover:text-zinc-400 transition-colors"
+						>
+							Docs
+						</a>
 						<a
 							href="https://github.com/procella-dev/procella"
 							target="_blank"

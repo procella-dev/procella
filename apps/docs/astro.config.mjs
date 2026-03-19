@@ -8,6 +8,13 @@ export default defineConfig({
     starlight({
       title: 'Procella',
       description: 'Self-hosted Pulumi backend documentation',
+      customCss: ['./src/styles/custom.css'],
+      components: {
+        Head: './src/components/Head.astro',
+        SiteTitle: './src/components/SiteTitle.astro',
+        ThemeProvider: './src/components/ThemeProvider.astro',
+        ThemeSelect: './src/components/ThemeSelect.astro',
+      },
       social: [
         { icon: 'github', label: 'GitHub', href: 'https://github.com/procella-dev/procella' },
       ],
@@ -47,6 +54,12 @@ export default defineConfig({
             { label: 'Horizontal Scaling', slug: 'operations/horizontal-scaling' },
             { label: 'Blob Storage', slug: 'operations/blob-storage' },
             { label: 'Environment Variables', slug: 'operations/environment-variables' },
+          ],
+        },
+        {
+          label: 'Deployment',
+          items: [
+            { label: 'AWS ECS', slug: 'deployment/aws-ecs' },
           ],
         },
         {
