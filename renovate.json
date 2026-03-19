@@ -7,8 +7,12 @@
   "prConcurrentLimit": 5,
   "packageRules": [
     {
-      "matchPackageNames": ["astro", "@astrojs/starlight"],
-      "groupName": "astro + starlight"
+      "matchPackageNames": ["astro", "@astrojs/starlight", "zod"],
+      "groupName": "astro + starlight + zod"
+    },
+    {
+      "matchPackageNames": ["vite", "@vitejs/plugin-react"],
+      "groupName": "vite + plugin-react"
     }
   ]
 }
