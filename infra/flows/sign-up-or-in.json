@@ -3,9 +3,7 @@
     "startTask": "30",
     "tasks": {
       "1": {
-        "allInputKeys": [
-          "email"
-        ],
+        "allInputKeys": ["email"],
         "calculatedInputKeys": true,
         "clientScripts": [],
         "componentsConditions": [],
@@ -292,7 +290,7 @@
               "paddingY": "8",
               "spaceBetween": "4",
               "st-items-grow": 0,
-              "width": "100%%"
+              "width": "100%"
             },
             "type": {
               "resolvedName": "Container"
@@ -362,9 +360,7 @@
           }
         },
         "id": "1",
-        "inputKeys": [
-          "email"
-        ],
+        "inputKeys": ["email"],
         "inputsMetadata": [
           {
             "displayName": "Email Input",
@@ -373,15 +369,20 @@
         ],
         "interactions": [
           {
-            "icon": "google",
-            "id": "gKDHyrEeGQ",
+            "icon": "fingerprint",
+            "id": "LdgRgSLZ0h",
             "label": "",
-            "subType": "social",
             "type": "button"
           },
           {
-            "icon": "github",
-            "id": "mGpwQF8o64",
+            "icon": "sso",
+            "id": "S3lBSkj9NS",
+            "label": "",
+            "type": "button"
+          },
+          {
+            "icon": "google",
+            "id": "gKDHyrEeGQ",
             "label": "",
             "subType": "social",
             "type": "button"
@@ -394,15 +395,10 @@
             "type": "button"
           },
           {
-            "icon": "sso",
-            "id": "S3lBSkj9NS",
+            "icon": "github",
+            "id": "mGpwQF8o64",
             "label": "",
-            "type": "button"
-          },
-          {
-            "icon": "fingerprint",
-            "id": "LdgRgSLZ0h",
-            "label": "",
+            "subType": "social",
             "type": "button"
           }
         ],
@@ -422,11 +418,11 @@
               "taskId": "14"
             },
             {
-              "interactionId": "mGpwQF8o64",
+              "interactionId": "mCuIwaR6mv",
               "taskId": "14"
             },
             {
-              "interactionId": "mCuIwaR6mv",
+              "interactionId": "mGpwQF8o64",
               "taskId": "14"
             }
           ]
@@ -825,9 +821,7 @@
         "clientScripts": [],
         "componentsConditions": [],
         "componentsConnectors": {},
-        "contextKeys": [
-          "lastAuth.loginId"
-        ],
+        "contextKeys": ["lastAuth.loginId"],
         "dynamicSelects": {},
         "htmlTemplate": {
           "errorMsg": {
@@ -937,12 +931,7 @@
             "hidden": false,
             "isCanvas": true,
             "linkedNodes": {},
-            "nodes": [
-              "rmSubtitle",
-              "HVl8IS0LWV",
-              "hqGqqjK2Uk",
-              "errorMsg"
-            ],
+            "nodes": ["rmSubtitle", "HVl8IS0LWV", "hqGqqjK2Uk", "errorMsg"],
             "props": {
               "align": "center",
               "background": "",
@@ -954,7 +943,7 @@
               "paddingY": "8",
               "spaceBetween": "4",
               "st-items-grow": 0,
-              "width": "100%%"
+              "width": "100%"
             },
             "type": {
               "resolvedName": "Container"
@@ -1236,9 +1225,7 @@
         "clientScripts": [],
         "componentsConditions": [],
         "componentsConnectors": {},
-        "contextKeys": [
-          "sentTo.maskedEmail"
-        ],
+        "contextKeys": ["sentTo.maskedEmail"],
         "dynamicSelects": {},
         "htmlTemplate": {
           "EbW8KMdjAx": {
@@ -1342,12 +1329,7 @@
             "hidden": false,
             "isCanvas": true,
             "linkedNodes": {},
-            "nodes": [
-              "elTitle",
-              "pollingLoader",
-              "EbW8KMdjAx",
-              "errorMsg"
-            ],
+            "nodes": ["elTitle", "pollingLoader", "EbW8KMdjAx", "errorMsg"],
             "props": {
               "align": "center",
               "background": "",
@@ -1359,7 +1341,7 @@
               "paddingY": "8",
               "spaceBetween": "4",
               "st-items-grow": 0,
-              "width": "100%%"
+              "width": "100%"
             },
             "type": {
               "resolvedName": "Container"
@@ -1425,9 +1407,7 @@
             "hidden": false,
             "isCanvas": true,
             "linkedNodes": {},
-            "nodes": [
-              "vsTitle"
-            ],
+            "nodes": ["vsTitle"],
             "props": {
               "align": "center",
               "background": "",
@@ -1439,7 +1419,7 @@
               "paddingY": "8",
               "spaceBetween": "4",
               "st-items-grow": 0,
-              "width": "100%%"
+              "width": "100%"
             },
             "type": {
               "resolvedName": "Container"
@@ -1492,9 +1472,7 @@
                 "operator": "in",
                 "predicate": {
                   "type": "inline",
-                  "value": [
-                    "Embargoed Countries (US EAR)"
-                  ]
+                  "value": ["Embargoed Countries (US EAR)"]
                 },
                 "target": {
                   "type": "context",
@@ -1531,10 +1509,92 @@
         }
       },
       "40": {
+        "allInputKeys": [],
+        "calculatedInputKeys": true,
+        "clientScripts": [],
+        "componentsConditions": [],
+        "componentsConnectors": {},
+        "dynamicSelects": {},
+        "htmlTemplate": {
+          "ecSubtitle": {
+            "custom": {},
+            "displayName": "Text",
+            "hidden": false,
+            "isCanvas": false,
+            "linkedNodes": {},
+            "nodes": [],
+            "parent": "ROOT",
+            "props": {
+              "children": "This service is not available in your region.",
+              "full-width": false,
+              "id": "ecSubtitle",
+              "isEnriched": true,
+              "italic": false,
+              "link-target-blank": true,
+              "mode": "body1",
+              "text-align": "center",
+              "tooltipText": "Tooltip text",
+              "variant": "body1"
+            },
+            "type": {
+              "resolvedName": "Text"
+            }
+          },
+          "ecTitle": {
+            "custom": {},
+            "displayName": "Text",
+            "hidden": false,
+            "isCanvas": false,
+            "linkedNodes": {},
+            "nodes": [],
+            "parent": "ROOT",
+            "props": {
+              "children": "Access restricted",
+              "full-width": false,
+              "id": "ecTitle",
+              "isEnriched": true,
+              "italic": false,
+              "link-target-blank": true,
+              "mode": "h3",
+              "text-align": "center",
+              "tooltipText": "Tooltip text",
+              "variant": "body1"
+            },
+            "type": {
+              "resolvedName": "Text"
+            }
+          },
+          "ROOT": {
+            "custom": {},
+            "displayName": "Container",
+            "hidden": false,
+            "isCanvas": true,
+            "linkedNodes": {},
+            "nodes": ["ecTitle", "ecSubtitle"],
+            "props": {
+              "align": "center",
+              "background": "",
+              "data-editor-type": "container",
+              "direction": "column",
+              "id": "ROOT",
+              "justify": "center",
+              "paddingX": "4",
+              "paddingY": "8",
+              "spaceBetween": "4",
+              "st-items-grow": 0,
+              "width": "100%"
+            },
+            "type": {
+              "resolvedName": "Container"
+            }
+          }
+        },
         "id": "40",
         "inputsMetadata": [],
+        "interactions": [],
         "name": "Embargoed countries",
         "next": {},
+        "recoveryCodesData": [],
         "screenId": "SC2TvN6mWHt9qTQf7ZEYdawiK5lFa",
         "type": "screen",
         "view": {
@@ -1692,12 +1752,7 @@
           "hidden": false,
           "isCanvas": true,
           "linkedNodes": {},
-          "nodes": [
-            "elTitle",
-            "pollingLoader",
-            "EbW8KMdjAx",
-            "errorMsg"
-          ],
+          "nodes": ["elTitle", "pollingLoader", "EbW8KMdjAx", "errorMsg"],
           "props": {
             "align": "center",
             "background": "",
@@ -1709,7 +1764,7 @@
             "paddingY": "8",
             "spaceBetween": "4",
             "st-items-grow": 0,
-            "width": "100%%"
+            "width": "100%"
           },
           "type": {
             "resolvedName": "Container"
@@ -1754,7 +1809,9 @@
             "italic": false,
             "link-target-blank": true,
             "mode": "body1",
-            "text-align": "center"
+            "text-align": "center",
+            "tooltipText": "Tooltip text",
+            "variant": "body1"
           },
           "type": {
             "resolvedName": "Text"
@@ -1776,7 +1833,9 @@
             "italic": false,
             "link-target-blank": true,
             "mode": "h3",
-            "text-align": "center"
+            "text-align": "center",
+            "tooltipText": "Tooltip text",
+            "variant": "body1"
           },
           "type": {
             "resolvedName": "Text"
@@ -1788,10 +1847,7 @@
           "hidden": false,
           "isCanvas": true,
           "linkedNodes": {},
-          "nodes": [
-            "ecTitle",
-            "ecSubtitle"
-          ],
+          "nodes": ["ecTitle", "ecSubtitle"],
           "props": {
             "align": "center",
             "background": "",
@@ -1803,7 +1859,7 @@
             "paddingY": "8",
             "spaceBetween": "4",
             "st-items-grow": 0,
-            "width": "100%%"
+            "width": "100%"
           },
           "type": {
             "resolvedName": "Container"
@@ -2094,7 +2150,7 @@
             "paddingY": "8",
             "spaceBetween": "4",
             "st-items-grow": 0,
-            "width": "100%%"
+            "width": "100%"
           },
           "type": {
             "resolvedName": "Container"
@@ -2165,14 +2221,18 @@
       },
       "interactions": [
         {
-          "icon": "google",
-          "id": "gKDHyrEeGQ",
-          "subType": "social",
+          "icon": "fingerprint",
+          "id": "LdgRgSLZ0h",
           "type": "button"
         },
         {
-          "icon": "github",
-          "id": "mGpwQF8o64",
+          "icon": "sso",
+          "id": "S3lBSkj9NS",
+          "type": "button"
+        },
+        {
+          "icon": "google",
+          "id": "gKDHyrEeGQ",
           "subType": "social",
           "type": "button"
         },
@@ -2183,13 +2243,9 @@
           "type": "button"
         },
         {
-          "icon": "sso",
-          "id": "S3lBSkj9NS",
-          "type": "button"
-        },
-        {
-          "icon": "fingerprint",
-          "id": "LdgRgSLZ0h",
+          "icon": "github",
+          "id": "mGpwQF8o64",
+          "subType": "social",
           "type": "button"
         }
       ],
@@ -2203,9 +2259,7 @@
           "hidden": false,
           "isCanvas": true,
           "linkedNodes": {},
-          "nodes": [
-            "vsTitle"
-          ],
+          "nodes": ["vsTitle"],
           "props": {
             "align": "center",
             "background": "",
@@ -2217,7 +2271,7 @@
             "paddingY": "8",
             "spaceBetween": "4",
             "st-items-grow": 0,
-            "width": "100%%"
+            "width": "100%"
           },
           "type": {
             "resolvedName": "Container"
@@ -2360,12 +2414,7 @@
           "hidden": false,
           "isCanvas": true,
           "linkedNodes": {},
-          "nodes": [
-            "rmSubtitle",
-            "HVl8IS0LWV",
-            "hqGqqjK2Uk",
-            "errorMsg"
-          ],
+          "nodes": ["rmSubtitle", "HVl8IS0LWV", "hqGqqjK2Uk", "errorMsg"],
           "props": {
             "align": "center",
             "background": "",
@@ -2377,7 +2426,7 @@
             "paddingY": "8",
             "spaceBetween": "4",
             "st-items-grow": 0,
-            "width": "100%%"
+            "width": "100%"
           },
           "type": {
             "resolvedName": "Container"
