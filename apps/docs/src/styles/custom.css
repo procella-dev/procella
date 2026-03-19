@@ -6,10 +6,8 @@
  *   Text primary: zinc-100  #f4f4f5
  *   Text muted:   zinc-400  #a1a1aa  /  zinc-500  #71717a
  *   Accent:       blue-500  #3b82f6  (hsl 217 91% 60%)
- *   Font:         Inter (Google Fonts)
+ *   Font:         Inter — loaded via <link> in Head.astro (non-blocking)
  * ─────────────────────────────────────────────────────────────────────── */
-
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 
 /* ── Accent hue: blue-500 ─────────────────────────────────────────────── */
 :root {
@@ -109,7 +107,9 @@ header.header {
 }
 
 /* ── Active sidebar item: blue accent ────────────────────────────────── */
-[aria-current="page"] {
-	background-color: hsl(217, 54%, 20%) !important;
-	color: hsl(217, 100%, 87%) !important;
+.sidebar-content a[aria-current="page"],
+.sidebar-content a[aria-current="page"]:hover,
+.sidebar-content a[aria-current="page"]:focus {
+	background-color: hsl(217, 54%, 20%);
+	color: hsl(217, 100%, 87%);
 }

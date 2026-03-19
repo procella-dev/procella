@@ -10,6 +10,7 @@ export default defineConfig({
       description: 'Self-hosted Pulumi backend documentation',
       customCss: ['./src/styles/custom.css'],
       components: {
+        Head: './src/components/Head.astro',
         SiteTitle: './src/components/SiteTitle.astro',
         ThemeProvider: './src/components/ThemeProvider.astro',
         ThemeSelect: './src/components/ThemeSelect.astro',
