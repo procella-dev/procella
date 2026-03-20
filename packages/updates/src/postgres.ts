@@ -398,16 +398,25 @@ export class PostgresUpdatesService implements UpdatesService {
 			return;
 		}
 
-		const rows = entries.map((entry: JournalEntry) => ({
-			updateId,
-			stackId: row.stackId,
-			sequenceId: BigInt(entry.sequenceID),
-			operationId: BigInt(entry.operationID),
-			kind: entry.kind,
-			state: entry.state ?? null,
-			operationType: entry.operationType ?? null,
-			elideWrite: entry.elideWrite ?? false,
-		}));
+		const rows = entries.map((entry: JournalEntry) => {
+			if (
+				typeof entry.sequenceID !== "number" ||
+				typeof entry.operationID !== "number" ||
+				typeof entry.kind !== "number"
+			) {
+				throw new Error("Invalid journal entry: sequenceID, operationID, and kind must be numbers");
+			}
+			return {
+				updateId,
+				stackId: row.stackId,
+				sequenceId: BigInt(entry.sequenceID),
+				operationId: BigInt(entry.operationID),
+				kind: entry.kind,
+				state: entry.state ?? null,
+				operationType: entry.operationType ?? null,
+				elideWrite: entry.elideWrite ?? false,
+			};
+		});
 
 		await this.db.insert(journalEntries).values(rows).onConflictDoNothing();
 
@@ -707,7 +716,10 @@ export class PostgresUpdatesService implements UpdatesService {
 
 		if (row.blobKey) {
 			const raw = await this.storage.get(row.blobKey);
-			return raw ? (JSON.parse(new TextDecoder().decode(raw)) as Record<string, unknown>) : {};
+			if (!raw) {
+				throw new CheckpointNotFoundError("", "", "");
+			}
+			return JSON.parse(new TextDecoder().decode(raw)) as Record<string, unknown>;
 		}
 
 		return (row.data as Record<string, unknown>) ?? {};

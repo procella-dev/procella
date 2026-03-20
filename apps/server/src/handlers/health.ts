@@ -31,7 +31,6 @@ export function healthHandlers(deps: { db: Database }) {
 					},
 					{ capability: "batch-encrypt" },
 					{ capability: "deployment-schema-version", version: 3 },
-					{ capability: "journaling-v1", version: 1 },
 				],
 			} satisfies CapabilitiesResponse),
 

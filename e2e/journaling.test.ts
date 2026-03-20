@@ -1,4 +1,4 @@
-// E2E — Journaling protocol: route exists, capability advertised, backward compat.
+// E2E — Journaling protocol: route exists, backward compat verified.
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import path from "node:path";
@@ -36,13 +36,6 @@ describe("journaling protocol", () => {
 		if (projectDir) await cleanupDir(projectDir);
 		await cleanupDir(pulumiHome);
 		await truncateTables();
-	});
-
-	test("capabilities include journaling-v1", async () => {
-		const res = await fetch(`${BACKEND_URL}/api/capabilities`);
-		const body = await res.json();
-		const names = body.capabilities.map((c: { capability: string }) => c.capability);
-		expect(names).toContain("journaling-v1");
 	});
 
 	test("startUpdate does not echo journalVersion (server-side journaling not yet active)", async () => {
