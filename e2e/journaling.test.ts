@@ -61,6 +61,10 @@ describe("journaling protocol", () => {
 			cwd: projectDir,
 			pulumiHome,
 		});
+		if (destroyRes.exitCode !== 0) {
+			console.error("destroy stderr:", destroyRes.stderr);
+			console.error("destroy stdout:", destroyRes.stdout);
+		}
 		expect(destroyRes.exitCode).toBe(0);
 	});
 
@@ -70,6 +74,10 @@ describe("journaling protocol", () => {
 			pulumiHome,
 			env: { PULUMI_DISABLE_JOURNALING: "true" },
 		});
+		if (upRes.exitCode !== 0) {
+			console.error("up(disabled) stderr:", upRes.stderr);
+			console.error("up(disabled) stdout:", upRes.stdout);
+		}
 		expect(upRes.exitCode).toBe(0);
 
 		await pulumi(["destroy", "--yes"], {
