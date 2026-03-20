@@ -37,7 +37,7 @@ import {
 	UpdateConflictError,
 	UpdateNotFoundError,
 } from "@procella/types";
-import { and, desc, eq, gt, max, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, max, sql } from "drizzle-orm";
 import {
 	applyDelta,
 	emptyDeployment,
@@ -528,7 +528,7 @@ export class PostgresUpdatesService implements UpdatesService {
 				.select()
 				.from(checkpoints)
 				.where(and(eq(checkpoints.stackId, stackId), eq(checkpoints.isDelta, false)))
-				.orderBy(desc(checkpoints.version))
+				.orderBy(desc(checkpoints.createdAt))
 				.limit(1);
 			checkpoint = rows[0];
 			if (!checkpoint) {
@@ -642,6 +642,10 @@ export class PostgresUpdatesService implements UpdatesService {
 		const baseDeployment = await this.loadBaseDeploymentForUpdate(stackId, updateId);
 		const reconstructed = applyJournalEntries(baseDeployment, allEntries);
 
+		if (!reconstructed.manifest) {
+			reconstructed.manifest = { time: new Date().toISOString(), magic: "", version: "" };
+		}
+
 		const serialized = JSON.stringify(reconstructed);
 		const maxAttempts = 5;
 		for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -683,29 +687,33 @@ export class PostgresUpdatesService implements UpdatesService {
 		stackId: string,
 		updateId: string,
 	): Promise<Record<string, unknown>> {
-		const [latest] = await this.db
+		const [initial] = await this.db
 			.select()
 			.from(checkpoints)
-			.where(
-				and(
-					eq(checkpoints.stackId, stackId),
-					eq(checkpoints.isDelta, false),
-					sql`${checkpoints.updateId} != ${updateId}`,
-				),
-			)
-			.orderBy(desc(checkpoints.version))
+			.where(and(eq(checkpoints.updateId, updateId), eq(checkpoints.isDelta, false)))
+			.orderBy(asc(checkpoints.version))
 			.limit(1);
 
-		if (!latest) {
+		const row =
+			initial ??
+			(await this.db
+				.select()
+				.from(checkpoints)
+				.where(and(eq(checkpoints.stackId, stackId), eq(checkpoints.isDelta, false)))
+				.orderBy(desc(checkpoints.createdAt))
+				.limit(1)
+				.then((rows) => rows[0]));
+
+		if (!row) {
 			return {};
 		}
 
-		if (latest.blobKey) {
-			const raw = await this.storage.get(latest.blobKey);
+		if (row.blobKey) {
+			const raw = await this.storage.get(row.blobKey);
 			return raw ? (JSON.parse(new TextDecoder().decode(raw)) as Record<string, unknown>) : {};
 		}
 
-		return (latest.data as Record<string, unknown>) ?? {};
+		return (row.data as Record<string, unknown>) ?? {};
 	}
 }
 

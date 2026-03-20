@@ -2490,4 +2490,3 @@ export interface StackRenameRequest {
 	newName: string;
 	newProject: string;
 }
-
