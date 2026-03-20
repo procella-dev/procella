@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { InvalidUpdateTokenError } from "@procella/types";
+import {
+	InvalidUpdateTokenError,
+	JournalEntryBegin,
+	JournalEntryFailure,
+	JournalEntrySuccess,
+} from "@procella/types";
 import {
 	applyDelta,
 	emptyDeployment,
@@ -8,7 +13,7 @@ import {
 	leaseExpiresAt,
 	parseLeaseToken,
 } from "./helpers.js";
-import { detectEventKind, mapStatusToApiStatus } from "./postgres.js";
+import { applyJournalEntries, detectEventKind, mapStatusToApiStatus } from "./postgres.js";
 import type { UpdatesService } from "./types.js";
 import {
 	BLOB_THRESHOLD,
@@ -196,6 +201,7 @@ describe("@procella/updates helpers", () => {
 				patchCheckpoint: noop,
 				patchCheckpointVerbatim: noop,
 				patchCheckpointDelta: noop,
+				appendJournalEntries: noop,
 				postEvents: noop,
 				renewLease: noop,
 				getUpdate: noop,
@@ -208,7 +214,7 @@ describe("@procella/updates helpers", () => {
 				batchEncrypt: noop,
 				batchDecrypt: noop,
 			};
-			expect(Object.keys(mock)).toHaveLength(18);
+			expect(Object.keys(mock)).toHaveLength(19);
 		});
 	});
 
@@ -252,6 +258,106 @@ describe("@procella/updates helpers", () => {
 
 		test("returns 'unknown' for empty event", () => {
 			expect(detectEventKind({} as never)).toBe("unknown");
+		});
+	});
+
+	describe("applyJournalEntries", () => {
+		const makeResource = (urn: string, id = "id-1") => ({
+			urn,
+			custom: true,
+			id,
+			type: "test:index:Resource",
+		});
+
+		const makeEntry = (
+			kind: number,
+			operationId: number,
+			sequenceId: number,
+			state: unknown = null,
+			operationType: string | null = "creating",
+			elideWrite = false,
+		) => ({ kind, operationId, sequenceId, state, operationType, elideWrite });
+
+		test("empty entries returns base state", () => {
+			const base = { resources: [makeResource("urn:a")], pendingOperations: [] };
+			const result = applyJournalEntries(base, []);
+			expect(result.resources).toHaveLength(1);
+			expect(result.pending_operations).toHaveLength(0);
+		});
+
+		test("begin entry adds pending operation", () => {
+			const base = { resources: [], pendingOperations: [] };
+			const resource = makeResource("urn:a");
+			const entries = [makeEntry(JournalEntryBegin, 1, 1, resource, "creating")];
+			const result = applyJournalEntries(base, entries);
+			expect(result.resources).toHaveLength(0);
+			expect(result.pending_operations).toHaveLength(1);
+			expect(result.pending_operations[0].type).toBe("creating");
+		});
+
+		test("success entry adds resource and removes pending op", () => {
+			const base = { resources: [], pendingOperations: [] };
+			const resource = makeResource("urn:a");
+			const entries = [
+				makeEntry(JournalEntryBegin, 1, 1, resource, "creating"),
+				makeEntry(JournalEntrySuccess, 1, 2, resource),
+			];
+			const result = applyJournalEntries(base, entries);
+			expect(result.resources).toHaveLength(1);
+			expect(result.resources[0].urn).toBe("urn:a");
+			expect(result.pending_operations).toHaveLength(0);
+		});
+
+		test("failure entry removes pending op without adding resource", () => {
+			const base = { resources: [], pendingOperations: [] };
+			const resource = makeResource("urn:a");
+			const entries = [
+				makeEntry(JournalEntryBegin, 1, 1, resource, "creating"),
+				makeEntry(JournalEntryFailure, 1, 2),
+			];
+			const result = applyJournalEntries(base, entries);
+			expect(result.resources).toHaveLength(0);
+			expect(result.pending_operations).toHaveLength(0);
+		});
+
+		test("success with delete=true removes resource", () => {
+			const existing = makeResource("urn:a");
+			const base = { resources: [existing], pendingOperations: [] };
+			const deleteState = { ...makeResource("urn:a"), delete: true };
+			const entries = [
+				makeEntry(JournalEntryBegin, 1, 1, existing, "deleting"),
+				makeEntry(JournalEntrySuccess, 1, 2, deleteState),
+			];
+			const result = applyJournalEntries(base, entries);
+			expect(result.resources).toHaveLength(0);
+		});
+
+		test("multiple parallel operations reconstruct correctly", () => {
+			const base = { resources: [], pendingOperations: [] };
+			const resA = makeResource("urn:a", "id-a");
+			const resB = makeResource("urn:b", "id-b");
+			const entries = [
+				makeEntry(JournalEntryBegin, 1, 1, resA, "creating"),
+				makeEntry(JournalEntryBegin, 2, 2, resB, "creating"),
+				makeEntry(JournalEntrySuccess, 1, 3, resA),
+				makeEntry(JournalEntrySuccess, 2, 4, resB),
+			];
+			const result = applyJournalEntries(base, entries);
+			expect(result.resources).toHaveLength(2);
+			expect(result.pending_operations).toHaveLength(0);
+		});
+
+		test("update replaces existing resource", () => {
+			const original = makeResource("urn:a", "id-orig");
+			const updated = makeResource("urn:a", "id-updated");
+			const base = { resources: [original], pendingOperations: [] };
+			const entries = [
+				makeEntry(JournalEntryBegin, 1, 1, original, "updating"),
+				makeEntry(JournalEntrySuccess, 1, 2, updated),
+			];
+			const result = applyJournalEntries(base, entries);
+			expect(result.resources).toHaveLength(1);
+			expect(result.resources[0].id).toBe("id-updated");
 		});
 	});
 });

@@ -2,7 +2,7 @@
 
 import type { CryptoService } from "@procella/crypto";
 import type { Database } from "@procella/db";
-import { checkpoints, stacks, updateEvents, updates } from "@procella/db";
+import { checkpoints, journalEntries, stacks, updateEvents, updates } from "@procella/db";
 import type { BlobStorage } from "@procella/storage";
 import type {
 	CompleteUpdateRequest,
@@ -11,11 +11,14 @@ import type {
 	GetHistoryResponse,
 	GetUpdateEventsResponse,
 	ImportStackResponse,
+	JournalEntries,
+	JournalEntry,
 	PatchUpdateCheckpointDeltaRequest,
 	PatchUpdateCheckpointRequest,
 	PatchUpdateVerbatimCheckpointRequest,
 	RenewUpdateLeaseRequest,
 	RenewUpdateLeaseResponse,
+	ResourceV3,
 	StartUpdateRequest,
 	StartUpdateResponse,
 	UntypedDeployment,
@@ -26,6 +29,10 @@ import type {
 } from "@procella/types";
 import {
 	CheckpointNotFoundError,
+	JournalEntryBegin,
+	JournalEntryElide,
+	JournalEntryFailure,
+	JournalEntrySuccess,
 	LeaseExpiredError,
 	UpdateConflictError,
 	UpdateNotFoundError,
@@ -97,7 +104,7 @@ export class PostgresUpdatesService implements UpdatesService {
 		return { updateID: row.id, version } as UpdateProgramResponse;
 	}
 
-	async startUpdate(updateId: string, _request: StartUpdateRequest): Promise<StartUpdateResponse> {
+	async startUpdate(updateId: string, request: StartUpdateRequest): Promise<StartUpdateResponse> {
 		return this.db.transaction(async (tx) => {
 			const [row] = await tx.select().from(updates).where(eq(updates.id, updateId));
 
@@ -130,10 +137,14 @@ export class PostgresUpdatesService implements UpdatesService {
 				.set({ activeUpdateId: updateId, updatedAt: sql`now()` })
 				.where(eq(stacks.id, row.stackId));
 
+			const clientJournalVersion = request.journalVersion ?? 0;
+			const journalVersion = clientJournalVersion >= 1 ? 1 : 0;
+
 			return {
 				token,
 				version: row.version,
 				tokenExpiration: Math.floor(expiry.getTime() / 1000),
+				...(journalVersion > 0 ? { journalVersion } : {}),
 			} as StartUpdateResponse;
 		});
 	}
@@ -379,6 +390,37 @@ export class PostgresUpdatesService implements UpdatesService {
 		}
 	}
 
+	async appendJournalEntries(updateId: string, batch: JournalEntries): Promise<void> {
+		const [row] = await this.db.select().from(updates).where(eq(updates.id, updateId));
+
+		if (!row) {
+			throw new UpdateNotFoundError(updateId);
+		}
+
+		const entries = batch.entries ?? [];
+		if (entries.length === 0) {
+			return;
+		}
+
+		const rows = entries.map((entry: JournalEntry) => ({
+			updateId,
+			stackId: row.stackId,
+			sequenceId: entry.sequenceID,
+			operationId: entry.operationID,
+			kind: entry.kind,
+			state: entry.state ?? null,
+			operationType: entry.operationType ?? null,
+			elideWrite: entry.elideWrite ?? false,
+		}));
+
+		await this.db.insert(journalEntries).values(rows).onConflictDoNothing();
+
+		const hasNonElided = entries.some((e: JournalEntry) => !e.elideWrite);
+		if (hasNonElided) {
+			await this.flushJournalToCheckpoint(updateId, row.stackId);
+		}
+	}
+
 	async postEvents(updateId: string, batch: EngineEventBatch): Promise<void> {
 		const events = (batch as { events?: EngineEvent[] }).events;
 		if (!events || events.length === 0) {
@@ -585,6 +627,77 @@ export class PostgresUpdatesService implements UpdatesService {
 
 		return (row?.maxVersion ?? 0) + 1;
 	}
+
+	private async flushJournalToCheckpoint(updateId: string, stackId: string): Promise<void> {
+		const allEntries = await this.db
+			.select()
+			.from(journalEntries)
+			.where(eq(journalEntries.updateId, updateId))
+			.orderBy(journalEntries.sequenceId);
+
+		if (allEntries.length === 0) {
+			return;
+		}
+
+		const baseState = await this.loadBaseDeploymentState(stackId);
+		const reconstructed = applyJournalEntries(baseState, allEntries);
+
+		const serialized = JSON.stringify(reconstructed);
+		const version = await this.nextCheckpointVersion(updateId);
+
+		if (serialized.length > BLOB_THRESHOLD) {
+			const blobKey = formatBlobKey(stackId, updateId, version);
+			await this.storage.put(blobKey, new TextEncoder().encode(serialized));
+			await this.db.insert(checkpoints).values({
+				updateId,
+				stackId,
+				version,
+				data: null,
+				blobKey,
+				isDelta: false,
+			});
+		} else {
+			await this.db.insert(checkpoints).values({
+				updateId,
+				stackId,
+				version,
+				data: reconstructed,
+				blobKey: null,
+				isDelta: false,
+			});
+		}
+	}
+
+	private async loadBaseDeploymentState(stackId: string): Promise<DeploymentState> {
+		const [latest] = await this.db
+			.select()
+			.from(checkpoints)
+			.where(and(eq(checkpoints.stackId, stackId), eq(checkpoints.isDelta, false)))
+			.orderBy(desc(checkpoints.version))
+			.limit(1);
+
+		if (!latest) {
+			return { resources: [], pendingOperations: [] };
+		}
+
+		let data: unknown;
+		if (latest.blobKey) {
+			const raw = await this.storage.get(latest.blobKey);
+			data = raw ? JSON.parse(new TextDecoder().decode(raw)) : null;
+		} else {
+			data = latest.data;
+		}
+
+		const d = data as {
+			resources?: ResourceV3[];
+			pending_operations?: Array<{ resource: ResourceV3; type: string }>;
+		} | null;
+
+		return {
+			resources: d?.resources ? [...d.resources] : [],
+			pendingOperations: d?.pending_operations ? [...d.pending_operations] : [],
+		};
+	}
 }
 
 // ============================================================================
@@ -609,6 +722,69 @@ export function mapStatusToApiStatus(dbStatus: string): string {
 		default:
 			return dbStatus;
 	}
+}
+
+export interface DeploymentState {
+	resources: ResourceV3[];
+	pendingOperations: Array<{ resource: ResourceV3; type: string }>;
+}
+
+export function applyJournalEntries(
+	base: DeploymentState,
+	entries: Array<{
+		kind: number;
+		operationId: number;
+		state: unknown;
+		operationType: string | null;
+		elideWrite: boolean;
+	}>,
+): { resources: ResourceV3[]; pending_operations: Array<{ resource: ResourceV3; type: string }> } {
+	const resources = new Map<string, ResourceV3>();
+	for (const r of base.resources) {
+		resources.set(r.urn, r);
+	}
+
+	const pendingOps = new Map<number, { resource: ResourceV3; type: string }>();
+	for (const op of base.pendingOperations) {
+		const key =
+			entries.find(
+				(e) =>
+					e.kind === JournalEntryBegin && (e.state as ResourceV3 | null)?.urn === op.resource.urn,
+			)?.operationId ?? -1;
+		if (key >= 0) {
+			pendingOps.set(key, op);
+		}
+	}
+
+	for (const entry of entries) {
+		if (entry.kind === JournalEntryElide) {
+			continue;
+		}
+
+		const state = entry.state as ResourceV3 | null | undefined;
+
+		if (entry.kind === JournalEntryBegin) {
+			if (state && entry.operationType) {
+				pendingOps.set(entry.operationId, { resource: state, type: entry.operationType });
+			}
+		} else if (entry.kind === JournalEntrySuccess) {
+			pendingOps.delete(entry.operationId);
+			if (state) {
+				if ((state as { delete?: boolean }).delete) {
+					resources.delete(state.urn);
+				} else {
+					resources.set(state.urn, state);
+				}
+			}
+		} else if (entry.kind === JournalEntryFailure) {
+			pendingOps.delete(entry.operationId);
+		}
+	}
+
+	return {
+		resources: Array.from(resources.values()),
+		pending_operations: Array.from(pendingOps.values()),
+	};
 }
 
 /** Detect the event kind from an EngineEvent by checking which field is non-null. */

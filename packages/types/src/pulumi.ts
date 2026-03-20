@@ -53,6 +53,10 @@ export type {
 	GetUpdateEventsResponse,
 	ImportStackRequest,
 	ImportStackResponse,
+	// Journal types (journal.go)
+	JournalEntries,
+	JournalEntry,
+	JournalEntryKind,
 	ListStacksResponse,
 	Log3rdPartyDecryptionEvent,
 	ManifestV1,
@@ -109,6 +113,10 @@ export type {
 export {
 	DeploymentSchemaVersionCurrent,
 	DeploymentSchemaVersionLatest,
+	JournalEntryBegin,
+	JournalEntryElide,
+	JournalEntryFailure,
+	JournalEntrySuccess,
 	ProjectDescriptionTag,
 	ProjectNameTag,
 	ProjectRuntimeTag,
@@ -207,6 +215,7 @@ export const APICapability = {
 	CopilotExplainPreview: "copilot-explain-preview",
 	DeploymentSchemaVersion: "deployment-schema-version",
 	StackPolicyPacks: "stack-policy-packs",
+	Journaling: "journaling-v1",
 } as const;
 export type APICapability = (typeof APICapability)[keyof typeof APICapability];
 

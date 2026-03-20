@@ -6,6 +6,7 @@ import type {
 	GetHistoryResponse,
 	GetUpdateEventsResponse,
 	ImportStackResponse,
+	JournalEntries,
 	PatchUpdateCheckpointDeltaRequest,
 	PatchUpdateCheckpointRequest,
 	PatchUpdateVerbatimCheckpointRequest,
@@ -44,6 +45,8 @@ export interface UpdatesService {
 	): Promise<void>;
 
 	patchCheckpointDelta(updateId: string, request: PatchUpdateCheckpointDeltaRequest): Promise<void>;
+
+	appendJournalEntries(updateId: string, entries: JournalEntries): Promise<void>;
 
 	postEvents(updateId: string, batch: EngineEventBatch): Promise<void>;
 

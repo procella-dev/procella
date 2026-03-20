@@ -2490,3 +2490,74 @@ export interface StackRenameRequest {
 	newName: string;
 	newProject: string;
 }
+
+//////////
+// source: journal.go
+
+/**
+ * JournalEntryKind is the kind of a journal entry.
+ */
+export type JournalEntryKind = number /* int */;
+/**
+ * JournalEntryBegin marks the beginning of a resource operation (pending operation added).
+ */
+export const JournalEntryBegin: JournalEntryKind = 0;
+/**
+ * JournalEntrySuccess marks the successful completion of a resource operation.
+ */
+export const JournalEntrySuccess: JournalEntryKind = 1;
+/**
+ * JournalEntryFailure marks the failed completion of a resource operation.
+ */
+export const JournalEntryFailure: JournalEntryKind = 2;
+/**
+ * JournalEntryElide marks an entry whose corresponding checkpoint write may be elided (same-step
+ * with no meaningful state change). Elided entries are flushed by the next non-elided write or Close.
+ */
+export const JournalEntryElide: JournalEntryKind = 3;
+
+/**
+ * JournalEntry is a single entry in the journal. It describes one step in a deployment.
+ */
+export interface JournalEntry {
+	/**
+	 * Version of the journal entry format. Currently always 1.
+	 */
+	version: number /* int */;
+	/**
+	 * Kind is the kind of journal entry.
+	 */
+	kind: JournalEntryKind;
+	/**
+	 * OperationID is the ID of the resource operation this entry is for. All entries for a single
+	 * resource operation (begin + success/failure) share the same OperationID.
+	 */
+	operationID: number /* int64 */;
+	/**
+	 * SequenceID is a strictly increasing counter unique per journal entry within an update.
+	 * The server uses this to order entries and detect gaps.
+	 */
+	sequenceID: number /* int64 */;
+	/**
+	 * State is the resource state after the operation. Only present on JournalEntrySuccess entries.
+	 * On JournalEntryBegin it represents the resource being operated on (the "old" state).
+	 */
+	state?: ResourceV3;
+	/**
+	 * OperationType is the type of operation (creating, updating, deleting, reading).
+	 */
+	operationType?: OperationType;
+	/**
+	 * ElideWrite, when true, indicates the corresponding checkpoint write may be skipped.
+	 * The server must not elide the final write before CompleteUpdate.
+	 */
+	elideWrite?: boolean;
+}
+
+/**
+ * JournalEntries is the body of a PATCH .../journalentries request.
+ * It carries a batch of journal entries to be applied to the server-side snapshot.
+ */
+export interface JournalEntries {
+	entries?: JournalEntry[];
+}

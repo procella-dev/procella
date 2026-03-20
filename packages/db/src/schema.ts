@@ -6,6 +6,7 @@
 
 import { sql } from "drizzle-orm";
 import {
+	bigint,
 	boolean,
 	integer,
 	jsonb,
@@ -124,6 +125,29 @@ export const updateEvents = pgTable(
 );
 
 // ============================================================================
+// journal_entries — Per-resource journal entries for journaling protocol
+// ============================================================================
+
+export const journalEntries = pgTable(
+	"journal_entries",
+	{
+		id: uuid().primaryKey().defaultRandom(),
+		updateId: uuid("update_id")
+			.notNull()
+			.references(() => updates.id, { onDelete: "cascade" }),
+		stackId: uuid("stack_id").notNull(),
+		sequenceId: bigint("sequence_id", { mode: "number" }).notNull(),
+		operationId: bigint("operation_id", { mode: "number" }).notNull(),
+		kind: integer().notNull(),
+		state: jsonb(),
+		operationType: text("operation_type"),
+		elideWrite: boolean("elide_write").notNull().default(false),
+		createdAt: timestamp("created_at").notNull().defaultNow(),
+	},
+	(table) => [uniqueIndex("idx_journal_entries_update_seq").on(table.updateId, table.sequenceId)],
+);
+
+// ============================================================================
 // Schema export — pass to drizzle() for relational queries
 // ============================================================================
 
@@ -133,4 +157,5 @@ export const schema = {
 	updates,
 	checkpoints,
 	updateEvents,
+	journalEntries,
 };
