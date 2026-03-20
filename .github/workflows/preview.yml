@@ -54,7 +54,8 @@ jobs:
       NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
     outputs:
       branch_id: ${{ steps.branch.outputs.branch_id }}
-      db_url_pooled: ${{ steps.branch.outputs.db_url_pooled }}
+      db_host_pooled: ${{ steps.branch.outputs.db_host_pooled }}
+      db_password: ${{ steps.branch.outputs.password }}
     steps:
       - name: Delete existing Neon branch (if suspended)
         uses: neondatabase/delete-branch-action@v3
@@ -84,8 +85,10 @@ jobs:
       - name: Run migrations
         if: needs.changes.outputs.migrate == 'true'
         env:
-          PROCELLA_DATABASE_URL: ${{ steps.branch.outputs.db_url }}
+          NEON_DB_HOST: ${{ steps.branch.outputs.db_host }}
+          NEON_DB_PASSWORD: ${{ steps.branch.outputs.password }}
         run: |
+          PROCELLA_DATABASE_URL="postgres://neondb_owner:${NEON_DB_PASSWORD}@${NEON_DB_HOST}/neondb?sslmode=require"
           mise set PROCELLA_DATABASE_URL="$PROCELLA_DATABASE_URL"
           bun run scripts/migrate.ts
           mise unset PROCELLA_DATABASE_URL
@@ -178,7 +181,8 @@ jobs:
         id: deploy
         env:
           VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
-          PROCELLA_DATABASE_URL: ${{ needs.neon.outputs.db_url_pooled }}
+          NEON_DB_HOST_POOLED: ${{ needs.neon.outputs.db_host_pooled }}
+          NEON_DB_PASSWORD: ${{ needs.neon.outputs.db_password }}
           PROCELLA_DESCOPE_PROJECT_ID: ${{ steps.descope.outputs.project_id }}
           PROCELLA_AUTH_MODE: descope
           PROCELLA_BLOB_BACKEND: s3
@@ -192,6 +196,7 @@ jobs:
           SKIP_MIGRATIONS: "1"
           GIT_BRANCH: ${{ github.head_ref }}
         run: |
+          PROCELLA_DATABASE_URL="postgres://neondb_owner:${NEON_DB_PASSWORD}@${NEON_DB_HOST_POOLED}/neondb?sslmode=require"
           vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
           vercel build --token="$VERCEL_TOKEN"
           URL=$(vercel deploy --prebuilt --token="$VERCEL_TOKEN" \
