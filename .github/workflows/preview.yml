@@ -54,7 +54,7 @@ jobs:
       NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
     outputs:
       branch_id: ${{ steps.branch.outputs.branch_id }}
-      db_url_pooled: ${{ steps.neon-url.outputs.db_url_pooled }}
+      db_url_pooled: ${{ steps.branch.outputs.db_url_pooled }}
     steps:
       - name: Delete existing Neon branch (if suspended)
         uses: neondatabase/delete-branch-action@v3
@@ -81,46 +81,11 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
-      - name: Get Neon connection string
-        id: neon-url
-        env:
-          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-        run: |
-          BRANCH_ID="${{ steps.branch.outputs.branch_id }}"
-          echo "Branch ID: $BRANCH_ID"
-          # Get direct (non-pooled) connection URI for migrations
-          RESPONSE=$(curl -s -H "Authorization: Bearer $NEON_API_KEY" \
-            "https://console.neon.tech/api/v2/projects/${{ vars.NEON_PROJECT_ID }}/connection_uri?branch_id=$BRANCH_ID&database_name=neondb&role_name=neondb_owner&pooled=false")
-          DB_URL=$(echo "$RESPONSE" | jq -r '.uri')
-          if [ -z "$DB_URL" ] || [ "$DB_URL" = "null" ]; then
-            echo "::error::Failed to get Neon connection URI. Response: $RESPONSE"
-            exit 1
-          fi
-          echo "::add-mask::$DB_URL"
-          echo "DB_URL host: $(echo "$DB_URL" | sed 's|.*@||;s|/.*||')"
-          # Ensure sslmode=require for Neon
-          DB_URL="${DB_URL}?sslmode=require"
-          echo "::add-mask::$DB_URL"
-          echo "db_url=$DB_URL" >> $GITHUB_OUTPUT
-          # Get pooled connection URI for runtime
-          DB_URL_POOLED=$(curl -s -H "Authorization: Bearer $NEON_API_KEY" \
-            "https://console.neon.tech/api/v2/projects/${{ vars.NEON_PROJECT_ID }}/connection_uri?branch_id=$BRANCH_ID&database_name=neondb&role_name=neondb_owner&pooled=true" \
-            | jq -r '.uri')
-          if [ -z "$DB_URL_POOLED" ] || [ "$DB_URL_POOLED" = "null" ]; then
-            echo "::error::Failed to get Neon pooled connection URI"
-            exit 1
-          fi
-          echo "::add-mask::$DB_URL_POOLED"
-          DB_URL_POOLED="${DB_URL_POOLED}?sslmode=require"
-          echo "::add-mask::$DB_URL_POOLED"
-          echo "db_url_pooled=$DB_URL_POOLED" >> $GITHUB_OUTPUT
       - name: Run migrations
         if: needs.changes.outputs.migrate == 'true'
         env:
-          PROCELLA_DATABASE_URL: ${{ steps.neon-url.outputs.db_url }}
+          PROCELLA_DATABASE_URL: ${{ steps.branch.outputs.db_url }}
         run: |
-          # mise re-applies env from mise.toml via shims, overriding step env.
-          # Override mise.toml env inline so Bun sees the Neon URL.
           mise set PROCELLA_DATABASE_URL="$PROCELLA_DATABASE_URL"
           bun run scripts/migrate.ts
           mise unset PROCELLA_DATABASE_URL
