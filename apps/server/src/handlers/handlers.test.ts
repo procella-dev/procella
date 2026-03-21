@@ -73,7 +73,7 @@ describe("@procella/server handlers", () => {
 
 		test("health returns { status: ok } when db is reachable", async () => {
 			const app = new Hono<Env>();
-			const health = healthHandlers({ db: mockDb });
+			const health = healthHandlers({ db: mockDb, enableJournaling: false });
 			app.get("/healthz", health.health);
 
 			const res = await app.request("/healthz");
@@ -89,7 +89,7 @@ describe("@procella/server handlers", () => {
 				},
 			} as never;
 			const app = new Hono<Env>();
-			const health = healthHandlers({ db: failDb });
+			const health = healthHandlers({ db: failDb, enableJournaling: false });
 			app.get("/healthz", health.health);
 
 			const res = await app.request("/healthz");
@@ -100,7 +100,7 @@ describe("@procella/server handlers", () => {
 
 		test("capabilities returns array with expected capabilities", async () => {
 			const app = new Hono<Env>();
-			const health = healthHandlers({ db: mockDb });
+			const health = healthHandlers({ db: mockDb, enableJournaling: false });
 			app.get("/capabilities", health.capabilities);
 
 			const res = await app.request("/capabilities");
@@ -117,7 +117,7 @@ describe("@procella/server handlers", () => {
 
 		test("cliVersion returns version info", async () => {
 			const app = new Hono<Env>();
-			const health = healthHandlers({ db: mockDb });
+			const health = healthHandlers({ db: mockDb, enableJournaling: false });
 			app.get("/version", health.cliVersion);
 
 			const res = await app.request("/version");

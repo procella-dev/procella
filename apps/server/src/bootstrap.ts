@@ -59,7 +59,12 @@ const crypto = new AesCryptoService(encryptionKey);
 
 // Domain services
 const stacksService = new PostgresStacksService({ db });
-const updatesService = new PostgresUpdatesService({ db, storage, crypto });
+const updatesService = new PostgresUpdatesService({
+	db,
+	storage,
+	crypto,
+	enableJournaling: config.enableJournaling,
+});
 
 // Hono app
 export const app = createApp({
@@ -69,6 +74,7 @@ export const app = createApp({
 	db,
 	stacks: stacksService,
 	updates: updatesService,
+	enableJournaling: config.enableJournaling,
 });
 
 export { auth, config, db, client };
