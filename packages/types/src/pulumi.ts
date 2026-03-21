@@ -8,7 +8,7 @@
 //
 // To regenerate: bun run types:generate
 
-import type { ResourceV3 } from "./pulumi.gen.js";
+import type { DeploymentV3, OperationV2, ResourceV3, SecretsProvidersV1 } from "./pulumi.gen.js";
 
 // Re-export all types we need from the tygo-generated file.
 // The .gen.ts file is excluded from Biome linting but still type-checked by tsc.
@@ -60,6 +60,7 @@ export type {
 	ManifestV1,
 	Message,
 	OperationStatus,
+	OperationV2,
 	PatchUpdateCheckpointDeltaRequest,
 	PatchUpdateCheckpointRequest,
 	PatchUpdateVerbatimCheckpointRequest,
@@ -241,15 +242,28 @@ export type JournalEntryKind = number;
 export const JournalEntryBegin: JournalEntryKind = 0;
 export const JournalEntrySuccess: JournalEntryKind = 1;
 export const JournalEntryFailure: JournalEntryKind = 2;
-export const JournalEntryElide: JournalEntryKind = 3;
+export const JournalEntryRefreshSuccess: JournalEntryKind = 3;
+export const JournalEntryOutputs: JournalEntryKind = 4;
+export const JournalEntryWrite: JournalEntryKind = 5;
+export const JournalEntrySecretsManager: JournalEntryKind = 6;
+export const JournalEntryRebuiltBaseState: JournalEntryKind = 7;
 
 export interface JournalEntry {
 	version: number;
 	kind: JournalEntryKind;
 	operationID: number;
 	sequenceID: number;
+	removeOld?: number | null;
+	removeNew?: number | null;
 	state?: ResourceV3;
-	operationType?: string;
+	operation?: OperationV2;
+	secretsProvider?: SecretsProvidersV1;
+	pendingReplacementOld?: number | null;
+	pendingReplacementNew?: number | null;
+	deleteOld?: number | null;
+	deleteNew?: number | null;
+	isRefresh?: boolean;
+	newSnapshot?: DeploymentV3;
 	elideWrite?: boolean;
 }
 

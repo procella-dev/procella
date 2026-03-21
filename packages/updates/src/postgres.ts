@@ -31,9 +31,13 @@ import {
 	BadRequestError,
 	CheckpointNotFoundError,
 	JournalEntryBegin,
-	JournalEntryElide,
 	JournalEntryFailure,
+	JournalEntryOutputs,
+	JournalEntryRebuiltBaseState,
+	JournalEntryRefreshSuccess,
+	JournalEntrySecretsManager,
 	JournalEntrySuccess,
+	JournalEntryWrite,
 	LeaseExpiredError,
 	UpdateConflictError,
 	UpdateNotFoundError,
@@ -424,7 +428,12 @@ export class PostgresUpdatesService implements UpdatesService {
 				operationId: BigInt(entry.operationID),
 				kind: entry.kind,
 				state: entry.state ?? null,
-				operationType: entry.operationType ?? null,
+				operation: entry.operation ?? null,
+				secretsProvider: entry.secretsProvider ?? null,
+				newSnapshot: entry.newSnapshot ?? null,
+				operationType: null,
+				removeOld: entry.removeOld != null ? BigInt(entry.removeOld) : null,
+				removeNew: entry.removeNew != null ? BigInt(entry.removeNew) : null,
 				elideWrite: entry.elideWrite ?? false,
 			};
 		});
@@ -761,68 +770,158 @@ export function mapStatusToApiStatus(dbStatus: string): string {
 	}
 }
 
+export interface JournalRow {
+	kind: number;
+	operationId: number | bigint;
+	state: unknown;
+	operation: unknown;
+	secretsProvider: unknown;
+	newSnapshot: unknown;
+	operationType: string | null;
+	removeOld: bigint | null;
+	removeNew: bigint | null;
+	elideWrite: boolean;
+}
+
 export function applyJournalEntries(
 	baseDeployment: Record<string, unknown>,
-	entries: Array<{
-		kind: number;
-		operationId: number | bigint;
-		state: unknown;
-		operationType: string | null;
-		elideWrite: boolean;
-	}>,
+	entries: JournalRow[],
 ): Record<string, unknown> {
-	const baseResources = (baseDeployment.resources ?? []) as ResourceV3[];
-	const basePendingOps = (baseDeployment.pending_operations ?? []) as Array<{
-		resource: ResourceV3;
-		type: string;
-	}>;
+	let deployment = { ...baseDeployment };
 
-	const resources = new Map<string, ResourceV3>();
-	for (const r of baseResources) {
-		resources.set(r.urn, r);
-	}
-
-	const pendingOps = new Map<string, { resource: ResourceV3; type: string }>();
-	for (const op of basePendingOps) {
-		const matchingBegin = entries.find(
-			(e) =>
-				e.kind === JournalEntryBegin && (e.state as ResourceV3 | null)?.urn === op.resource.urn,
-		);
-		if (matchingBegin) {
-			pendingOps.set(String(matchingBegin.operationId), op);
-		}
-	}
+	const newResources: Array<ResourceV3 | null> = [];
+	const opIdToNewIdx = new Map<string, number>();
+	const toDeleteInSnapshot = new Set<number>();
+	const toReplaceInSnapshot = new Map<number, ResourceV3>();
+	const incompleteOps = new Map<string, boolean>();
 
 	for (const entry of entries) {
-		if (entry.kind === JournalEntryElide) {
-			continue;
-		}
-
 		const opKey = String(entry.operationId);
 		const state = entry.state as ResourceV3 | null | undefined;
 
-		if (entry.kind === JournalEntryBegin) {
-			if (state && entry.operationType) {
-				pendingOps.set(opKey, { resource: state, type: entry.operationType });
-			}
-		} else if (entry.kind === JournalEntrySuccess) {
-			pendingOps.delete(opKey);
-			if (state) {
-				if ((state as { delete?: boolean }).delete) {
-					resources.delete(state.urn);
-				} else {
-					resources.set(state.urn, state);
+		switch (entry.kind) {
+			case JournalEntryWrite: {
+				const snap = entry.newSnapshot as Record<string, unknown> | null;
+				if (snap) {
+					deployment = { ...snap };
 				}
+				break;
 			}
-		} else if (entry.kind === JournalEntryFailure) {
-			pendingOps.delete(opKey);
+
+			case JournalEntrySecretsManager: {
+				const sp = entry.secretsProvider as { type: string; state: unknown } | null;
+				if (sp) {
+					deployment.secrets_providers = sp;
+				}
+				break;
+			}
+
+			case JournalEntryBegin: {
+				incompleteOps.set(opKey, entry.elideWrite);
+				if (state) {
+					const idx = newResources.length;
+					newResources.push(null);
+					opIdToNewIdx.set(opKey, idx);
+				}
+				break;
+			}
+
+			case JournalEntrySuccess: {
+				incompleteOps.delete(opKey);
+				if (entry.removeOld != null && state) {
+					toReplaceInSnapshot.set(Number(entry.removeOld), state);
+				} else if (entry.removeOld != null && !state) {
+					toDeleteInSnapshot.add(Number(entry.removeOld));
+				}
+				if (entry.removeNew != null && state) {
+					const idx = opIdToNewIdx.get(String(entry.removeNew));
+					if (idx !== undefined) newResources[idx] = state;
+				} else if (entry.removeNew != null && !state) {
+					const idx = opIdToNewIdx.get(String(entry.removeNew));
+					if (idx !== undefined) newResources[idx] = null;
+				}
+				break;
+			}
+
+			case JournalEntryFailure: {
+				incompleteOps.delete(opKey);
+				break;
+			}
+
+			case JournalEntryRefreshSuccess: {
+				incompleteOps.delete(opKey);
+				if (entry.removeOld != null) {
+					if (state) {
+						toReplaceInSnapshot.set(Number(entry.removeOld), state);
+					} else {
+						toDeleteInSnapshot.add(Number(entry.removeOld));
+					}
+				}
+				if (entry.removeNew != null) {
+					const idx = opIdToNewIdx.get(String(entry.removeNew));
+					if (idx !== undefined) {
+						newResources[idx] = state ?? null;
+					}
+				}
+				break;
+			}
+
+			case JournalEntryOutputs: {
+				if (state && entry.removeOld != null) {
+					toReplaceInSnapshot.set(Number(entry.removeOld), state);
+				}
+				if (state && entry.removeNew != null) {
+					const idx = opIdToNewIdx.get(String(entry.removeNew));
+					if (idx !== undefined) newResources[idx] = state;
+				}
+				break;
+			}
+
+			case JournalEntryRebuiltBaseState: {
+				const rebuilt = rebuildFromJournal(
+					deployment,
+					newResources,
+					toDeleteInSnapshot,
+					toReplaceInSnapshot,
+				);
+				deployment = rebuilt;
+				newResources.length = 0;
+				opIdToNewIdx.clear();
+				toDeleteInSnapshot.clear();
+				toReplaceInSnapshot.clear();
+				incompleteOps.clear();
+				break;
+			}
+
+			default:
+				break;
 		}
 	}
 
+	return rebuildFromJournal(deployment, newResources, toDeleteInSnapshot, toReplaceInSnapshot);
+}
+
+function rebuildFromJournal(
+	base: Record<string, unknown>,
+	newResources: Array<ResourceV3 | null>,
+	toDelete: Set<number>,
+	toReplace: Map<number, ResourceV3>,
+): Record<string, unknown> {
+	const baseResources = ((base.resources ?? []) as ResourceV3[]).slice();
+
+	for (const [idx, replacement] of toReplace) {
+		if (idx >= 0 && idx < baseResources.length) {
+			baseResources[idx] = replacement;
+		}
+	}
+
+	const filtered = baseResources.filter((_, i) => !toDelete.has(i));
+	const added = newResources.filter((r): r is ResourceV3 => r != null);
+
 	return {
-		...baseDeployment,
-		resources: Array.from(resources.values()),
-		pending_operations: Array.from(pendingOps.values()),
+		...base,
+		resources: [...filtered, ...added],
+		pending_operations: [],
 	};
 }
 
