@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
 	InvalidUpdateTokenError,
 	JournalEntryBegin,
+	JournalEntryElide,
 	JournalEntryFailure,
 	JournalEntrySuccess,
 } from "@procella/types";
@@ -375,6 +376,17 @@ describe("@procella/updates helpers", () => {
 			const resources = result.resources as unknown as Array<{ id: string }>;
 			expect(resources.length).toBe(1);
 			expect(resources[0].id).toBe("id-updated");
+		});
+
+		test("elide entries are skipped and do not affect state", () => {
+			const base = makeBase([makeResource("urn:a")]);
+			const entries = [
+				makeEntry(JournalEntryElide, 1, 1, makeResource("urn:a"), "updating", true),
+				makeEntry(JournalEntryElide, 2, 2, makeResource("urn:b"), "creating", true),
+			];
+			const result = applyJournalEntries(base, entries);
+			expect((result.resources as unknown[]).length).toBe(1);
+			expect((result.pending_operations as unknown[]).length).toBe(0);
 		});
 	});
 });

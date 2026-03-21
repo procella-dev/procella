@@ -28,6 +28,7 @@ import type {
 	UpdateStatus,
 } from "@procella/types";
 import {
+	BadRequestError,
 	CheckpointNotFoundError,
 	JournalEntryBegin,
 	JournalEntryElide,
@@ -404,7 +405,9 @@ export class PostgresUpdatesService implements UpdatesService {
 				typeof entry.operationID !== "number" ||
 				typeof entry.kind !== "number"
 			) {
-				throw new Error("Invalid journal entry: sequenceID, operationID, and kind must be numbers");
+				throw new BadRequestError(
+					"Invalid journal entry: sequenceID, operationID, and kind must be numbers",
+				);
 			}
 			return {
 				updateId,
