@@ -61,23 +61,15 @@ export class PostgresUpdatesService implements UpdatesService {
 	private readonly db: Database;
 	private readonly storage: BlobStorage;
 	private readonly crypto: CryptoService;
-	private readonly enableJournaling: boolean;
 
 	constructor({
 		db,
 		storage,
 		crypto,
-		enableJournaling = false,
-	}: {
-		db: Database;
-		storage: BlobStorage;
-		crypto: CryptoService;
-		enableJournaling?: boolean;
-	}) {
+	}: { db: Database; storage: BlobStorage; crypto: CryptoService }) {
 		this.db = db;
 		this.storage = storage;
 		this.crypto = crypto;
-		this.enableJournaling = enableJournaling;
 	}
 
 	// ========================================================================
@@ -146,8 +138,7 @@ export class PostgresUpdatesService implements UpdatesService {
 				.set({ activeUpdateId: updateId, updatedAt: sql`now()` })
 				.where(eq(stacks.id, row.stackId));
 
-			const clientWantsJournal = (request.journalVersion ?? 0) >= 1;
-			const journalVersion = this.enableJournaling && clientWantsJournal ? 1 : 0;
+			const journalVersion = (request.journalVersion ?? 0) >= 1 ? 1 : 0;
 
 			return {
 				token,

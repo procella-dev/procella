@@ -40,7 +40,6 @@ export function createApp(deps: {
 	db: Database;
 	stacks: StacksService;
 	updates: UpdatesService;
-	enableJournaling?: boolean;
 }): Hono<Env> {
 	const app = new Hono<Env>();
 
@@ -53,7 +52,7 @@ export function createApp(deps: {
 	app.use("*", decompress());
 
 	// Create handler instances
-	const health = healthHandlers({ db: deps.db, enableJournaling: deps.enableJournaling ?? false });
+	const health = healthHandlers({ db: deps.db });
 	const user = userHandlers(deps.stacks);
 	const stackH = stackHandlers(deps.stacks);
 	const updateH = updateHandlers(deps.updates, deps.stacks);

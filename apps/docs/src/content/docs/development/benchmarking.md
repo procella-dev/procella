@@ -99,17 +99,10 @@ The storage table shows averages:
 | 10  | journal    | 2048             | 10.0            |
 ```
 
-## Journaling Toggle
+## How Journaling Works
 
-The benchmark uses the `PROCELLA_ENABLE_JOURNALING` environment variable to toggle server-side journaling:
+Journaling is enabled by default. When the CLI sends `journalVersion: 1` in the `StartUpdate` request, the server echoes it back and the CLI sends per-resource journal entries instead of full checkpoints.
 
-- When `false` (default): `startUpdate` does not include `journalVersion` in the response, and the CLI uses the traditional checkpoint path
-- When `true`: `startUpdate` echoes `journalVersion: 1`, the CLI sends journal entries instead of full checkpoints, and the `journaling-v1` capability is advertised
+The benchmark's `checkpoint` mode forces the CLI to use the traditional path by setting `PULUMI_DISABLE_JOURNALING=true`. The `journal` mode lets the CLI use journaling naturally.
 
-See [Environment Variables](/operations/environment-variables/) for details.
-
-## Current Limitations
-
-Journaling is not yet fully activated. The `pulumi destroy`, `preview`, and `refresh` operations fail after a journaled `pulumi up` because the server cannot reconstruct `secrets_providers` from journal entries alone. The benchmark captures these failures in the results — they appear as `FAIL` in the timing table.
-
-This will be resolved when Procella tracks `secrets_providers` independently per stack.
+For more on the journaling protocol, see [Pulumi's journaling blog post](https://www.pulumi.com/blog/journaling/).

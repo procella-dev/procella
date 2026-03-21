@@ -24,7 +24,6 @@ All Procella configuration is via environment variables. Variables prefixed with
 | `PROCELLA_BLOB_S3_REGION` | `us-east-1` | No | S3 region |
 | `PROCELLA_ENCRYPTION_KEY` | *(auto in dev)* | If non-dev | 64 hex chars (32 bytes) |
 | `PROCELLA_CORS_ORIGINS` | *(unrestricted)* | No | Comma-separated allowed origins |
-| `PROCELLA_ENABLE_JOURNALING` | `false` | No | Enable journaling protocol for updates |
 | `AWS_ACCESS_KEY_ID` | — | If custom endpoint | S3 access key |
 | `AWS_SECRET_ACCESS_KEY` | — | If custom endpoint | S3 secret key |
 
@@ -147,21 +146,3 @@ When not set, all origins are permitted. For production deployments, restrict th
 
 Standard AWS credentials. Required when `PROCELLA_BLOB_S3_ENDPOINT` is set (custom S3 endpoint). For standard AWS S3, you can also use IAM roles, instance profiles, or any method supported by the AWS SDK default credential chain.
 
-## Journaling
-
-### PROCELLA_ENABLE_JOURNALING
-
-Enables the journaling state protocol for Pulumi updates. When `true`:
-
-- `startUpdate` echoes `journalVersion: 1` in the response, causing the CLI (v3.225+) to send per-resource journal entries instead of full checkpoints
-- The `journaling-v1` capability is advertised in `GET /api/capabilities`
-
-When `false` (default), the server does not activate journaling and the CLI uses the traditional checkpoint path.
-
-```bash
-PROCELLA_ENABLE_JOURNALING=true
-```
-
-:::caution
-Journaling is experimental. Operations that read encrypted state (`destroy`, `preview`, `refresh`) may fail after a journaled `pulumi up` because the server does not yet reconstruct `secrets_providers` from journal entries. Use for benchmarking only.
-:::

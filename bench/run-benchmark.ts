@@ -58,7 +58,7 @@ async function waitForHealth(url: string, timeoutMs: number): Promise<void> {
   throw new Error(`Server did not become healthy within ${timeoutMs}ms`);
 }
 
-async function startBenchServer(enableJournaling: boolean): Promise<Subprocess> {
+async function startBenchServer(): Promise<Subprocess> {
   const proc = Bun.spawn(["bun", "run", "apps/server/src/index.ts"], {
     cwd: PROJECT_ROOT,
     env: {
@@ -69,7 +69,6 @@ async function startBenchServer(enableJournaling: boolean): Promise<Subprocess> 
       PROCELLA_DEV_AUTH_TOKEN: TEST_TOKEN,
       PROCELLA_BLOB_BACKEND: "local",
       PROCELLA_BLOB_LOCAL_PATH: "./data/bench-blobs",
-      ...(enableJournaling ? { PROCELLA_ENABLE_JOURNALING: "true" } : {}),
     },
     stdout: "pipe",
     stderr: "pipe",
@@ -402,18 +401,15 @@ async function main(): Promise<void> {
   const allResults: TrialResult[] = [];
 
   try {
-    const modes: Mode[] = IS_REMOTE ? ["checkpoint"] : ["checkpoint", "journal"];
+    const modes: Mode[] = IS_REMOTE ? ["journal"] : ["checkpoint", "journal"];
     const variants: Variant[] = ["plain", "secrets"];
-    if (IS_REMOTE) {
-      console.log("Remote mode: running single mode (server controls journaling config)");
-    }
 
-    for (const mode of modes) {
-      let server: Subprocess | null = null;
-      if (!IS_REMOTE) {
-        server = await startBenchServer(mode === "journal");
-      }
-      try {
+    let server: Subprocess | null = null;
+    if (!IS_REMOTE) {
+      server = await startBenchServer();
+    }
+    try {
+      for (const mode of modes) {
         for (const variant of variants) {
           for (const n of BENCH_SIZES) {
             for (let trial = 1; trial <= BENCH_TRIALS; trial += 1) {
@@ -423,10 +419,10 @@ async function main(): Promise<void> {
             }
           }
         }
-      } finally {
-        if (server) {
-          await stopBenchServer(server);
-        }
+      }
+    } finally {
+      if (server) {
+        await stopBenchServer(server);
       }
     }
 

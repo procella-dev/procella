@@ -73,7 +73,7 @@ describe("@procella/server handlers", () => {
 
 		test("health returns { status: ok } when db is reachable", async () => {
 			const app = new Hono<Env>();
-			const health = healthHandlers({ db: mockDb, enableJournaling: false });
+			const health = healthHandlers({ db: mockDb });
 			app.get("/healthz", health.health);
 
 			const res = await app.request("/healthz");
@@ -89,7 +89,7 @@ describe("@procella/server handlers", () => {
 				},
 			} as never;
 			const app = new Hono<Env>();
-			const health = healthHandlers({ db: failDb, enableJournaling: false });
+			const health = healthHandlers({ db: failDb });
 			app.get("/healthz", health.health);
 
 			const res = await app.request("/healthz");
@@ -100,24 +100,25 @@ describe("@procella/server handlers", () => {
 
 		test("capabilities returns array with expected capabilities", async () => {
 			const app = new Hono<Env>();
-			const health = healthHandlers({ db: mockDb, enableJournaling: false });
+			const health = healthHandlers({ db: mockDb });
 			app.get("/capabilities", health.capabilities);
 
 			const res = await app.request("/capabilities");
 			expect(res.status).toBe(200);
 			const body = await res.json();
 			expect(body.capabilities).toBeArray();
-			expect(body.capabilities).toHaveLength(3);
+			expect(body.capabilities).toHaveLength(4);
 
 			const names = body.capabilities.map((c: { capability: string }) => c.capability);
 			expect(names).toContain("delta-checkpoint-uploads-v2");
 			expect(names).toContain("batch-encrypt");
 			expect(names).toContain("deployment-schema-version");
+			expect(names).toContain("journaling-v1");
 		});
 
 		test("cliVersion returns version info", async () => {
 			const app = new Hono<Env>();
-			const health = healthHandlers({ db: mockDb, enableJournaling: false });
+			const health = healthHandlers({ db: mockDb });
 			app.get("/version", health.cliVersion);
 
 			const res = await app.request("/version");

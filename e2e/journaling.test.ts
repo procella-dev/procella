@@ -1,4 +1,4 @@
-// E2E — Journaling protocol: route exists, backward compat verified.
+// E2E — Journaling protocol: startUpdate echoes journalVersion, full lifecycle.
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import path from "node:path";
@@ -38,7 +38,7 @@ describe("journaling protocol", () => {
 		await truncateTables();
 	});
 
-	test("startUpdate does not echo journalVersion (server-side journaling not yet active)", async () => {
+	test("startUpdate echoes journalVersion when client requests it", async () => {
 		projectDir = await newProjectDir("journaling-test");
 		await Bun.write(path.join(projectDir, "Pulumi.yaml"), RANDOM_PET_PROGRAM);
 
@@ -61,14 +61,14 @@ describe("journaling protocol", () => {
 		});
 		expect(startRes.status).toBe(200);
 		const startBody = await startRes.json();
-		expect(startBody.journalVersion).toBeUndefined();
+		expect(startBody.journalVersion).toBe(1);
 
 		await apiRequest(`/stacks/dev-org/journaling-test/dev/update/${updateID}/cancel`, {
 			method: "POST",
 		});
 	});
 
-	test("pulumi up + destroy work with journaling inactive (backward compat)", async () => {
+	test("pulumi up + destroy work with journaling active", async () => {
 		const upDir = await newProjectDir("journal-compat");
 		await Bun.write(path.join(upDir, "Pulumi.yaml"), RANDOM_PET_PROGRAM);
 		try {

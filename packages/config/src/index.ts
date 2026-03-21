@@ -47,9 +47,6 @@ const configSchema = z
 			.string()
 			.transform((s) => s.split(",").map((o) => o.trim()))
 			.optional(),
-
-		// Journaling
-		enableJournaling: z.boolean().default(false),
 	})
 	.superRefine((data, ctx) => {
 		if (data.authMode === "dev" && !data.devAuthToken) {
@@ -114,7 +111,6 @@ function envToConfig(): Record<string, unknown> {
 		blobS3Region: env.PROCELLA_BLOB_S3_REGION,
 		encryptionKey: env.PROCELLA_ENCRYPTION_KEY,
 		corsOrigins: env.PROCELLA_CORS_ORIGINS,
-		enableJournaling: env.PROCELLA_ENABLE_JOURNALING === "true",
 	};
 }
 

@@ -10,7 +10,7 @@ import type { Env } from "../types.js";
 // Health Handlers
 // ============================================================================
 
-export function healthHandlers(deps: { db: Database; enableJournaling: boolean }) {
+export function healthHandlers(deps: { db: Database }) {
 	return {
 		health: async (c: Context<Env>) => {
 			try {
@@ -31,7 +31,7 @@ export function healthHandlers(deps: { db: Database; enableJournaling: boolean }
 					},
 					{ capability: "batch-encrypt" },
 					{ capability: "deployment-schema-version", version: 3 },
-					...(deps.enableJournaling ? [{ capability: "journaling-v1", version: 1 }] : []),
+					{ capability: "journaling-v1", version: 1 },
 				],
 			} satisfies CapabilitiesResponse),
 

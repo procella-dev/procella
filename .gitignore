@@ -53,3 +53,4 @@ node-compile-cache/
 
 # Vercel
 .vercel
+bench/*.log

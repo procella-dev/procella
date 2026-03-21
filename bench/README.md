@@ -23,7 +23,7 @@ bun run bench
 
 ### Local (default)
 
-Starts a Procella server per mode on port 18081. Runs both `checkpoint` and `journal` modes, toggling `PROCELLA_ENABLE_JOURNALING` between them. Truncates tables between trials. Collects DB metrics (checkpoint bytes, journal entry counts).
+Starts a Procella server on port 18081 with journaling enabled (default). Runs both `checkpoint` and `journal` modes — the `checkpoint` mode forces the CLI to use the traditional path via `PULUMI_DISABLE_JOURNALING=true`. Truncates tables between trials. Collects DB metrics (checkpoint bytes, journal entry counts).
 
 ```bash
 # Fast smoke test
@@ -87,6 +87,6 @@ For each (resource count, mode, trial):
 
 ## Notes
 
-- Journaling is not yet fully activated — `pulumi destroy`/`preview`/`refresh` will fail in journal mode because the server cannot yet reconstruct `secrets_providers` from journal entries alone. The benchmark captures these failures.
 - Uses port 18081 (E2E tests use 18080) so both can run concurrently.
 - Resource type is `random:index:RandomString` — no cloud provider needed.
+- The `checkpoint` mode forces the CLI to use the traditional path via `PULUMI_DISABLE_JOURNALING=true`.
