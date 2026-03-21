@@ -57,6 +57,7 @@ export async function getLatestUpdateId(
        WHERE p.tenant_id = ${quoteLiteral(org)}
          AND p.name = ${quoteLiteral(project)}
          AND s.name = ${quoteLiteral(stack)}
+         AND u.kind = 'update'
        ORDER BY u.created_at DESC
        LIMIT 1`,
     )) as Array<{ id: string | null }>;
