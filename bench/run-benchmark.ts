@@ -4,7 +4,8 @@ import path from "node:path";
 import type { Subprocess } from "bun";
 import { SQL } from "bun";
 import { getCheckpointBytes, getJournalEntryCount, getLatestUpdateId, getStackId } from "./db-metrics";
-import { generateProgram } from "./generate-programs";
+import { generateProgram, generateSecretsProgram } from "./generate-programs";
+import type { BenchmarkResults, Mode, TrialResult, Variant } from "./types";
 import type { BenchmarkResults, Mode, TrialResult } from "./types";
 
 const BENCH_PORT = 18_081;
@@ -151,7 +152,12 @@ interface CommandResult {
   stderr: string;
 }
 
-async function runPulumi(args: string[], cwd: string, pulumiHome: string): Promise<CommandResult> {
+async function runPulumi(
+  args: string[],
+  cwd: string,
+  pulumiHome: string,
+  mode: Mode = "checkpoint",
+): Promise<CommandResult> {
   const proc = Bun.spawn([PULUMI_BIN, ...args, "--non-interactive"], {
     cwd,
     env: {
@@ -162,6 +168,7 @@ async function runPulumi(args: string[], cwd: string, pulumiHome: string): Promi
       PULUMI_SKIP_UPDATE_CHECK: "true",
       PULUMI_DIY_BACKEND_URL: "",
       PULUMI_HOME: pulumiHome,
+      ...(mode === "journal" ? { PULUMI_ENABLE_JOURNALING: "true" } : { PULUMI_DISABLE_JOURNALING: "true" }),
     },
     stdout: "pipe",
     stderr: "pipe",
@@ -211,25 +218,28 @@ function uniqueId(): string {
   return Math.random().toString(36).slice(2, 8);
 }
 
-async function runTrial(n: number, mode: Mode, trial: number, pulumiHome: string): Promise<TrialResult> {
+async function runTrial(
+  n: number, mode: Mode, variant: Variant, trial: number, pulumiHome: string,
+): Promise<TrialResult> {
   const org = "dev-org";
-  const project = "bench";
-  const stack = IS_REMOTE ? `t${trial}-${uniqueId()}` : `n${n}`;
+  const project = variant === "secrets" ? "bench-secrets" : "bench";
+  const stack = IS_REMOTE ? `t${trial}-${uniqueId()}` : `${variant[0]}${n}`;
   const stackRef = `${org}/${project}/${stack}`;
 
   if (!IS_REMOTE) {
     await truncate();
   }
 
-  const projectDir = await mkdtemp(path.join(tmpdir(), `procella-bench-${mode}-${n}-`));
+  const projectDir = await mkdtemp(path.join(tmpdir(), `procella-bench-${mode}-${variant}-${n}-`));
 
   try {
-    await Bun.write(path.join(projectDir, "Pulumi.yaml"), generateProgram(n));
+    const yaml = variant === "secrets" ? generateSecretsProgram(n) : generateProgram(n);
+    await Bun.write(path.join(projectDir, "Pulumi.yaml"), yaml);
 
-    const initResult = await runPulumi(["stack", "init", stackRef], projectDir, pulumiHome);
+    const initResult = await runPulumi(["stack", "init", stackRef], projectDir, pulumiHome, mode);
     if (initResult.exitCode !== 0) {
       return {
-        n, mode, trial,
+        n, mode, variant, trial,
         upMs: null, previewMs: null, destroyMs: null,
         checkpointBytes: null, journalEntryCount: null,
         upExitCode: initResult.exitCode,
@@ -239,12 +249,12 @@ async function runTrial(n: number, mode: Mode, trial: number, pulumiHome: string
       };
     }
 
-    const up = await timed(() => runPulumi(["up", "--yes"], projectDir, pulumiHome));
+    const up = await timed(() => runPulumi(["up", "--yes"], projectDir, pulumiHome, mode));
 
     if (up.exitCode !== 0) {
-      console.error(`[${mode}] N=${n} trial=${trial} up failed:\n${up.stderr}`);
+      console.error(`[${mode}/${variant}] N=${n} trial=${trial} up failed:\n${up.stderr}`);
       return {
-        n, mode, trial,
+        n, mode, variant, trial,
         upMs: null, previewMs: null, destroyMs: null,
         checkpointBytes: null, journalEntryCount: null,
         upExitCode: up.exitCode,
@@ -253,7 +263,7 @@ async function runTrial(n: number, mode: Mode, trial: number, pulumiHome: string
       };
     }
 
-    const preview = await timed(() => runPulumi(["preview"], projectDir, pulumiHome));
+    const preview = await timed(() => runPulumi(["preview"], projectDir, pulumiHome, mode));
 
     let checkpointBytes: number | null = null;
     let journalEntryCount: number | null = null;
@@ -264,10 +274,10 @@ async function runTrial(n: number, mode: Mode, trial: number, pulumiHome: string
       journalEntryCount = updateId ? await getJournalEntryCount(updateId) : null;
     }
 
-    const destroy = await timed(() => runPulumi(["destroy", "--yes"], projectDir, pulumiHome));
+    const destroy = await timed(() => runPulumi(["destroy", "--yes"], projectDir, pulumiHome, mode));
 
     return {
-      n, mode, trial,
+      n, mode, variant, trial,
       upMs: up.ms, previewMs: preview.ms, destroyMs: destroy.ms,
       checkpointBytes, journalEntryCount,
       upExitCode: up.exitCode,
@@ -276,7 +286,7 @@ async function runTrial(n: number, mode: Mode, trial: number, pulumiHome: string
     };
   } finally {
     if (IS_REMOTE) {
-      await runPulumi(["stack", "rm", "--yes"], projectDir, pulumiHome).catch(() => {});
+      await runPulumi(["stack", "rm", "--yes"], projectDir, pulumiHome, mode).catch(() => {});
     }
     await rm(projectDir, { recursive: true, force: true });
   }
@@ -308,30 +318,37 @@ function average(values: number[]): number | null {
 }
 
 function renderMarkdownTable(results: BenchmarkResults): string {
-  const combos: Array<{ n: number; mode: Mode }> = [];
+  const modes = [...new Set(results.results.map((r) => r.mode))];
+  const variants = [...new Set(results.results.map((r) => r.variant))];
+  const combos: Array<{ n: number; mode: Mode; variant: Variant }> = [];
   for (const n of results.benchSizes) {
-    combos.push({ n, mode: "checkpoint" });
-    combos.push({ n, mode: "journal" });
+    for (const mode of modes) {
+      for (const variant of variants) {
+        combos.push({ n, mode, variant });
+      }
+    }
   }
 
   const timingLines: string[] = [
-    "| N | Mode | up p50 | up min | up max | preview p50 | destroy p50 | Status |",
-    "| --- | --- | --- | --- | --- | --- | --- | --- |",
+    "| N | Mode | Variant | up p50 | up min | up max | preview p50 | destroy p50 | Status |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
   ];
 
   const storageLines: string[] = [
-    "| N | Mode | Checkpoint Bytes | Journal Entries |",
-    "| --- | --- | --- | --- |",
+    "| N | Mode | Variant | Checkpoint Bytes | Journal Entries |",
+    "| --- | --- | --- | --- | --- |",
   ];
 
   for (const combo of combos) {
-    const rows = results.results.filter((r) => r.n === combo.n && r.mode === combo.mode);
+    const rows = results.results.filter(
+      (r) => r.n === combo.n && r.mode === combo.mode && r.variant === combo.variant,
+    );
     const successful = rows.filter((r) => r.upExitCode === 0);
     const status = successful.length > 0 ? "OK" : "FAIL";
 
     if (status === "FAIL") {
-      timingLines.push(`| ${combo.n} | ${combo.mode} | FAIL | FAIL | FAIL | FAIL | FAIL | FAIL |`);
-      storageLines.push(`| ${combo.n} | ${combo.mode} | FAIL | FAIL |`);
+      timingLines.push(`| ${combo.n} | ${combo.mode} | ${combo.variant} | FAIL | FAIL | FAIL | FAIL | FAIL | FAIL |`);
+      storageLines.push(`| ${combo.n} | ${combo.mode} | ${combo.variant} | FAIL | FAIL |`);
       continue;
     }
 
@@ -359,11 +376,11 @@ function renderMarkdownTable(results: BenchmarkResults): string {
     const destroyP50 = median(destroyValues);
 
     timingLines.push(
-      `| ${combo.n} | ${combo.mode} | ${formatMs(upP50)} | ${formatMs(upMin)} | ${formatMs(upMax)} | ${formatMs(previewP50)} | ${formatMs(destroyP50)} | ${status} |`,
+      `| ${combo.n} | ${combo.mode} | ${combo.variant} | ${formatMs(upP50)} | ${formatMs(upMin)} | ${formatMs(upMax)} | ${formatMs(previewP50)} | ${formatMs(destroyP50)} | ${status} |`,
     );
 
     storageLines.push(
-      `| ${combo.n} | ${combo.mode} | ${formatNumber(average(checkpointValues), 0)} | ${formatNumber(average(journalValues), 1)} |`,
+      `| ${combo.n} | ${combo.mode} | ${combo.variant} | ${formatNumber(average(checkpointValues), 0)} | ${formatNumber(average(journalValues), 1)} |`,
     );
   }
 
@@ -386,6 +403,7 @@ async function main(): Promise<void> {
 
   try {
     const modes: Mode[] = IS_REMOTE ? ["checkpoint"] : ["checkpoint", "journal"];
+    const variants: Variant[] = ["plain", "secrets"];
     if (IS_REMOTE) {
       console.log("Remote mode: running single mode (server controls journaling config)");
     }
@@ -396,10 +414,13 @@ async function main(): Promise<void> {
         server = await startBenchServer(mode === "journal");
       }
       try {
-        for (const n of BENCH_SIZES) {
-          for (let trial = 1; trial <= BENCH_TRIALS; trial += 1) {
-            const result = await runTrial(n, mode, trial, pulumiHome);
-            allResults.push(result);
+        for (const variant of variants) {
+          for (const n of BENCH_SIZES) {
+            for (let trial = 1; trial <= BENCH_TRIALS; trial += 1) {
+              console.log(`  [${mode}/${variant}] N=${n} trial=${trial}`);
+              const result = await runTrial(n, mode, variant, trial, pulumiHome);
+              allResults.push(result);
+            }
           }
         }
       } finally {
