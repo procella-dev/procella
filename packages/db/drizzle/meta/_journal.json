@@ -8,6 +8,20 @@
       "when": 1772914464231,
       "tag": "0000_medical_fabian_cortez",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1772914500000,
+      "tag": "0001_add_journal_entries",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1772914600000,
+      "tag": "0002_extend_journal_entries",
+      "breakpoints": true
     }
   ]
 }

@@ -164,6 +164,11 @@ export function createApp(deps: {
 		withUpdateAuth,
 		checkpointH.patchCheckpointDelta,
 	);
+	app.patch(
+		"/api/stacks/:org/:project/:stack/update/:updateId/journalentries",
+		withUpdateAuth,
+		checkpointH.appendJournalEntries,
+	);
 	app.post(
 		"/api/stacks/:org/:project/:stack/update/:updateId/events/batch",
 		withUpdateAuth,

@@ -67,6 +67,7 @@ export default defineConfig({
           items: [
             { label: 'Contributing', slug: 'development/contributing' },
             { label: 'Testing', slug: 'development/testing' },
+            { label: 'Benchmarking', slug: 'development/benchmarking' },
           ],
         },
         {

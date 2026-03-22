@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { InvalidUpdateTokenError } from "@procella/types";
+import {
+	InvalidUpdateTokenError,
+	JournalEntryBegin,
+	JournalEntryFailure,
+	JournalEntrySecretsManager,
+	JournalEntrySuccess,
+	JournalEntryWrite,
+} from "@procella/types";
 import {
 	applyDelta,
 	emptyDeployment,
@@ -8,7 +15,12 @@ import {
 	leaseExpiresAt,
 	parseLeaseToken,
 } from "./helpers.js";
-import { detectEventKind, mapStatusToApiStatus } from "./postgres.js";
+import {
+	applyJournalEntries,
+	detectEventKind,
+	type JournalRow,
+	mapStatusToApiStatus,
+} from "./postgres.js";
 import type { UpdatesService } from "./types.js";
 import {
 	BLOB_THRESHOLD,
@@ -196,6 +208,7 @@ describe("@procella/updates helpers", () => {
 				patchCheckpoint: noop,
 				patchCheckpointVerbatim: noop,
 				patchCheckpointDelta: noop,
+				appendJournalEntries: noop,
 				postEvents: noop,
 				renewLease: noop,
 				getUpdate: noop,
@@ -208,7 +221,7 @@ describe("@procella/updates helpers", () => {
 				batchEncrypt: noop,
 				batchDecrypt: noop,
 			};
-			expect(Object.keys(mock)).toHaveLength(18);
+			expect(Object.keys(mock)).toHaveLength(19);
 		});
 	});
 
@@ -252,6 +265,165 @@ describe("@procella/updates helpers", () => {
 
 		test("returns 'unknown' for empty event", () => {
 			expect(detectEventKind({} as never)).toBe("unknown");
+		});
+	});
+
+	describe("applyJournalEntries", () => {
+		const makeResource = (urn: string, id = "id-1") => ({
+			urn,
+			custom: true,
+			id,
+			type: "test:index:Resource",
+		});
+
+		const makeEntry = (
+			overrides: Partial<JournalRow> & { kind: number; operationId: number },
+		): JournalRow => ({
+			state: null,
+			operation: null,
+			secretsProvider: null,
+			newSnapshot: null,
+			operationType: null,
+			removeOld: null,
+			removeNew: null,
+			elideWrite: false,
+			...overrides,
+		});
+
+		const makeBase = (resources: unknown[] = []) => ({
+			manifest: { time: "2026-01-01T00:00:00Z", magic: "abc", version: "3.225.0" },
+			secrets_providers: { type: "passphrase", state: { salt: "v1:abc" } },
+			resources,
+			pending_operations: [],
+		});
+
+		test("empty entries returns base state unchanged", () => {
+			const base = makeBase([makeResource("urn:a")]);
+			const result = applyJournalEntries(base, []);
+			expect((result.resources as unknown[]).length).toBe(1);
+		});
+
+		test("preserves manifest and secrets_providers", () => {
+			const base = makeBase([makeResource("urn:a")]);
+			const result = applyJournalEntries(base, []);
+			expect(result.manifest).toEqual(base.manifest);
+			expect(result.secrets_providers).toEqual(base.secrets_providers);
+		});
+
+		test("Write entry replaces base deployment entirely", () => {
+			const base = makeBase();
+			const snapshot = {
+				manifest: { time: "new", magic: "new", version: "3.227.0" },
+				secrets_providers: { type: "passphrase", state: { salt: "v1:real-salt" } },
+				resources: [makeResource("urn:existing")],
+				pending_operations: [],
+			};
+			const entries = [
+				makeEntry({ kind: JournalEntryWrite, operationId: 0, newSnapshot: snapshot }),
+			];
+			const result = applyJournalEntries(base, entries);
+			expect((result.secrets_providers as { state: { salt: string } }).state.salt).toBe(
+				"v1:real-salt",
+			);
+			expect((result.resources as unknown[]).length).toBe(1);
+		});
+
+		test("SecretsManager entry updates secrets_providers", () => {
+			const base = makeBase();
+			const entries = [
+				makeEntry({
+					kind: JournalEntrySecretsManager,
+					operationId: 0,
+					secretsProvider: { type: "passphrase", state: { salt: "v1:new-salt" } },
+				}),
+			];
+			const result = applyJournalEntries(base, entries);
+			expect((result.secrets_providers as { state: { salt: string } }).state.salt).toBe(
+				"v1:new-salt",
+			);
+		});
+
+		test("Begin + Success creates a new resource", () => {
+			const base = makeBase();
+			const resource = makeResource("urn:a");
+			const entries = [
+				makeEntry({ kind: JournalEntryBegin, operationId: 1, state: resource }),
+				makeEntry({ kind: JournalEntrySuccess, operationId: 1, removeNew: 1n, state: resource }),
+			];
+			const result = applyJournalEntries(base, entries);
+			expect((result.resources as unknown[]).length).toBe(1);
+		});
+
+		test("Success with removeOld replaces base resource by index", () => {
+			const existing = makeResource("urn:a", "id-orig");
+			const updated = makeResource("urn:a", "id-updated");
+			const base = makeBase([existing]);
+			const entries = [
+				makeEntry({ kind: JournalEntryBegin, operationId: 1, state: existing }),
+				makeEntry({ kind: JournalEntrySuccess, operationId: 1, removeOld: 0n, state: updated }),
+			];
+			const result = applyJournalEntries(base, entries);
+			const resources = result.resources as Array<{ id: string }>;
+			expect(resources.length).toBe(1);
+			expect(resources[0].id).toBe("id-updated");
+		});
+
+		test("Success with removeOld and no state deletes base resource", () => {
+			const existing = makeResource("urn:a");
+			const base = makeBase([existing]);
+			const entries = [
+				makeEntry({ kind: JournalEntryBegin, operationId: 1, state: existing }),
+				makeEntry({ kind: JournalEntrySuccess, operationId: 1, removeOld: 0n }),
+			];
+			const result = applyJournalEntries(base, entries);
+			expect((result.resources as unknown[]).length).toBe(0);
+		});
+
+		test("Failure entry clears incomplete op without side effects", () => {
+			const base = makeBase();
+			const resource = makeResource("urn:a");
+			const entries = [
+				makeEntry({ kind: JournalEntryBegin, operationId: 1, state: resource }),
+				makeEntry({ kind: JournalEntryFailure, operationId: 1 }),
+			];
+			const result = applyJournalEntries(base, entries);
+			expect((result.resources as unknown[]).length).toBe(0);
+		});
+
+		test("multiple parallel creates reconstruct correctly", () => {
+			const base = makeBase();
+			const resA = makeResource("urn:a", "id-a");
+			const resB = makeResource("urn:b", "id-b");
+			const entries = [
+				makeEntry({ kind: JournalEntryBegin, operationId: 1, state: resA }),
+				makeEntry({ kind: JournalEntryBegin, operationId: 2, state: resB }),
+				makeEntry({ kind: JournalEntrySuccess, operationId: 1, removeNew: 1n, state: resA }),
+				makeEntry({ kind: JournalEntrySuccess, operationId: 2, removeNew: 2n, state: resB }),
+			];
+			const result = applyJournalEntries(base, entries);
+			expect((result.resources as unknown[]).length).toBe(2);
+		});
+
+		test("Write + SecretsManager + Begin/Success: full lifecycle", () => {
+			const snapshot = {
+				manifest: { time: "t", magic: "m", version: "v" },
+				resources: [],
+				pending_operations: [],
+			};
+			const sp = { type: "passphrase", state: { salt: "v1:correct-salt" } };
+			const resource = makeResource("urn:a");
+			const entries = [
+				makeEntry({ kind: JournalEntryWrite, operationId: 0, newSnapshot: snapshot }),
+				makeEntry({ kind: JournalEntrySecretsManager, operationId: 0, secretsProvider: sp }),
+				makeEntry({ kind: JournalEntryBegin, operationId: 1, state: resource }),
+				makeEntry({ kind: JournalEntrySuccess, operationId: 1, removeNew: 1n, state: resource }),
+			];
+			const result = applyJournalEntries({}, entries);
+			expect((result.secrets_providers as { state: { salt: string } }).state.salt).toBe(
+				"v1:correct-salt",
+			);
+			expect((result.resources as unknown[]).length).toBe(1);
+			expect(result.manifest).toEqual(snapshot.manifest);
 		});
 	});
 });

@@ -217,7 +217,10 @@ describe("DescopeAuthService — JWT cache", () => {
 	});
 
 	test("failed exchange propagates error and does not cache", async () => {
-		mockExchangeAccessKey.mockRejectedValueOnce(new Error("Rate limit exceeded"));
+		const rateErr = new Error("Rate limit exceeded");
+		mockExchangeAccessKey.mockRejectedValueOnce(rateErr);
+		mockExchangeAccessKey.mockRejectedValueOnce(rateErr);
+		mockExchangeAccessKey.mockRejectedValueOnce(rateErr);
 
 		await expect(svc.authenticate(reqWithAuth("token ak_fail"))).rejects.toThrow(
 			"Rate limit exceeded",
@@ -228,7 +231,7 @@ describe("DescopeAuthService — JWT cache", () => {
 		const caller = await svc.authenticate(reqWithAuth("token ak_fail"));
 
 		expect(caller.login).toBe("omer");
-		expect(mockExchangeAccessKey).toHaveBeenCalledTimes(2);
+		expect(mockExchangeAccessKey).toHaveBeenCalledTimes(4); // 3 retries (all fail) + 1 success
 	});
 
 	test("dispose is idempotent", () => {

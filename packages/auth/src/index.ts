@@ -183,26 +183,51 @@ export class DescopeAuthService implements AuthService {
 	}
 
 	private async doExchange(accessKey: string): Promise<Caller> {
-		const authInfo = await this.sdk.exchangeAccessKey(accessKey);
-		const claims = authInfo.token;
-		const caller = this.extractCaller(claims);
+		const maxAttempts = 3;
+		let lastErr: unknown;
+		for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+			const started = performance.now();
+			try {
+				const authInfo = await this.sdk.exchangeAccessKey(accessKey);
+				const claims = authInfo.token;
+				const elapsed = (performance.now() - started).toFixed(0);
+				const exp = typeof claims.exp === "number" ? claims.exp : undefined;
+				// biome-ignore lint/suspicious/noConsole: auth diagnostics
+				console.log(
+					`[auth] exchangeAccessKey OK ${elapsed}ms exp=${exp ? new Date(exp * 1000).toISOString() : "none"} sub=${claims.sub ?? "?"}`,
+				);
 
-		// Cache if exp claim exists, capping TTL so revocations/role changes propagate in bounded time.
-		const exp = typeof claims.exp === "number" ? claims.exp : undefined;
-		if (exp) {
-			const nowSec = Math.floor(Date.now() / 1000);
-			const desiredExpiry = exp - this.EXPIRY_MARGIN_S;
-			const cappedExpiry = Math.min(desiredExpiry, nowSec + this.MAX_CACHE_TTL_S);
+				const caller = this.extractCaller(claims);
 
-			if (cappedExpiry > nowSec) {
-				this.cache.set(accessKey, {
-					caller,
-					expiresAt: cappedExpiry,
-				});
+				if (exp) {
+					const nowSec = Math.floor(Date.now() / 1000);
+					const desiredExpiry = exp - this.EXPIRY_MARGIN_S;
+					const cappedExpiry = Math.min(desiredExpiry, nowSec + this.MAX_CACHE_TTL_S);
+					if (cappedExpiry > nowSec) {
+						this.cache.set(accessKey, { caller, expiresAt: cappedExpiry });
+					}
+				}
+
+				return caller;
+			} catch (err) {
+				const elapsed = (performance.now() - started).toFixed(0);
+				lastErr = err;
+				if (attempt < maxAttempts) {
+					const delay = attempt * 500;
+					// biome-ignore lint/suspicious/noConsole: auth retry diagnostics
+					console.warn(
+						`[auth] exchangeAccessKey attempt ${attempt}/${maxAttempts} failed after ${elapsed}ms, retrying in ${delay}ms: ${err}`,
+					);
+					await new Promise((r) => setTimeout(r, delay));
+				} else {
+					// biome-ignore lint/suspicious/noConsole: auth failure logging
+					console.error(
+						`[auth] exchangeAccessKey FAILED after ${attempt} attempt(s) ${elapsed}ms: ${err}`,
+					);
+				}
 			}
 		}
-
-		return caller;
+		throw lastErr;
 	}
 
 	private extractCaller(claims: Record<string, unknown>): Caller {

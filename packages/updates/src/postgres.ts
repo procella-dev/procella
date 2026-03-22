@@ -2,7 +2,7 @@
 
 import type { CryptoService } from "@procella/crypto";
 import type { Database } from "@procella/db";
-import { checkpoints, stacks, updateEvents, updates } from "@procella/db";
+import { checkpoints, journalEntries, stacks, updateEvents, updates } from "@procella/db";
 import type { BlobStorage } from "@procella/storage";
 import type {
 	CompleteUpdateRequest,
@@ -11,11 +11,14 @@ import type {
 	GetHistoryResponse,
 	GetUpdateEventsResponse,
 	ImportStackResponse,
+	JournalEntries,
+	JournalEntry,
 	PatchUpdateCheckpointDeltaRequest,
 	PatchUpdateCheckpointRequest,
 	PatchUpdateVerbatimCheckpointRequest,
 	RenewUpdateLeaseRequest,
 	RenewUpdateLeaseResponse,
+	ResourceV3,
 	StartUpdateRequest,
 	StartUpdateResponse,
 	UntypedDeployment,
@@ -25,12 +28,21 @@ import type {
 	UpdateStatus,
 } from "@procella/types";
 import {
+	BadRequestError,
 	CheckpointNotFoundError,
+	JournalEntryBegin,
+	JournalEntryFailure,
+	JournalEntryOutputs,
+	JournalEntryRebuiltBaseState,
+	JournalEntryRefreshSuccess,
+	JournalEntrySecretsManager,
+	JournalEntrySuccess,
+	JournalEntryWrite,
 	LeaseExpiredError,
 	UpdateConflictError,
 	UpdateNotFoundError,
 } from "@procella/types";
-import { and, desc, eq, gt, max, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, max, sql } from "drizzle-orm";
 import {
 	applyDelta,
 	emptyDeployment,
@@ -54,11 +66,7 @@ export class PostgresUpdatesService implements UpdatesService {
 		db,
 		storage,
 		crypto,
-	}: {
-		db: Database;
-		storage: BlobStorage;
-		crypto: CryptoService;
-	}) {
+	}: { db: Database; storage: BlobStorage; crypto: CryptoService }) {
 		this.db = db;
 		this.storage = storage;
 		this.crypto = crypto;
@@ -97,7 +105,7 @@ export class PostgresUpdatesService implements UpdatesService {
 		return { updateID: row.id, version } as UpdateProgramResponse;
 	}
 
-	async startUpdate(updateId: string, _request: StartUpdateRequest): Promise<StartUpdateResponse> {
+	async startUpdate(updateId: string, request: StartUpdateRequest): Promise<StartUpdateResponse> {
 		return this.db.transaction(async (tx) => {
 			const [row] = await tx.select().from(updates).where(eq(updates.id, updateId));
 
@@ -130,10 +138,13 @@ export class PostgresUpdatesService implements UpdatesService {
 				.set({ activeUpdateId: updateId, updatedAt: sql`now()` })
 				.where(eq(stacks.id, row.stackId));
 
+			const journalVersion = (request.journalVersion ?? 0) >= 1 ? 1 : 0;
+
 			return {
 				token,
 				version: row.version,
 				tokenExpiration: Math.floor(expiry.getTime() / 1000),
+				...(journalVersion > 0 ? { journalVersion } : {}),
 			} as StartUpdateResponse;
 		});
 	}
@@ -340,7 +351,7 @@ export class PostgresUpdatesService implements UpdatesService {
 			if (baseCheckpoint.blobKey) {
 				const data = await this.storage.get(baseCheckpoint.blobKey);
 				if (!data) {
-					throw new CheckpointNotFoundError("", "", "");
+					throw new Error("Checkpoint blob data missing from storage");
 				}
 				baseDeployment = JSON.parse(new TextDecoder().decode(data));
 			} else {
@@ -376,6 +387,53 @@ export class PostgresUpdatesService implements UpdatesService {
 				blobKey: null,
 				isDelta: false,
 			});
+		}
+	}
+
+	async appendJournalEntries(updateId: string, batch: JournalEntries): Promise<void> {
+		const [row] = await this.db.select().from(updates).where(eq(updates.id, updateId));
+
+		if (!row) {
+			throw new UpdateNotFoundError(updateId);
+		}
+
+		const entries = batch.entries ?? [];
+		if (entries.length === 0) {
+			return;
+		}
+
+		const rows = entries.map((entry: JournalEntry) => {
+			if (
+				typeof entry.sequenceID !== "number" ||
+				typeof entry.operationID !== "number" ||
+				typeof entry.kind !== "number"
+			) {
+				throw new BadRequestError(
+					"Invalid journal entry: sequenceID, operationID, and kind must be numbers",
+				);
+			}
+			return {
+				updateId,
+				stackId: row.stackId,
+				sequenceId: BigInt(entry.sequenceID),
+				operationId: BigInt(entry.operationID),
+				kind: entry.kind,
+				state: entry.state ?? null,
+				operation: entry.operation ?? null,
+				secretsProvider: entry.secretsProvider ?? null,
+				newSnapshot: entry.newSnapshot ?? null,
+				operationType: null,
+				removeOld: entry.removeOld != null ? BigInt(entry.removeOld) : null,
+				removeNew: entry.removeNew != null ? BigInt(entry.removeNew) : null,
+				elideWrite: entry.elideWrite ?? false,
+			};
+		});
+
+		await this.db.insert(journalEntries).values(rows).onConflictDoNothing();
+
+		const hasNonElided = entries.some((e: JournalEntry) => !e.elideWrite);
+		if (hasNonElided) {
+			await this.flushJournalToCheckpoint(updateId, row.stackId);
 		}
 	}
 
@@ -479,14 +537,14 @@ export class PostgresUpdatesService implements UpdatesService {
 				.limit(1);
 			checkpoint = rows[0];
 			if (!checkpoint) {
-				throw new CheckpointNotFoundError("", "", "");
+				throw new CheckpointNotFoundError("", "", `version ${version}`);
 			}
 		} else {
 			const rows = await this.db
 				.select()
 				.from(checkpoints)
 				.where(and(eq(checkpoints.stackId, stackId), eq(checkpoints.isDelta, false)))
-				.orderBy(desc(checkpoints.version))
+				.orderBy(desc(checkpoints.createdAt))
 				.limit(1);
 			checkpoint = rows[0];
 			if (!checkpoint) {
@@ -498,7 +556,7 @@ export class PostgresUpdatesService implements UpdatesService {
 		if (checkpoint.blobKey) {
 			const data = await this.storage.get(checkpoint.blobKey);
 			if (!data) {
-				throw new CheckpointNotFoundError("", "", "");
+				throw new Error("Checkpoint blob data missing from storage");
 			}
 			deploymentData = JSON.parse(new TextDecoder().decode(data));
 		} else {
@@ -585,6 +643,97 @@ export class PostgresUpdatesService implements UpdatesService {
 
 		return (row?.maxVersion ?? 0) + 1;
 	}
+
+	private async flushJournalToCheckpoint(updateId: string, stackId: string): Promise<void> {
+		const allEntries = await this.db
+			.select()
+			.from(journalEntries)
+			.where(eq(journalEntries.updateId, updateId))
+			.orderBy(journalEntries.sequenceId);
+
+		if (allEntries.length === 0) {
+			return;
+		}
+
+		const baseDeployment = await this.loadBaseDeploymentForUpdate(stackId, updateId);
+		const reconstructed = applyJournalEntries(baseDeployment, allEntries);
+		const serialized = JSON.stringify(reconstructed);
+		const maxAttempts = 5;
+		for (let attempt = 0; attempt < maxAttempts; attempt++) {
+			const version = await this.nextCheckpointVersion(updateId);
+			try {
+				if (serialized.length > BLOB_THRESHOLD) {
+					const blobKey = formatBlobKey(stackId, updateId, version);
+					await this.storage.put(blobKey, new TextEncoder().encode(serialized));
+					await this.db.insert(checkpoints).values({
+						updateId,
+						stackId,
+						version,
+						data: null,
+						blobKey,
+						isDelta: false,
+					});
+				} else {
+					await this.db.insert(checkpoints).values({
+						updateId,
+						stackId,
+						version,
+						data: reconstructed,
+						blobKey: null,
+						isDelta: false,
+					});
+				}
+				return;
+			} catch (error: unknown) {
+				const err = error as { code?: string };
+				if (err.code === "23505" && attempt < maxAttempts - 1) {
+					continue;
+				}
+				throw error;
+			}
+		}
+	}
+
+	private async loadBaseDeploymentForUpdate(
+		stackId: string,
+		updateId: string,
+	): Promise<Record<string, unknown>> {
+		const [initial] = await this.db
+			.select()
+			.from(checkpoints)
+			.where(and(eq(checkpoints.updateId, updateId), eq(checkpoints.isDelta, false)))
+			.orderBy(asc(checkpoints.version))
+			.limit(1);
+
+		const row =
+			initial ??
+			(await this.db
+				.select()
+				.from(checkpoints)
+				.where(and(eq(checkpoints.stackId, stackId), eq(checkpoints.isDelta, false)))
+				.orderBy(desc(checkpoints.createdAt))
+				.limit(1)
+				.then((rows) => rows[0]));
+
+		if (!row) {
+			return {
+				manifest: { time: new Date().toISOString(), magic: "", version: "" },
+				secrets_providers: { type: "passphrase", state: {} },
+				resources: [],
+				pending_operations: [],
+			};
+		}
+
+		if (row.blobKey) {
+			const raw = await this.storage.get(row.blobKey);
+			if (!raw) {
+				throw new Error("Checkpoint blob data missing from storage");
+			}
+			return JSON.parse(new TextDecoder().decode(raw)) as Record<string, unknown>;
+		}
+
+		return (row.data as Record<string, unknown>) ?? {};
+	}
 }
 
 // ============================================================================
@@ -609,6 +758,207 @@ export function mapStatusToApiStatus(dbStatus: string): string {
 		default:
 			return dbStatus;
 	}
+}
+
+export interface JournalRow {
+	kind: number;
+	operationId: number | bigint;
+	state: unknown;
+	operation: unknown;
+	secretsProvider: unknown;
+	newSnapshot: unknown;
+	operationType: string | null;
+	removeOld: bigint | null;
+	removeNew: bigint | null;
+	elideWrite: boolean;
+}
+
+export function applyJournalEntries(
+	baseDeployment: Record<string, unknown>,
+	entries: JournalRow[],
+): Record<string, unknown> {
+	let deployment = { ...baseDeployment };
+
+	// URN-based resource map for entries without index pointers (httpstate CLI)
+	const resourcesByUrn = new Map<string, ResourceV3>();
+	for (const r of (deployment.resources ?? []) as ResourceV3[]) {
+		resourcesByUrn.set(r.urn, r);
+	}
+
+	const newResources: Array<ResourceV3 | null> = [];
+	const opIdToNewIdx = new Map<string, number>();
+	const toDeleteInSnapshot = new Set<number>();
+	const toReplaceInSnapshot = new Map<number, ResourceV3>();
+
+	for (const entry of entries) {
+		const opKey = String(entry.operationId);
+		const state = entry.state as ResourceV3 | null | undefined;
+
+		switch (entry.kind) {
+			case JournalEntryWrite: {
+				const snap = entry.newSnapshot as Record<string, unknown> | null;
+				if (snap) {
+					deployment = { ...snap };
+					resourcesByUrn.clear();
+					for (const r of (deployment.resources ?? []) as ResourceV3[]) {
+						resourcesByUrn.set(r.urn, r);
+					}
+				}
+				break;
+			}
+
+			case JournalEntrySecretsManager: {
+				const sp = entry.secretsProvider as { type: string; state: unknown } | null;
+				if (sp) {
+					deployment.secrets_providers = sp;
+				}
+				break;
+			}
+
+			case JournalEntryBegin: {
+				if (state) {
+					const idx = newResources.length;
+					newResources.push(null);
+					opIdToNewIdx.set(opKey, idx);
+				}
+				break;
+			}
+
+			case JournalEntrySuccess: {
+				const hasIndexPointers = entry.removeOld != null || entry.removeNew != null;
+				if (hasIndexPointers) {
+					if (entry.removeOld != null && state) {
+						toReplaceInSnapshot.set(Number(entry.removeOld), state);
+					} else if (entry.removeOld != null && !state) {
+						const baseRes = ((deployment.resources ?? []) as ResourceV3[])[Number(entry.removeOld)];
+						if (baseRes) resourcesByUrn.delete(baseRes.urn);
+						toDeleteInSnapshot.add(Number(entry.removeOld));
+					}
+					if (entry.removeNew != null && state) {
+						const idx = opIdToNewIdx.get(String(entry.removeNew));
+						if (idx !== undefined) newResources[idx] = state;
+					} else if (entry.removeNew != null && !state) {
+						const idx = opIdToNewIdx.get(String(entry.removeNew));
+						if (idx !== undefined) newResources[idx] = null;
+					}
+				} else if (state) {
+					// No index pointers (httpstate CLI) — fall back to URN-based tracking
+					if ((state as { delete?: boolean }).delete) {
+						resourcesByUrn.delete(state.urn);
+					} else {
+						resourcesByUrn.set(state.urn, state);
+					}
+				}
+				break;
+			}
+
+			case JournalEntryFailure: {
+				break;
+			}
+
+			case JournalEntryRefreshSuccess: {
+				if (entry.removeOld != null) {
+					if (state) {
+						toReplaceInSnapshot.set(Number(entry.removeOld), state);
+					} else {
+						toDeleteInSnapshot.add(Number(entry.removeOld));
+					}
+				}
+				if (entry.removeNew != null) {
+					const idx = opIdToNewIdx.get(String(entry.removeNew));
+					if (idx !== undefined) {
+						newResources[idx] = state ?? null;
+					}
+				}
+				break;
+			}
+
+			case JournalEntryOutputs: {
+				if (state && entry.removeOld != null) {
+					toReplaceInSnapshot.set(Number(entry.removeOld), state);
+				} else if (state && entry.removeNew != null) {
+					const idx = opIdToNewIdx.get(String(entry.removeNew));
+					if (idx !== undefined) newResources[idx] = state;
+				} else if (state) {
+					// No index pointers — URN-based update
+					resourcesByUrn.set(state.urn, state);
+				}
+				break;
+			}
+
+			case JournalEntryRebuiltBaseState: {
+				const rebuilt = rebuildFromJournal(
+					deployment,
+					newResources,
+					toDeleteInSnapshot,
+					toReplaceInSnapshot,
+					resourcesByUrn,
+				);
+				deployment = rebuilt;
+				newResources.length = 0;
+				opIdToNewIdx.clear();
+				toDeleteInSnapshot.clear();
+				toReplaceInSnapshot.clear();
+				resourcesByUrn.clear();
+				for (const r of (deployment.resources ?? []) as ResourceV3[]) {
+					resourcesByUrn.set(r.urn, r);
+				}
+				break;
+			}
+
+			default:
+				break;
+		}
+	}
+
+	return rebuildFromJournal(
+		deployment,
+		newResources,
+		toDeleteInSnapshot,
+		toReplaceInSnapshot,
+		resourcesByUrn,
+	);
+}
+
+function rebuildFromJournal(
+	base: Record<string, unknown>,
+	newResources: Array<ResourceV3 | null>,
+	toDelete: Set<number>,
+	toReplace: Map<number, ResourceV3>,
+	resourcesByUrn: Map<string, ResourceV3>,
+): Record<string, unknown> {
+	const baseResources = ((base.resources ?? []) as ResourceV3[]).slice();
+
+	for (const [idx, replacement] of toReplace) {
+		if (idx >= 0 && idx < baseResources.length) {
+			baseResources[idx] = replacement;
+		}
+	}
+
+	const filtered = baseResources.filter((_, i) => !toDelete.has(i));
+	const indexAdded = newResources.filter((r): r is ResourceV3 => r != null);
+
+	// When index pointers were used, index-based reconstruction is authoritative.
+	// URN-based map only adds resources that aren't already in the index-based result.
+	const hasIndexOps = toDelete.size > 0 || toReplace.size > 0 || indexAdded.length > 0;
+	const merged = new Map<string, ResourceV3>();
+	if (hasIndexOps) {
+		for (const r of filtered) merged.set(r.urn, r);
+		for (const r of indexAdded) merged.set(r.urn, r);
+		// Add URN-based resources that don't conflict with index results
+		for (const [urn, r] of resourcesByUrn) {
+			if (!merged.has(urn)) merged.set(urn, r);
+		}
+	} else {
+		// Pure URN-based mode (httpstate CLI)
+		for (const [urn, r] of resourcesByUrn) merged.set(urn, r);
+	}
+
+	return {
+		...base,
+		resources: Array.from(merged.values()),
+		pending_operations: [],
+	};
 }
 
 /** Detect the event kind from an EngineEvent by checking which field is non-null. */

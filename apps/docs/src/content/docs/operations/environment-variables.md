@@ -145,3 +145,4 @@ When not set, all origins are permitted. For production deployments, restrict th
 ### AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
 
 Standard AWS credentials. Required when `PROCELLA_BLOB_S3_ENDPOINT` is set (custom S3 endpoint). For standard AWS S3, you can also use IAM roles, instance profiles, or any method supported by the AWS SDK default credential chain.
+

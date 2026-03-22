@@ -31,5 +31,12 @@ export function checkpointHandlers(updates: UpdatesService) {
 			await updates.patchCheckpointDelta(updateCtx.updateId, body);
 			return c.body(null, 200);
 		},
+
+		appendJournalEntries: async (c: Context<Env>) => {
+			const updateCtx = updateContext(c);
+			const body = await c.req.json();
+			await updates.appendJournalEntries(updateCtx.updateId, body);
+			return c.body(null, 200);
+		},
 	};
 }

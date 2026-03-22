@@ -13,6 +13,7 @@ import { schema } from "./schema.js";
 // Re-export schema for consumers
 export {
 	checkpoints,
+	journalEntries,
 	projects,
 	schema,
 	stacks,

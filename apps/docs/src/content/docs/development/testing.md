@@ -126,3 +126,7 @@ bun test e2e/stacks.test.ts
 # Run tests matching a pattern
 bun test --filter "stack lifecycle"
 ```
+
+## Benchmarks
+
+For performance benchmarking (journaling vs checkpoint), see [Benchmarking](/development/benchmarking/).

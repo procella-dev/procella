@@ -21,7 +21,8 @@
 		"e2e": "bun test --timeout 120000 --preload ./e2e/setup.ts e2e/",
 		"check:all": "bun run check && bun run e2e",
 		"db:generate": "drizzle-kit generate --config packages/db/drizzle.config.ts",
-		"db:migrate": "drizzle-kit migrate --config packages/db/drizzle.config.ts"
+		"db:migrate": "drizzle-kit migrate --config packages/db/drizzle.config.ts",
+		"bench": "bun run bench/run-benchmark.ts"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.6",

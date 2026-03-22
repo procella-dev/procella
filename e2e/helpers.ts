@@ -48,7 +48,9 @@ export async function resetDatabase(): Promise<void> {
 /** Truncate all tables (fast cleanup between test groups). */
 export async function truncateTables(): Promise<void> {
 	const sql = new SQL({ url: TEST_DB_URL });
-	await sql.unsafe("TRUNCATE update_events, checkpoints, updates, stacks, projects CASCADE");
+	await sql.unsafe(
+		"TRUNCATE update_events, journal_entries, checkpoints, updates, stacks, projects CASCADE",
+	);
 	sql.close();
 }
 

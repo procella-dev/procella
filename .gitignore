@@ -27,6 +27,8 @@ apps/ui/vite.config.d.ts.map
 /data/
 /tmp/
 
+# Benchmark results
+bench/results.json
 # Node / Bun
 node_modules/
 
@@ -51,3 +53,5 @@ node-compile-cache/
 
 # Vercel
 .vercel
+bench/*.log
+bench/auth-debug/

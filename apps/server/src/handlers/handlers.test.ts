@@ -107,12 +107,13 @@ describe("@procella/server handlers", () => {
 			expect(res.status).toBe(200);
 			const body = await res.json();
 			expect(body.capabilities).toBeArray();
-			expect(body.capabilities).toHaveLength(3);
+			expect(body.capabilities).toHaveLength(4);
 
 			const names = body.capabilities.map((c: { capability: string }) => c.capability);
 			expect(names).toContain("delta-checkpoint-uploads-v2");
 			expect(names).toContain("batch-encrypt");
 			expect(names).toContain("deployment-schema-version");
+			expect(names).toContain("journaling-v1");
 		});
 
 		test("cliVersion returns version info", async () => {
