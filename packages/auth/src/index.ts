@@ -47,7 +47,7 @@ export class DevAuthService implements AuthService {
 	}
 
 	async authenticate(request: Request): Promise<Caller> {
-		const token = extractToken(request);
+		const { token } = extractToken(request);
 		if (token !== this.config.token) {
 			throw new UnauthorizedError("Invalid authentication token");
 		}
@@ -82,12 +82,11 @@ export class DescopeAuthService implements AuthService {
 	}
 
 	async authenticate(request: Request): Promise<Caller> {
-		const token = extractToken(request);
+		const { scheme, token } = extractToken(request);
 
 		// Block raw JWTs on the Pulumi CLI path — CLI should use access keys.
 		// "token <value>" = CLI; "Bearer <value>" = UI dashboard (session JWTs OK there).
-		const authHeader = request.headers.get("Authorization") ?? "";
-		if (authHeader.startsWith("token ") && token.startsWith("eyJ")) {
+		if (scheme === "token" && token.startsWith("eyJ")) {
 			throw new UnauthorizedError(
 				"Session JWTs cannot be used as CLI tokens (they expire). Use `pulumi login` to create a long-lived access key.",
 			);
@@ -210,7 +209,7 @@ export function requireRole(caller: Caller, ...roles: Role[]): void {
 // ============================================================================
 
 /** Extract bearer/token from Authorization header (supports Pulumi CLI + standard formats). */
-function extractToken(request: Request): string {
+function extractToken(request: Request): { scheme: "token" | "bearer"; token: string } {
 	const header = request.headers.get("Authorization");
 	if (!header) {
 		throw new UnauthorizedError("Missing Authorization header");
@@ -222,7 +221,7 @@ function extractToken(request: Request): string {
 		if (!value) {
 			throw new UnauthorizedError("Empty token value");
 		}
-		return value;
+		return { scheme: "token", token: value };
 	}
 
 	// Standard Bearer format: "Bearer <value>"
@@ -231,7 +230,7 @@ function extractToken(request: Request): string {
 		if (!value) {
 			throw new UnauthorizedError("Empty Bearer token");
 		}
-		return value;
+		return { scheme: "bearer", token: value };
 	}
 
 	throw new UnauthorizedError("Invalid Authorization header format");

@@ -110,8 +110,8 @@ describe("DevAuthService", () => {
 // ============================================================================
 
 describe("DescopeAuthService", () => {
-	// Uses a fake project ID — the JWT guard fires before any SDK call.
-	const svc = new DescopeAuthService({ projectId: "fake-project-id" });
+	// Uses a placeholder project ID — the JWT guard fires before any SDK call.
+	const svc = new DescopeAuthService({ projectId: "P3Aaha02iJvkGVbPDAF78KWuAxe6" });
 
 	test("rejects session JWT on 'token' prefix (CLI path)", async () => {
 		// eyJhbGciOiJIUzI1NiJ9 is a valid JWT header prefix
