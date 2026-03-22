@@ -779,6 +779,12 @@ export function applyJournalEntries(
 ): Record<string, unknown> {
 	let deployment = { ...baseDeployment };
 
+	// URN-based resource map for entries without index pointers (httpstate CLI)
+	const resourcesByUrn = new Map<string, ResourceV3>();
+	for (const r of (deployment.resources ?? []) as ResourceV3[]) {
+		resourcesByUrn.set(r.urn, r);
+	}
+
 	const newResources: Array<ResourceV3 | null> = [];
 	const opIdToNewIdx = new Map<string, number>();
 	const toDeleteInSnapshot = new Set<number>();
@@ -793,6 +799,10 @@ export function applyJournalEntries(
 				const snap = entry.newSnapshot as Record<string, unknown> | null;
 				if (snap) {
 					deployment = { ...snap };
+					resourcesByUrn.clear();
+					for (const r of (deployment.resources ?? []) as ResourceV3[]) {
+						resourcesByUrn.set(r.urn, r);
+					}
 				}
 				break;
 			}
@@ -815,17 +825,29 @@ export function applyJournalEntries(
 			}
 
 			case JournalEntrySuccess: {
-				if (entry.removeOld != null && state) {
-					toReplaceInSnapshot.set(Number(entry.removeOld), state);
-				} else if (entry.removeOld != null && !state) {
-					toDeleteInSnapshot.add(Number(entry.removeOld));
-				}
-				if (entry.removeNew != null && state) {
-					const idx = opIdToNewIdx.get(String(entry.removeNew));
-					if (idx !== undefined) newResources[idx] = state;
-				} else if (entry.removeNew != null && !state) {
-					const idx = opIdToNewIdx.get(String(entry.removeNew));
-					if (idx !== undefined) newResources[idx] = null;
+				const hasIndexPointers = entry.removeOld != null || entry.removeNew != null;
+				if (hasIndexPointers) {
+					if (entry.removeOld != null && state) {
+						toReplaceInSnapshot.set(Number(entry.removeOld), state);
+					} else if (entry.removeOld != null && !state) {
+						const baseRes = ((deployment.resources ?? []) as ResourceV3[])[Number(entry.removeOld)];
+						if (baseRes) resourcesByUrn.delete(baseRes.urn);
+						toDeleteInSnapshot.add(Number(entry.removeOld));
+					}
+					if (entry.removeNew != null && state) {
+						const idx = opIdToNewIdx.get(String(entry.removeNew));
+						if (idx !== undefined) newResources[idx] = state;
+					} else if (entry.removeNew != null && !state) {
+						const idx = opIdToNewIdx.get(String(entry.removeNew));
+						if (idx !== undefined) newResources[idx] = null;
+					}
+				} else if (state) {
+					// No index pointers (httpstate CLI) — fall back to URN-based tracking
+					if ((state as { delete?: boolean }).delete) {
+						resourcesByUrn.delete(state.urn);
+					} else {
+						resourcesByUrn.set(state.urn, state);
+					}
 				}
 				break;
 			}
@@ -854,10 +876,12 @@ export function applyJournalEntries(
 			case JournalEntryOutputs: {
 				if (state && entry.removeOld != null) {
 					toReplaceInSnapshot.set(Number(entry.removeOld), state);
-				}
-				if (state && entry.removeNew != null) {
+				} else if (state && entry.removeNew != null) {
 					const idx = opIdToNewIdx.get(String(entry.removeNew));
 					if (idx !== undefined) newResources[idx] = state;
+				} else if (state) {
+					// No index pointers — URN-based update
+					resourcesByUrn.set(state.urn, state);
 				}
 				break;
 			}
@@ -868,12 +892,17 @@ export function applyJournalEntries(
 					newResources,
 					toDeleteInSnapshot,
 					toReplaceInSnapshot,
+					resourcesByUrn,
 				);
 				deployment = rebuilt;
 				newResources.length = 0;
 				opIdToNewIdx.clear();
 				toDeleteInSnapshot.clear();
 				toReplaceInSnapshot.clear();
+				resourcesByUrn.clear();
+				for (const r of (deployment.resources ?? []) as ResourceV3[]) {
+					resourcesByUrn.set(r.urn, r);
+				}
 				break;
 			}
 
@@ -882,7 +911,13 @@ export function applyJournalEntries(
 		}
 	}
 
-	return rebuildFromJournal(deployment, newResources, toDeleteInSnapshot, toReplaceInSnapshot);
+	return rebuildFromJournal(
+		deployment,
+		newResources,
+		toDeleteInSnapshot,
+		toReplaceInSnapshot,
+		resourcesByUrn,
+	);
 }
 
 function rebuildFromJournal(
@@ -890,6 +925,7 @@ function rebuildFromJournal(
 	newResources: Array<ResourceV3 | null>,
 	toDelete: Set<number>,
 	toReplace: Map<number, ResourceV3>,
+	resourcesByUrn: Map<string, ResourceV3>,
 ): Record<string, unknown> {
 	const baseResources = ((base.resources ?? []) as ResourceV3[]).slice();
 
@@ -900,11 +936,27 @@ function rebuildFromJournal(
 	}
 
 	const filtered = baseResources.filter((_, i) => !toDelete.has(i));
-	const added = newResources.filter((r): r is ResourceV3 => r != null);
+	const indexAdded = newResources.filter((r): r is ResourceV3 => r != null);
+
+	// When index pointers were used, index-based reconstruction is authoritative.
+	// URN-based map only adds resources that aren't already in the index-based result.
+	const hasIndexOps = toDelete.size > 0 || toReplace.size > 0 || indexAdded.length > 0;
+	const merged = new Map<string, ResourceV3>();
+	if (hasIndexOps) {
+		for (const r of filtered) merged.set(r.urn, r);
+		for (const r of indexAdded) merged.set(r.urn, r);
+		// Add URN-based resources that don't conflict with index results
+		for (const [urn, r] of resourcesByUrn) {
+			if (!merged.has(urn)) merged.set(urn, r);
+		}
+	} else {
+		// Pure URN-based mode (httpstate CLI)
+		for (const [urn, r] of resourcesByUrn) merged.set(urn, r);
+	}
 
 	return {
 		...base,
-		resources: [...filtered, ...added],
+		resources: Array.from(merged.values()),
 		pending_operations: [],
 	};
 }
