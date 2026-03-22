@@ -71,4 +71,4 @@ export const app = createApp({
 	updates: updatesService,
 });
 
-export { config, db, client };
+export { auth, config, db, client };

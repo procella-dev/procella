@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { ForbiddenError, UnauthorizedError } from "@procella/types";
 import {
 	type AuthService,
@@ -9,6 +9,20 @@ import {
 	requireRole,
 	slugify,
 } from "./index.js";
+
+// Mock @descope/node-sdk — Bun hoists this before all imports.
+const mockExchangeAccessKey = mock();
+const mockValidateJwt = mock();
+mock.module("@descope/node-sdk", () => ({
+	default: () => ({
+		exchangeAccessKey: mockExchangeAccessKey,
+		validateJwt: mockValidateJwt,
+		management: {
+			user: { loadByUserId: mock() },
+			accessKey: { create: mock() },
+		},
+	}),
+}));
 
 // ============================================================================
 // Helpers
@@ -112,6 +126,7 @@ describe("DevAuthService", () => {
 describe("DescopeAuthService", () => {
 	// Uses a placeholder project ID — the JWT guard fires before any SDK call.
 	const svc = new DescopeAuthService({ projectId: "P3Aaha02iJvkGVbPDAF78KWuAxe6" });
+	afterAll(() => svc.dispose());
 
 	test("rejects session JWT on 'token' prefix (CLI path)", async () => {
 		// eyJhbGciOiJIUzI1NiJ9 is a valid JWT header prefix
@@ -124,6 +139,102 @@ describe("DescopeAuthService", () => {
 	test("rejection message mentions pulumi login", async () => {
 		const fakeJwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.fake";
 		await expect(svc.authenticate(reqWithAuth(`token ${fakeJwt}`))).rejects.toThrow(/pulumi login/);
+	});
+});
+
+// ============================================================================
+// DescopeAuthService — JWT cache
+// ============================================================================
+
+describe("DescopeAuthService — JWT cache", () => {
+	let svc: DescopeAuthService;
+	const nowSec = Math.floor(Date.now() / 1000);
+	const CLAIMS = {
+		sub: "user-1",
+		dct: "tenant-1",
+		procellaLogin: "omer",
+		tenant_name: "Omer Corp",
+		tenants: { "tenant-1": { roles: ["admin"] } },
+		exp: nowSec + 3600,
+	};
+
+	beforeEach(() => {
+		mockExchangeAccessKey.mockReset();
+		mockExchangeAccessKey.mockResolvedValue({ token: CLAIMS });
+		svc = new DescopeAuthService({ projectId: "test-cache" });
+	});
+
+	afterEach(() => {
+		svc.dispose();
+	});
+
+	test("cache hit — second call does NOT call exchangeAccessKey", async () => {
+		await svc.authenticate(reqWithAuth("token ak_first"));
+		await svc.authenticate(reqWithAuth("token ak_first"));
+
+		expect(mockExchangeAccessKey).toHaveBeenCalledTimes(1);
+	});
+
+	test("cache miss after expiry — triggers re-exchange", async () => {
+		const expiredClaims = { ...CLAIMS, exp: nowSec - 100 };
+		mockExchangeAccessKey.mockResolvedValue({ token: expiredClaims });
+
+		await svc.authenticate(reqWithAuth("token ak_expired"));
+		await svc.authenticate(reqWithAuth("token ak_expired"));
+
+		expect(mockExchangeAccessKey).toHaveBeenCalledTimes(2);
+	});
+
+	test("concurrent dedup — 3 simultaneous calls produce 1 exchange", async () => {
+		mockExchangeAccessKey.mockImplementation(
+			() => new Promise((resolve) => setTimeout(() => resolve({ token: CLAIMS }), 50)),
+		);
+
+		const results = await Promise.all([
+			svc.authenticate(reqWithAuth("token ak_concurrent")),
+			svc.authenticate(reqWithAuth("token ak_concurrent")),
+			svc.authenticate(reqWithAuth("token ak_concurrent")),
+		]);
+
+		expect(mockExchangeAccessKey).toHaveBeenCalledTimes(1);
+		expect(results[0]).toBe(results[1]);
+		expect(results[1]).toBe(results[2]);
+	});
+
+	test("no cache without exp claim — every call exchanges", async () => {
+		const noExpClaims = {
+			sub: "user-1",
+			dct: "tenant-1",
+			procellaLogin: "omer",
+			tenants: { "tenant-1": { roles: ["admin"] } },
+		};
+		mockExchangeAccessKey.mockResolvedValue({ token: noExpClaims });
+
+		await svc.authenticate(reqWithAuth("token ak_noexp"));
+		await svc.authenticate(reqWithAuth("token ak_noexp"));
+
+		expect(mockExchangeAccessKey).toHaveBeenCalledTimes(2);
+	});
+
+	test("failed exchange propagates error and does not cache", async () => {
+		mockExchangeAccessKey.mockRejectedValueOnce(new Error("Rate limit exceeded"));
+
+		await expect(svc.authenticate(reqWithAuth("token ak_fail"))).rejects.toThrow(
+			"Rate limit exceeded",
+		);
+
+		// Retry succeeds — error was not cached
+		mockExchangeAccessKey.mockResolvedValueOnce({ token: CLAIMS });
+		const caller = await svc.authenticate(reqWithAuth("token ak_fail"));
+
+		expect(caller.login).toBe("omer");
+		expect(mockExchangeAccessKey).toHaveBeenCalledTimes(2);
+	});
+
+	test("dispose is idempotent", () => {
+		svc.dispose();
+		svc.dispose();
+		// No throw — safe to call multiple times
 	});
 });
 
@@ -247,6 +358,7 @@ describe("createAuthService", () => {
 		});
 
 		expect(svc).toBeInstanceOf(DescopeAuthService);
+		svc.dispose?.();
 	});
 
 	test("factory returns object implementing AuthService interface", () => {

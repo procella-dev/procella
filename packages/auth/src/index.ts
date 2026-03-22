@@ -19,6 +19,8 @@ export interface AuthService {
 	authenticateUpdateToken(token: string): Promise<{ updateId: string; stackId: string }>;
 	/** Create a long-lived CLI access key for the given caller. Returns the cleartext key. */
 	createCliAccessKey?(caller: Caller, name: string): Promise<string>;
+	/** Stop background timers (e.g. cache sweep). Called on server shutdown. */
+	dispose?(): void;
 }
 
 // ============================================================================
@@ -74,11 +76,25 @@ export interface DescopeAuthConfig {
 	managementKey?: string;
 }
 
+/** Cached access-key → Caller mapping with TTL from JWT exp claim. */
+interface CachedAuth {
+	caller: Caller;
+	/** Unix timestamp (seconds) — re-exchange when now >= expiresAt. */
+	expiresAt: number;
+}
+
 export class DescopeAuthService implements AuthService {
 	private readonly sdk: ReturnType<typeof DescopeSdk>;
+	private readonly cache = new Map<string, CachedAuth>();
+	private readonly pending = new Map<string, Promise<Caller>>();
+	private readonly EXPIRY_MARGIN_S = 60;
+	private readonly MAX_CACHE_TTL_S = 300;
+	private sweepTimer: ReturnType<typeof setInterval> | null = null;
 
 	constructor(config: DescopeAuthConfig) {
 		this.sdk = DescopeSdk({ projectId: config.projectId, managementKey: config.managementKey });
+		this.sweepTimer = setInterval(() => this.sweep(), 60_000);
+		if (this.sweepTimer.unref) this.sweepTimer.unref();
 	}
 
 	async authenticate(request: Request): Promise<Caller> {
@@ -92,34 +108,14 @@ export class DescopeAuthService implements AuthService {
 			);
 		}
 
-		const authInfo = token.startsWith("eyJ")
-			? await this.sdk.validateJwt(token)
-			: await this.sdk.exchangeAccessKey(token);
-		const claims = authInfo.token;
-
-		// Descope stores tenant ID in `dct` (descope current tenant) claim
-		// or in tenants object. Access keys use `act` claim for tenant context.
-		const tenantId = extractTenantId(claims);
-		if (!tenantId) {
-			throw new UnauthorizedError("JWT missing tenant claim");
+		// JWT tokens (Bearer from UI) — validate directly, no caching needed.
+		if (token.startsWith("eyJ")) {
+			const authInfo = await this.sdk.validateJwt(token);
+			return this.extractCaller(authInfo.token);
 		}
 
-		const userId = claims.sub ?? "";
-		const login =
-			typeof claims.procellaLogin === "string" && claims.procellaLogin
-				? claims.procellaLogin
-				: typeof claims.strataLogin === "string" && claims.strataLogin
-					? claims.strataLogin
-					: userId;
-		const roles = extractRoles(claims, tenantId);
-
-		return {
-			tenantId,
-			orgSlug: extractOrgSlug(claims, tenantId),
-			userId,
-			login,
-			roles,
-		};
+		// Access key tokens — cache the exchanged JWT.
+		return this.authenticateAccessKey(token);
 	}
 
 	async authenticateUpdateToken(token: string): Promise<{ updateId: string; stackId: string }> {
@@ -150,6 +146,96 @@ export class DescopeAuthService implements AuthService {
 			);
 		}
 		return resp.data.cleartext;
+	}
+
+	/** Stop the sweep timer. Call on server shutdown. */
+	dispose(): void {
+		if (this.sweepTimer) {
+			clearInterval(this.sweepTimer);
+			this.sweepTimer = null;
+		}
+	}
+
+	// ---- Private: Cache ------------------------------------------------
+
+	private async authenticateAccessKey(accessKey: string): Promise<Caller> {
+		// 1. Check cache
+		const cached = this.cache.get(accessKey);
+		if (cached && cached.expiresAt > Math.floor(Date.now() / 1000)) {
+			return cached.caller;
+		}
+
+		// 2. Deduplicate concurrent exchanges for the same key
+		const inflight = this.pending.get(accessKey);
+		if (inflight) {
+			return inflight;
+		}
+
+		// 3. Exchange and cache
+		const promise = this.doExchange(accessKey);
+		this.pending.set(accessKey, promise);
+
+		try {
+			return await promise;
+		} finally {
+			this.pending.delete(accessKey);
+		}
+	}
+
+	private async doExchange(accessKey: string): Promise<Caller> {
+		const authInfo = await this.sdk.exchangeAccessKey(accessKey);
+		const claims = authInfo.token;
+		const caller = this.extractCaller(claims);
+
+		// Cache if exp claim exists, capping TTL so revocations/role changes propagate in bounded time.
+		const exp = typeof claims.exp === "number" ? claims.exp : undefined;
+		if (exp) {
+			const nowSec = Math.floor(Date.now() / 1000);
+			const desiredExpiry = exp - this.EXPIRY_MARGIN_S;
+			const cappedExpiry = Math.min(desiredExpiry, nowSec + this.MAX_CACHE_TTL_S);
+
+			if (cappedExpiry > nowSec) {
+				this.cache.set(accessKey, {
+					caller,
+					expiresAt: cappedExpiry,
+				});
+			}
+		}
+
+		return caller;
+	}
+
+	private extractCaller(claims: Record<string, unknown>): Caller {
+		const tenantId = extractTenantId(claims);
+		if (!tenantId) {
+			throw new UnauthorizedError("JWT missing tenant claim");
+		}
+
+		const userId = typeof claims.sub === "string" ? claims.sub : "";
+		const login =
+			typeof claims.procellaLogin === "string" && claims.procellaLogin
+				? claims.procellaLogin
+				: typeof claims.strataLogin === "string" && claims.strataLogin
+					? claims.strataLogin
+					: userId;
+		const roles = extractRoles(claims, tenantId);
+
+		return {
+			tenantId,
+			orgSlug: extractOrgSlug(claims, tenantId),
+			userId,
+			login,
+			roles,
+		};
+	}
+
+	private sweep(): void {
+		const now = Math.floor(Date.now() / 1000);
+		for (const [key, entry] of this.cache) {
+			if (entry.expiresAt <= now) {
+				this.cache.delete(key);
+			}
+		}
 	}
 }
 

@@ -13,7 +13,7 @@ if (process.argv.includes("--healthz")) {
 		.then((res) => process.exit(res.ok ? 0 : 1))
 		.catch(() => process.exit(1));
 } else {
-	const { app, config, db, client } = await import("./bootstrap.js");
+	const { app, auth, config, db, client } = await import("./bootstrap.js");
 
 	const [, portStr] = config.listenAddr.split(":");
 	const port = Number.parseInt(portStr || "9090", 10);
@@ -44,6 +44,7 @@ if (process.argv.includes("--healthz")) {
 
 		await server.stop();
 		await gc.stop();
+		auth.dispose?.();
 		await client.close();
 		clearTimeout(forceTimer);
 		process.exit(0);
