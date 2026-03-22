@@ -29,6 +29,7 @@ import type {
 } from "@procella/types";
 import {
 	BadRequestError,
+	CheckpointNotFoundError,
 	JournalEntryBegin,
 	JournalEntryFailure,
 	JournalEntryOutputs,
@@ -536,7 +537,7 @@ export class PostgresUpdatesService implements UpdatesService {
 				.limit(1);
 			checkpoint = rows[0];
 			if (!checkpoint) {
-				throw new Error("Checkpoint blob data missing from storage");
+				throw new CheckpointNotFoundError("", "", `version ${version}`);
 			}
 		} else {
 			const rows = await this.db

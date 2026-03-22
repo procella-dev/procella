@@ -90,7 +90,7 @@ async function resetDb(): Promise<void> {
       ...cleanEnv(),
       PROCELLA_DATABASE_URL: TEST_DB_URL,
     },
-    stdout: "pipe",
+    stdout: "ignore",
     stderr: "pipe",
   });
 

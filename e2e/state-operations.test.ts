@@ -65,6 +65,11 @@ describe("state operations", () => {
 		const exportRes = await apiRequest("/stacks/dev-org/state-proj/with-resources/export");
 		expect(exportRes.status).toBe(200);
 		const body = await exportRes.json();
+		if (!body.deployment?.resources?.length) {
+			const keys = Object.keys(body.deployment ?? {});
+			console.error(`[debug] export deployment keys: ${keys.join(", ")}`);
+			console.error(`[debug] deployment: ${JSON.stringify(body.deployment).slice(0, 500)}`);
+		}
 		expect(body.deployment).toBeDefined();
 		expect(body.deployment.resources).toBeArray();
 		expect(body.deployment.resources.length).toBeGreaterThan(0);
