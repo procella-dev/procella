@@ -7,7 +7,7 @@
  * During local dev (vite dev server), VITE_API_URL is empty and the Vite proxy
  * in vite.config.ts forwards /trpc and /api/* to localhost:9090.
  */
-export const apiBase: string = import.meta.env.VITE_API_URL ?? "";
+export const apiBase: string = (import.meta.env.VITE_API_URL ?? "").replace(/\/+$/, "");
 
 /**
  * Base URL for the dashboard app.
@@ -19,4 +19,4 @@ export const apiBase: string = import.meta.env.VITE_API_URL ?? "";
  * During local dev and Vercel previews VITE_APP_URL is empty, so links
  * resolve as relative paths on the same origin.
  */
-export const appUrl: string = import.meta.env.VITE_APP_URL ?? "";
+export const appUrl: string = (import.meta.env.VITE_APP_URL ?? "").replace(/\/+$/, "");
