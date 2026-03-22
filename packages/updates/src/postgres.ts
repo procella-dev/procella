@@ -402,6 +402,13 @@ export class PostgresUpdatesService implements UpdatesService {
 			return;
 		}
 
+		// biome-ignore lint/suspicious/noConsole: temporary debug for CI E2E failure
+		for (const e of entries) {
+			console.log(
+				`[journal-entry] kind=${e.kind} opId=${e.operationID} seqId=${e.sequenceID} hasState=${!!e.state} removeOld=${e.removeOld} removeNew=${e.removeNew} hasSnapshot=${!!e.newSnapshot} hasSP=${!!e.secretsProvider} elide=${e.elideWrite}`,
+			);
+		}
+
 		const rows = entries.map((entry: JournalEntry) => {
 			if (
 				typeof entry.sequenceID !== "number" ||
