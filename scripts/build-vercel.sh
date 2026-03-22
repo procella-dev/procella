@@ -43,16 +43,30 @@ cat > "$FUNC_DIR/.vc-config.json" << 'EOF'
 }
 EOF
 
-# 4. Write config.json (rewrites)
+# 4. Write config.json (host-based routing for multi-domain setup)
+#    procella.sh       → landing page only (redirects dashboard paths to app.procella.sh)
+#    app.procella.sh   → full SPA + API (default)
+#    api.procella.sh   → API-only (404 for non-API paths)
+#    *.vercel.app      → passthrough (preview environments)
 cat > "$OUT/config.json" << 'EOF'
 {
   "version": 3,
   "routes": [
-    { "src": "/api(?:/(.*))?", "dest": "/api/index" },
-    { "src": "/trpc(?:/(.*))?", "dest": "/api/index" },
-    { "src": "/healthz", "dest": "/api/index" },
-    { "src": "/cron(?:/(.*))?", "dest": "/api/index" },
+    { "src": "/api(?:/(.*))?"  , "has": [{"type":"host","value":"api.procella.sh"}], "dest": "/api/index" },
+    { "src": "/trpc(?:/(.*))?" , "has": [{"type":"host","value":"api.procella.sh"}], "dest": "/api/index" },
+    { "src": "/healthz"        , "has": [{"type":"host","value":"api.procella.sh"}], "dest": "/api/index" },
+    { "src": "/cron(?:/(.*))?" , "has": [{"type":"host","value":"api.procella.sh"}], "dest": "/api/index" },
+    { "src": "/(.*)"           , "has": [{"type":"host","value":"api.procella.sh"}], "status": 404 },
+
+    { "src": "/api(?:/(.*))?" , "dest": "/api/index" },
+    { "src": "/trpc(?:/(.*))?" , "dest": "/api/index" },
+    { "src": "/healthz"       , "dest": "/api/index" },
+    { "src": "/cron(?:/(.*))?" , "dest": "/api/index" },
+
     { "handle": "filesystem" },
+
+    { "src": "/(.+)", "has": [{"type":"host","value":"procella.sh"}], "headers": {"Location": "https://app.procella.sh/$1"}, "status": 308 },
+
     { "src": "/(.*)", "dest": "/index.html" }
   ]
 }

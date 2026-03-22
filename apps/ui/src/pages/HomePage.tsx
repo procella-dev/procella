@@ -1,5 +1,5 @@
-import { Link } from "react-router";
 import { ProcellaLogo } from "../components/ProcellaLogo";
+import { appUrl } from "../config";
 
 const features = [
 	{
@@ -178,12 +178,12 @@ export function HomePage() {
 						>
 							GitHub
 						</a>
-						<Link
-							to="/login"
+						<a
+							href={`${appUrl}/login`}
 							className="text-sm font-medium text-zinc-100 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-4 py-2 rounded-lg transition-colors"
 						>
 							Sign in
-						</Link>
+						</a>
 					</div>
 				</div>
 			</nav>
@@ -209,8 +209,8 @@ export function HomePage() {
 						Pulumi Cloud account required.
 					</p>
 					<div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-						<Link
-							to="/login"
+						<a
+							href={`${appUrl}/login`}
 							className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg transition-colors text-sm"
 						>
 							Open Dashboard
@@ -221,7 +221,7 @@ export function HomePage() {
 									clipRule="evenodd"
 								/>
 							</svg>
-						</Link>
+						</a>
 						<a
 							href="https://github.com/procella-dev/procella"
 							target="_blank"
@@ -349,8 +349,8 @@ export function HomePage() {
 					<div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-12">
 						<h2 className="text-2xl font-bold tracking-tight mb-3">Ready to take control?</h2>
 						<p className="text-zinc-500 mb-8">Deploy Procella and own your infrastructure state.</p>
-						<Link
-							to="/login"
+						<a
+							href={`${appUrl}/login`}
 							className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg transition-colors text-sm"
 						>
 							Open Dashboard
@@ -361,7 +361,7 @@ export function HomePage() {
 									clipRule="evenodd"
 								/>
 							</svg>
-						</Link>
+						</a>
 					</div>
 				</div>
 			</section>
