@@ -429,7 +429,7 @@ async function main(): Promise<void> {
   const allResults: TrialResult[] = [];
 
   try {
-    const modes: Mode[] = IS_REMOTE ? ["journal"] : ["checkpoint", "journal"];
+    const modes: Mode[] = ["checkpoint", "journal"];
     const variants: Variant[] = ["plain", "secrets"];
 
     let server: Subprocess | null = null;
