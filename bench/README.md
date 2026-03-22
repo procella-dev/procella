@@ -35,7 +35,7 @@ BENCH_SIZES=10,50,100,500,1000 BENCH_TRIALS=5 bun run bench
 
 ### Remote
 
-Points at an existing Procella server. Runs a single mode (whatever the server has configured). Uses unique stack names per trial and cleans up via `pulumi stack rm`. DB metrics require `BENCH_DATABASE_URL`.
+Points at an existing Procella server. Runs both `checkpoint` and `journal` modes — the `checkpoint` mode forces the CLI to use the traditional path via `PULUMI_DISABLE_JOURNALING=true`. Uses unique stack names per trial and cleans up via `pulumi stack rm`. DB metrics are collected when `BENCH_DATABASE_URL` is set.
 
 ```bash
 # Against a live server

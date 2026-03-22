@@ -65,29 +65,6 @@ describe("state operations", () => {
 		const exportRes = await apiRequest("/stacks/dev-org/state-proj/with-resources/export");
 		expect(exportRes.status).toBe(200);
 		const body = await exportRes.json();
-		if (!body.deployment?.resources?.length) {
-			const { SQL } = await import("bun");
-			const { TEST_DB_URL } = await import("./helpers.js");
-			const sql = new SQL({ url: TEST_DB_URL });
-			const entries = await sql.unsafe(
-				"SELECT kind, operation_id, sequence_id, remove_old, remove_new, (state IS NOT NULL) as has_state, (new_snapshot IS NOT NULL) as has_snap, elide_write FROM journal_entries ORDER BY sequence_id LIMIT 20",
-			);
-			console.error(`[debug] journal_entries (${entries.length} rows):`);
-			for (const e of entries) {
-				console.error(
-					`  kind=${e.kind} opId=${e.operation_id} seq=${e.sequence_id} removeOld=${e.remove_old} removeNew=${e.remove_new} hasState=${e.has_state} hasSnap=${e.has_snap} elide=${e.elide_write}`,
-				);
-			}
-			const cps = await sql.unsafe(
-				"SELECT version, length(data::text) as bytes, created_at FROM checkpoints ORDER BY created_at DESC LIMIT 5",
-			);
-			console.error(`[debug] checkpoints (${cps.length} rows):`);
-			for (const c of cps) {
-				console.error(`  v=${c.version} bytes=${c.bytes} at=${c.created_at}`);
-			}
-			console.error(`[debug] deployment: ${JSON.stringify(body.deployment).slice(0, 500)}`);
-			sql.close();
-		}
 		expect(body.deployment).toBeDefined();
 		expect(body.deployment.resources).toBeArray();
 		expect(body.deployment.resources.length).toBeGreaterThan(0);

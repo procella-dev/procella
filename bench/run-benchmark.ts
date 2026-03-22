@@ -18,6 +18,7 @@ const TEST_DB_URL =
 const PROJECT_ROOT = path.resolve(import.meta.dir, "..");
 const IS_REMOTE = !!BENCH_URL;
 let REMOTE_ORG = "";
+const HAS_DB_METRICS = !IS_REMOTE || !!process.env.BENCH_DATABASE_URL;
 
 const BENCH_SIZES = (() => {
   const raw = process.env.BENCH_SIZES;
@@ -279,7 +280,7 @@ async function runTrial(
 
     let checkpointBytes: number | null = null;
     let journalEntryCount: number | null = null;
-    if (!IS_REMOTE) {
+    if (HAS_DB_METRICS) {
       const updateId = await getLatestUpdateId(org, project, stack);
       const stackId = await getStackId(org, project, stack);
       checkpointBytes = stackId ? await getCheckpointBytes(stackId) : null;

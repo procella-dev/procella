@@ -60,10 +60,10 @@ BENCH_URL=https://procella.example.com BENCH_TOKEN=pul-xxx bun run bench
 
 In remote mode:
 - No server is started or stopped
-- Only one mode runs (whichever the server is configured for)
+- Both `checkpoint` and `journal` modes run (CLI controls via `PULUMI_DISABLE_JOURNALING`)
 - Each trial uses a unique stack name to avoid conflicts
 - Stacks are cleaned up via `pulumi stack rm` after each trial
-- DB metrics are only available if `BENCH_DATABASE_URL` is also set
+- DB metrics are collected when `BENCH_DATABASE_URL` is set
 
 ## What It Measures
 
