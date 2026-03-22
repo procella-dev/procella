@@ -65,7 +65,7 @@ cat > "$OUT/config.json" << 'EOF'
 
     { "handle": "filesystem" },
 
-    { "src": "(/.+)", "has": [{"type":"host","value":"procella.sh"}], "headers": {"Location": "https://app.procella.sh$1"}, "status": 308 },
+    { "src": "/(.+)", "has": [{"type":"host","value":"procella.sh"}], "headers": {"Location": "https://app.procella.sh/$1"}, "status": 308 },
 
     { "src": "/(.*)", "dest": "/index.html" }
   ]
