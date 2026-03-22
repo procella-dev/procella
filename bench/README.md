@@ -90,3 +90,4 @@ For each (resource count, mode, trial):
 - Uses port 18081 (E2E tests use 18080) so both can run concurrently.
 - Resource type is `random:index:RandomString` — no cloud provider needed.
 - The `checkpoint` mode forces the CLI to use the traditional path via `PULUMI_DISABLE_JOURNALING=true`.
+
