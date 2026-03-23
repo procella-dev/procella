@@ -7,6 +7,6 @@
 	"dependencies": {
 		"@procella/types": "workspace:*",
 		"@procella/config": "workspace:*",
-		"@descope/node-sdk": "^1.10.0"
+		"@descope/node-sdk": "^2.0.0"
 	}
 }
