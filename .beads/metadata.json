@@ -2,6 +2,6 @@
   "database": "dolt",
   "backend": "dolt",
   "dolt_mode": "server",
-  "dolt_database": "strata",
-  "project_id": "740269e3-1b02-461c-9d22-a85e52ae2820"
+  "dolt_database": "procella",
+  "project_id": "9b4edd22-8a72-4951-ac48-9e081385e66b"
 }

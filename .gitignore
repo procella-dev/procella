@@ -38,3 +38,12 @@ bench/auth-debug/
 .sisyphus/
 .agents/
 skills-lock.json
+plan.md
+$PULUMI_HOME/
+
+# Node compile cache
+node-compile-cache/
+*.node-gyp/
+
+# Beads / Dolt files (added by bd init)
+.beads-credential-key
