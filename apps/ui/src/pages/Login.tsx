@@ -25,9 +25,9 @@ function DescopeLogin({ returnTo }: { returnTo: string }) {
 	const navigate = useNavigate();
 
 	return (
-		<div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-4">
+		<div className="min-h-screen bg-deep-sky flex flex-col items-center justify-center px-4">
 			<ProcellaLogo linkTo="/" className="mb-3" />
-			<p className="text-sm text-zinc-400 mb-8">Sign in to your Pulumi backend</p>
+			<p className="text-sm text-cloud mb-8">Sign in to your Pulumi backend</p>
 			<div
 				className="w-full max-w-md"
 				style={
@@ -61,28 +61,28 @@ function DevLogin({ returnTo }: { returnTo: string }) {
 	};
 
 	return (
-		<div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-4">
+		<div className="min-h-screen bg-deep-sky flex flex-col items-center justify-center px-4">
 			<ProcellaLogo linkTo="/" className="mb-3" />
-			<p className="text-sm text-zinc-400 mb-8">Enter your API token to continue</p>
+			<p className="text-sm text-cloud mb-8">Enter your API token to continue</p>
 			<form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4">
 				<input
 					type="password"
 					value={token}
 					onChange={(e) => setToken(e.target.value)}
 					placeholder="API token"
-					className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-3 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+					className="w-full bg-slate-brand border border-cloud/30 rounded-lg px-4 py-3 text-sm text-mist placeholder-cloud focus:outline-none focus:ring-2 focus:ring-lightning focus:border-transparent transition-all"
 				/>
 				<button
 					type="submit"
 					disabled={!token.trim()}
-					className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+					className="w-full bg-lightning hover:bg-lightning/80 disabled:bg-slate-brand disabled:text-cloud text-deep-sky font-medium py-3 px-4 rounded-lg transition-colors"
 				>
 					Connect
 				</button>
 			</form>
-			<div className="mt-6 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-800/50 border border-zinc-700/50">
+			<div className="mt-6 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-brand/50 border border-cloud/20">
 				<span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-				<span className="text-xs text-zinc-500">Dev mode</span>
+				<span className="text-xs text-cloud">Dev mode</span>
 			</div>
 		</div>
 	);
