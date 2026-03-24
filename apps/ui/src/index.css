@@ -4,14 +4,14 @@
 	--font-sans:
 		"Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
 		"Segoe UI Symbol", "Noto Color Emoji";
-	--color-deep-sky: #0D1B2A;
-	--color-lightning: #00D4FF;
-	--color-flash: #FFB800;
-	--color-slate-brand: #1B2838;
-	--color-cloud: #4A5568;
-	--color-mist: #E2E8F0;
-	--color-success: #10B981;
-	--color-danger: #EF4444;
+	--color-deep-sky: #0d1b2a;
+	--color-lightning: #00d4ff;
+	--color-flash: #ffb800;
+	--color-slate-brand: #1b2838;
+	--color-cloud: #4a5568;
+	--color-mist: #e2e8f0;
+	--color-success: #10b981;
+	--color-danger: #ef4444;
 }
 
 @layer base {

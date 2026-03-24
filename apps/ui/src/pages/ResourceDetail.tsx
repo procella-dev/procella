@@ -321,9 +321,7 @@ export function ResourceDetail() {
 
 				{/* Type */}
 				<div className="bg-slate-brand border border-slate-brand rounded-lg p-4">
-					<div className="text-xs font-medium text-cloud uppercase tracking-wider mb-1.5">
-						Type
-					</div>
+					<div className="text-xs font-medium text-cloud uppercase tracking-wider mb-1.5">Type</div>
 					<div className="text-sm text-mist/80">{resource.custom ? "Custom" : "Component"}</div>
 				</div>
 
@@ -354,9 +352,7 @@ export function ResourceDetail() {
 					>
 						{resource.parent.name}
 					</Link>
-					<div className="font-mono text-xs text-cloud mt-0.5 break-all">
-						{resource.parent.urn}
-					</div>
+					<div className="font-mono text-xs text-cloud mt-0.5 break-all">{resource.parent.urn}</div>
 				</div>
 			)}
 
@@ -408,9 +404,7 @@ export function ResourceDetail() {
 							>
 								<div>
 									<span className="text-sm text-mist font-medium">{dep.name}</span>
-									<span className="ml-2 font-mono text-xs text-cloud">
-										{shortType(dep.type)}
-									</span>
+									<span className="ml-2 font-mono text-xs text-cloud">{shortType(dep.type)}</span>
 								</div>
 								<span className="text-cloud/60 text-sm">&rarr;</span>
 							</Link>
@@ -424,9 +418,7 @@ export function ResourceDetail() {
 				<section>
 					<h2 className="text-lg font-semibold text-mist mb-3">
 						Children
-						<span className="text-xs text-cloud font-normal ml-2">
-							{resource.children.length}
-						</span>
+						<span className="text-xs text-cloud font-normal ml-2">{resource.children.length}</span>
 					</h2>
 					<div className="bg-slate-brand border border-slate-brand rounded-lg divide-y divide-slate-brand">
 						{resource.children.map((child) => (
@@ -437,9 +429,7 @@ export function ResourceDetail() {
 							>
 								<div>
 									<span className="text-sm text-mist font-medium">{child.name}</span>
-									<span className="ml-2 font-mono text-xs text-cloud">
-										{shortType(child.type)}
-									</span>
+									<span className="ml-2 font-mono text-xs text-cloud">{shortType(child.type)}</span>
 								</div>
 								<span className="text-cloud/60 text-sm">&rarr;</span>
 							</Link>
@@ -453,9 +443,7 @@ export function ResourceDetail() {
 				<section>
 					<h2 className="text-lg font-semibold text-mist mb-3">
 						Aliases
-						<span className="text-xs text-cloud font-normal ml-2">
-							{resource.aliases.length}
-						</span>
+						<span className="text-xs text-cloud font-normal ml-2">{resource.aliases.length}</span>
 					</h2>
 					<div className="bg-slate-brand border border-slate-brand rounded-lg p-4 space-y-1.5">
 						{resource.aliases.map((alias) => (

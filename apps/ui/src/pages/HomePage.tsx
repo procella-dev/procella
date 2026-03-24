@@ -260,9 +260,7 @@ export function HomePage() {
 							<div className="mt-4 text-cloud">
 								<span className="text-emerald-400">$</span> pulumi up
 							</div>
-							<div className="text-cloud mt-1">
-								Previewing update (myorg/myproject/production)
-							</div>
+							<div className="text-cloud mt-1">Previewing update (myorg/myproject/production)</div>
 							<div className="mt-2 text-cloud">
 								&nbsp;&nbsp;&nbsp;&nbsp;
 								<span className="text-emerald-400">+</span> aws:s3:Bucket &nbsp;&nbsp;my-bucket{" "}

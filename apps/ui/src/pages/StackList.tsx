@@ -76,9 +76,7 @@ function EmptyState() {
 						</svg>
 					</div>
 					<div>
-						<h3 className="text-sm font-semibold text-mist mb-1.5">
-							Get started with Procella
-						</h3>
+						<h3 className="text-sm font-semibold text-mist mb-1.5">Get started with Procella</h3>
 						<p className="text-sm text-cloud leading-relaxed mb-5">
 							Connect the Pulumi CLI to this backend and create your first stack.
 						</p>

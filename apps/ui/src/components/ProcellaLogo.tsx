@@ -31,20 +31,25 @@ export function ProcellaLogo({
 			>
 				<title>Procella logo</title>
 				{/* Upper wing - swept back */}
-				<path d="M13 11.5 Q8 7.5 3 4.5 Q7 8 13 11.5Z" fill="currentColor"/>
+				<path d="M13 11.5 Q8 7.5 3 4.5 Q7 8 13 11.5Z" fill="currentColor" />
 				{/* Lower wing - swept back */}
-				<path d="M13 12.5 Q8 16.5 3 19.5 Q7 16 13 12.5Z" fill="currentColor"/>
+				<path d="M13 12.5 Q8 16.5 3 19.5 Q7 16 13 12.5Z" fill="currentColor" />
 				{/* Body - streamlined ellipse */}
-				<ellipse cx="15" cy="12" rx="4.5" ry="1.8" fill="currentColor"/>
+				<ellipse cx="15" cy="12" rx="4.5" ry="1.8" fill="currentColor" />
 				{/* Head */}
-				<circle cx="19.5" cy="11.2" r="1.5" fill="currentColor"/>
+				<circle cx="19.5" cy="11.2" r="1.5" fill="currentColor" />
 				{/* Forked tail */}
-				<path d="M10.5 11.5 L7 9.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
-				<path d="M10.5 12.5 L7 14.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+				<path d="M10.5 11.5 L7 9.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+				<path
+					d="M10.5 12.5 L7 14.5"
+					stroke="currentColor"
+					strokeWidth="1.2"
+					strokeLinecap="round"
+				/>
 				{/* Eye - Flash amber accent */}
-				<circle cx="20.2" cy="10.8" r="0.45" fill="#FFB800"/>
+				<circle cx="20.2" cy="10.8" r="0.45" fill="#FFB800" />
 				{/* White rump patch */}
-				<ellipse cx="11.5" cy="12.3" rx="1" ry="0.55" fill="white" opacity="0.85"/>
+				<ellipse cx="11.5" cy="12.3" rx="1" ry="0.55" fill="white" opacity="0.85" />
 			</svg>
 			<span className={`${s.text} font-bold tracking-tight text-mist`}>Procella</span>
 		</>

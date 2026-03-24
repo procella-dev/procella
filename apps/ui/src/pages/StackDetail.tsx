@@ -388,8 +388,8 @@ export function StackDetail() {
 					<div className="bg-slate-brand/50 border border-cloud/20 rounded-lg p-8 text-center">
 						<p className="text-cloud">
 							No updates yet. Run{" "}
-							<code className="bg-slate-brand px-1.5 py-0.5 rounded text-sm">pulumi up</code> to create
-							one.
+							<code className="bg-slate-brand px-1.5 py-0.5 rounded text-sm">pulumi up</code> to
+							create one.
 						</p>
 					</div>
 				) : (

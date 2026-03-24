@@ -211,10 +211,7 @@ export function UpdateDetail() {
 		return (
 			<div className="space-y-6">
 				<div className="flex items-center gap-4">
-					<Link
-						to={`/stacks/${org}/${project}/${stack}`}
-						className="text-cloud hover:text-mist"
-					>
+					<Link to={`/stacks/${org}/${project}/${stack}`} className="text-cloud hover:text-mist">
 						&larr; Back to Stack
 					</Link>
 					<h1 className="text-2xl font-bold text-mist">Loading Update...</h1>

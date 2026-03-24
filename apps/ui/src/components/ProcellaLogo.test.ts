@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "fs";
-import { resolve } from "path";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 const SOURCE_PATH = resolve(import.meta.dir, "ProcellaLogo.tsx");
 const source = readFileSync(SOURCE_PATH, "utf-8");
