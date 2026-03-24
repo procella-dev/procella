@@ -1,4 +1,5 @@
 import { Link } from "react-router";
+import stormPetrelSvg from "../assets/storm-petrel.svg";
 
 /**
  * Shared brand logo used across Layout, Login, and HomePage.
@@ -22,63 +23,7 @@ export function ProcellaLogo({
 
 	const content = (
 		<>
-			<svg
-				viewBox="0 0 24 24"
-				fill="none"
-				className={`${s.icon} text-lightning`}
-				role="img"
-				aria-label="Procella logo"
-			>
-				<title>Procella logo</title>
-				{/* Tail wind lines */}
-				<path
-					d="M3 13.5 Q1.5 15 1 17"
-					stroke="#1B2838"
-					strokeWidth="0.6"
-					strokeLinecap="round"
-					fill="none"
-				/>
-				<path
-					d="M3.5 14.5 Q2 16 1.5 18.5"
-					stroke="#1B2838"
-					strokeWidth="0.6"
-					strokeLinecap="round"
-					fill="none"
-				/>
-				<path
-					d="M4 15.5 Q2.5 17 2.5 19.5"
-					stroke="#1B2838"
-					strokeWidth="0.6"
-					strokeLinecap="round"
-					fill="none"
-				/>
-				{/* White outline silhouette */}
-				<path
-					d="M22 10.5 L20 8.5 L17.5 7.5 L14 6.5 L10 6 L7.5 6.5 L5 4 L3 2 L4 5.5 L5.5 7.5 L4 10 L3 13 L2 15.5 L4 14.5 L6 14 L7 15.5 L8 18 L9.5 20.5 L11 18.5 L13.5 16 L16 13.5 L19 12 L21 11 Z"
-					fill="white"
-					stroke="white"
-					strokeWidth="0.7"
-					strokeLinejoin="round"
-				/>
-				{/* Main body - Lightning cyan */}
-				<path
-					d="M21.5 10.7 L20 9 L17.5 8 L14 7 L10.5 6.5 L8 7 L5.5 4.5 L3.5 2.5 L4.5 5.5 L6 8 L4.5 10.5 L3.5 13 L2.5 15 L4.5 14 L6.5 13.5 L7.5 15.5 L8.5 18 L9.5 19.5 L10.5 18 L12.5 16 L15 14 L18 12 L20.5 11 Z"
-					fill="currentColor"
-				/>
-				{/* Dark upper wing */}
-				<path
-					d="M8 7 L5.5 4.5 L3.5 2.5 L4.5 5.5 L6 8 L8 8.5 L11 7.5 L14 7 L10.5 6.5 Z"
-					fill="#1B2838"
-				/>
-				{/* Dark back shadow */}
-				<path d="M14 7 L10.5 6.5 L8.5 7.5 L10 9 L14 8.5 L17 8 Z" fill="#2D3748" opacity="0.7" />
-				{/* Dark lower tail shadow */}
-				<path d="M6.5 13.5 L4.5 10.5 L3.5 13 L2.5 15 L4.5 14 Z" fill="#1B2838" opacity="0.6" />
-				{/* Eye */}
-				<circle cx="18.8" cy="9.2" r="0.55" fill="#FFB800" />
-				{/* Beak */}
-				<path d="M20 9 L22 10.5 L20.5 11 L19.5 10 Z" fill="#F59E0B" />
-			</svg>
+			<img src={stormPetrelSvg} className={s.icon} alt="Procella logo" />
 			<span className={`${s.text} font-bold tracking-tight text-mist`}>Procella</span>
 		</>
 	);

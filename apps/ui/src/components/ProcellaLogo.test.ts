@@ -11,8 +11,8 @@ describe("ProcellaLogo", () => {
 		expect(source).toMatch(/export function ProcellaLogo\(/);
 	});
 
-	test("uses text-lightning for SVG icon, not text-blue-500", () => {
-		expect(source).toContain("text-lightning");
+	test("uses storm-petrel.svg asset, not inline SVG or text-blue-500", () => {
+		expect(source).toContain("storm-petrel.svg");
 		expect(source).not.toContain("text-blue-500");
 	});
 
@@ -31,10 +31,9 @@ describe("ProcellaLogo", () => {
 		expect(source).toContain("<Link to={linkTo}");
 	});
 
-	test("contains Storm Petrel SVG elements", () => {
-		expect(source).toContain("Storm Petrel");
-		expect(source).toContain('viewBox="0 0 24 24"');
-		expect(source).toContain('fill="#FFB800"'); // Flash amber eye
-		expect(source).toContain("currentColor"); // Body uses currentColor
+	test("loads Storm Petrel as img element", () => {
+		expect(source).toContain("storm-petrel.svg");
+		expect(source).toContain("<img");
+		expect(source).toContain('alt="Procella logo"');
 	});
 });
