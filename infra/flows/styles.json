@@ -320,21 +320,21 @@
               "--descope-button-main": "var(--descope-colors-error-main)"
             },
             "primary": {
-              "--descope-button-border-color": "#2563eb",
-              "--descope-button-contrast": "#eff6ff",
-              "--descope-button-dark": "#1d4ed8",
+              "--descope-button-border-color": "#00D4FF",
+              "--descope-button-contrast": "#0D1B2A",
+              "--descope-button-dark": "#00B8D9",
               "--descope-button-font-family": "var(--descope-fonts-font1-family)",
               "--descope-button-highlight": "var(--descope-colors-primary-highlight)",
-              "--descope-button-light": "#60a5fa",
-              "--descope-button-main": "#2563eb"
+              "--descope-button-light": "#33DDFF",
+              "--descope-button-main": "#00D4FF"
             },
             "secondary": {
-              "--descope-button-border-color": "#3f3f46",
-              "--descope-button-contrast": "#f4f4f5",
-              "--descope-button-dark": "#18181b",
+              "--descope-button-border-color": "#2D3748",
+              "--descope-button-contrast": "#E2E8F0",
+              "--descope-button-dark": "#1B2838",
               "--descope-button-highlight": "var(--descope-colors-secondary-highlight)",
-              "--descope-button-light": "#3f3f46",
-              "--descope-button-main": "#27272a"
+              "--descope-button-light": "#2D3748",
+              "--descope-button-main": "#1B2838"
             },
             "success": {
               "--descope-button-contrast": "var(--descope-colors-success-contrast)",
@@ -819,7 +819,7 @@
               "--descope-container-border-radius": "var(--descope-radius-xl)"
             }
           },
-          "--descope-container-background-color": "#09090bFF",
+          "--descope-container-background-color": "#0D1B2AFF",
           "--descope-container-background-image": "",
           "--descope-container-background-position-x": "center",
           "--descope-container-background-position-y": "center",
@@ -1099,8 +1099,8 @@
         "icon": {},
         "image": {},
         "inputWrapper": {
-          "--descope-input-wrapper-background-color": "#18181bFF",
-          "--descope-input-wrapper-border-color": "#3f3f46FF",
+          "--descope-input-wrapper-background-color": "#1B2838FF",
+          "--descope-input-wrapper-border-color": "#2D3748FF",
           "--descope-input-wrapper-border-radius": "8px",
           "--descope-input-wrapper-border-width": "var(--descope-border-xs)",
           "--descope-input-wrapper-direction": "var(--descope-direction)",
@@ -1118,19 +1118,19 @@
           "--descope-input-wrapper-input-icon-size": "1em",
           "--descope-input-wrapper-label-font-size": "14px",
           "--descope-input-wrapper-label-font-weight": "500",
-          "--descope-input-wrapper-label-text-color": "#a1a1aaFF",
+          "--descope-input-wrapper-label-text-color": "#4A5568FF",
           "--descope-input-wrapper-min-width": "10em",
           "--descope-input-wrapper-outline-color": "transparent",
           "--descope-input-wrapper-outline-offset": "0px",
           "--descope-input-wrapper-outline-style": "solid",
           "--descope-input-wrapper-outline-width": "var(--descope-border-sm)",
           "--descope-input-wrapper-overlay-opacity": "0.3",
-          "--descope-input-wrapper-placeholder-text-color": "#71717aFF",
+          "--descope-input-wrapper-placeholder-text-color": "#4A5568FF",
           "--descope-input-wrapper-required-indicator": "'*'",
           "--descope-input-wrapper-success-message-text-color": "var(--descope-colors-success-main)",
           "--descope-input-wrapper-text-align": "start",
           "--descope-input-wrapper-toggle-button-size": "1.5em",
-          "--descope-input-wrapper-value-text-color": "#f4f4f5FF",
+          "--descope-input-wrapper-value-text-color": "#E2E8F0FF",
           "--descope-input-wrapper-vertical-padding": "0.5em",
           "_bordered": {
             "--descope-input-wrapper-border-color": "var(--descope-colors-surface-light)",
@@ -1225,7 +1225,7 @@
           },
           "mode": {
             "primary": {
-              "--descope-link-text-color": "#60a5faFF"
+              "--descope-link-text-color": "#33DDFFFF"
             },
             "secondary": {
               "--descope-link-text-color": "var(--descope-colors-secondary-main)"
@@ -2053,10 +2053,10 @@
               "--descope-text-text-color": "var(--descope-colors-error-dark)"
             },
             "primary": {
-              "--descope-text-text-color": "#f4f4f5"
+              "--descope-text-text-color": "#E2E8F0"
             },
             "secondary": {
-              "--descope-text-text-color": "#a1a1aaFF"
+              "--descope-text-text-color": "#4A5568FF"
             },
             "success": {
               "--descope-text-text-color": "var(--descope-colors-success-main)"
@@ -2611,18 +2611,18 @@
           "--descope-button-font-family": "var(--descope-fonts-font1-family)",
           "mode": {
             "primary": {
-              "--descope-button-border-color": "#2563eb",
-              "--descope-button-contrast": "#eff6ff",
-              "--descope-button-dark": "#1d4ed8",
-              "--descope-button-light": "#60a5fa",
-              "--descope-button-main": "#2563eb"
+              "--descope-button-border-color": "#00D4FF",
+              "--descope-button-contrast": "#0D1B2A",
+              "--descope-button-dark": "#00B8D9",
+              "--descope-button-light": "#33DDFF",
+              "--descope-button-main": "#00D4FF"
             },
             "secondary": {
               "--descope-button-border-color": "#d4d4d8",
-              "--descope-button-contrast": "#18181b",
+              "--descope-button-contrast": "#1B2838",
               "--descope-button-dark": "#d4d4d8",
-              "--descope-button-light": "#f4f4f5",
-              "--descope-button-main": "#e4e4e7"
+              "--descope-button-light": "#E2E8F0",
+              "--descope-button-main": "#CBD5E1"
             }
           }
         },
@@ -2634,15 +2634,15 @@
           "--descope-input-wrapper-border-color": "#d4d4d8FF",
           "--descope-input-wrapper-border-radius": "8px",
           "--descope-input-wrapper-font-family": "var(--descope-fonts-font1-family)",
-          "--descope-input-wrapper-label-text-color": "#71717aFF",
-          "--descope-input-wrapper-placeholder-text-color": "#a1a1aaFF",
-          "--descope-input-wrapper-value-text-color": "#09090bFF",
+          "--descope-input-wrapper-label-text-color": "#4A5568FF",
+          "--descope-input-wrapper-placeholder-text-color": "#4A5568FF",
+          "--descope-input-wrapper-value-text-color": "#0D1B2AFF",
           "_bordered": {}
         },
         "link": {
           "mode": {
             "primary": {
-              "--descope-link-text-color": "#2563ebFF"
+              "--descope-link-text-color": "#00D4FFFF"
             }
           }
         },
@@ -2655,10 +2655,10 @@
               "--descope-text-text-color": "#dc2626FF"
             },
             "primary": {
-              "--descope-text-text-color": "#09090b"
+              "--descope-text-text-color": "#0D1B2A"
             },
             "secondary": {
-              "--descope-text-text-color": "#71717aFF"
+              "--descope-text-text-color": "#4A5568FF"
             }
           }
         }
