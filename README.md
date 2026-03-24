@@ -16,6 +16,10 @@ A self-hosted [Pulumi](https://www.pulumi.com/) backend. Run `pulumi login`, `pu
 - **S3-compatible blob storage** — local filesystem or any S3-compatible backend (AWS S3, MinIO, R2)
 - **Single process** — CLI API + tRPC dashboard share one Hono server
 - **Production deployment** — Deploy to Vercel with a single git push
+- **Stack search** — full-text search with tag filtering and cursor-based pagination
+- **Webhooks** — outbound HTTP event delivery with HMAC-SHA256 signing and retries
+- **Audit logs** — automatic audit trail via Descope management API
+- **GitHub App** — PR preview comments and commit status checks
 
 ## Tech Stack
 
@@ -98,6 +102,9 @@ All configuration is via `PROCELLA_*` environment variables. Set these as Vercel
 | `PROCELLA_BLOB_S3_REGION` | `us-east-1` | S3 region |
 | `PROCELLA_ENCRYPTION_KEY` | *(auto in dev)* | 64 hex chars (32 bytes) for AES-256-GCM |
 | `PROCELLA_CORS_ORIGINS` | *(unrestricted)* | Comma-separated allowed CORS origins |
+| `PROCELLA_GITHUB_APP_ID` | *(optional)* | GitHub App ID for PR comments and commit status checks |
+| `PROCELLA_GITHUB_APP_PRIVATE_KEY` | *(optional)* | GitHub App private key (PEM format) |
+| `PROCELLA_GITHUB_APP_WEBHOOK_SECRET` | *(optional)* | GitHub App webhook secret for signature verification |
 
 Encryption keys are auto-generated in dev mode via `mise` (see `mise.toml`). For production, generate one with `openssl rand -hex 32`.
 

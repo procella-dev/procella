@@ -47,6 +47,15 @@ export default defineConfig({
           ],
         },
         {
+          label: 'Features',
+          items: [
+            { label: 'Stack Search', slug: 'features/search' },
+            { label: 'Webhooks', slug: 'features/webhooks' },
+            { label: 'Audit Logs', slug: 'features/audit' },
+            { label: 'GitHub App', slug: 'features/github-app' },
+          ],
+        },
+        {
           label: 'Operations',
           items: [
             { label: 'Descope Setup', slug: 'operations/descope' },

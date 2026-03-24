@@ -17,6 +17,7 @@ import { StackDetail } from "./pages/StackDetail";
 import { StackList } from "./pages/StackList";
 import { Tokens } from "./pages/Tokens";
 import { UpdateDetail } from "./pages/UpdateDetail";
+import { Webhooks } from "./pages/Webhooks";
 import { WelcomeCli } from "./pages/WelcomeCli";
 import { createTRPCClient, trpc } from "./trpc";
 
@@ -87,6 +88,7 @@ function App() {
 								<Route index element={<StackList />} />
 								<Route path="tokens" element={<Tokens />} />
 								<Route path="settings" element={<Settings />} />
+								<Route path="webhooks" element={<Webhooks />} />
 								<Route path="stacks/:org/:project/:stack" element={<StackDetail />} />
 								<Route path="stacks/:org/:project/:stack/resources" element={<ResourceDetail />} />
 								<Route

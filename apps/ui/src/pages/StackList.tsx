@@ -1,16 +1,116 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Link } from "react-router";
 import { StackCard, type UpdateStatus } from "../components/ui";
 import { apiBase } from "../config";
 import { trpc } from "../trpc";
 
+type SortBy = "name" | "lastUpdated" | "created";
+type SortOrder = "asc" | "desc";
+
+function useDebounce<T>(value: T, delay: number): T {
+	const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+	useEffect(() => {
+		const handler = setTimeout(() => setDebouncedValue(value), delay);
+		return () => clearTimeout(handler);
+	}, [value, delay]);
+
+	return debouncedValue;
+}
+
 export function StackList() {
+	const [searchText, setSearchText] = useState("");
+	const [project, setProject] = useState("");
+	const [tagName, setTagName] = useState("");
+	const [tagValue, setTagValue] = useState("");
+	const [sortBy, setSortBy] = useState<SortBy>("name");
+	const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
+
+	const debouncedSearch = useDebounce(searchText, 300);
+
+	const hasFilters = debouncedSearch !== "" || project !== "" || tagName !== "" || tagValue !== "";
+
+	const queryInput =
+		hasFilters || sortBy !== "name" || sortOrder !== "asc"
+			? {
+					query: debouncedSearch || undefined,
+					project: project || undefined,
+					tagName: tagName || undefined,
+					tagValue: tagValue || undefined,
+					sortBy,
+					sortOrder,
+					pageSize: 50,
+				}
+			: undefined;
+
 	const {
 		data: stacks,
 		isLoading: loading,
 		error: queryError,
-	} = trpc.stacks.list.useQuery(undefined, { refetchInterval: 5000 });
+	} = trpc.stacks.list.useQuery(queryInput, { refetchInterval: 5000 });
 	const error = queryError?.message ?? null;
+
+	// Pagination state
+	const [allItems, setAllItems] = useState<StackItem[]>([]);
+	const [isLoadingMore, setIsLoadingMore] = useState(false);
+	const prevTokenRef = useRef<string | undefined>(undefined);
+
+	// Reset accumulated items when filters change
+	useEffect(() => {
+		if (stacks) {
+			setAllItems(stacks.stacks ?? []);
+			prevTokenRef.current = undefined;
+		}
+	}, [stacks]);
+
+	const continuationToken = stacks?.continuationToken;
+
+	const loadMore = useCallback(() => {
+		if (!continuationToken || isLoadingMore) return;
+		setIsLoadingMore(true);
+		prevTokenRef.current = continuationToken;
+	}, [continuationToken, isLoadingMore]);
+
+	// Fetch next page when loadMore is triggered
+	const nextPageInput = prevTokenRef.current
+		? {
+				query: debouncedSearch || undefined,
+				project: project || undefined,
+				tagName: tagName || undefined,
+				tagValue: tagValue || undefined,
+				sortBy,
+				sortOrder,
+				pageSize: 50,
+				continuationToken: prevTokenRef.current,
+			}
+		: undefined;
+	const { data: nextPage } = trpc.stacks.list.useQuery(nextPageInput, {
+		enabled: !!nextPageInput && isLoadingMore,
+		refetchOnWindowFocus: false,
+	});
+
+	useEffect(() => {
+		if (nextPage && isLoadingMore) {
+			setAllItems((prev) => [...prev, ...(nextPage.stacks ?? [])]);
+			setIsLoadingMore(false);
+			prevTokenRef.current = undefined;
+		}
+	}, [nextPage, isLoadingMore]);
+
+	const clearFilters = () => {
+		setSearchText("");
+		setProject("");
+		setTagName("");
+		setTagValue("");
+		setSortBy("name");
+		setSortOrder("asc");
+	};
+
+	const toggleSortOrder = () => {
+		setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+	};
 
 	if (loading) {
 		return (
@@ -38,7 +138,8 @@ export function StackList() {
 		);
 	}
 
-	const items = stacks?.stacks ?? [];
+	const items = allItems.length > 0 ? allItems : (stacks?.stacks ?? []);
+	const hasNoStacks = !hasFilters && items.length === 0;
 
 	return (
 		<div className="space-y-6">
@@ -51,7 +152,145 @@ export function StackList() {
 				)}
 			</div>
 
-			{items.length === 0 ? <EmptyState /> : <StackTable items={items} />}
+			{/* Search bar */}
+			{!hasNoStacks && (
+				<div className="space-y-3">
+					<div className="relative">
+						<svg
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							strokeWidth="2"
+							className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none"
+							aria-hidden="true"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
+							/>
+						</svg>
+						<input
+							type="text"
+							value={searchText}
+							onChange={(e) => setSearchText(e.target.value)}
+							placeholder="Search stacks..."
+							className="w-full bg-zinc-900 border border-zinc-700 text-zinc-100 rounded-lg pl-10 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-zinc-500"
+						/>
+					</div>
+
+					{/* Filter row */}
+					<div className="flex flex-wrap items-center gap-3">
+						<input
+							type="text"
+							value={project}
+							onChange={(e) => setProject(e.target.value)}
+							placeholder="Filter by project..."
+							className="bg-zinc-900 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-zinc-500 w-48"
+						/>
+						<input
+							type="text"
+							value={tagName}
+							onChange={(e) => setTagName(e.target.value)}
+							placeholder="Tag name..."
+							className="bg-zinc-900 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-zinc-500 w-36"
+						/>
+						<input
+							type="text"
+							value={tagValue}
+							onChange={(e) => setTagValue(e.target.value)}
+							placeholder="Tag value..."
+							className="bg-zinc-900 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-zinc-500 w-36"
+						/>
+
+						<div className="flex items-center gap-1.5">
+							<select
+								value={sortBy}
+								onChange={(e) => setSortBy(e.target.value as SortBy)}
+								className="bg-zinc-900 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+							>
+								<option value="name">Name</option>
+								<option value="lastUpdated">Last Updated</option>
+								<option value="created">Created</option>
+							</select>
+							<button
+								type="button"
+								onClick={toggleSortOrder}
+								className="bg-zinc-900 border border-zinc-700 text-zinc-400 hover:text-zinc-100 rounded-lg px-2.5 py-2 text-sm transition-colors"
+								title={sortOrder === "asc" ? "Ascending" : "Descending"}
+							>
+								{sortOrder === "asc" ? "↑" : "↓"}
+							</button>
+						</div>
+
+						{hasFilters && (
+							<button
+								type="button"
+								onClick={clearFilters}
+								className="text-xs text-zinc-400 hover:text-zinc-100 transition-colors"
+							>
+								Clear filters
+							</button>
+						)}
+					</div>
+				</div>
+			)}
+
+			{hasNoStacks ? (
+				<EmptyState />
+			) : items.length === 0 && hasFilters ? (
+				<EmptySearchState onClear={clearFilters} />
+			) : (
+				<>
+					<StackTable items={items} />
+					{continuationToken && !isLoadingMore && (
+						<div className="flex justify-center">
+							<button
+								type="button"
+								onClick={loadMore}
+								className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+							>
+								Load more
+							</button>
+						</div>
+					)}
+					{isLoadingMore && (
+						<div className="flex justify-center">
+							<div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-700 border-t-blue-500" />
+						</div>
+					)}
+				</>
+			)}
+		</div>
+	);
+}
+
+function EmptySearchState({ onClear }: { onClear: () => void }) {
+	return (
+		<div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-12 text-center">
+			<svg
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				strokeWidth="1.5"
+				className="w-10 h-10 text-zinc-600 mx-auto mb-3"
+				aria-hidden="true"
+			>
+				<path
+					strokeLinecap="round"
+					strokeLinejoin="round"
+					d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
+				/>
+			</svg>
+			<p className="text-zinc-400 text-sm font-medium mb-1">No stacks match your search</p>
+			<p className="text-zinc-500 text-xs mb-4">Try adjusting your filters or search terms.</p>
+			<button
+				type="button"
+				onClick={onClear}
+				className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+			>
+				Clear filters
+			</button>
 		</div>
 	);
 }
