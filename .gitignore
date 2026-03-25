@@ -1,57 +1,40 @@
+# Dependencies
+node_modules/
+
 # Build output
 dist/
+*.js
+*.map
 *.tsbuildinfo
+apps/docs/.astro/
 
-# TypeScript build artifacts in source dirs
-apps/ui/src/**/*.js
-apps/ui/src/**/*.js.map
-apps/ui/src/**/*.d.ts
-apps/ui/src/**/*.d.ts.map
-apps/ui/vite.config.js
-apps/ui/vite.config.js.map
-apps/ui/vite.config.d.ts.map
+# Compiled binary
+procella
 
-# Environment
+# Environment (track .env.example, ignore actual env files)
 .env
 .env.local
+.env.*.local
 
-# IDE
+# Runtime data
+/data/
+/tmp/
+
+# IDE / OS
+.DS_Store
 .idea/
 .vscode/
 *.swp
 
-# OS
-.DS_Store
-
-# Data (dev blobs)
-/data/
-/tmp/
-
-# Benchmark results
+# Benchmarks
 bench/results.json
-# Node / Bun
-node_modules/
+bench/*.log
+bench/auth-debug/
 
-# Docs site build artifacts
-apps/docs/.astro/
-
-# Dolt database files (added by bd init)
+# Tooling
 .dolt/
 *.db
-
-
-# Agent / tool artifacts
+.vercel
 .sisyphus/
 .agents/
 skills-lock.json
-plan.md
-$PULUMI_HOME/
-
-# Node compile cache
-node-compile-cache/
-*.node-gyp/
-
-# Vercel
-.vercel
-bench/*.log
-bench/auth-debug/

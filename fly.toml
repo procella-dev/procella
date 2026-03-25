@@ -12,6 +12,9 @@ primary_region = "iad"
 [build]
   dockerfile = "Dockerfile"
 
+[deploy]
+  release_command = "/procella --migrate"
+
 # Non-sensitive runtime config (secrets go via `fly secrets set`)
 [env]
   PROCELLA_LISTEN_ADDR    = ":9090"

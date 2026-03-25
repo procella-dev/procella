@@ -1,10 +1,8 @@
-// @procella/server — Global error handler.
-
 import { ProcellaError } from "@procella/types";
 import type { ErrorHandler } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
+import { logger } from "../logger.js";
 
-/** Catch errors and return structured JSON responses. Used with app.onError(). */
 export function errorHandler(): ErrorHandler {
 	return (error, c) => {
 		if (error instanceof ProcellaError) {
@@ -13,8 +11,7 @@ export function errorHandler(): ErrorHandler {
 				error.statusCode as ContentfulStatusCode,
 			);
 		}
-		// biome-ignore lint/suspicious/noConsole: server error logging
-		console.error("Unhandled error:", error);
+		logger.error({ err: error }, "Unhandled error");
 		return c.json({ code: 500, message: "Internal server error" }, 500);
 	};
 }

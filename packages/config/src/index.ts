@@ -52,29 +52,28 @@ const configSchema = z
 		if (data.authMode === "dev" && !data.devAuthToken) {
 			ctx.addIssue({
 				code: z.ZodIssueCode.custom,
-				message: "PROCELLA_DEV_AUTH_TOKEN is required when PROCELLA_AUTH_MODE=dev",
+				message: "Required when PROCELLA_AUTH_MODE=dev",
 				path: ["devAuthToken"],
 			});
 		}
 		if (data.authMode === "descope" && !data.descopeProjectId) {
 			ctx.addIssue({
 				code: z.ZodIssueCode.custom,
-				message: "PROCELLA_DESCOPE_PROJECT_ID is required when PROCELLA_AUTH_MODE=descope",
+				message: "Required when PROCELLA_AUTH_MODE=descope",
 				path: ["descopeProjectId"],
 			});
 		}
 		if (data.blobBackend === "s3" && !data.blobS3Bucket) {
 			ctx.addIssue({
 				code: z.ZodIssueCode.custom,
-				message: "PROCELLA_BLOB_S3_BUCKET is required when PROCELLA_BLOB_BACKEND=s3",
+				message: "Required when PROCELLA_BLOB_BACKEND=s3",
 				path: ["blobS3Bucket"],
 			});
 		}
 		if (data.authMode !== "dev" && !data.encryptionKey) {
 			ctx.addIssue({
 				code: z.ZodIssueCode.custom,
-				message:
-					"PROCELLA_ENCRYPTION_KEY is required in production (non-dev auth mode). Must be 64 hex chars (32 bytes).",
+				message: "Required in production (non-dev auth mode). Must be 64 hex chars (32 bytes).",
 				path: ["encryptionKey"],
 			});
 		}
@@ -92,31 +91,35 @@ export type BlobBackend = z.infer<typeof blobBackendSchema>;
 // Loader
 // ============================================================================
 
-/** Map PROCELLA_* env vars to config object shape. */
+const envMapping = {
+	listenAddr: "PROCELLA_LISTEN_ADDR",
+	databaseUrl: "PROCELLA_DATABASE_URL",
+	authMode: "PROCELLA_AUTH_MODE",
+	devAuthToken: "PROCELLA_DEV_AUTH_TOKEN",
+	devUserLogin: "PROCELLA_DEV_USER_LOGIN",
+	devOrgLogin: "PROCELLA_DEV_ORG_LOGIN",
+	descopeProjectId: "PROCELLA_DESCOPE_PROJECT_ID",
+	descopeManagementKey: "PROCELLA_DESCOPE_MANAGEMENT_KEY",
+	blobBackend: "PROCELLA_BLOB_BACKEND",
+	blobLocalPath: "PROCELLA_BLOB_LOCAL_PATH",
+	blobS3Bucket: "PROCELLA_BLOB_S3_BUCKET",
+	blobS3Endpoint: "PROCELLA_BLOB_S3_ENDPOINT",
+	blobS3Region: "PROCELLA_BLOB_S3_REGION",
+	encryptionKey: "PROCELLA_ENCRYPTION_KEY",
+	corsOrigins: "PROCELLA_CORS_ORIGINS",
+} as const;
+
 function envToConfig(): Record<string, unknown> {
-	const env = process.env;
-	return {
-		listenAddr: env.PROCELLA_LISTEN_ADDR,
-		databaseUrl: env.PROCELLA_DATABASE_URL,
-		authMode: env.PROCELLA_AUTH_MODE,
-		devAuthToken: env.PROCELLA_DEV_AUTH_TOKEN,
-		devUserLogin: env.PROCELLA_DEV_USER_LOGIN,
-		devOrgLogin: env.PROCELLA_DEV_ORG_LOGIN,
-		descopeProjectId: env.PROCELLA_DESCOPE_PROJECT_ID,
-		descopeManagementKey: env.PROCELLA_DESCOPE_MANAGEMENT_KEY,
-		blobBackend: env.PROCELLA_BLOB_BACKEND,
-		blobLocalPath: env.PROCELLA_BLOB_LOCAL_PATH,
-		blobS3Bucket: env.PROCELLA_BLOB_S3_BUCKET,
-		blobS3Endpoint: env.PROCELLA_BLOB_S3_ENDPOINT,
-		blobS3Region: env.PROCELLA_BLOB_S3_REGION,
-		encryptionKey: env.PROCELLA_ENCRYPTION_KEY,
-		corsOrigins: env.PROCELLA_CORS_ORIGINS,
-	};
+	const result: Record<string, unknown> = {};
+	for (const [key, envVar] of Object.entries(envMapping)) {
+		result[key] = process.env[envVar];
+	}
+	return result;
 }
 
 /**
  * Load and validate configuration from environment variables.
- * Throws a descriptive ZodError on validation failure — call at startup.
+ * Throws a ZodError on validation failure — call at startup.
  */
 export function loadConfig(): Config {
 	return configSchema.parse(envToConfig());
@@ -136,7 +139,15 @@ export function tryLoadConfig(): { ok: true; config: Config } | { ok: false; err
 
 /**
  * Format a ZodError into human-readable config error messages.
+ * Maps camelCase config keys to their PROCELLA_* env var names.
  */
 export function formatConfigErrors(error: z.ZodError): string {
-	return error.issues.map((issue) => `  ${issue.path.join(".")}: ${issue.message}`).join("\n");
+	return error.issues
+		.map((issue) => {
+			const key = issue.path.join(".");
+			const envVar = envMapping[key as keyof typeof envMapping];
+			const label = envVar ? `${envVar}` : key;
+			return `  ✗ ${label}: ${issue.message}`;
+		})
+		.join("\n");
 }

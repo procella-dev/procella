@@ -8,9 +8,7 @@
 // before passing it to Hono. We use handle() from the Vercel adapter which
 // handles this internally.
 //
-// bootstrap.ts uses top-level await (async createDb), which causes
-// "Requested module is not instantiated yet" errors with static imports
-// during Bun's build-time bundling. Lazy-init on first request avoids this.
+// Lazy-init on first request to avoid cold-start overhead on unused routes.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 
@@ -20,7 +18,8 @@ function getHandler() {
 	if (!handlerPromise) {
 		handlerPromise = (async () => {
 			const { handle } = await import("@hono/node-server/vercel");
-			const { app } = await import("./bootstrap.js");
+			const { bootstrap } = await import("./bootstrap.js");
+			const { app } = await bootstrap();
 			return handle(app);
 		})();
 	}

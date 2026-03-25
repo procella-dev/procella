@@ -9,11 +9,9 @@
 		"@procella/config": "workspace:*",
 		"drizzle-kit": "catalog:",
 		"drizzle-orm": "catalog:",
-		"pg": "^8.16.0",
 		"ws": "^8.19.0"
 	},
 	"devDependencies": {
-		"@types/pg": "^8.11.13",
 		"@types/ws": "^8.18.1"
 	}
 }

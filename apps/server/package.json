@@ -17,6 +17,7 @@
 		"@procella/updates": "workspace:*",
 		"@trpc/server": "catalog:",
 		"drizzle-orm": "catalog:",
-		"hono": "^4.7.0"
+		"hono": "^4.7.0",
+		"pino": "^10.3.1"
 	}
 }

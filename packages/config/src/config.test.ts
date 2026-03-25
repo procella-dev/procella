@@ -116,7 +116,7 @@ describe("@procella/config", () => {
 			Bun.env.PROCELLA_DATABASE_URL = "postgres://localhost:5432/procella?sslmode=disable";
 			Bun.env.PROCELLA_AUTH_MODE = "descope";
 			Bun.env.PROCELLA_DESCOPE_PROJECT_ID = "P3test";
-			expect(() => loadConfig()).toThrow(/PROCELLA_ENCRYPTION_KEY is required/);
+			expect(() => loadConfig()).toThrow(/Required in production/);
 		});
 
 		test("allows missing encryption key in dev mode", () => {
@@ -150,13 +150,14 @@ describe("@procella/config", () => {
 	});
 
 	describe("formatConfigErrors", () => {
-		test("formats errors as readable lines", () => {
+		test("formats errors with PROCELLA_* env var names", () => {
 			clearProcellaEnv();
 			const result = tryLoadConfig();
 			expect(result.ok).toBe(false);
 			if (!result.ok) {
 				const formatted = formatConfigErrors(result.error);
-				expect(formatted).toContain("databaseUrl");
+				expect(formatted).toContain("PROCELLA_DATABASE_URL");
+				expect(formatted).toContain("✗");
 			}
 		});
 	});

@@ -11,6 +11,7 @@
   dockerfilePath = "Dockerfile"
 
 [deploy]
+  preDeployCommand        = "/procella --migrate"
   healthcheckPath         = "/healthz"
   healthcheckTimeout      = 30
   numReplicas             = 1
