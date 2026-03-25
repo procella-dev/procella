@@ -18,7 +18,7 @@ export function pgErrorCode(err: unknown): string | undefined {
 			for (const key of ["code", "errno"] as const) {
 				const val = rec[key];
 				const str = typeof val === "number" ? String(val) : val;
-				if (typeof str === "string" && /^\d{5}$/.test(str)) return str;
+				if (typeof str === "string" && /^[0-9A-Z]{5}$/i.test(str)) return str;
 			}
 			if (Array.isArray(rec.errors)) {
 				for (const inner of rec.errors) {

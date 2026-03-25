@@ -239,6 +239,11 @@ describe("@procella/stacks", () => {
 			expect(pgErrorCode(err)).toBeUndefined();
 		});
 
+		test("extracts alphanumeric SQLSTATE codes", () => {
+			const err = Object.assign(new Error("undefined_table"), { code: "42P01" });
+			expect(pgErrorCode(err)).toBe("42P01");
+		});
+
 		test("extracts SQLSTATE from Bun.sql errno (numeric)", () => {
 			const pgErr = Object.assign(new Error("unique_violation"), {
 				code: "ERR_POSTGRES_SERVER_ERROR",
