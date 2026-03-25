@@ -33,3 +33,6 @@ sed -i.bak 's/export type UpdateStatus = typeof UpdateStatusSucceeded | typeof U
 rm -f "$GEN_FILE.bak"
 
 echo "✓ Generated $GEN_FILE from Pulumi SDK $SDK_VERSION"
+
+# Generate route table from api_endpoints.go
+bun run "$TYGO_DIR/generate-routes.ts"

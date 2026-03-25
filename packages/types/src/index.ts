@@ -3,3 +3,4 @@
 export * from "./domain.js";
 export * from "./errors.js";
 export * from "./pulumi.js";
+export * from "./routes.gen.js";
