@@ -1,7 +1,7 @@
 // @procella/server — Stack CRUD handlers.
 
 import type { StackInfo, StacksService } from "@procella/stacks";
-import type { Stack, StackRenameRequest } from "@procella/types";
+import type { Stack, StackRenameRequest, StackSummary } from "@procella/types";
 import { BadRequestError } from "@procella/types";
 import type { WebhooksService } from "@procella/webhooks";
 import type { Context } from "hono";
@@ -70,12 +70,12 @@ export function stackHandlers(stacks: StacksService, webhooks?: WebhooksService)
 			const hasSearchParams = Boolean(tagName || tagValue || query || continuationToken);
 			if (!hasSearchParams) {
 				const results = await stacks.listStacks(caller.tenantId, org, project);
-				return c.json({ stacks: results.map((r) => mapToStack(r, caller.orgSlug)) });
+				return c.json({ stacks: results.map((r) => mapToStackSummary(r, caller.orgSlug)) });
 			}
 
 			if (!stacks.searchStacks) {
 				const results = await stacks.listStacks(caller.tenantId, org, project);
-				return c.json({ stacks: results.map((r) => mapToStack(r, caller.orgSlug)) });
+				return c.json({ stacks: results.map((r) => mapToStackSummary(r, caller.orgSlug)) });
 			}
 
 			const page = await stacks.searchStacks(caller.tenantId, {
@@ -88,7 +88,7 @@ export function stackHandlers(stacks: StacksService, webhooks?: WebhooksService)
 			});
 
 			return c.json({
-				stacks: page.stacks.map((r) => mapToStack(r, caller.orgSlug)),
+				stacks: page.stacks.map((r) => mapToStackSummary(r, caller.orgSlug)),
 				...(page.continuationToken ? { continuationToken: page.continuationToken } : {}),
 			});
 		},
@@ -129,4 +129,15 @@ function mapToStack(info: StackInfo, orgSlug?: string): Stack {
 		activeUpdate: info.activeUpdateId ?? "",
 		version: 0,
 	} as Stack;
+}
+
+function mapToStackSummary(info: StackInfo, orgSlug?: string): StackSummary {
+	return {
+		id: info.id,
+		orgName: orgSlug ?? info.orgName,
+		projectName: info.projectName,
+		stackName: info.stackName,
+		lastUpdate: info.lastUpdate ?? undefined,
+		resourceCount: info.resourceCount ?? undefined,
+	};
 }

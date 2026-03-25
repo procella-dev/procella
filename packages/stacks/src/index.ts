@@ -51,6 +51,8 @@ export interface StackInfo {
 	stackName: string;
 	tags: Record<string, string>;
 	activeUpdateId: string | null;
+	lastUpdate: number | null;
+	resourceCount: number | null;
 	createdAt: Date;
 	updatedAt: Date;
 }
@@ -215,6 +217,8 @@ function toStackInfo(row: {
 		stackName: row.stack_name,
 		tags: (row.stack_tags ?? {}) as Record<string, string>,
 		activeUpdateId: row.stack_active_update_id,
+		lastUpdate: Math.floor(row.stack_updated_at.getTime() / 1000),
+		resourceCount: null,
 		createdAt: row.stack_created_at,
 		updatedAt: row.stack_updated_at,
 	};
@@ -280,6 +284,8 @@ export class PostgresStacksService implements StacksService {
 							stackName: stack,
 							tags: (row.tags ?? {}) as Record<string, string>,
 							activeUpdateId: row.activeUpdateId,
+							lastUpdate: null,
+							resourceCount: null,
 							createdAt: row.createdAt,
 							updatedAt: row.updatedAt,
 						};

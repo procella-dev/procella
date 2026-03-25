@@ -19,6 +19,8 @@ describe("@procella/stacks", () => {
 				stackName: "dev",
 				tags: { "pulumi:project": "my-proj", "pulumi:stack": "dev" },
 				activeUpdateId: null,
+				lastUpdate: null,
+				resourceCount: null,
 				createdAt: new Date(),
 				updatedAt: new Date(),
 			};
@@ -141,6 +143,8 @@ describe("@procella/stacks", () => {
 				stackName: "s",
 				tags: {},
 				activeUpdateId: null,
+				lastUpdate: null,
+				resourceCount: null,
 				createdAt: new Date(),
 				updatedAt: new Date(),
 			};
