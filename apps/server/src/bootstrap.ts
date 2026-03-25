@@ -10,7 +10,7 @@ import { createApp } from "./routes/index.js";
 export async function bootstrap() {
 	const config = loadConfig();
 
-	const { db, client } = await createDb({ url: config.databaseUrl });
+	const { db, client } = await createDb({ url: config.databaseUrl, max: config.databasePoolMax });
 
 	const authConfig =
 		config.authMode === "dev"

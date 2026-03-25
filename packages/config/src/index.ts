@@ -20,6 +20,7 @@ const configSchema = z
 
 		// Database
 		databaseUrl: z.string().url(),
+		databasePoolMax: z.coerce.number().int().min(1).max(100).default(10),
 
 		// Auth
 		authMode: authModeSchema.default("dev"),
@@ -94,6 +95,7 @@ export type BlobBackend = z.infer<typeof blobBackendSchema>;
 const envMapping = {
 	listenAddr: "PROCELLA_LISTEN_ADDR",
 	databaseUrl: "PROCELLA_DATABASE_URL",
+	databasePoolMax: "PROCELLA_DATABASE_POOL_MAX",
 	authMode: "PROCELLA_AUTH_MODE",
 	devAuthToken: "PROCELLA_DEV_AUTH_TOKEN",
 	devUserLogin: "PROCELLA_DEV_USER_LOGIN",
