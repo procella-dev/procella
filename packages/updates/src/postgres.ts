@@ -43,8 +43,9 @@ import {
 	UpdateNotFoundError,
 } from "@procella/types";
 import { and, asc, desc, eq, gt, max, sql } from "drizzle-orm";
+import type { TextEdit } from "./helpers.js";
 import {
-	applyDelta,
+	applyTextEdits,
 	emptyDeployment,
 	formatBlobKey,
 	generateLeaseToken,
@@ -315,9 +316,29 @@ export class PostgresUpdatesService implements UpdatesService {
 			baseDeployment = {};
 		}
 
-		// Apply delta merge patch
-		const delta = (request as { deployment?: unknown }).deployment;
-		const merged = applyDelta(baseDeployment, delta);
+		const baseJson = JSON.stringify(baseDeployment);
+
+		const edits = (request as { deploymentDelta?: unknown }).deploymentDelta;
+		if (!Array.isArray(edits)) {
+			throw new BadRequestError("deploymentDelta must be an array of TextEdit");
+		}
+
+		const newJson = applyTextEdits(baseJson, edits as TextEdit[]);
+
+		const expectedHash = (request as { checkpointHash?: string }).checkpointHash;
+		if (expectedHash) {
+			const hashBuffer = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(newJson));
+			const actualHash = Array.from(new Uint8Array(hashBuffer))
+				.map((b) => b.toString(16).padStart(2, "0"))
+				.join("");
+			if (actualHash !== expectedHash) {
+				throw new BadRequestError(
+					`Checkpoint hash mismatch: expected ${expectedHash}, got ${actualHash}`,
+				);
+			}
+		}
+
+		const merged = JSON.parse(newJson);
 		await this.upsertCheckpoint(updateId, row.stackId, merged);
 	}
 
