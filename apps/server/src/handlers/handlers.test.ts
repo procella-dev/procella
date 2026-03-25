@@ -286,5 +286,54 @@ describe("@procella/server handlers", () => {
 			expect(body.stacks).toBeArray();
 			expect(body.stacks).toHaveLength(1);
 		});
+
+		test("renameStack returns 204", async () => {
+			const app = new Hono<Env>();
+			app.use("*", injectCaller(validCaller));
+			const stackH = stackHandlers(mockStacksService());
+			app.post("/stacks/:org/:project/:stack/rename", stackH.renameStack);
+
+			const res = await app.request("/stacks/myorg/myproj/dev/rename", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ newName: "staging" }),
+			});
+			expect(res.status).toBe(204);
+		});
+
+		test("updateStackTags returns 204", async () => {
+			const app = new Hono<Env>();
+			app.use("*", injectCaller(validCaller));
+			const stackH = stackHandlers(mockStacksService());
+			app.patch("/stacks/:org/:project/:stack/tags", stackH.updateStackTags);
+
+			const res = await app.request("/stacks/myorg/myproj/dev/tags", {
+				method: "PATCH",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ env: "staging", team: "platform" }),
+			});
+			expect(res.status).toBe(204);
+		});
+	});
+
+	// ========================================================================
+	// userHandlers — additional
+	// ========================================================================
+
+	describe("userHandlers — getOrganization", () => {
+		test("getOrganization returns org info with defaults", async () => {
+			const app = new Hono<Env>();
+			app.use("*", injectCaller(validCaller));
+			const user = userHandlers(mockStacksService());
+			app.get("/user/organizations/:orgName", user.getOrganization);
+
+			const res = await app.request("/user/organizations/my-org");
+			expect(res.status).toBe(200);
+			const body = await res.json();
+			expect(body.githubLogin).toBe("my-org");
+			expect(body.name).toBe("my-org");
+			expect(body.defaultTeam).toBeDefined();
+			expect(body.defaultTeam.name).toBe("my-org");
+		});
 	});
 });
