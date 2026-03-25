@@ -1,6 +1,6 @@
 module procella-tygo
 
-go 1.25
+go 1.25.8
 
 require github.com/pulumi/pulumi/sdk/v3 v3.228.0
 
