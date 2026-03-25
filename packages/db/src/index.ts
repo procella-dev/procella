@@ -80,7 +80,7 @@ export async function createDb(
 	options: CreateDbOptions,
 ): Promise<{ db: Database; client: DbClient }> {
 	if (!isNeonHost(options.url)) {
-		const { SQL } = await import("bun");
+		const { SQL } = require("bun") as typeof import("bun");
 		const { drizzle } = await import("drizzle-orm/bun-sql");
 		const client = new SQL({
 			url: options.url,
@@ -120,7 +120,7 @@ export async function createDbFromUrl(
 
 export async function runMigrations(url: string, migrationsFolder: string): Promise<void> {
 	if (!isNeonHost(url)) {
-		const { SQL } = await import("bun");
+		const { SQL } = require("bun") as typeof import("bun");
 		const { drizzle } = await import("drizzle-orm/bun-sql");
 		const { migrate } = await import("drizzle-orm/bun-sql/migrator");
 		const client = new SQL({ url });
