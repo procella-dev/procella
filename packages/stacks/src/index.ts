@@ -12,10 +12,17 @@ import { and, eq, sql } from "drizzle-orm";
 
 function pgErrorCode(err: unknown): string | undefined {
 	let current: unknown = err;
-	for (let i = 0; i < 5 && current != null; i++) {
-		if (typeof current === "object" && "code" in (current as object)) {
-			const code = (current as Record<string, unknown>).code;
+	for (let i = 0; i < 10 && current != null; i++) {
+		if (typeof current === "object") {
+			const rec = current as Record<string, unknown>;
+			const code = rec.code;
 			if (typeof code === "string" && /^\d{5}$/.test(code)) return code;
+			if (Array.isArray(rec.errors)) {
+				for (const inner of rec.errors) {
+					const found = pgErrorCode(inner);
+					if (found) return found;
+				}
+			}
 		}
 		current = current instanceof Error ? current.cause : undefined;
 	}

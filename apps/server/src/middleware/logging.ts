@@ -6,9 +6,14 @@ export function requestLogger(): MiddlewareHandler {
 		const start = performance.now();
 		await next();
 		const duration = Math.round(performance.now() - start);
-		logger.info(
-			{ method: c.req.method, path: c.req.path, status: c.res.status, duration },
-			"request",
-		);
+		const status = c.res.status;
+		const data = { method: c.req.method, path: c.req.path, status, duration };
+		if (status >= 500) {
+			logger.error(data, "request");
+		} else if (status >= 400) {
+			logger.warn(data, "request");
+		} else {
+			logger.info(data, "request");
+		}
 	};
 }
