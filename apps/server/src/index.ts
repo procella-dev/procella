@@ -1,7 +1,4 @@
-import { existsSync } from "node:fs";
 import { formatConfigErrors } from "@procella/config";
-import { GCWorker } from "@procella/updates";
-import { serveStatic } from "hono/bun";
 import { ZodError } from "zod";
 import { logger } from "./logger.js";
 
@@ -37,10 +34,14 @@ if (process.argv.includes("--healthz")) {
 	}
 } else {
 	try {
-		const { app, auth, config, db, client } = await import("./bootstrap.js");
+		const { existsSync } = await import("node:fs");
+		const { GCWorker } = await import("@procella/updates");
+		const { bootstrap } = await import("./bootstrap.js");
+		const { app, auth, config, db, client } = await bootstrap();
 
 		const uiRoot = process.env.PROCELLA_UI_PATH || "/ui";
 		if (existsSync(`${uiRoot}/index.html`)) {
+			const { serveStatic } = await import("hono/bun");
 			app.get("*", serveStatic({ root: uiRoot }));
 			app.get("*", serveStatic({ root: uiRoot, path: "/index.html" }));
 		}
