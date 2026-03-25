@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { parseStackFQN } from "@procella/types";
 import type { StackInfo, StacksService } from "./index.js";
-import { buildStackTags, mergeTags } from "./index.js";
+import { buildStackTags, mergeTags, pgErrorCode } from "./index.js";
 
 describe("@procella/stacks", () => {
 	// ========================================================================
@@ -187,6 +187,79 @@ describe("@procella/stacks", () => {
 			// With org + project filter
 			const withBoth = await mock.listStacks("tid", "org", "proj");
 			expect(withBoth).toEqual([]);
+		});
+	});
+
+	// ========================================================================
+	// pgErrorCode — PG SQLSTATE extraction from wrapped errors
+	// ========================================================================
+
+	describe("pgErrorCode", () => {
+		test("extracts code from direct PostgresError", () => {
+			const err = Object.assign(new Error("unique_violation"), { code: "23505" });
+			expect(pgErrorCode(err)).toBe("23505");
+		});
+
+		test("extracts code from DrizzleQueryError wrapping", () => {
+			const pgErr = Object.assign(new Error("unique_violation"), { code: "23505" });
+			const drizzleErr = new Error("Failed query: INSERT INTO...");
+			drizzleErr.cause = pgErr;
+			expect(pgErrorCode(drizzleErr)).toBe("23505");
+		});
+
+		test("extracts code from double-wrapped cause chain", () => {
+			const pgErr = Object.assign(new Error("unique_violation"), { code: "23505" });
+			const mid = new Error("query failed");
+			mid.cause = pgErr;
+			const outer = new Error("transaction failed");
+			outer.cause = mid;
+			expect(pgErrorCode(outer)).toBe("23505");
+		});
+
+		test("extracts code from AggregateError.errors", () => {
+			const pgErr = Object.assign(new Error("unique_violation"), { code: "23505" });
+			const agg = new AggregateError([pgErr], "multiple errors");
+			expect(pgErrorCode(agg)).toBe("23505");
+		});
+
+		test("extracts code from non-Error object with cause", () => {
+			const pgErr = { code: "23505", message: "unique_violation" };
+			const wrapper = { cause: pgErr, message: "wrapped" };
+			expect(pgErrorCode(wrapper)).toBe("23505");
+		});
+
+		test("returns undefined for unrelated errors", () => {
+			expect(pgErrorCode(new Error("timeout"))).toBeUndefined();
+			expect(pgErrorCode(null)).toBeUndefined();
+			expect(pgErrorCode(undefined)).toBeUndefined();
+		});
+
+		test("ignores non-SQLSTATE code strings", () => {
+			const err = Object.assign(new Error("fail"), { code: "ERR_CONNECTION_CLOSED" });
+			expect(pgErrorCode(err)).toBeUndefined();
+		});
+
+		test("extracts alphanumeric SQLSTATE codes", () => {
+			const err = Object.assign(new Error("undefined_table"), { code: "42P01" });
+			expect(pgErrorCode(err)).toBe("42P01");
+		});
+
+		test("extracts SQLSTATE from Bun.sql errno (numeric)", () => {
+			const pgErr = Object.assign(new Error("unique_violation"), {
+				code: "ERR_POSTGRES_SERVER_ERROR",
+				errno: 23505,
+			});
+			expect(pgErrorCode(pgErr)).toBe("23505");
+		});
+
+		test("extracts SQLSTATE from Bun.sql errno via DrizzleQueryError cause", () => {
+			const pgErr = Object.assign(new Error("unique_violation"), {
+				code: "ERR_POSTGRES_SERVER_ERROR",
+				errno: 23505,
+			});
+			const drizzleErr = new Error("Failed query: INSERT INTO...");
+			drizzleErr.cause = pgErr;
+			expect(pgErrorCode(drizzleErr)).toBe("23505");
 		});
 	});
 });

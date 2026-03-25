@@ -43,8 +43,9 @@ import {
 	UpdateNotFoundError,
 } from "@procella/types";
 import { and, asc, desc, eq, gt, max, sql } from "drizzle-orm";
+import type { TextEdit } from "./helpers.js";
 import {
-	applyDelta,
+	applyTextEdits,
 	emptyDeployment,
 	formatBlobKey,
 	generateLeaseToken,
@@ -262,30 +263,7 @@ export class PostgresUpdatesService implements UpdatesService {
 		}
 
 		const deployment = (request as { deployment?: unknown }).deployment;
-		const serialized = JSON.stringify(deployment);
-		const version = await this.nextCheckpointVersion(updateId);
-
-		if (serialized.length > BLOB_THRESHOLD) {
-			const blobKey = formatBlobKey(row.stackId, updateId, version);
-			await this.storage.put(blobKey, new TextEncoder().encode(serialized));
-			await this.db.insert(checkpoints).values({
-				updateId,
-				stackId: row.stackId,
-				version,
-				data: null,
-				blobKey,
-				isDelta: false,
-			});
-		} else {
-			await this.db.insert(checkpoints).values({
-				updateId,
-				stackId: row.stackId,
-				version,
-				data: deployment,
-				blobKey: null,
-				isDelta: false,
-			});
-		}
+		await this.upsertCheckpoint(updateId, row.stackId, deployment);
 	}
 
 	async patchCheckpointVerbatim(
@@ -302,30 +280,7 @@ export class PostgresUpdatesService implements UpdatesService {
 		// Extract the inner deployment to store consistently with patchCheckpoint.
 		const wrapper = (request as { untypedDeployment?: { deployment?: unknown } }).untypedDeployment;
 		const rawDeployment = wrapper?.deployment ?? wrapper;
-		const serialized = JSON.stringify(rawDeployment);
-		const version = await this.nextCheckpointVersion(updateId);
-
-		if (serialized.length > BLOB_THRESHOLD) {
-			const blobKey = formatBlobKey(row.stackId, updateId, version);
-			await this.storage.put(blobKey, new TextEncoder().encode(serialized));
-			await this.db.insert(checkpoints).values({
-				updateId,
-				stackId: row.stackId,
-				version,
-				data: null,
-				blobKey,
-				isDelta: false,
-			});
-		} else {
-			await this.db.insert(checkpoints).values({
-				updateId,
-				stackId: row.stackId,
-				version,
-				data: rawDeployment,
-				blobKey: null,
-				isDelta: false,
-			});
-		}
+		await this.upsertCheckpoint(updateId, row.stackId, rawDeployment);
 	}
 
 	async patchCheckpointDelta(
@@ -361,33 +316,30 @@ export class PostgresUpdatesService implements UpdatesService {
 			baseDeployment = {};
 		}
 
-		// Apply delta merge patch
-		const delta = (request as { deployment?: unknown }).deployment;
-		const merged = applyDelta(baseDeployment, delta);
-		const serialized = JSON.stringify(merged);
-		const version = await this.nextCheckpointVersion(updateId);
+		const baseJson = JSON.stringify(baseDeployment);
 
-		if (serialized.length > BLOB_THRESHOLD) {
-			const blobKey = formatBlobKey(row.stackId, updateId, version);
-			await this.storage.put(blobKey, new TextEncoder().encode(serialized));
-			await this.db.insert(checkpoints).values({
-				updateId,
-				stackId: row.stackId,
-				version,
-				data: null,
-				blobKey,
-				isDelta: false,
-			});
-		} else {
-			await this.db.insert(checkpoints).values({
-				updateId,
-				stackId: row.stackId,
-				version,
-				data: merged,
-				blobKey: null,
-				isDelta: false,
-			});
+		const edits = (request as { deploymentDelta?: unknown }).deploymentDelta;
+		if (!Array.isArray(edits)) {
+			throw new BadRequestError("deploymentDelta must be an array of TextEdit");
 		}
+
+		const newJson = applyTextEdits(baseJson, edits as TextEdit[]);
+
+		const expectedHash = (request as { checkpointHash?: string }).checkpointHash;
+		if (expectedHash) {
+			const hashBuffer = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(newJson));
+			const actualHash = Array.from(new Uint8Array(hashBuffer))
+				.map((b) => b.toString(16).padStart(2, "0"))
+				.join("");
+			if (actualHash !== expectedHash) {
+				throw new BadRequestError(
+					`Checkpoint hash mismatch: expected ${expectedHash}, got ${actualHash}`,
+				);
+			}
+		}
+
+		const merged = JSON.parse(newJson);
+		await this.upsertCheckpoint(updateId, row.stackId, merged);
 	}
 
 	async appendJournalEntries(updateId: string, batch: JournalEntries): Promise<void> {
@@ -450,7 +402,13 @@ export class PostgresUpdatesService implements UpdatesService {
 			fields: event as unknown,
 		}));
 
-		await this.db.insert(updateEvents).values(rows);
+		await this.db
+			.insert(updateEvents)
+			.values(rows)
+			.onConflictDoUpdate({
+				target: [updateEvents.updateId, updateEvents.sequence],
+				set: { kind: sql`excluded.kind`, fields: sql`excluded.fields` },
+			});
 	}
 
 	async getUpdateEvents(
@@ -581,36 +539,7 @@ export class PostgresUpdatesService implements UpdatesService {
 			})
 			.returning();
 
-		// Get next version
-		const [versionRow] = await this.db
-			.select({ maxVersion: max(checkpoints.version) })
-			.from(checkpoints)
-			.where(eq(checkpoints.stackId, stackId));
-
-		const version = (versionRow?.maxVersion ?? 0) + 1;
-		const serialized = JSON.stringify(deployment.deployment);
-
-		if (serialized.length > BLOB_THRESHOLD) {
-			const blobKey = formatBlobKey(stackId, updateRow.id, version);
-			await this.storage.put(blobKey, new TextEncoder().encode(serialized));
-			await this.db.insert(checkpoints).values({
-				updateId: updateRow.id,
-				stackId,
-				version,
-				data: null,
-				blobKey,
-				isDelta: false,
-			});
-		} else {
-			await this.db.insert(checkpoints).values({
-				updateId: updateRow.id,
-				stackId,
-				version,
-				data: deployment.deployment,
-				blobKey: null,
-				isDelta: false,
-			});
-		}
+		await this.upsertCheckpoint(updateRow.id, stackId, deployment.deployment);
 
 		return { updateId: updateRow.id } satisfies ImportStackResponse;
 	}
@@ -657,41 +586,39 @@ export class PostgresUpdatesService implements UpdatesService {
 
 		const baseDeployment = await this.loadBaseDeploymentForUpdate(stackId, updateId);
 		const reconstructed = applyJournalEntries(baseDeployment, allEntries);
-		const serialized = JSON.stringify(reconstructed);
-		const maxAttempts = 5;
-		for (let attempt = 0; attempt < maxAttempts; attempt++) {
-			const version = await this.nextCheckpointVersion(updateId);
-			try {
-				if (serialized.length > BLOB_THRESHOLD) {
-					const blobKey = formatBlobKey(stackId, updateId, version);
-					await this.storage.put(blobKey, new TextEncoder().encode(serialized));
-					await this.db.insert(checkpoints).values({
-						updateId,
-						stackId,
-						version,
-						data: null,
-						blobKey,
-						isDelta: false,
-					});
-				} else {
-					await this.db.insert(checkpoints).values({
-						updateId,
-						stackId,
-						version,
-						data: reconstructed,
-						blobKey: null,
-						isDelta: false,
-					});
-				}
-				return;
-			} catch (error: unknown) {
-				const err = error as { code?: string };
-				if (err.code === "23505" && attempt < maxAttempts - 1) {
-					continue;
-				}
-				throw error;
-			}
+		await this.upsertCheckpoint(updateId, stackId, reconstructed);
+	}
+
+	private async upsertCheckpoint(updateId: string, stackId: string, data: unknown): Promise<void> {
+		const serialized = JSON.stringify(data);
+		const version = await this.nextCheckpointVersion(updateId);
+
+		let blobKey: string | null = null;
+		let checkpointData: unknown = data;
+		if (serialized.length > BLOB_THRESHOLD) {
+			blobKey = formatBlobKey(stackId, updateId, version);
+			await this.storage.put(blobKey, new TextEncoder().encode(serialized));
+			checkpointData = null;
 		}
+
+		await this.db
+			.insert(checkpoints)
+			.values({
+				updateId,
+				stackId,
+				version,
+				data: checkpointData,
+				blobKey,
+				isDelta: false,
+			})
+			.onConflictDoUpdate({
+				target: [checkpoints.updateId, checkpoints.version],
+				set: {
+					data: checkpointData,
+					blobKey,
+					isDelta: false,
+				},
+			});
 	}
 
 	private async loadBaseDeploymentForUpdate(

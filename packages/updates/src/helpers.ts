@@ -39,6 +39,23 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+interface TextEditSpanPoint {
+	line: number;
+	column: number;
+	offset: number;
+}
+
+interface TextEditSpan {
+	uri?: string;
+	start: TextEditSpanPoint;
+	end: TextEditSpanPoint;
+}
+
+export interface TextEdit {
+	span: TextEditSpan;
+	newText: string;
+}
+
 /**
  * Apply a JSON merge patch (RFC 7396) to a base value.
  *
@@ -60,6 +77,32 @@ export function applyDelta(base: unknown, delta: unknown): unknown {
 		} else {
 			result[key] = value;
 		}
+	}
+
+	return result;
+}
+
+export function applyTextEdits(before: string, edits: TextEdit[]): string {
+	if (edits.length === 0) {
+		return before;
+	}
+
+	const sorted = [...edits].sort((a, b) => a.span.start.offset - b.span.start.offset);
+
+	let result = "";
+	let last = 0;
+
+	for (const edit of sorted) {
+		const start = edit.span.start.offset;
+		if (start > last) {
+			result += before.slice(last, start);
+		}
+		result += edit.newText;
+		last = edit.span.end.offset;
+	}
+
+	if (last < before.length) {
+		result += before.slice(last);
 	}
 
 	return result;

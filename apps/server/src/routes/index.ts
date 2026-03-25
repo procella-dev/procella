@@ -5,6 +5,7 @@ import type { TRPCContext } from "@procella/api/src/trpc.js";
 import type { AuthConfig, AuthService } from "@procella/auth";
 import type { Database } from "@procella/db";
 import type { StacksService } from "@procella/stacks";
+import { PulumiRoutes } from "@procella/types";
 import { GCWorker, type UpdatesService } from "@procella/updates";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { Hono } from "hono";
@@ -149,41 +150,15 @@ export function createApp(deps: {
 	// These use "Authorization: update-token <lease-token>" from the CLI.
 	// ========================================================================
 
-	app.patch(
-		"/api/stacks/:org/:project/:stack/update/:updateId/checkpoint",
-		withUpdateAuth,
-		checkpointH.patchCheckpoint,
-	);
-	app.patch(
-		"/api/stacks/:org/:project/:stack/update/:updateId/checkpointverbatim",
-		withUpdateAuth,
-		checkpointH.patchCheckpointVerbatim,
-	);
-	app.post(
-		"/api/stacks/:org/:project/:stack/update/:updateId/checkpoint/delta",
-		withUpdateAuth,
-		checkpointH.patchCheckpointDelta,
-	);
-	app.patch(
-		"/api/stacks/:org/:project/:stack/update/:updateId/journalentries",
-		withUpdateAuth,
-		checkpointH.appendJournalEntries,
-	);
-	app.post(
-		"/api/stacks/:org/:project/:stack/update/:updateId/events/batch",
-		withUpdateAuth,
-		eventH.postEvents,
-	);
-	app.post(
-		"/api/stacks/:org/:project/:stack/update/:updateId/renew_lease",
-		withUpdateAuth,
-		eventH.renewLease,
-	);
-	app.post(
-		"/api/stacks/:org/:project/:stack/update/:updateId/complete",
-		withUpdateAuth,
-		updateH.completeUpdate,
-	);
+	const R = PulumiRoutes;
+
+	app.patch(R.patchCheckpoint.path, withUpdateAuth, checkpointH.patchCheckpoint);
+	app.patch(R.patchCheckpointVerbatim.path, withUpdateAuth, checkpointH.patchCheckpointVerbatim);
+	app.patch(R.patchCheckpointDelta.path, withUpdateAuth, checkpointH.patchCheckpointDelta);
+	app.patch(R.patchJournalEntries.path, withUpdateAuth, checkpointH.appendJournalEntries);
+	app.post(R.postEngineEventBatch.path, withUpdateAuth, eventH.postEvents);
+	app.post(R.renewLease.path, withUpdateAuth, eventH.renewLease);
+	app.post(R.completeUpdate.path, withUpdateAuth, updateH.completeUpdate);
 
 	// ========================================================================
 	// API-token authenticated routes

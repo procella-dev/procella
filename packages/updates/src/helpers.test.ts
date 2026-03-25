@@ -9,6 +9,7 @@ import {
 } from "@procella/types";
 import {
 	applyDelta,
+	applyTextEdits,
 	emptyDeployment,
 	formatBlobKey,
 	generateLeaseToken,
@@ -119,6 +120,140 @@ describe("@procella/updates helpers", () => {
 		test("handles non-object base with object delta", () => {
 			const result = applyDelta("string-base", { a: 1 });
 			expect(result).toEqual({ a: 1 });
+		});
+	});
+
+	describe("applyTextEdits (gotextdiff)", () => {
+		test("returns original when edits array is empty", () => {
+			const before = '{"resources":[]}';
+			expect(applyTextEdits(before, [])).toBe(before);
+		});
+
+		test("replaces a substring at given offsets", () => {
+			const before = '{"resources":[]}';
+			const edits = [
+				{
+					span: {
+						start: { line: 0, column: 0, offset: 14 },
+						end: { line: 0, column: 0, offset: 14 },
+						uri: "",
+					},
+					newText: '{"urn":"test"}',
+				},
+			];
+			expect(applyTextEdits(before, edits)).toBe('{"resources":[{"urn":"test"}]}');
+		});
+
+		test("inserts text (start === end)", () => {
+			const before = "abc";
+			const edits = [
+				{
+					span: {
+						start: { line: 0, column: 0, offset: 1 },
+						end: { line: 0, column: 0, offset: 1 },
+					},
+					newText: "X",
+				},
+			];
+			expect(applyTextEdits(before, edits)).toBe("aXbc");
+		});
+
+		test("deletes text (newText is empty)", () => {
+			const before = "abcdef";
+			const edits = [
+				{
+					span: {
+						start: { line: 0, column: 0, offset: 2 },
+						end: { line: 0, column: 0, offset: 4 },
+					},
+					newText: "",
+				},
+			];
+			expect(applyTextEdits(before, edits)).toBe("abef");
+		});
+
+		test("applies multiple non-overlapping edits in order", () => {
+			const before = "abcdef";
+			const edits = [
+				{
+					span: {
+						start: { line: 0, column: 0, offset: 1 },
+						end: { line: 0, column: 0, offset: 2 },
+					},
+					newText: "X",
+				},
+				{
+					span: {
+						start: { line: 0, column: 0, offset: 4 },
+						end: { line: 0, column: 0, offset: 5 },
+					},
+					newText: "Y",
+				},
+			];
+			expect(applyTextEdits(before, edits)).toBe("aXcdYf");
+		});
+
+		test("handles edit at start of string (offset 0)", () => {
+			const before = "world";
+			const edits = [
+				{
+					span: {
+						start: { line: 0, column: 0, offset: 0 },
+						end: { line: 0, column: 0, offset: 0 },
+					},
+					newText: "hello ",
+				},
+			];
+			expect(applyTextEdits(before, edits)).toBe("hello world");
+		});
+
+		test("handles edit at end of string", () => {
+			const before = "hello";
+			const edits = [
+				{
+					span: {
+						start: { line: 0, column: 0, offset: 5 },
+						end: { line: 0, column: 0, offset: 5 },
+					},
+					newText: " world",
+				},
+			];
+			expect(applyTextEdits(before, edits)).toBe("hello world");
+		});
+
+		test("handles full string replacement", () => {
+			const before = "abc";
+			const edits = [
+				{
+					span: {
+						start: { line: 0, column: 0, offset: 0 },
+						end: { line: 0, column: 0, offset: 3 },
+					},
+					newText: "xyz",
+				},
+			];
+			expect(applyTextEdits(before, edits)).toBe("xyz");
+		});
+
+		test("sorts edits by start offset regardless of input order", () => {
+			const before = "abcdef";
+			const edits = [
+				{
+					span: {
+						start: { line: 0, column: 0, offset: 4 },
+						end: { line: 0, column: 0, offset: 5 },
+					},
+					newText: "Y",
+				},
+				{
+					span: {
+						start: { line: 0, column: 0, offset: 1 },
+						end: { line: 0, column: 0, offset: 2 },
+					},
+					newText: "X",
+				},
+			];
+			expect(applyTextEdits(before, edits)).toBe("aXcdYf");
 		});
 	});
 

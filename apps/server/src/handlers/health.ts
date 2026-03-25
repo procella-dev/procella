@@ -24,11 +24,6 @@ export function healthHandlers(deps: { db: Database }) {
 		capabilities: (c: Context<Env>) =>
 			c.json({
 				capabilities: [
-					{
-						capability: "delta-checkpoint-uploads-v2",
-						version: 2,
-						configuration: { checkpointCutoffSizeBytes: 1_048_576 },
-					},
 					{ capability: "batch-encrypt" },
 					{ capability: "deployment-schema-version", version: 3 },
 					{ capability: "journaling-v1", version: 1 },

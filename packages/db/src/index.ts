@@ -1,12 +1,12 @@
 // @procella/db — Database connection via Drizzle ORM.
 //
 // Dual-driver design:
-//   - Production (Neon): @neondatabase/serverless Pool over WebSocket.
-//   - Local dev / CI:    pg (node-postgres) Pool over TCP.
+//   - Standard PostgreSQL: Bun.sql (native, fastest).
+//   - Neon serverless:     @neondatabase/serverless Pool over WebSocket.
 //
 // The driver is selected automatically based on the connection URL hostname.
 // Neon connection strings use *.neon.tech hosts; everything else (localhost,
-// 127.0.0.1, Docker hostnames) falls back to node-postgres.
+// 127.0.0.1, Docker hostnames, RDS, Supabase) uses Bun's native driver.
 
 import { schema } from "./schema.js";
 
@@ -26,7 +26,7 @@ export {
 // ============================================================================
 
 /** Drizzle database instance with full schema type inference. */
-// Both NeonDatabase and NodePgDatabase extend PgDatabase, so consumers get
+// Both BunSQLDatabase and NeonDatabase extend PgDatabase, so consumers get
 // the full Drizzle query/mutation/transaction API regardless of the driver.
 // biome-ignore lint/suspicious/noExplicitAny: PgDatabase requires QueryResultHKT generic which differs per driver
 export type Database = import("drizzle-orm/pg-core").PgDatabase<any, typeof schema>;
@@ -71,7 +71,7 @@ function isNeonHost(url: string): boolean {
  * Create a Drizzle database instance with automatic driver selection.
  *
  * - Neon hosts (*.neon.tech) → @neondatabase/serverless (WebSocket)
- * - All other hosts → pg / node-postgres (TCP)
+ * - All other hosts → Bun.sql (native TCP, fastest)
  *
  * Returns both the Drizzle instance (for type-safe queries) and a client
  * handle (for lifecycle management — call client.close() on shutdown).
@@ -79,28 +79,28 @@ function isNeonHost(url: string): boolean {
 export async function createDb(
 	options: CreateDbOptions,
 ): Promise<{ db: Database; client: DbClient }> {
-	const poolOpts = {
-		connectionString: options.url,
-		max: options.max ?? 20,
-		idleTimeoutMillis: options.idleTimeout ?? 30_000,
-	};
-
 	if (!isNeonHost(options.url)) {
-		// Local dev / CI / Docker / any non-Neon host — use node-postgres (TCP).
-		const pg = await import("pg");
-		const { drizzle } = await import("drizzle-orm/node-postgres");
-		const pool = new pg.default.Pool(poolOpts);
-		const db = drizzle({ client: pool, schema });
-		return { db: db as Database, client: { close: () => pool.end() } };
+		const { SQL } = require("bun") as typeof import("bun");
+		const { drizzle } = await import("drizzle-orm/bun-sql");
+		const client = new SQL({
+			url: options.url,
+			max: options.max ?? 20,
+			idleTimeout: Math.max(1, Math.ceil((options.idleTimeout ?? 30_000) / 1000)),
+		});
+		const db = drizzle({ client, schema });
+		return { db: db as Database, client: { close: () => client.close() } };
 	}
 
-	// Production — use Neon serverless (WebSocket).
 	const { neonConfig, Pool } = await import("@neondatabase/serverless");
 	const { drizzle } = await import("drizzle-orm/neon-serverless");
 	const ws = (await import("ws")).default;
 	neonConfig.webSocketConstructor = ws;
 
-	const pool = new Pool(poolOpts);
+	const pool = new Pool({
+		connectionString: options.url,
+		max: options.max ?? 20,
+		idleTimeoutMillis: options.idleTimeout ?? 30_000,
+	});
 	const db = drizzle({ client: pool, schema });
 	return { db: db as Database, client: { close: () => pool.end() } };
 }
@@ -112,4 +112,38 @@ export async function createDbFromUrl(
 	databaseUrl: string,
 ): Promise<{ db: Database; client: DbClient }> {
 	return createDb({ url: databaseUrl });
+}
+
+// ============================================================================
+// Migrations
+// ============================================================================
+
+export async function runMigrations(url: string, migrationsFolder: string): Promise<void> {
+	if (!isNeonHost(url)) {
+		const { SQL } = require("bun") as typeof import("bun");
+		const { drizzle } = await import("drizzle-orm/bun-sql");
+		const { migrate } = await import("drizzle-orm/bun-sql/migrator");
+		const client = new SQL({ url });
+		try {
+			const db = drizzle({ client });
+			await migrate(db, { migrationsFolder });
+		} finally {
+			await client.close();
+		}
+		return;
+	}
+
+	const { neonConfig, Pool } = await import("@neondatabase/serverless");
+	const { drizzle } = await import("drizzle-orm/neon-serverless");
+	const { migrate } = await import("drizzle-orm/neon-serverless/migrator");
+	const ws = (await import("ws")).default;
+	neonConfig.webSocketConstructor = ws;
+
+	const pool = new Pool({ connectionString: url });
+	try {
+		const db = drizzle({ client: pool });
+		await migrate(db, { migrationsFolder });
+	} finally {
+		await pool.end();
+	}
 }

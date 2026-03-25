@@ -10,6 +10,32 @@ import {
 } from "@procella/types";
 import { and, eq, sql } from "drizzle-orm";
 
+export function pgErrorCode(err: unknown): string | undefined {
+	let current: unknown = err;
+	for (let i = 0; i < 10 && current != null; i++) {
+		if (typeof current === "object") {
+			const rec = current as Record<string, unknown>;
+			for (const key of ["code", "errno"] as const) {
+				const val = rec[key];
+				const str = typeof val === "number" ? String(val) : val;
+				if (typeof str === "string" && /^[0-9A-Z]{5}$/i.test(str)) return str;
+			}
+			if (Array.isArray(rec.errors)) {
+				for (const inner of rec.errors) {
+					const found = pgErrorCode(inner);
+					if (found) return found;
+				}
+			}
+			if ("cause" in rec) {
+				current = rec.cause;
+				continue;
+			}
+		}
+		current = undefined;
+	}
+	return undefined;
+}
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -175,14 +201,7 @@ export class PostgresStacksService implements StacksService {
 				};
 			});
 		} catch (err: unknown) {
-			// Drizzle wraps Postgres errors in DrizzleQueryError with cause.
-			// Bun.sql uses `errno`, node-postgres uses `code` for PG error codes.
-			const pgErr = err instanceof Error && err.cause instanceof Error ? err.cause : err;
-			const errCode =
-				typeof pgErr === "object" && pgErr !== null
-					? ((pgErr as Record<string, unknown>).code ?? (pgErr as Record<string, unknown>).errno)
-					: undefined;
-			if (errCode === "23505") {
+			if (pgErrorCode(err) === "23505") {
 				throw new StackAlreadyExistsError(tenantId, project, stack);
 			}
 			throw err;

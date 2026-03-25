@@ -48,12 +48,12 @@
 	},
 	"files": {
 		"includes": [
-			"**/packages/**/*.ts",
-			"**/apps/**/*.ts",
-			"**/apps/**/*.tsx",
-			"**/e2e/**/*.ts",
-			"**/scripts/**/*.ts",
-			"**/apps/**/*.css",
+			"packages/**/*.ts",
+			"apps/**/*.ts",
+			"apps/**/*.tsx",
+			"e2e/**/*.ts",
+			"scripts/**/*.ts",
+			"apps/**/*.css",
 			"!**/node_modules",
 			"!**/dist",
 			"!**/*.gen.*",

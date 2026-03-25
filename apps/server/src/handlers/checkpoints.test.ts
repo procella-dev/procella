@@ -1,0 +1,137 @@
+import { describe, expect, mock, test } from "bun:test";
+import type { UpdatesService } from "@procella/updates";
+import { Hono } from "hono";
+import { errorHandler } from "../middleware/error-handler.js";
+import type { Env } from "../types.js";
+import { checkpointHandlers } from "./checkpoints.js";
+
+function mockUpdatesService(overrides?: Partial<UpdatesService>): UpdatesService {
+	return {
+		createUpdate: mock(async () => ({ updateID: "", requiredPolicies: [] }) as never),
+		startUpdate: mock(async () => ({}) as never),
+		completeUpdate: mock(async () => {}),
+		cancelUpdate: mock(async () => {}),
+		patchCheckpoint: mock(async () => {}),
+		patchCheckpointVerbatim: mock(async () => {}),
+		patchCheckpointDelta: mock(async () => {}),
+		appendJournalEntries: mock(async () => {}),
+		postEvents: mock(async () => {}),
+		renewLease: mock(async () => ({}) as never),
+		getUpdate: mock(async () => ({}) as never),
+		getUpdateEvents: mock(async () => ({}) as never),
+		getHistory: mock(async () => ({}) as never),
+		exportStack: mock(async () => ({}) as never),
+		importStack: mock(async () => ({}) as never),
+		encryptValue: mock(async () => new Uint8Array()),
+		decryptValue: mock(async () => new Uint8Array()),
+		batchEncrypt: mock(async () => []),
+		batchDecrypt: mock(async () => []),
+		...overrides,
+	};
+}
+
+function injectUpdateContext(updateId: string, stackId: string) {
+	return async (c: { set: (key: string, value: unknown) => void }, next: () => Promise<void>) => {
+		c.set("updateContext", { updateId, stackId });
+		await next();
+	};
+}
+
+describe("checkpointHandlers", () => {
+	test("patchCheckpoint calls service and returns 200", async () => {
+		const updates = mockUpdatesService();
+		const app = new Hono<Env>();
+		app.use("*", injectUpdateContext("u-1", "s-1"));
+		const h = checkpointHandlers(updates);
+		app.patch("/checkpoint", h.patchCheckpoint);
+
+		const body = { version: 1, deployment: { resources: [] } };
+		const res = await app.request("/checkpoint", {
+			method: "PATCH",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body),
+		});
+
+		expect(res.status).toBe(200);
+		expect(updates.patchCheckpoint).toHaveBeenCalledTimes(1);
+		expect(updates.patchCheckpoint).toHaveBeenCalledWith("u-1", body);
+	});
+
+	test("patchCheckpointVerbatim calls service and returns 200", async () => {
+		const updates = mockUpdatesService();
+		const app = new Hono<Env>();
+		app.use("*", injectUpdateContext("u-2", "s-2"));
+		const h = checkpointHandlers(updates);
+		app.patch("/checkpointverbatim", h.patchCheckpointVerbatim);
+
+		const body = { version: 2, deployment: '{"resources":[]}' };
+		const res = await app.request("/checkpointverbatim", {
+			method: "PATCH",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body),
+		});
+
+		expect(res.status).toBe(200);
+		expect(updates.patchCheckpointVerbatim).toHaveBeenCalledTimes(1);
+		expect(updates.patchCheckpointVerbatim).toHaveBeenCalledWith("u-2", body);
+	});
+
+	test("patchCheckpointDelta calls service and returns 200", async () => {
+		const updates = mockUpdatesService();
+		const app = new Hono<Env>();
+		app.use("*", injectUpdateContext("u-3", "s-3"));
+		const h = checkpointHandlers(updates);
+		app.patch("/checkpointdelta", h.patchCheckpointDelta);
+
+		const body = {
+			version: 3,
+			sequenceNumber: 1,
+			checkpointHash: "abc123",
+			deploymentDelta: [{ span: { start: { offset: 0 }, end: { offset: 5 } }, newText: "hello" }],
+		};
+		const res = await app.request("/checkpointdelta", {
+			method: "PATCH",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body),
+		});
+
+		expect(res.status).toBe(200);
+		expect(updates.patchCheckpointDelta).toHaveBeenCalledTimes(1);
+		expect(updates.patchCheckpointDelta).toHaveBeenCalledWith("u-3", body);
+	});
+
+	test("appendJournalEntries calls service and returns 200", async () => {
+		const updates = mockUpdatesService();
+		const app = new Hono<Env>();
+		app.use("*", injectUpdateContext("u-4", "s-4"));
+		const h = checkpointHandlers(updates);
+		app.patch("/journal", h.appendJournalEntries);
+
+		const body = { entries: [{ kind: 1 }] };
+		const res = await app.request("/journal", {
+			method: "PATCH",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body),
+		});
+
+		expect(res.status).toBe(200);
+		expect(updates.appendJournalEntries).toHaveBeenCalledTimes(1);
+		expect(updates.appendJournalEntries).toHaveBeenCalledWith("u-4", body);
+	});
+
+	test("handlers throw when updateContext is not set", async () => {
+		const updates = mockUpdatesService();
+		const app = new Hono<Env>();
+		app.onError(errorHandler());
+		const h = checkpointHandlers(updates);
+		app.patch("/checkpoint", h.patchCheckpoint);
+
+		const res = await app.request("/checkpoint", {
+			method: "PATCH",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({}),
+		});
+
+		expect(res.status).toBe(400);
+	});
+});

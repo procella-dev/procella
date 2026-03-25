@@ -107,10 +107,9 @@ describe("@procella/server handlers", () => {
 			expect(res.status).toBe(200);
 			const body = await res.json();
 			expect(body.capabilities).toBeArray();
-			expect(body.capabilities).toHaveLength(4);
+			expect(body.capabilities).toHaveLength(3);
 
 			const names = body.capabilities.map((c: { capability: string }) => c.capability);
-			expect(names).toContain("delta-checkpoint-uploads-v2");
 			expect(names).toContain("batch-encrypt");
 			expect(names).toContain("deployment-schema-version");
 			expect(names).toContain("journaling-v1");
@@ -285,6 +284,55 @@ describe("@procella/server handlers", () => {
 			const body = await res.json();
 			expect(body.stacks).toBeArray();
 			expect(body.stacks).toHaveLength(1);
+		});
+
+		test("renameStack returns 204", async () => {
+			const app = new Hono<Env>();
+			app.use("*", injectCaller(validCaller));
+			const stackH = stackHandlers(mockStacksService());
+			app.post("/stacks/:org/:project/:stack/rename", stackH.renameStack);
+
+			const res = await app.request("/stacks/myorg/myproj/dev/rename", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ newName: "staging" }),
+			});
+			expect(res.status).toBe(204);
+		});
+
+		test("updateStackTags returns 204", async () => {
+			const app = new Hono<Env>();
+			app.use("*", injectCaller(validCaller));
+			const stackH = stackHandlers(mockStacksService());
+			app.patch("/stacks/:org/:project/:stack/tags", stackH.updateStackTags);
+
+			const res = await app.request("/stacks/myorg/myproj/dev/tags", {
+				method: "PATCH",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ env: "staging", team: "platform" }),
+			});
+			expect(res.status).toBe(204);
+		});
+	});
+
+	// ========================================================================
+	// userHandlers — additional
+	// ========================================================================
+
+	describe("userHandlers — getOrganization", () => {
+		test("getOrganization returns org info with defaults", async () => {
+			const app = new Hono<Env>();
+			app.use("*", injectCaller(validCaller));
+			const user = userHandlers(mockStacksService());
+			app.get("/user/organizations/:orgName", user.getOrganization);
+
+			const res = await app.request("/user/organizations/my-org");
+			expect(res.status).toBe(200);
+			const body = await res.json();
+			expect(body.githubLogin).toBe("my-org");
+			expect(body.name).toBe("my-org");
+			expect(body.defaultTeam).toBeDefined();
+			expect(body.defaultTeam.name).toBe("my-org");
 		});
 	});
 });
