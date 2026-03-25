@@ -685,8 +685,12 @@ export class PostgresUpdatesService implements UpdatesService {
 				}
 				return;
 			} catch (error: unknown) {
-				const err = error as { code?: string };
-				if (err.code === "23505" && attempt < maxAttempts - 1) {
+				const pgErr = error instanceof Error && error.cause instanceof Error ? error.cause : error;
+				const errCode =
+					typeof pgErr === "object" && pgErr !== null
+						? (pgErr as Record<string, unknown>).code
+						: undefined;
+				if (errCode === "23505" && attempt < maxAttempts - 1) {
 					continue;
 				}
 				throw error;
