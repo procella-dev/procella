@@ -91,9 +91,9 @@ async function startBenchServer(): Promise<Subprocess> {
 				? { PROCELLA_OTEL_ENABLED: process.env.PROCELLA_OTEL_ENABLED }
 				: {}),
 		},
-    stdout: "ignore",
-    stderr: "ignore",
-  });
+		stdout: "ignore",
+		stderr: "inherit",
+	});
 
   await waitForHealth(`${BACKEND_URL}/healthz`, 30_000);
   return proc;

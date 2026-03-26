@@ -55,11 +55,17 @@ export class FetchOtlpTraceExporter implements SpanExporter {
 			body,
 		})
 			.then((res) => {
+				if (!res.ok) {
+					console.error(`[otlp] export failed: ${res.status} ${res.statusText} → ${this.url}`);
+				}
 				resultCallback({
 					code: res.ok ? ExportResultCode.SUCCESS : ExportResultCode.FAILED,
 				});
 			})
-			.catch(() => {
+			.catch((err) => {
+				console.error(
+					`[otlp] export error: ${err instanceof Error ? err.message : err} → ${this.url}`,
+				);
 				resultCallback({ code: ExportResultCode.FAILED });
 			});
 	}

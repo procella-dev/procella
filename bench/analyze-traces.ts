@@ -75,6 +75,15 @@ function fmtMs(ms: number): string {
 async function main(): Promise<void> {
 	await Bun.sleep(FLUSH_WAIT_MS);
 
+	const servicesRes = await fetch(`${JAEGER_API}/api/services`).catch(() => null);
+	if (servicesRes?.ok) {
+		const servicesBody = (await servicesRes.json()) as { data?: string[] };
+		const services = servicesBody.data ?? [];
+		console.log(`Jaeger services: ${services.length > 0 ? services.join(", ") : "(none)"}`);
+	} else {
+		console.log(`Jaeger API unreachable at ${JAEGER_API}/api/services`);
+	}
+
 	let traces: JaegerTrace[];
 	try {
 		traces = await fetchTraces();
@@ -83,6 +92,7 @@ async function main(): Promise<void> {
 		return;
 	}
 
+	console.log(`Fetched ${traces.length} traces for service "${SERVICE_NAME}"`);
 	if (traces.length === 0) {
 		console.log("No traces found — trace analysis skipped.");
 		return;
