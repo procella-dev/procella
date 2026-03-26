@@ -1,9 +1,0 @@
-{
-  "id": "T-78093e2c-cb7a-41fb-84c8-c98e3a12cae6",
-  "subject": "Phase 0: Workspace scaffold — package.json, tsconfig, biome, directory structure",
-  "description": "Create the Bun workspace monorepo structure with all packages and apps. Set up shared tsconfig, biome, and package.json files. Delete all Go code.",
-  "status": "completed",
-  "blocks": [],
-  "blockedBy": [],
-  "threadID": "ses_33b666cfaffeyl8CINCyw4DTN8"
-}
