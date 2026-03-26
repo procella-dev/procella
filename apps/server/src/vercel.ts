@@ -30,20 +30,18 @@ export function normalizeRequest(req: Request): Request {
 	});
 }
 
-export default async function handler(req: Request): Promise<Response> {
-	if (!appPromise) appPromise = init();
-	try {
-		const app = await appPromise;
-		const response = await app.fetch(normalizeRequest(req));
-		return new Response(response.body, {
-			status: response.status,
-			headers: response.headers,
-		});
-	} catch (e: unknown) {
-		console.error("[vercel] unhandled error:", e);
-		return new Response(JSON.stringify({ error: "Internal server error" }), {
-			status: 500,
-			headers: { "content-type": "application/json" },
-		});
-	}
-}
+export default {
+	async fetch(req: Request): Promise<Response> {
+		if (!appPromise) appPromise = init();
+		try {
+			const app = await appPromise;
+			return app.fetch(normalizeRequest(req));
+		} catch (e: unknown) {
+			console.error("[vercel] unhandled error:", e);
+			return new Response(JSON.stringify({ error: "Internal server error" }), {
+				status: 500,
+				headers: { "content-type": "application/json" },
+			});
+		}
+	},
+};
