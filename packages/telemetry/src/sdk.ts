@@ -35,13 +35,13 @@ export function initTelemetry(config: TelemetryConfig): void {
 		diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.DEBUG);
 	}
 
-	const defaults = new Resource({
-		[ATTR_SERVICE_NAME]: config.serviceName ?? "procella",
-		[ATTR_SERVICE_VERSION]: config.serviceVersion ?? "0.0.0",
-	});
-	// Resource.default() reads OTEL_SERVICE_NAME and OTEL_RESOURCE_ATTRIBUTES env vars.
-	// Merge so env vars override code defaults (merge gives precedence to argument).
-	const resource = defaults.merge(Resource.default());
+	const serviceName = process.env.OTEL_SERVICE_NAME ?? config.serviceName ?? "procella";
+	const resource = Resource.default().merge(
+		new Resource({
+			[ATTR_SERVICE_NAME]: serviceName,
+			[ATTR_SERVICE_VERSION]: config.serviceVersion ?? "0.0.0",
+		}),
+	);
 
 	provider = new NodeTracerProvider({ resource });
 

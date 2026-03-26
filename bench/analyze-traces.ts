@@ -75,24 +75,39 @@ function fmtMs(ms: number): string {
 async function main(): Promise<void> {
 	await Bun.sleep(FLUSH_WAIT_MS);
 
+	let availableServices: string[] = [];
 	const servicesRes = await fetch(`${JAEGER_API}/api/services`).catch(() => null);
 	if (servicesRes?.ok) {
 		const servicesBody = (await servicesRes.json()) as { data?: string[] };
-		const services = servicesBody.data ?? [];
-		console.log(`Jaeger services: ${services.length > 0 ? services.join(", ") : "(none)"}`);
+		availableServices = servicesBody.data ?? [];
+		console.log(`Jaeger services: ${availableServices.length > 0 ? availableServices.join(", ") : "(none)"}`);
 	} else {
 		console.log(`Jaeger API unreachable at ${JAEGER_API}/api/services`);
 	}
 
+	let serviceName = SERVICE_NAME;
 	let traces: JaegerTrace[];
 	try {
 		traces = await fetchTraces();
+		if (traces.length === 0 && availableServices.length > 0) {
+			const fallback = availableServices.find((s) => s !== "jaeger-query");
+			if (fallback && fallback !== serviceName) {
+				console.log(`No traces for "${serviceName}", trying "${fallback}"`);
+				serviceName = fallback;
+				const url = `${JAEGER_API}/api/traces?service=${encodeURIComponent(fallback)}&limit=1000&lookback=1h`;
+				const res = await fetch(url);
+				if (res.ok) {
+					const body = (await res.json()) as JaegerResponse;
+					traces = body.data ?? [];
+				}
+			}
+		}
 	} catch (err) {
 		console.log(`Trace analysis skipped: ${err instanceof Error ? err.message : err}`);
 		return;
 	}
 
-	console.log(`Fetched ${traces.length} traces for service "${SERVICE_NAME}"`);
+	console.log(`Fetched ${traces.length} traces for service "${serviceName}"`);
 	if (traces.length === 0) {
 		console.log("No traces found — trace analysis skipped.");
 		return;
