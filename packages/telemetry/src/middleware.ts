@@ -14,13 +14,12 @@ import {
 } from "@opentelemetry/api";
 import type { MiddlewareHandler } from "hono";
 
-const tracer = trace.getTracer("procella.http");
-
 /**
  * Hono middleware that wraps each request in an OTLP span.
  * Extracts route pattern, method, status, and sets standard HTTP attributes.
  */
 export function tracingMiddleware(): MiddlewareHandler {
+	const tracer = trace.getTracer("procella.http");
 	return async (c, next) => {
 		const method = c.req.method;
 		const path = c.req.path;

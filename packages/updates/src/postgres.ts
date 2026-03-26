@@ -66,6 +66,7 @@ export class PostgresUpdatesService implements UpdatesService {
 
 	// Per-update caches for immutable/monotonic data. Cleared on completeUpdate/cancelUpdate.
 	// Journal entries are NOT cached — DB remains source of truth for cluster safety.
+	private static readonly MAX_CACHE_ENTRIES = 64;
 	private readonly baseDeploymentCache = new Map<string, Record<string, unknown>>();
 	private readonly checkpointVersionCache = new Map<string, number>();
 
@@ -615,8 +616,18 @@ export class PostgresUpdatesService implements UpdatesService {
 		this.checkpointVersionCache.delete(updateId);
 	}
 
+	private evictStaleCaches(): void {
+		if (this.baseDeploymentCache.size > PostgresUpdatesService.MAX_CACHE_ENTRIES) {
+			this.baseDeploymentCache.clear();
+		}
+		if (this.checkpointVersionCache.size > PostgresUpdatesService.MAX_CACHE_ENTRIES) {
+			this.checkpointVersionCache.clear();
+		}
+	}
+
 	private async flushJournalToCheckpoint(updateId: string, stackId: string): Promise<void> {
 		return withDbSpan("flushJournalToCheckpoint", { "update.id": updateId }, async () => {
+			this.evictStaleCaches();
 			const allEntries = await this.db
 				.select()
 				.from(journalEntries)
