@@ -267,10 +267,153 @@ jobs:
           branch: preview/pr-${{ github.event.number }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
+  bench-preview:
+    name: Preview Benchmark
+    needs: [deploy-app]
+    if: needs.deploy-app.result == 'success' && needs.deploy-app.outputs.url
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    environment: preview
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      summary: ${{ steps.bench.outputs.summary }}
+    env:
+      PULUMI_BACKEND_URL: s3://${{ vars.PROCELLA_BLOB_S3_BUCKET }}?endpoint=${{ vars.R2_ENDPOINT }}&region=auto
+    steps:
+      - uses: actions/checkout@v6
+      - uses: jdx/mise-action@v4
+      - uses: pulumi/setup-pulumi@v2
+      - uses: actions/cache@v5
+        with:
+          path: |
+            node_modules
+            ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - run: bun install --frozen-lockfile
+        working-directory: infra
+      - name: Get Descope project ID
+        id: descope
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+        run: |
+          DESCOPE_ID=$(cd infra && pulumi stack output projectId --stack preview-pr-${{ github.event.number }})
+          echo "project_id=$DESCOPE_ID" >> $GITHUB_OUTPUT
+      - name: Setup Descope auth
+        id: auth
+        env:
+          DESCOPE_PROJECT_ID: ${{ steps.descope.outputs.project_id }}
+          DESCOPE_MANAGEMENT_KEY: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
+        run: bun run bench/setup-preview-auth.ts
+      - name: Run benchmark
+        id: bench
+        env:
+          BENCH_URL: ${{ needs.deploy-app.outputs.url }}
+          BENCH_TOKEN: ${{ steps.auth.outputs.bench_token }}
+          BENCH_MODES: journal
+          BENCH_VARIANTS: secrets
+          BENCH_SIZES: "100"
+          BENCH_TRIALS: "10"
+        run: |
+          bun run bench
+          SUMMARY=$(bun -e 'const path="bench/results.json";const f=Bun.file(path);if(!(await f.exists())){console.log("No results");process.exit(0)};const payload=await f.json();const rows=Array.isArray(payload.results)?payload.results:[];const by=new Map();for(const r of rows){const k=`${r.n}|${r.mode}|${r.variant}`;if(!by.has(k))by.set(k,[]);by.get(k).push(r)};const med=(arr)=>{if(arr.length===0)return null;const s=[...arr].sort((a,b)=>a-b);const m=Math.floor(s.length/2);return s.length%2?s[m]:(s[m-1]+s[m])/2};const out=[];for(const [k,v] of by){const [n,mode,variant]=k.split("|");const ok=v.filter((r)=>r.upExitCode===0);const up=med(ok.map((r)=>r.upMs).filter((x)=>typeof x==="number"));const pre=med(ok.map((r)=>r.previewMs).filter((x)=>typeof x==="number"));const des=med(ok.map((r)=>r.destroyMs).filter((x)=>typeof x==="number"));const fmt=(x)=>x===null?"FAIL":`${x.toFixed(1)}ms`;out.push(`${n}/${mode}/${variant}: up ${fmt(up)}, preview ${fmt(pre)}, destroy ${fmt(des)}`)};console.log(out.join("; ")||"No benchmark rows")')
+          {
+            echo "summary<<EOF"
+            echo "$SUMMARY"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+      - name: Cleanup Descope auth
+        if: always()
+        env:
+          DESCOPE_PROJECT_ID: ${{ steps.descope.outputs.project_id }}
+          DESCOPE_MANAGEMENT_KEY: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
+        run: bun run bench/setup-preview-auth.ts --cleanup
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-benchmark-results
+          path: bench/results.json
+          if-no-files-found: ignore
+      - name: Comment benchmark results
+        if: always() && hashFiles('bench/results.json')
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('node:fs');
+
+            const marker = '## 📊 Preview Benchmark';
+            const file = fs.readFileSync('bench/results.json', 'utf8');
+            const payload = JSON.parse(file);
+            const rows = Array.isArray(payload.results) ? payload.results : [];
+            const groups = new Map();
+
+            for (const row of rows) {
+              const key = `${row.n}|${row.mode}|${row.variant}`;
+              if (!groups.has(key)) groups.set(key, []);
+              groups.get(key).push(row);
+            }
+
+            const median = (values) => {
+              if (!values.length) return null;
+              const sorted = [...values].sort((a, b) => a - b);
+              const middle = Math.floor(sorted.length / 2);
+              return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+            };
+            const fmt = (n) => (n === null ? 'FAIL' : `${n.toFixed(1)}ms`);
+
+            const lines = [
+              marker,
+              '',
+              '| N | Mode | Variant | up p50 | preview p50 | destroy p50 |',
+              '|---:|------|---------|-------:|------------:|------------:|',
+            ];
+
+            for (const [key, values] of groups.entries()) {
+              const [n, mode, variant] = key.split('|');
+              const successful = values.filter((v) => v.upExitCode === 0);
+              const up = median(successful.map((v) => v.upMs).filter((v) => typeof v === 'number'));
+              const preview = median(successful.map((v) => v.previewMs).filter((v) => typeof v === 'number'));
+              const destroy = median(successful.map((v) => v.destroyMs).filter((v) => typeof v === 'number'));
+              lines.push(`| ${n} | ${mode} | ${variant} | ${fmt(up)} | ${fmt(preview)} | ${fmt(destroy)} |`);
+            }
+
+            lines.push('');
+            lines.push(`Run at: ${payload.runAt ?? 'unknown'}`);
+            const body = lines.join('\n');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find((comment) => comment.body?.startsWith(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
   # ── Comment on PR with preview URLs ────────────────────────────────────
   comment:
     name: PR Comment
-    needs: [changes, deploy-app, deploy-docs, infra, neon]
+    needs: [changes, deploy-app, deploy-docs, infra, neon, bench-preview]
     if: always() && (needs.deploy-app.result == 'success' || needs.deploy-docs.result == 'success')
     runs-on: ubuntu-latest
     permissions:
