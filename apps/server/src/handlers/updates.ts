@@ -137,20 +137,21 @@ export function updateHandlers(
 				});
 			}
 
-			if (
-				org &&
-				(body.status === "succeeded" || body.status === "failed" || body.status === "cancelled")
-			) {
-				void webhooks?.emit({
-					tenantId: org,
-					event:
-						body.status === "succeeded"
-							? "update.succeeded"
-							: body.status === "failed"
-								? "update.failed"
-								: "update.cancelled",
-					data: { org, project, stack, updateId, status: body.status },
-				});
+			if (body.status === "succeeded" || body.status === "failed" || body.status === "cancelled") {
+				if (!org) {
+					console.error("[updates] completeUpdate: org param missing, skipping webhook emit");
+				} else {
+					void webhooks?.emit({
+						tenantId: org,
+						event:
+							body.status === "succeeded"
+								? "update.succeeded"
+								: body.status === "failed"
+									? "update.failed"
+									: "update.cancelled",
+						data: { org, project, stack, updateId, status: body.status },
+					});
+				}
 			}
 			return c.body(null, 204);
 		},
