@@ -37,8 +37,7 @@ export default async function fetch(req: Request): Promise<Response> {
 		return app.fetch(normalizeRequest(req));
 	} catch (e: unknown) {
 		console.error("[vercel] unhandled error:", e);
-		const msg = e instanceof Error ? e.message : String(e);
-		return new Response(JSON.stringify({ error: msg }), {
+		return new Response(JSON.stringify({ error: "Internal server error" }), {
 			status: 500,
 			headers: { "content-type": "application/json" },
 		});
