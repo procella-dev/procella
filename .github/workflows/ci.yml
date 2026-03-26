@@ -99,3 +99,46 @@ jobs:
           PROCELLA_DATABASE_URL: postgres://procella:procella@localhost:5432/procella?sslmode=disable
         run: bun run e2e
 
+  bench:
+    name: Performance Benchmark
+    runs-on: ubuntu-latest
+    needs: [check]
+    continue-on-error: true
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: procella
+          POSTGRES_PASSWORD: procella
+          POSTGRES_DB: procella
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U procella"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: jdx/mise-action@v4
+      - uses: actions/cache@v5
+        with:
+          path: |
+            node_modules
+            ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - uses: pulumi/setup-pulumi@v2
+      - run: bun install --frozen-lockfile
+      - name: Run benchmark
+        env:
+          PROCELLA_DATABASE_URL: postgres://procella:procella@localhost:5432/procella?sslmode=disable
+        run: BENCH_SIZES=100 BENCH_TRIALS=3 bun run bench
+      - name: Check benchmark thresholds
+        run: bun run bench:check
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: bench/results.json

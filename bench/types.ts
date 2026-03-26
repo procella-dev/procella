@@ -25,3 +25,13 @@ export interface BenchmarkResults {
   trialsPerSize: number;
   results: TrialResult[];
 }
+
+export interface BaselineThreshold {
+  maxUpP50Ms: number;
+}
+
+export interface BaselineConfig {
+  description: string;
+  tolerancePct: number;
+  thresholds: Record<string, Record<string, BaselineThreshold>>;
+}
