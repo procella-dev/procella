@@ -47,6 +47,13 @@ const BENCH_MODES: Mode[] = (() => {
   return parsed.length > 0 ? parsed : ["journal"] as Mode[];
 })();
 
+const BENCH_VARIANTS: Variant[] = (() => {
+  const raw = process.env.BENCH_VARIANTS;
+  if (!raw) return ["plain", "secrets"] as Variant[];
+  const parsed = raw.split(",").map((v) => v.trim()).filter((v): v is Variant => v === "plain" || v === "secrets");
+  return parsed.length > 0 ? parsed : ["plain", "secrets"] as Variant[];
+})();
+
 function cleanEnv(): Record<string, string> {
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env)) {
@@ -340,6 +347,13 @@ function average(values: number[]): number | null {
   return sum / values.length;
 }
 
+function stddev(values: number[]): number | null {
+  const avg = average(values);
+  if (avg === null || values.length < 2) return null;
+  const sumSq = values.reduce((acc, v) => acc + (v - avg) ** 2, 0);
+  return Math.sqrt(sumSq / (values.length - 1));
+}
+
 async function writeStepSummary(results: BenchmarkResults): Promise<void> {
   if (!STEP_SUMMARY_PATH) return;
 
@@ -351,8 +365,8 @@ async function writeStepSummary(results: BenchmarkResults): Promise<void> {
   lines.push("");
   lines.push(`> ${results.trialsPerSize} trials per combo · modes: ${modes.join(", ")} · sizes: ${results.benchSizes.join(", ")}`);
   lines.push("");
-  lines.push("| N | Mode | Variant | up p50 | up min | up max | preview p50 | destroy p50 |");
-  lines.push("|---:|------|---------|-------:|-------:|-------:|------------:|------------:|");
+  lines.push("| N | Mode | Variant | up p50 | up σ | up min | up max | preview p50 | destroy p50 |");
+  lines.push("|---:|------|---------|-------:|-----:|-------:|-------:|------------:|------------:|");
 
   for (const n of results.benchSizes) {
     for (const mode of modes) {
@@ -360,14 +374,15 @@ async function writeStepSummary(results: BenchmarkResults): Promise<void> {
         const rows = results.results.filter((r) => r.n === n && r.mode === mode && r.variant === variant);
         const successful = rows.filter((r) => r.upExitCode === 0);
         if (successful.length === 0) {
-          lines.push(`| ${n} | ${mode} | ${variant} | ❌ FAIL | — | — | — | — |`);
+          lines.push(`| ${n} | ${mode} | ${variant} | ❌ FAIL | — | — | — | — | — |`);
           continue;
         }
         const upVals = successful.map((r) => r.upMs).filter((v): v is number => typeof v === "number");
         const preVals = successful.map((r) => r.previewMs).filter((v): v is number => typeof v === "number");
         const desVals = successful.map((r) => r.destroyMs).filter((v): v is number => typeof v === "number");
+        const upSd = stddev(upVals);
         lines.push(
-          `| ${n} | ${mode} | ${variant} | ${formatMs(median(upVals))} | ${formatMs(upVals.length > 0 ? Math.min(...upVals) : null)} | ${formatMs(upVals.length > 0 ? Math.max(...upVals) : null)} | ${formatMs(median(preVals))} | ${formatMs(median(desVals))} |`,
+          `| ${n} | ${mode} | ${variant} | ${formatMs(median(upVals))} | ${upSd !== null ? formatMs(upSd) : "—"} | ${formatMs(upVals.length > 0 ? Math.min(...upVals) : null)} | ${formatMs(upVals.length > 0 ? Math.max(...upVals) : null)} | ${formatMs(median(preVals))} | ${formatMs(median(desVals))} |`,
         );
       }
     }
@@ -443,7 +458,9 @@ function renderSummary(results: BenchmarkResults): string {
     const destroyP50 = median(destroyValues);
     const avgJournal = average(journalValues);
 
-    lines.push(`    up      ${padLeft(formatMs(upP50), 10)}  (min ${formatMs(upMin)}, max ${formatMs(upMax)})`);
+    const upStd = stddev(upValues);
+    const stdText = upStd !== null ? `, σ=${formatMs(upStd)}` : "";
+    lines.push(`    up      ${padLeft(formatMs(upP50), 10)}  (min ${formatMs(upMin)}, max ${formatMs(upMax)}${stdText})`);
     lines.push(`    preview ${padLeft(formatMs(previewP50), 10)}`);
     lines.push(`    destroy ${padLeft(formatMs(destroyP50), 10)}`);
     if (avgJournal !== null) {
@@ -458,7 +475,7 @@ function renderSummary(results: BenchmarkResults): string {
 
 async function main(): Promise<void> {
   PULUMI_BIN = await findPulumi();
-  console.log(`Procella benchmark: modes=${BENCH_MODES.join(",")}, sizes=${BENCH_SIZES.join(",")}, trials=${BENCH_TRIALS}`);
+  console.log(`Procella benchmark: modes=${BENCH_MODES.join(",")}, variants=${BENCH_VARIANTS.join(",")}, sizes=${BENCH_SIZES.join(",")}, trials=${BENCH_TRIALS}`);
   console.log(`Using pulumi: ${PULUMI_BIN}`);
   if (IS_REMOTE) {
     console.log(`Remote mode: ${BACKEND_URL}`);
@@ -486,7 +503,7 @@ async function main(): Promise<void> {
   const allResults: TrialResult[] = [];
 
   try {
-    const variants: Variant[] = ["plain", "secrets"];
+    const variants = BENCH_VARIANTS;
 
     let server: Subprocess | null = null;
     if (!IS_REMOTE) {
