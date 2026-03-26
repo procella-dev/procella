@@ -43,9 +43,20 @@ export function updateHandlers(
 		},
 
 		startUpdate: async (c: Context<Env>) => {
+			const caller = c.get("caller");
 			const updateId = param(c, "updateId");
 			const body = await c.req.json<StartUpdateRequest>();
 			const result = await updates.startUpdate(updateId, body);
+			const org = c.req.param("org");
+			const project = c.req.param("project");
+			const stack = c.req.param("stack");
+			if (org) {
+				void webhooks?.emit({
+					tenantId: caller.tenantId,
+					event: "update.started",
+					data: { org, project, stack, updateId },
+				});
+			}
 			return c.json(result);
 		},
 
@@ -127,11 +138,11 @@ export function updateHandlers(
 			}
 
 			if (
-				caller &&
+				org &&
 				(body.status === "succeeded" || body.status === "failed" || body.status === "cancelled")
 			) {
 				void webhooks?.emit({
-					tenantId: caller.tenantId,
+					tenantId: org,
 					event:
 						body.status === "succeeded"
 							? "update.succeeded"
