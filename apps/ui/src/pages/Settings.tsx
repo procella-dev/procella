@@ -9,7 +9,6 @@ import {
 } from "@descope/react-sdk";
 import { useEffect, useState } from "react";
 import { useAuthConfig } from "../hooks/useAuthConfig";
-import { useOrg } from "../hooks/useOrg";
 import { trpc } from "../trpc";
 
 type SettingsTab = "users" | "roles" | "audit" | "tenant" | "github";
@@ -118,20 +117,18 @@ export function Settings() {
 }
 
 function GitHubSettingsTab() {
-	const { org, isLoading: orgLoading } = useOrg();
-
 	const {
 		data: installation,
 		isLoading,
 		error: queryError,
 		refetch,
-	} = trpc.github.installation.useQuery({ org }, { enabled: !!org });
+	} = trpc.github.installation.useQuery();
 	const error = queryError?.message ?? null;
 
 	const removeMutation = trpc.github.removeInstallation.useMutation();
 	const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
 
-	if (orgLoading || isLoading) {
+	if (isLoading) {
 		return (
 			<div className="animate-pulse space-y-3">
 				<div className="h-32 bg-zinc-900 rounded-xl border border-zinc-800" />
@@ -154,7 +151,7 @@ function GitHubSettingsTab() {
 
 	const handleDisconnect = async () => {
 		try {
-			await removeMutation.mutateAsync({ org });
+			await removeMutation.mutateAsync();
 			setShowDisconnectConfirm(false);
 			refetch();
 		} catch {

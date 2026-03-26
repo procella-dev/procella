@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useOrg } from "../hooks/useOrg";
+
 import { trpc } from "../trpc";
 
 const WEBHOOK_EVENTS = [
@@ -13,7 +13,6 @@ const WEBHOOK_EVENTS = [
 ] as const;
 
 export function Webhooks() {
-	const { org, isLoading: orgLoading } = useOrg();
 	const [selectedWebhookId, setSelectedWebhookId] = useState<string | null>(null);
 	const [showCreateModal, setShowCreateModal] = useState(false);
 
@@ -22,10 +21,10 @@ export function Webhooks() {
 		isLoading,
 		error: queryError,
 		refetch: refetchList,
-	} = trpc.webhooks.list.useQuery({ org }, { enabled: !!org, refetchInterval: 10000 });
+	} = trpc.webhooks.list.useQuery(undefined, { refetchInterval: 10000 });
 	const error = queryError?.message ?? null;
 
-	if (orgLoading || isLoading) {
+	if (isLoading) {
 		return (
 			<div className="space-y-6">
 				<div className="flex items-center justify-between">
@@ -54,7 +53,6 @@ export function Webhooks() {
 	if (selectedWebhookId) {
 		return (
 			<WebhookDetail
-				org={org}
 				webhookId={selectedWebhookId}
 				onBack={() => setSelectedWebhookId(null)}
 				onDeleted={() => {
@@ -88,7 +86,6 @@ export function Webhooks() {
 
 			{showCreateModal && (
 				<WebhookModal
-					org={org}
 					webhookId={null}
 					onClose={() => {
 						setShowCreateModal(false);
@@ -243,12 +240,10 @@ function WebhookTable({
 }
 
 function WebhookModal({
-	org,
 	webhookId,
 	onClose,
 	onSaved,
 }: {
-	org: string;
 	webhookId: string | null;
 	onClose: () => void;
 	onSaved: () => void;
@@ -263,7 +258,7 @@ function WebhookModal({
 	const isEditing = !!webhookId;
 
 	const { data: existingWebhook } = trpc.webhooks.get.useQuery(
-		{ org, webhookId: webhookId ?? "" },
+		{ webhookId: webhookId ?? "" },
 		{ enabled: isEditing },
 	);
 
@@ -310,7 +305,6 @@ function WebhookModal({
 		try {
 			if (isEditing && webhookId) {
 				await updateMutation.mutateAsync({
-					org,
 					webhookId,
 					name,
 					url,
@@ -319,7 +313,6 @@ function WebhookModal({
 				onSaved();
 			} else {
 				const result = await createMutation.mutateAsync({
-					org,
 					name,
 					url,
 					events: selectedEvents,
@@ -445,12 +438,10 @@ function WebhookModal({
 }
 
 function WebhookDetail({
-	org,
 	webhookId,
 	onBack,
 	onDeleted,
 }: {
-	org: string;
 	webhookId: string;
 	onBack: () => void;
 	onDeleted: () => void;
@@ -463,11 +454,11 @@ function WebhookDetail({
 		isLoading,
 		error: queryError,
 		refetch: refetchWebhook,
-	} = trpc.webhooks.get.useQuery({ org, webhookId });
+	} = trpc.webhooks.get.useQuery({ webhookId });
 	const error = queryError?.message ?? null;
 
 	const { data: deliveries, refetch: refetchDeliveries } = trpc.webhooks.deliveries.useQuery(
-		{ org, webhookId },
+		{ webhookId },
 		{ refetchInterval: 10000 },
 	);
 
@@ -476,7 +467,7 @@ function WebhookDetail({
 
 	const handleDelete = async () => {
 		try {
-			await deleteMutation.mutateAsync({ org, webhookId });
+			await deleteMutation.mutateAsync({ webhookId });
 			onDeleted();
 		} catch {
 			// Error handled by tRPC
@@ -485,7 +476,7 @@ function WebhookDetail({
 
 	const handlePing = async () => {
 		try {
-			await pingMutation.mutateAsync({ org, webhookId });
+			await pingMutation.mutateAsync({ webhookId });
 			refetchDeliveries();
 		} catch {
 			// Error handled by tRPC
@@ -732,7 +723,6 @@ function WebhookDetail({
 			{/* Edit modal */}
 			{showEditModal && (
 				<WebhookModal
-					org={org}
 					webhookId={webhookId}
 					onClose={() => setShowEditModal(false)}
 					onSaved={handleEditSaved}

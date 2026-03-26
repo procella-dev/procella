@@ -1,8 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { z } from "zod/v4";
 import { publicProcedure, router } from "../trpc.js";
-
-const orgInput = z.object({ org: z.string() });
 
 function assertAdmin(roles: readonly string[]): void {
 	if (!roles.includes("admin")) {
@@ -11,28 +8,14 @@ function assertAdmin(roles: readonly string[]): void {
 }
 
 export const githubRouter = router({
-	installation: publicProcedure.input(orgInput).query(async ({ ctx, input }) => {
-		if (input.org !== ctx.caller.orgSlug) {
-			throw new TRPCError({
-				code: "BAD_REQUEST",
-				message: "Organization does not match caller organization",
-			});
-		}
-
+	installation: publicProcedure.query(async ({ ctx }) => {
 		if (!ctx.github) {
 			return null;
 		}
-
 		return ctx.github.getInstallation(ctx.caller.tenantId);
 	}),
 
-	removeInstallation: publicProcedure.input(orgInput).mutation(async ({ ctx, input }) => {
-		if (input.org !== ctx.caller.orgSlug) {
-			throw new TRPCError({
-				code: "BAD_REQUEST",
-				message: "Organization does not match caller organization",
-			});
-		}
+	removeInstallation: publicProcedure.mutation(async ({ ctx }) => {
 		assertAdmin(ctx.caller.roles);
 
 		if (!ctx.github) {
