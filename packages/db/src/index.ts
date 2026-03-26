@@ -93,8 +93,11 @@ export async function createDb(
 
 	const { neonConfig, Pool } = await import("@neondatabase/serverless");
 	const { drizzle } = await import("drizzle-orm/neon-serverless");
-	const ws = (await import("ws")).default;
-	neonConfig.webSocketConstructor = ws;
+
+	// Fall back to the `ws` npm package only when no global WebSocket is available.
+	if (typeof globalThis.WebSocket === "undefined") {
+		neonConfig.webSocketConstructor = (await import("ws")).default;
+	}
 
 	const pool = new Pool({
 		connectionString: options.url,
@@ -136,8 +139,9 @@ export async function runMigrations(url: string, migrationsFolder: string): Prom
 	const { neonConfig, Pool } = await import("@neondatabase/serverless");
 	const { drizzle } = await import("drizzle-orm/neon-serverless");
 	const { migrate } = await import("drizzle-orm/neon-serverless/migrator");
-	const ws = (await import("ws")).default;
-	neonConfig.webSocketConstructor = ws;
+	if (typeof globalThis.WebSocket === "undefined") {
+		neonConfig.webSocketConstructor = (await import("ws")).default;
+	}
 
 	const pool = new Pool({ connectionString: url });
 	try {
