@@ -4,7 +4,14 @@
 // Propagates trace context so downstream spans (DB queries, crypto ops)
 // are children of the request span.
 
-import { context, type Span, SpanKind, SpanStatusCode, trace } from "@opentelemetry/api";
+import {
+	context,
+	propagation,
+	type Span,
+	SpanKind,
+	SpanStatusCode,
+	trace,
+} from "@opentelemetry/api";
 import type { MiddlewareHandler } from "hono";
 
 const tracer = trace.getTracer("procella.http");
@@ -19,6 +26,12 @@ export function tracingMiddleware(): MiddlewareHandler {
 		const path = c.req.path;
 		const spanName = `${method} ${path}`;
 
+		const headers: Record<string, string> = {};
+		c.req.raw.headers.forEach((value, key) => {
+			headers[key] = value;
+		});
+		const parentCtx = propagation.extract(context.active(), headers);
+
 		await tracer.startActiveSpan(
 			spanName,
 			{
@@ -30,6 +43,7 @@ export function tracingMiddleware(): MiddlewareHandler {
 					"http.user_agent": c.req.header("user-agent") ?? "",
 				},
 			},
+			parentCtx,
 			async (span: Span) => {
 				try {
 					await next();

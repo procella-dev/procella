@@ -64,9 +64,8 @@ export class PostgresUpdatesService implements UpdatesService {
 	private readonly storage: BlobStorage;
 	private readonly crypto: CryptoService;
 
-	// In-memory caches to avoid O(N²) DB reads during journal flush.
-	// Keyed by updateId. Cleared on completeUpdate/cancelUpdate.
-	private readonly journalCache = new Map<string, Map<string, JournalRow>>();
+	// Per-update caches for immutable/monotonic data. Cleared on completeUpdate/cancelUpdate.
+	// Journal entries are NOT cached — DB remains source of truth for cluster safety.
 	private readonly baseDeploymentCache = new Map<string, Record<string, unknown>>();
 	private readonly checkpointVersionCache = new Map<string, number>();
 
@@ -405,15 +404,6 @@ export class PostgresUpdatesService implements UpdatesService {
 
 			await this.db.insert(journalEntries).values(rows).onConflictDoNothing();
 
-			let cached = this.journalCache.get(updateId);
-			if (!cached) {
-				cached = new Map();
-				this.journalCache.set(updateId, cached);
-			}
-			for (const r of rows) {
-				cached.set(String(r.sequenceId), r as unknown as JournalRow);
-			}
-
 			const hasNonElided = entries.some((e: JournalEntry) => !e.elideWrite);
 			if (hasNonElided) {
 				await this.flushJournalToCheckpoint(updateId, row.stackId);
@@ -621,28 +611,20 @@ export class PostgresUpdatesService implements UpdatesService {
 	}
 
 	private clearUpdateCaches(updateId: string): void {
-		this.journalCache.delete(updateId);
 		this.baseDeploymentCache.delete(updateId);
 		this.checkpointVersionCache.delete(updateId);
 	}
 
 	private async flushJournalToCheckpoint(updateId: string, stackId: string): Promise<void> {
 		return withDbSpan("flushJournalToCheckpoint", { "update.id": updateId }, async () => {
-			let allEntries: JournalRow[];
+			const allEntries = await this.db
+				.select()
+				.from(journalEntries)
+				.where(eq(journalEntries.updateId, updateId))
+				.orderBy(journalEntries.sequenceId);
 
-			const cached = this.journalCache.get(updateId);
-			if (cached && cached.size > 0) {
-				allEntries = Array.from(cached.values()).sort(compareSequenceId);
-			} else {
-				const rows = await this.db
-					.select()
-					.from(journalEntries)
-					.where(eq(journalEntries.updateId, updateId))
-					.orderBy(journalEntries.sequenceId);
-				if (rows.length === 0) {
-					return;
-				}
-				allEntries = rows;
+			if (allEntries.length === 0) {
+				return;
 			}
 
 			let baseDeployment = this.baseDeploymentCache.get(updateId);
@@ -740,10 +722,6 @@ export class PostgresUpdatesService implements UpdatesService {
 // Pure Helpers (exported for testing)
 // ============================================================================
 
-function compareSequenceId(a: JournalRow, b: JournalRow): number {
-	return Number(a.sequenceId ?? 0) - Number(b.sequenceId ?? 0);
-}
-
 /** Map DB status string to Pulumi API status string. */
 export function mapStatusToApiStatus(dbStatus: string): string {
 	switch (dbStatus) {
@@ -765,7 +743,6 @@ export function mapStatusToApiStatus(dbStatus: string): string {
 }
 
 export interface JournalRow {
-	sequenceId?: number | bigint;
 	kind: number;
 	operationId: number | bigint;
 	state: unknown;
