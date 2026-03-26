@@ -15,9 +15,16 @@ async function init() {
  */
 function normalizeRequest(req: Request): Request {
 	if (typeof req.headers?.get === "function") return req;
-	return new Request(req.url, {
+
+	const rawHeaders = req.headers as unknown as Record<string, string>;
+	const headers = new Headers(rawHeaders);
+	const host = rawHeaders.host || rawHeaders.Host || "localhost";
+	const proto = rawHeaders["x-forwarded-proto"] || "https";
+	const url = req.url.startsWith("http") ? req.url : `${proto}://${host}${req.url}`;
+
+	return new Request(url, {
 		method: req.method,
-		headers: new Headers(req.headers as unknown as Record<string, string>),
+		headers,
 		body: req.body,
 	});
 }
