@@ -57,6 +57,7 @@ export async function bootstrap() {
 		authConfig,
 		corsOrigins: config.corsOrigins,
 		db,
+		deltaCheckpointCutoffBytes: config.deltaCheckpointCutoffBytes,
 		stacks: stacksService,
 		updates: updatesService,
 	});
