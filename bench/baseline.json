@@ -1,12 +1,12 @@
 {
-  "description": "Performance baseline thresholds. p50 'up' time must stay within tolerancePct of maxUpP50Ms.",
-  "tolerancePct": 20,
-  "thresholds": {
-    "100": {
-      "checkpoint/plain": { "maxUpP50Ms": 45000 },
-      "checkpoint/secrets": { "maxUpP50Ms": 45000 },
-      "journal/plain": { "maxUpP50Ms": 15000 },
-      "journal/secrets": { "maxUpP50Ms": 15000 }
-    }
-  }
+	"description": "Performance baseline thresholds. p50 'up' time must stay within tolerancePct of maxUpP50Ms.",
+	"tolerancePct": 20,
+	"thresholds": {
+		"100": {
+			"checkpoint/plain": { "maxUpP50Ms": 8000 },
+			"checkpoint/secrets": { "maxUpP50Ms": 8000 },
+			"journal/plain": { "maxUpP50Ms": 4000 },
+			"journal/secrets": { "maxUpP50Ms": 4000 }
+		}
+	}
 }
