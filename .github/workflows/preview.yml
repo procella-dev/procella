@@ -269,7 +269,7 @@ jobs:
 
   bench-preview:
     name: Preview Benchmark
-    needs: [deploy-app]
+    needs: [deploy-app, neon]
     if: needs.deploy-app.result == 'success' && needs.deploy-app.outputs.url
     runs-on: ubuntu-latest
     continue-on-error: true
@@ -310,12 +310,19 @@ jobs:
           DESCOPE_PROJECT_ID: ${{ steps.descope.outputs.project_id }}
           DESCOPE_MANAGEMENT_KEY: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
         run: bun run bench/setup-preview-auth.ts
+      - name: Build DB URL
+        id: dburl
+        run: |
+          DB_URL="postgres://neondb_owner:${{ needs.neon.outputs.db_password }}@${{ needs.neon.outputs.db_host_pooled }}/neondb?sslmode=require"
+          echo "::add-mask::${DB_URL}"
+          echo "url=${DB_URL}" >> "$GITHUB_OUTPUT"
       - name: Run benchmark
         id: bench
         timeout-minutes: 15
         env:
           BENCH_URL: ${{ needs.deploy-app.outputs.url }}
           BENCH_TOKEN: ${{ steps.auth.outputs.bench_token }}
+          BENCH_DATABASE_URL: ${{ steps.dburl.outputs.url }}
           BENCH_MODES: journal
           BENCH_VARIANTS: secrets
           BENCH_SIZES: "10"
