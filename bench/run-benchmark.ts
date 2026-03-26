@@ -337,7 +337,15 @@ function average(values: number[]): number | null {
   return sum / values.length;
 }
 
-function renderMarkdownTable(results: BenchmarkResults): string {
+function pad(s: string, width: number): string {
+  return s.length >= width ? s : `${s}${" ".repeat(width - s.length)}`;
+}
+
+function padLeft(s: string, width: number): string {
+  return s.length >= width ? s : `${" ".repeat(width - s.length)}${s}`;
+}
+
+function renderSummary(results: BenchmarkResults): string {
   const modes = [...new Set(results.results.map((r) => r.mode))];
   const variants = [...new Set(results.results.map((r) => r.variant))];
   const combos: Array<{ n: number; mode: Mode; variant: Variant }> = [];
@@ -349,62 +357,50 @@ function renderMarkdownTable(results: BenchmarkResults): string {
     }
   }
 
-  const timingLines: string[] = [
-    "| N | Mode | Variant | up p50 | up min | up max | preview p50 | destroy p50 | Status |",
-    "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
-  ];
-
-  const storageLines: string[] = [
-    "| N | Mode | Variant | Checkpoint Bytes | Journal Entries |",
-    "| --- | --- | --- | --- | --- |",
-  ];
+  const lines: string[] = [];
+  lines.push("");
+  lines.push("━".repeat(78));
+  lines.push("  BENCHMARK SUMMARY");
+  lines.push("━".repeat(78));
 
   for (const combo of combos) {
     const rows = results.results.filter(
       (r) => r.n === combo.n && r.mode === combo.mode && r.variant === combo.variant,
     );
     const successful = rows.filter((r) => r.upExitCode === 0);
-    const status = successful.length > 0 ? "OK" : "FAIL";
 
-    if (status === "FAIL") {
-      timingLines.push(`| ${combo.n} | ${combo.mode} | ${combo.variant} | FAIL | FAIL | FAIL | FAIL | FAIL | FAIL |`);
-      storageLines.push(`| ${combo.n} | ${combo.mode} | ${combo.variant} | FAIL | FAIL |`);
+    lines.push("");
+    lines.push(`  ${combo.mode}/${combo.variant}  N=${combo.n}`);
+    lines.push(`  ${"─".repeat(50)}`);
+
+    if (successful.length === 0) {
+      lines.push("    ✗ ALL TRIALS FAILED");
       continue;
     }
 
-    const upValues = successful
-      .map((r) => r.upMs)
-      .filter((v): v is number => typeof v === "number");
-    const previewValues = successful
-      .map((r) => r.previewMs)
-      .filter((v): v is number => typeof v === "number");
-    const destroyValues = successful
-      .map((r) => r.destroyMs)
-      .filter((v): v is number => typeof v === "number");
-
-    const checkpointValues = successful
-      .map((r) => r.checkpointBytes)
-      .filter((v): v is number => typeof v === "number");
-    const journalValues = successful
-      .map((r) => r.journalEntryCount)
-      .filter((v): v is number => typeof v === "number");
+    const upValues = successful.map((r) => r.upMs).filter((v): v is number => typeof v === "number");
+    const previewValues = successful.map((r) => r.previewMs).filter((v): v is number => typeof v === "number");
+    const destroyValues = successful.map((r) => r.destroyMs).filter((v): v is number => typeof v === "number");
+    const journalValues = successful.map((r) => r.journalEntryCount).filter((v): v is number => typeof v === "number");
 
     const upP50 = median(upValues);
     const upMin = upValues.length > 0 ? Math.min(...upValues) : null;
     const upMax = upValues.length > 0 ? Math.max(...upValues) : null;
     const previewP50 = median(previewValues);
     const destroyP50 = median(destroyValues);
+    const avgJournal = average(journalValues);
 
-    timingLines.push(
-      `| ${combo.n} | ${combo.mode} | ${combo.variant} | ${formatMs(upP50)} | ${formatMs(upMin)} | ${formatMs(upMax)} | ${formatMs(previewP50)} | ${formatMs(destroyP50)} | ${status} |`,
-    );
-
-    storageLines.push(
-      `| ${combo.n} | ${combo.mode} | ${combo.variant} | ${formatNumber(average(checkpointValues), 0)} | ${formatNumber(average(journalValues), 1)} |`,
-    );
+    lines.push(`    up      ${padLeft(formatMs(upP50), 10)}  (min ${formatMs(upMin)}, max ${formatMs(upMax)})`);
+    lines.push(`    preview ${padLeft(formatMs(previewP50), 10)}`);
+    lines.push(`    destroy ${padLeft(formatMs(destroyP50), 10)}`);
+    if (avgJournal !== null) {
+      lines.push(`    journal ${padLeft(formatNumber(avgJournal, 0), 10)} entries`);
+    }
   }
 
-  return `${timingLines.join("\n")}\n\n${storageLines.join("\n")}`;
+  lines.push("");
+  lines.push("━".repeat(78));
+  return lines.join("\n");
 }
 
 async function main(): Promise<void> {
@@ -448,9 +444,18 @@ async function main(): Promise<void> {
         for (const variant of variants) {
           for (const n of BENCH_SIZES) {
             for (let trial = 1; trial <= BENCH_TRIALS; trial += 1) {
-              console.log(`  [${mode}/${variant}] N=${n} trial=${trial}`);
+              const label = `  [${mode}/${variant}] N=${n} trial=${trial}`;
+              process.stdout.write(`${label} ...`);
               const result = await runTrial(n, mode, variant, trial, pulumiHome);
               allResults.push(result);
+              if (result.upExitCode !== 0) {
+                console.log(` FAIL (exit ${result.upExitCode})`);
+              } else {
+                const up = result.upMs !== null ? `up=${formatMs(result.upMs)}` : "up=N/A";
+                const preview = result.previewMs !== null ? `preview=${formatMs(result.previewMs)}` : "";
+                const destroy = result.destroyMs !== null ? `destroy=${formatMs(result.destroyMs)}` : "";
+                console.log(` ${[up, preview, destroy].filter(Boolean).join("  ")}`);
+              }
             }
           }
         }
@@ -471,7 +476,7 @@ async function main(): Promise<void> {
     await mkdir(import.meta.dir, { recursive: true });
     await Bun.write(path.join(import.meta.dir, "results.json"), JSON.stringify(payload, null, 2));
 
-    console.log(renderMarkdownTable(payload));
+    console.log(renderSummary(payload));
   } finally {
     await rm(pulumiHome, { recursive: true, force: true });
   }

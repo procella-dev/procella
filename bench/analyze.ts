@@ -118,16 +118,28 @@ async function main(): Promise<void> {
 		return a.variant.localeCompare(b.variant);
 	});
 
-	const header = "| N | Mode | Variant | p50 up | threshold | status |";
-	const divider = "| --- | --- | --- | --- | --- | --- |";
-	const lines = summaries.map((summary) => {
-		const p50Text = summary.p50 === null ? "N/A" : formatMs(summary.p50);
-		const thresholdText = `${formatMs(summary.threshold)} (limit ${formatMs(summary.limit)})`;
-		const status = summary.pass ? "PASS" : "FAIL";
-		return `| ${summary.n} | ${summary.mode} | ${summary.variant} | ${p50Text} | ${thresholdText} | ${status} |`;
-	});
+	function padLeft(s: string, w: number): string {
+		return s.length >= w ? s : `${" ".repeat(w - s.length)}${s}`;
+	}
 
-	console.log([header, divider, ...lines].join("\n"));
+	console.log("");
+	console.log("━".repeat(68));
+	console.log("  THRESHOLD CHECK");
+	console.log("━".repeat(68));
+
+	let anyFail = false;
+	for (const s of summaries) {
+		const p50Text = s.p50 === null ? "N/A" : formatMs(s.p50);
+		const icon = s.pass ? "✓" : "✗";
+		const status = s.pass ? "PASS" : "FAIL";
+		if (!s.pass) anyFail = true;
+		console.log(
+			`  ${icon} ${s.mode}/${s.variant} N=${String(s.n).padStart(4)}  p50=${padLeft(p50Text, 10)}  limit=${padLeft(formatMs(s.limit), 10)}  ${status}`,
+		);
+	}
+
+	console.log("━".repeat(68));
+	console.log("");
 
 	if (errors.length > 0) {
 		console.error("Benchmark regression check failed:");
