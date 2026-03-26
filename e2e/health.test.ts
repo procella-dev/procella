@@ -19,7 +19,6 @@ describe("health and capabilities", () => {
 		const names = body.capabilities.map((c: { capability: string }) => c.capability);
 		expect(names).toContain("batch-encrypt");
 		expect(names).toContain("deployment-schema-version");
-		expect(names).toContain("delta-checkpoint-uploads-v2");
 	});
 
 	test("GET /api/cli/version returns version info", async () => {

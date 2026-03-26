@@ -10,7 +10,7 @@ import type { Env } from "../types.js";
 // Health Handlers
 // ============================================================================
 
-export function healthHandlers(deps: { db: Database; deltaCheckpointCutoffBytes: number }) {
+export function healthHandlers(deps: { db: Database }) {
 	return {
 		health: async (c: Context<Env>) => {
 			try {
@@ -27,12 +27,6 @@ export function healthHandlers(deps: { db: Database; deltaCheckpointCutoffBytes:
 					{ capability: "batch-encrypt" },
 					{ capability: "deployment-schema-version", version: 3 },
 					{ capability: "journaling-v1", version: 1 },
-					{
-						capability: "delta-checkpoint-uploads-v2",
-						configuration: {
-							checkpointCutoffSizeBytes: deps.deltaCheckpointCutoffBytes,
-						},
-					},
 				],
 			} satisfies CapabilitiesResponse),
 

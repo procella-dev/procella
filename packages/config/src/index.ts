@@ -43,9 +43,6 @@ const configSchema = z
 			.regex(/^[0-9a-fA-F]{64}$/, "Must be 64 hex chars (32 bytes)")
 			.optional(),
 
-		// Delta checkpoints
-		deltaCheckpointCutoffBytes: z.coerce.number().int().min(0).default(1_048_576),
-
 		// CORS
 		corsOrigins: z
 			.string()
@@ -111,7 +108,6 @@ const envMapping = {
 	blobS3Endpoint: "PROCELLA_BLOB_S3_ENDPOINT",
 	blobS3Region: "PROCELLA_BLOB_S3_REGION",
 	encryptionKey: "PROCELLA_ENCRYPTION_KEY",
-	deltaCheckpointCutoffBytes: "PROCELLA_DELTA_CHECKPOINT_CUTOFF_BYTES",
 	corsOrigins: "PROCELLA_CORS_ORIGINS",
 } as const;
 

@@ -39,7 +39,6 @@ export function createApp(deps: {
 	authConfig: AuthConfig;
 	corsOrigins?: string[];
 	db: Database;
-	deltaCheckpointCutoffBytes?: number;
 	stacks: StacksService;
 	updates: UpdatesService;
 }): Hono<Env> {
@@ -54,10 +53,7 @@ export function createApp(deps: {
 	app.use("*", decompress());
 
 	// Create handler instances
-	const health = healthHandlers({
-		db: deps.db,
-		deltaCheckpointCutoffBytes: deps.deltaCheckpointCutoffBytes ?? 1_048_576,
-	});
+	const health = healthHandlers({ db: deps.db });
 	const user = userHandlers(deps.stacks);
 	const stackH = stackHandlers(deps.stacks);
 	const updateH = updateHandlers(deps.updates, deps.stacks);

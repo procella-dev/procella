@@ -157,7 +157,6 @@ export async function startServer(): Promise<Subprocess> {
 			PROCELLA_DEV_AUTH_TOKEN: TEST_TOKEN,
 			PROCELLA_BLOB_BACKEND: "local",
 			PROCELLA_BLOB_LOCAL_PATH: "./data/e2e-blobs",
-			PROCELLA_DELTA_CHECKPOINT_CUTOFF_BYTES: "1024",
 		},
 		stdout: "ignore",
 		stderr: "ignore",

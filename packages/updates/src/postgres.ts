@@ -276,13 +276,11 @@ export class PostgresUpdatesService implements UpdatesService {
 			throw new UpdateNotFoundError(updateId);
 		}
 
-		// Extract the inner deployment. Store via blob to preserve exact JSON byte
-		// representation — required for delta checkpoint base computation.
+		// Verbatim: untypedDeployment is the full UntypedDeployment wrapper { version, deployment }.
+		// Extract the inner deployment to store consistently with patchCheckpoint.
 		const wrapper = (request as { untypedDeployment?: { deployment?: unknown } }).untypedDeployment;
 		const rawDeployment = wrapper?.deployment ?? wrapper;
-		const rawJson =
-			typeof rawDeployment === "string" ? rawDeployment : JSON.stringify(rawDeployment ?? {});
-		await this.upsertCheckpointRaw(updateId, row.stackId, rawJson);
+		await this.upsertCheckpoint(updateId, row.stackId, rawDeployment);
 	}
 
 	async patchCheckpointDelta(
@@ -295,6 +293,7 @@ export class PostgresUpdatesService implements UpdatesService {
 			throw new UpdateNotFoundError(updateId);
 		}
 
+		// Fetch latest non-delta checkpoint for this update
 		const [baseCheckpoint] = await this.db
 			.select()
 			.from(checkpoints)
@@ -302,18 +301,22 @@ export class PostgresUpdatesService implements UpdatesService {
 			.orderBy(desc(checkpoints.version))
 			.limit(1);
 
-		// Load base as raw JSON string — must read from blob to preserve exact bytes.
-		// JSONB normalizes key ordering which corrupts byte-offset-based text edits.
-		if (!baseCheckpoint?.blobKey) {
-			throw new BadRequestError(
-				"Delta checkpoint requires a blob-backed base checkpoint (JSONB base is not byte-safe)",
-			);
+		let baseDeployment: unknown;
+		if (baseCheckpoint) {
+			if (baseCheckpoint.blobKey) {
+				const data = await this.storage.get(baseCheckpoint.blobKey);
+				if (!data) {
+					throw new Error("Checkpoint blob data missing from storage");
+				}
+				baseDeployment = JSON.parse(new TextDecoder().decode(data));
+			} else {
+				baseDeployment = baseCheckpoint.data;
+			}
+		} else {
+			baseDeployment = {};
 		}
-		const baseData = await this.storage.get(baseCheckpoint.blobKey);
-		if (!baseData) {
-			throw new Error("Checkpoint blob data missing from storage");
-		}
-		const baseJson = new TextDecoder().decode(baseData);
+
+		const baseJson = JSON.stringify(baseDeployment);
 
 		const edits = (request as { deploymentDelta?: unknown }).deploymentDelta;
 		if (!Array.isArray(edits)) {
@@ -335,13 +338,8 @@ export class PostgresUpdatesService implements UpdatesService {
 			}
 		}
 
-		try {
-			JSON.parse(newJson);
-		} catch {
-			throw new BadRequestError("Delta produced invalid JSON");
-		}
-
-		await this.upsertCheckpointRaw(updateId, row.stackId, newJson);
+		const merged = JSON.parse(newJson);
+		await this.upsertCheckpoint(updateId, row.stackId, merged);
 	}
 
 	async appendJournalEntries(updateId: string, batch: JournalEntries): Promise<void> {
@@ -617,40 +615,6 @@ export class PostgresUpdatesService implements UpdatesService {
 				target: [checkpoints.updateId, checkpoints.version],
 				set: {
 					data: checkpointData,
-					blobKey,
-					isDelta: false,
-				},
-			});
-	}
-
-	/**
-	 * Store a checkpoint as raw JSON bytes in blob storage (always, regardless of size).
-	 * This preserves the exact byte representation needed for delta checkpoint computation.
-	 * JSONB column is set to null — reads must go through blobKey.
-	 */
-	private async upsertCheckpointRaw(
-		updateId: string,
-		stackId: string,
-		rawJson: string,
-	): Promise<void> {
-		const version = await this.nextCheckpointVersion(updateId);
-		const blobKey = formatBlobKey(stackId, updateId, version);
-		await this.storage.put(blobKey, new TextEncoder().encode(rawJson));
-
-		await this.db
-			.insert(checkpoints)
-			.values({
-				updateId,
-				stackId,
-				version,
-				data: null,
-				blobKey,
-				isDelta: false,
-			})
-			.onConflictDoUpdate({
-				target: [checkpoints.updateId, checkpoints.version],
-				set: {
-					data: null,
 					blobKey,
 					isDelta: false,
 				},
