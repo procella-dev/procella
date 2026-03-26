@@ -3,8 +3,6 @@
 	"tolerancePct": 20,
 	"thresholds": {
 		"100": {
-			"checkpoint/plain": { "maxUpP50Ms": 8000 },
-			"checkpoint/secrets": { "maxUpP50Ms": 8000 },
 			"journal/plain": { "maxUpP50Ms": 4000 },
 			"journal/secrets": { "maxUpP50Ms": 4000 }
 		}

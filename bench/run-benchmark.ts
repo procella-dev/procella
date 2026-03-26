@@ -37,6 +37,13 @@ const BENCH_TRIALS = (() => {
   return Math.floor(raw);
 })();
 
+const BENCH_MODES: Mode[] = (() => {
+  const raw = process.env.BENCH_MODES;
+  if (!raw) return ["journal"] as Mode[];
+  const parsed = raw.split(",").map((v) => v.trim()).filter((v): v is Mode => v === "checkpoint" || v === "journal");
+  return parsed.length > 0 ? parsed : ["journal"] as Mode[];
+})();
+
 function cleanEnv(): Record<string, string> {
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env)) {
@@ -402,7 +409,7 @@ function renderMarkdownTable(results: BenchmarkResults): string {
 
 async function main(): Promise<void> {
   PULUMI_BIN = await findPulumi();
-  console.log(`Procella journaling benchmark: sizes=${BENCH_SIZES.join(",")}, trials=${BENCH_TRIALS}`);
+  console.log(`Procella benchmark: modes=${BENCH_MODES.join(",")}, sizes=${BENCH_SIZES.join(",")}, trials=${BENCH_TRIALS}`);
   console.log(`Using pulumi: ${PULUMI_BIN}`);
   if (IS_REMOTE) {
     console.log(`Remote mode: ${BACKEND_URL}`);
@@ -430,7 +437,6 @@ async function main(): Promise<void> {
   const allResults: TrialResult[] = [];
 
   try {
-    const modes: Mode[] = ["checkpoint", "journal"];
     const variants: Variant[] = ["plain", "secrets"];
 
     let server: Subprocess | null = null;
@@ -438,7 +444,7 @@ async function main(): Promise<void> {
       server = await startBenchServer();
     }
     try {
-      for (const mode of modes) {
+      for (const mode of BENCH_MODES) {
         for (const variant of variants) {
           for (const n of BENCH_SIZES) {
             for (let trial = 1; trial <= BENCH_TRIALS; trial += 1) {

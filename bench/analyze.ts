@@ -59,9 +59,6 @@ async function main(): Promise<void> {
 		grouped.set(key, existing);
 	}
 
-	const modes: Mode[] = ["checkpoint", "journal"];
-	const variants: Variant[] = ["plain", "secrets"];
-
 	const expectedKeys = new Set<string>();
 	for (const nKey of Object.keys(baseline.thresholds)) {
 		const n = Number(nKey);

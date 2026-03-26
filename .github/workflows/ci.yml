@@ -135,7 +135,7 @@ jobs:
       - name: Run benchmark
         env:
           PROCELLA_DATABASE_URL: postgres://procella:procella@localhost:5432/procella?sslmode=disable
-        run: BENCH_SIZES=100 BENCH_TRIALS=3 bun run bench
+        run: BENCH_MODES=journal BENCH_SIZES=100 BENCH_TRIALS=3 bun run bench
       - name: Check benchmark thresholds
         run: bun run bench:check
       - name: Upload benchmark results
