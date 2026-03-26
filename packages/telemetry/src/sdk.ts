@@ -5,11 +5,11 @@
 // Call initTelemetry() before any other imports that need tracing.
 
 import { DiagConsoleLogger, DiagLogLevel, diag } from "@opentelemetry/api";
-import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { Resource } from "@opentelemetry/resources";
 import { BatchSpanProcessor, type SpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from "@opentelemetry/semantic-conventions";
+import { FetchOtlpTraceExporter } from "./fetch-exporter.js";
 
 let provider: NodeTracerProvider | null = null;
 
@@ -45,12 +45,9 @@ export function initTelemetry(config: TelemetryConfig): void {
 
 	provider = new NodeTracerProvider({ resource });
 
-	const exporterOptions: Record<string, unknown> = {};
-	if (config.otlpEndpoint) {
-		exporterOptions.url = config.otlpEndpoint;
-	}
-
-	const exporter = new OTLPTraceExporter(exporterOptions);
+	const exporter = new FetchOtlpTraceExporter(
+		config.otlpEndpoint ? { url: config.otlpEndpoint } : undefined,
+	);
 	provider.addSpanProcessor(new BatchSpanProcessor(exporter) as SpanProcessor);
 	provider.register();
 }
