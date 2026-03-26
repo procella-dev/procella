@@ -327,14 +327,12 @@ jobs:
           BENCH_VARIANTS: secrets
           BENCH_SIZES: "10"
           BENCH_TRIALS: "3"
-        run: |
-          bun run bench
-          SUMMARY=$(bun -e 'const path="bench/results.json";const f=Bun.file(path);if(!(await f.exists())){console.log("No results");process.exit(0)};const payload=await f.json();const rows=Array.isArray(payload.results)?payload.results:[];const by=new Map();for(const r of rows){const k=`${r.n}|${r.mode}|${r.variant}`;if(!by.has(k))by.set(k,[]);by.get(k).push(r)};const med=(arr)=>{if(arr.length===0)return null;const s=[...arr].sort((a,b)=>a-b);const m=Math.floor(s.length/2);return s.length%2?s[m]:(s[m-1]+s[m])/2};const out=[];for(const [k,v] of by){const [n,mode,variant]=k.split("|");const ok=v.filter((r)=>r.upExitCode===0);const up=med(ok.map((r)=>r.upMs).filter((x)=>typeof x==="number"));const pre=med(ok.map((r)=>r.previewMs).filter((x)=>typeof x==="number"));const des=med(ok.map((r)=>r.destroyMs).filter((x)=>typeof x==="number"));const fmt=(x)=>x===null?"FAIL":`${x.toFixed(1)}ms`;out.push(`${n}/${mode}/${variant}: up ${fmt(up)}, preview ${fmt(pre)}, destroy ${fmt(des)}`)};console.log(out.join("; ")||"No benchmark rows")')
-          {
-            echo "summary<<EOF"
-            echo "$SUMMARY"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+        run: bun run bench
+      - name: Check benchmark thresholds
+        if: always() && hashFiles('bench/results.json')
+        env:
+          BENCH_BASELINE: bench/baseline-preview.json
+        run: bun run bench:check
       - name: Cleanup Descope auth
         if: always()
         env:
@@ -351,70 +349,83 @@ jobs:
       - name: Comment benchmark results
         if: always() && hashFiles('bench/results.json')
         uses: actions/github-script@v8
+        env:
+          BENCH_BASELINE_PATH: bench/baseline-preview.json
         with:
           script: |
             const fs = require('node:fs');
-
             const marker = '## 📊 Preview Benchmark';
-            const file = fs.readFileSync('bench/results.json', 'utf8');
-            const payload = JSON.parse(file);
+            const payload = JSON.parse(fs.readFileSync('bench/results.json', 'utf8'));
+            const baseline = JSON.parse(fs.readFileSync(process.env.BENCH_BASELINE_PATH, 'utf8'));
             const rows = Array.isArray(payload.results) ? payload.results : [];
             const groups = new Map();
-
             for (const row of rows) {
               const key = `${row.n}|${row.mode}|${row.variant}`;
               if (!groups.has(key)) groups.set(key, []);
               groups.get(key).push(row);
             }
-
-            const median = (values) => {
-              if (!values.length) return null;
-              const sorted = [...values].sort((a, b) => a - b);
-              const middle = Math.floor(sorted.length / 2);
-              return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+            const median = (arr) => {
+              if (!arr.length) return null;
+              const s = [...arr].sort((a, b) => a - b);
+              const m = Math.floor(s.length / 2);
+              return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
             };
-            const fmt = (n) => (n === null ? 'FAIL' : `${n.toFixed(1)}ms`);
+            const fmt = (n) => (n === null ? '—' : `${n.toFixed(1)}ms`);
+            const tol = baseline.tolerancePct ?? 30;
 
-            const lines = [
-              marker,
-              '',
-              '| N | Mode | Variant | up p50 | preview p50 | destroy p50 |',
-              '|---:|------|---------|-------:|------------:|------------:|',
-            ];
+            const lines = [marker, ''];
 
             for (const [key, values] of groups.entries()) {
               const [n, mode, variant] = key.split('|');
-              const successful = values.filter((v) => v.upExitCode === 0);
-              const up = median(successful.map((v) => v.upMs).filter((v) => typeof v === 'number'));
-              const preview = median(successful.map((v) => v.previewMs).filter((v) => typeof v === 'number'));
-              const destroy = median(successful.map((v) => v.destroyMs).filter((v) => typeof v === 'number'));
-              lines.push(`| ${n} | ${mode} | ${variant} | ${fmt(up)} | ${fmt(preview)} | ${fmt(destroy)} |`);
+              const ok = values.filter((v) => v.upExitCode === 0);
+              const upVals = ok.map((v) => v.upMs).filter((v) => typeof v === 'number');
+              const preVals = ok.map((v) => v.previewMs).filter((v) => typeof v === 'number');
+              const desVals = ok.map((v) => v.destroyMs).filter((v) => typeof v === 'number');
+              const up50 = median(upVals);
+              const pre50 = median(preVals);
+              const des50 = median(desVals);
+              const jrnl = ok[0]?.journalEntryCount;
+              const thresh = baseline.thresholds?.[n]?.[`${mode}/${variant}`]?.maxUpP50Ms;
+              const limit = thresh ? thresh * (1 + tol / 100) : null;
+              const status = up50 !== null && limit !== null ? (up50 <= limit ? '✅' : '❌') : '—';
+
+              lines.push(`**${mode}/${variant} N=${n}** ${status}`);
+              lines.push('');
+              lines.push('| Metric | Value |');
+              lines.push('|--------|------:|');
+              lines.push(`| up p50 | ${fmt(up50)} |`);
+              if (thresh) lines.push(`| threshold | ${fmt(thresh)} (limit ${fmt(limit)}) |`);
+              lines.push(`| preview p50 | ${fmt(pre50)} |`);
+              lines.push(`| destroy p50 | ${fmt(des50)} |`);
+              if (jrnl) lines.push(`| journal entries | ${jrnl} |`);
+              lines.push('');
+
+              lines.push('<details><summary>Per-trial</summary>', '');
+              lines.push('| Trial | up | preview | destroy |');
+              lines.push('|------:|---:|--------:|--------:|');
+              for (const r of values) {
+                const s = r.upExitCode === 0 ? '' : ' ❌';
+                lines.push(`| ${r.trial} | ${fmt(r.upMs)}${s} | ${fmt(r.previewMs)} | ${fmt(r.destroyMs)} |`);
+              }
+              lines.push('', '</details>', '');
             }
+            lines.push(`_Run at ${payload.runAt ?? 'unknown'}_`);
 
-            lines.push('');
-            lines.push(`Run at: ${payload.runAt ?? 'unknown'}`);
             const body = lines.join('\n');
-
             const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
+              owner: context.repo.owner, repo: context.repo.repo,
               issue_number: context.issue.number,
             });
-            const existing = comments.find((comment) => comment.body?.startsWith(marker));
-
+            const existing = comments.find((c) => c.body?.startsWith(marker));
             if (existing) {
               await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
+                owner: context.repo.owner, repo: context.repo.repo,
+                comment_id: existing.id, body,
               });
             } else {
               await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: context.issue.number, body,
               });
             }
 

@@ -33,7 +33,7 @@ function getUpValues(rows: TrialResult[]): number[] {
 
 async function main(): Promise<void> {
 	const resultsPath = path.join(import.meta.dir, "results.json");
-	const baselinePath = path.join(import.meta.dir, "baseline.json");
+	const baselinePath = process.env.BENCH_BASELINE ?? path.join(import.meta.dir, "baseline.json");
 
 	const [results, baseline] = await Promise.all([
 		Bun.file(resultsPath).json() as Promise<BenchmarkResults>,

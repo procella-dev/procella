@@ -1,0 +1,9 @@
+{
+	"description": "Preview deployment thresholds (Vercel serverless + Neon). Higher variance due to cold starts.",
+	"tolerancePct": 30,
+	"thresholds": {
+		"10": {
+			"journal/secrets": { "maxUpP50Ms": 6000 }
+		}
+	}
+}
