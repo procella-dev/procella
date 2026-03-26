@@ -1,4 +1,5 @@
 import { Link } from "react-router";
+import { apiBase } from "../config";
 import { trpc } from "../trpc";
 
 export function StackList() {
@@ -85,7 +86,7 @@ function EmptyState() {
 							<CommandStep
 								step="1"
 								label="Login to this backend"
-								command={`pulumi login ${window.location.origin}`}
+								command={`pulumi login ${apiBase || window.location.origin}`}
 							/>
 							<CommandStep
 								step="2"
@@ -103,7 +104,7 @@ function EmptyState() {
 				<QuickRefCard
 					title="API Token Authentication"
 					description="Use your API token to authenticate the CLI."
-					code={`export PULUMI_ACCESS_TOKEN=<your-token>\npulumi login ${window.location.origin}`}
+					code={`export PULUMI_ACCESS_TOKEN=<your-token>\npulumi login ${apiBase || window.location.origin}`}
 				/>
 				<QuickRefCard
 					title="Manage Stacks"
