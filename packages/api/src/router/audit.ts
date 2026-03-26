@@ -18,6 +18,12 @@ const auditExportInput = z.object({
 	action: z.string().optional(),
 });
 
+function assertAdmin(roles: readonly string[]): void {
+	if (!roles.includes("admin")) {
+		throw new TRPCError({ code: "FORBIDDEN", message: "Admin role required" });
+	}
+}
+
 export const auditRouter = router({
 	list: publicProcedure.input(auditListInput).query(async ({ ctx, input }) => {
 		if (input.org !== ctx.caller.orgSlug) {
@@ -26,6 +32,7 @@ export const auditRouter = router({
 				message: "Organization does not match caller organization",
 			});
 		}
+		assertAdmin(ctx.caller.roles);
 
 		return ctx.audit.query(ctx.caller.tenantId, {
 			startTime: input.startTime,
@@ -43,6 +50,7 @@ export const auditRouter = router({
 				message: "Organization does not match caller organization",
 			});
 		}
+		assertAdmin(ctx.caller.roles);
 
 		return ctx.audit.export(ctx.caller.tenantId, {
 			startTime: input.startTime,

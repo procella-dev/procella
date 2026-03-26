@@ -14,6 +14,15 @@ describe("@procella/audit", () => {
 		expect(mapRouteToAction("POST", "/api/stacks/org/proj/dev/update")).toBe(
 			AuditAction.UPDATE_CREATE,
 		);
+		expect(mapRouteToAction("POST", "/api/stacks/org/proj/dev/preview")).toBe(
+			AuditAction.UPDATE_CREATE,
+		);
+		expect(mapRouteToAction("POST", "/api/stacks/org/proj/dev/refresh")).toBe(
+			AuditAction.UPDATE_CREATE,
+		);
+		expect(mapRouteToAction("POST", "/api/stacks/org/proj/dev/destroy")).toBe(
+			AuditAction.UPDATE_CREATE,
+		);
 		expect(mapRouteToAction("POST", "/api/stacks/org/proj/dev/update/u1/complete")).toBe(
 			AuditAction.UPDATE_COMPLETE,
 		);

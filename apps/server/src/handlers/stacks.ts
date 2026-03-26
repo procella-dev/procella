@@ -66,8 +66,13 @@ export function stackHandlers(stacks: StacksService, webhooks?: WebhooksService)
 			const tagValue = c.req.query("tagValue");
 			const query = c.req.query("query");
 			const continuationToken = c.req.query("continuationToken");
+			const pageSize = c.req.query("pageSize");
+			const sortBy = c.req.query("sortBy");
+			const sortOrder = c.req.query("sortOrder");
 
-			const hasSearchParams = Boolean(tagName || tagValue || query || continuationToken);
+			const hasSearchParams = Boolean(
+				tagName || tagValue || query || continuationToken || pageSize || sortBy || sortOrder,
+			);
 			if (!hasSearchParams) {
 				const results = await stacks.listStacks(caller.tenantId, org, project);
 				return c.json({ stacks: results.map((r) => mapToStackSummary(r, caller.orgSlug)) });
@@ -85,6 +90,12 @@ export function stackHandlers(stacks: StacksService, webhooks?: WebhooksService)
 				tagValue,
 				query,
 				continuationToken,
+				pageSize: pageSize && !Number.isNaN(Number(pageSize)) ? Number(pageSize) : undefined,
+				sortBy:
+					sortBy === "name" || sortBy === "lastUpdated" || sortBy === "created"
+						? sortBy
+						: undefined,
+				sortOrder: sortOrder === "asc" || sortOrder === "desc" ? sortOrder : undefined,
 			});
 
 			return c.json({

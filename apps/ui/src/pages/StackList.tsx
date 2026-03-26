@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { StackCard, type UpdateStatus } from "../components/ui";
 import { apiBase } from "../config";
@@ -54,27 +54,44 @@ export function StackList() {
 
 	// Pagination state
 	const [allItems, setAllItems] = useState<StackItem[]>([]);
+	const [continuationToken, setContinuationToken] = useState<string | undefined>(undefined);
 	const [isLoadingMore, setIsLoadingMore] = useState(false);
-	const prevTokenRef = useRef<string | undefined>(undefined);
+	const [nextPageToken, setNextPageToken] = useState<string | undefined>(undefined);
 
-	// Reset accumulated items when filters change
+	const searchKey = useMemo(
+		() =>
+			JSON.stringify({
+				query: debouncedSearch || "",
+				project: project || "",
+				tagName: tagName || "",
+				tagValue: tagValue || "",
+				sortBy,
+				sortOrder,
+			}),
+		[debouncedSearch, project, tagName, tagValue, sortBy, sortOrder],
+	);
+
 	useEffect(() => {
-		if (stacks) {
-			setAllItems(stacks.stacks ?? []);
-			prevTokenRef.current = undefined;
-		}
-	}, [stacks]);
+		setAllItems([]);
+		setContinuationToken(undefined);
+		setNextPageToken(undefined);
+		setIsLoadingMore(false);
+	}, [searchKey]);
 
-	const continuationToken = stacks?.continuationToken;
+	useEffect(() => {
+		if (!stacks) return;
+		setAllItems(stacks.stacks ?? []);
+		setContinuationToken(stacks.continuationToken);
+	}, [stacks]);
 
 	const loadMore = useCallback(() => {
 		if (!continuationToken || isLoadingMore) return;
 		setIsLoadingMore(true);
-		prevTokenRef.current = continuationToken;
+		setNextPageToken(continuationToken);
 	}, [continuationToken, isLoadingMore]);
 
 	// Fetch next page when loadMore is triggered
-	const nextPageInput = prevTokenRef.current
+	const nextPageInput = nextPageToken
 		? {
 				query: debouncedSearch || undefined,
 				project: project || undefined,
@@ -83,7 +100,7 @@ export function StackList() {
 				sortBy,
 				sortOrder,
 				pageSize: 50,
-				continuationToken: prevTokenRef.current,
+				continuationToken: nextPageToken,
 			}
 		: undefined;
 	const { data: nextPage } = trpc.stacks.list.useQuery(nextPageInput, {
@@ -94,8 +111,9 @@ export function StackList() {
 	useEffect(() => {
 		if (nextPage && isLoadingMore) {
 			setAllItems((prev) => [...prev, ...(nextPage.stacks ?? [])]);
+			setContinuationToken(nextPage.continuationToken);
 			setIsLoadingMore(false);
-			prevTokenRef.current = undefined;
+			setNextPageToken(undefined);
 		}
 	}, [nextPage, isLoadingMore]);
 

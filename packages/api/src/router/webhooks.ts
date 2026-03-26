@@ -26,6 +26,12 @@ const webhookIdInput = z.object({
 	webhookId: z.string().uuid(),
 });
 
+function assertAdmin(roles: readonly string[]): void {
+	if (!roles.includes("admin")) {
+		throw new TRPCError({ code: "FORBIDDEN", message: "Admin role required" });
+	}
+}
+
 export const webhooksRouter = router({
 	list: publicProcedure.input(orgInput).query(async ({ ctx, input }) => {
 		if (input.org !== ctx.caller.orgSlug) {
@@ -34,6 +40,7 @@ export const webhooksRouter = router({
 				message: "Organization does not match caller organization",
 			});
 		}
+		assertAdmin(ctx.caller.roles);
 		return ctx.webhooks.listWebhooks(ctx.caller.tenantId);
 	}),
 
@@ -44,6 +51,7 @@ export const webhooksRouter = router({
 				message: "Organization does not match caller organization",
 			});
 		}
+		assertAdmin(ctx.caller.roles);
 
 		return ctx.webhooks.createWebhook(
 			ctx.caller.tenantId,
@@ -64,6 +72,7 @@ export const webhooksRouter = router({
 				message: "Organization does not match caller organization",
 			});
 		}
+		assertAdmin(ctx.caller.roles);
 
 		const webhook = await ctx.webhooks.getWebhook(ctx.caller.tenantId, input.webhookId);
 		if (!webhook) {
@@ -79,6 +88,7 @@ export const webhooksRouter = router({
 				message: "Organization does not match caller organization",
 			});
 		}
+		assertAdmin(ctx.caller.roles);
 
 		return ctx.webhooks.updateWebhook(ctx.caller.tenantId, input.webhookId, {
 			name: input.name,
@@ -95,6 +105,7 @@ export const webhooksRouter = router({
 				message: "Organization does not match caller organization",
 			});
 		}
+		assertAdmin(ctx.caller.roles);
 
 		await ctx.webhooks.deleteWebhook(ctx.caller.tenantId, input.webhookId);
 		return { success: true };
@@ -109,6 +120,7 @@ export const webhooksRouter = router({
 					message: "Organization does not match caller organization",
 				});
 			}
+			assertAdmin(ctx.caller.roles);
 
 			return ctx.webhooks.listDeliveries(ctx.caller.tenantId, input.webhookId, input.limit);
 		}),
@@ -120,6 +132,7 @@ export const webhooksRouter = router({
 				message: "Organization does not match caller organization",
 			});
 		}
+		assertAdmin(ctx.caller.roles);
 
 		return ctx.webhooks.ping(ctx.caller.tenantId, input.webhookId);
 	}),

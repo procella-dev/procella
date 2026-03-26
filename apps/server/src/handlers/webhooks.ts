@@ -94,12 +94,8 @@ export function webhookHandlers(deps: { webhooks: WebhooksService }) {
 			}
 
 			const hookId = param(c, "hookId");
-			const limit = Number(c.req.query("limit") ?? "50");
-			const deliveries = await deps.webhooks.listDeliveries(
-				caller.tenantId,
-				hookId,
-				Number.isNaN(limit) ? 50 : limit,
-			);
+			const limit = Math.min(Math.max(Number(c.req.query("limit")) || 50, 1), 200);
+			const deliveries = await deps.webhooks.listDeliveries(caller.tenantId, hookId, limit);
 			return c.json({ deliveries });
 		},
 

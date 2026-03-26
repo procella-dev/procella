@@ -203,6 +203,8 @@ export class OctokitGitHubService implements GitHubService {
 		body: string,
 	): Promise<void> {
 		const octokit = this.createInstallationClient(installationId);
+		// Phase 1 limitation: post a new Procella comment for each update.
+		// Phase 2 will switch to find-and-update existing Procella comment threads.
 		await octokit.rest.issues.createComment({
 			owner,
 			repo,

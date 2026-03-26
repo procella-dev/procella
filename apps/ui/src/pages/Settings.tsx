@@ -139,7 +139,6 @@ function GitHubSettingsTab() {
 		);
 	}
 
-	// GitHub not configured (server returned null because ctx.github is null)
 	if (!error && installation === null) {
 		return <GitHubNotConfigured onCheckConnection={refetch} />;
 	}
@@ -263,10 +262,11 @@ function GitHubNotConfigured({ onCheckConnection }: { onCheckConnection: () => v
 				</div>
 				<div>
 					<h3 className="text-sm font-semibold text-zinc-400 mb-1.5">
-						GitHub App Integration Not Configured
+						GitHub App Not Configured or Not Installed
 					</h3>
 					<p className="text-sm text-zinc-500 leading-relaxed mb-4">
-						Set the following environment variables to enable GitHub App integration:
+						Procella cannot yet distinguish between missing server configuration and a missing
+						organization installation. Verify environment variables and app installation:
 					</p>
 					<div className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2.5 font-mono text-xs text-zinc-400 overflow-x-auto whitespace-pre leading-relaxed mb-4">
 						{`PROCELLA_GITHUB_APP_ID=<your-app-id>

@@ -22,7 +22,7 @@ Fill in:
 |---|---|
 | GitHub App name | `procella-your-org` (must be globally unique) |
 | Homepage URL | Your Procella instance URL |
-| Webhook URL | `https://your-procella.example.com/api/github/webhook` |
+| Webhook URL | `https://your-procella.example.com/api/webhooks/github` |
 | Webhook secret | A random string you generate (save it, you'll need it) |
 
 Under **Permissions**, set:

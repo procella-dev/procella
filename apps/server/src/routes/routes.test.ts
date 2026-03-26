@@ -109,7 +109,7 @@ function mockUpdatesService(): UpdatesService {
 
 function mockAuditService(): AuditService {
 	return {
-		log: async () => {},
+		log: () => {},
 		query: async () => ({ entries: [], total: 0 }),
 		export: async () => [],
 	};

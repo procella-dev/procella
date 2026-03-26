@@ -67,55 +67,63 @@ export function updateHandlers(
 				github &&
 				(body.status === "succeeded" || body.status === "failed")
 			) {
-				const stackInfo = await stacks.getStack(caller.tenantId, org, project, stack);
-				const installation = await github.getInstallation(caller.tenantId);
-				if (installation) {
+				void (async () => {
+					const stackInfo = await stacks.getStack(caller.tenantId, org, project, stack);
+					const installation = await github.getInstallation(caller.tenantId);
+					if (!installation) {
+						return;
+					}
+
 					const owner = stackInfo.tags["github:owner"];
 					const repo = stackInfo.tags["github:repo"];
 					const pr = stackInfo.tags["github:pr"];
 					const sha = stackInfo.tags["github:sha"];
 
-					if (owner && repo && pr && sha) {
-						const prNumber = Number(pr);
-						if (!Number.isNaN(prNumber)) {
-							const latest = await updates.getHistory(stackInfo.id);
-							const summary = latest.updates[0];
-							const commitState = mapUpdateStatusToCommitState(body.status);
-							await github.setCommitStatus(
-								installation.installationId,
-								owner,
-								repo,
-								sha,
-								commitState,
-								`Procella ${body.status}`,
-							);
-
-							const resourceChanges = summary?.resourceChanges as
-								| Record<string, number>
-								| undefined;
-							const commentBody = buildPRCommentBody({
-								org,
-								project,
-								stack,
-								kind: summary?.kind ?? "update",
-								status: body.status,
-								resourceChanges: {
-									creates: resourceChanges?.create ?? resourceChanges?.creates,
-									updates: resourceChanges?.update ?? resourceChanges?.updates,
-									deletes: resourceChanges?.delete ?? resourceChanges?.deletes,
-									sames: resourceChanges?.same ?? resourceChanges?.sames,
-								},
-							});
-							await github.postPRComment(
-								installation.installationId,
-								owner,
-								repo,
-								prNumber,
-								commentBody,
-							);
-						}
+					if (!owner || !repo || !pr || !sha) {
+						return;
 					}
-				}
+
+					const prNumber = Number(pr);
+					if (Number.isNaN(prNumber)) {
+						return;
+					}
+
+					const latest = await updates.getHistory(stackInfo.id);
+					const summary = latest.updates[0];
+					const commitState = mapUpdateStatusToCommitState(body.status);
+					await github.setCommitStatus(
+						installation.installationId,
+						owner,
+						repo,
+						sha,
+						commitState,
+						`Procella ${body.status}`,
+					);
+
+					const resourceChanges = summary?.resourceChanges as Record<string, number> | undefined;
+					const commentBody = buildPRCommentBody({
+						org,
+						project,
+						stack,
+						kind: summary?.kind ?? "update",
+						status: body.status,
+						resourceChanges: {
+							creates: resourceChanges?.create ?? resourceChanges?.creates,
+							updates: resourceChanges?.update ?? resourceChanges?.updates,
+							deletes: resourceChanges?.delete ?? resourceChanges?.deletes,
+							sames: resourceChanges?.same ?? resourceChanges?.sames,
+						},
+					});
+					await github.postPRComment(
+						installation.installationId,
+						owner,
+						repo,
+						prNumber,
+						commentBody,
+					);
+				})().catch((error: unknown) => {
+					console.error("[updates] Failed to publish GitHub update status", error);
+				});
 			}
 
 			if (

@@ -23,9 +23,9 @@ All parameters are optional.
 | `project` | string | Filter to a specific project name (exact match). |
 | `tagName` | string | Filter by tag name (use with `tagValue` for exact match). |
 | `tagValue` | string | Filter by tag value. Requires `tagName`. |
-| `sortBy` | string | Sort field: `name`, `project`, `lastUpdate`. Default: `lastUpdate`. |
-| `sortOrder` | string | `asc` or `desc`. Default: `desc`. |
-| `pageSize` | number | Results per page. Default: 20, max: 100. |
+| `sortBy` | string | Sort field: `name`, `lastUpdated`, `created`. Default: `name`. |
+| `sortOrder` | string | `asc` or `desc`. Default: `asc`. |
+| `pageSize` | number | Results per page. Default: 50, max: 200. |
 | `continuationToken` | string | Cursor from a previous response to fetch the next page. |
 
 ### Examples

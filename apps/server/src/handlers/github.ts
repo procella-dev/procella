@@ -28,7 +28,12 @@ export function githubHandlers(deps: {
 				return c.json({ error: "Invalid webhook signature" }, 401);
 			}
 
-			const parsed = JSON.parse(payload) as unknown;
+			let parsed: unknown;
+			try {
+				parsed = JSON.parse(payload) as unknown;
+			} catch {
+				throw new BadRequestError("Invalid JSON payload");
+			}
 			await deps.github.handleWebhookEvent(event, parsed);
 			return c.body(null, 200);
 		},

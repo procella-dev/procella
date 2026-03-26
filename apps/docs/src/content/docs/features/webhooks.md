@@ -12,21 +12,20 @@ This is useful for triggering CI/CD pipelines, sending Slack alerts, syncing sta
 ### Via curl
 
 ```bash
-curl -X POST https://your-procella.example.com/api/orgs/my-org/webhooks \
+curl -X POST https://your-procella.example.com/api/orgs/my-org/hooks \
   -H "Authorization: token $PULUMI_ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "displayName": "My Slack Notifier",
-    "payloadUrl": "https://hooks.example.com/procella",
-    "secret": "my-webhook-secret",
-    "active": true,
-    "filters": ["update.succeeded", "update.failed"]
+    "name": "My Slack Notifier",
+    "url": "https://hooks.example.com/procella",
+    "events": ["update.succeeded", "update.failed"],
+    "secret": "my-webhook-secret"
   }'
 ```
 
 The `secret` field is optional but strongly recommended. It's used to compute the `X-Webhook-Signature` header so you can verify the payload is authentic.
 
-Leave `filters` empty (or omit it) to receive all event types.
+Set `events` to the event types you want to subscribe to.
 
 ### Via the dashboard
 
@@ -144,23 +143,23 @@ After 3 failed attempts, the delivery is marked as `failed` and no further retri
 ### List webhooks
 
 ```bash
-curl https://your-procella.example.com/api/orgs/my-org/webhooks \
+curl https://your-procella.example.com/api/orgs/my-org/hooks \
   -H "Authorization: token $PULUMI_ACCESS_TOKEN"
 ```
 
 ### Update a webhook
 
 ```bash
-curl -X PATCH https://your-procella.example.com/api/orgs/my-org/webhooks/wh_01HQ7Z... \
+curl -X PUT https://your-procella.example.com/api/orgs/my-org/hooks/wh_01HQ7Z... \
   -H "Authorization: token $PULUMI_ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"active": false}'
+  -d '{"events": ["update.failed"]}'
 ```
 
 ### Delete a webhook
 
 ```bash
-curl -X DELETE https://your-procella.example.com/api/orgs/my-org/webhooks/wh_01HQ7Z... \
+curl -X DELETE https://your-procella.example.com/api/orgs/my-org/hooks/wh_01HQ7Z... \
   -H "Authorization: token $PULUMI_ACCESS_TOKEN"
 ```
 
@@ -169,7 +168,7 @@ curl -X DELETE https://your-procella.example.com/api/orgs/my-org/webhooks/wh_01H
 Ping sends a synthetic `ping` event to verify your endpoint is reachable:
 
 ```bash
-curl -X POST https://your-procella.example.com/api/orgs/my-org/webhooks/wh_01HQ7Z.../ping \
+curl -X POST https://your-procella.example.com/api/orgs/my-org/hooks/wh_01HQ7Z.../ping \
   -H "Authorization: token $PULUMI_ACCESS_TOKEN"
 ```
 
