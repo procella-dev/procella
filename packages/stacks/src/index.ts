@@ -125,6 +125,7 @@ export interface StacksService {
 	): Promise<void>;
 
 	getStackByFQN(tenantId: string, fqn: string): Promise<StackInfo>;
+	getStackByNames(org: string, project: string, stack: string): Promise<StackInfo>;
 }
 
 // ============================================================================
@@ -647,5 +648,28 @@ export class PostgresStacksService implements StacksService {
 				return this.getStack(tenantId, parsed.org, parsed.project, parsed.stack);
 			},
 		);
+	}
+
+	async getStackByNames(org: string, project: string, stack: string): Promise<StackInfo> {
+		const rows = await this.db
+			.select({
+				stack_id: stacks.id,
+				stack_name: stacks.name,
+				stack_tags: stacks.tags,
+				stack_active_update_id: stacks.activeUpdateId,
+				stack_created_at: stacks.createdAt,
+				stack_updated_at: stacks.updatedAt,
+				project_id: projects.id,
+				project_tenant_id: projects.tenantId,
+				project_name: projects.name,
+			})
+			.from(stacks)
+			.innerJoin(projects, eq(stacks.projectId, projects.id))
+			.where(and(eq(projects.name, project), eq(stacks.name, stack)));
+
+		if (rows.length === 0) {
+			throw new StackNotFoundError(org, project, stack);
+		}
+		return toStackInfo(rows[0]);
 	}
 }

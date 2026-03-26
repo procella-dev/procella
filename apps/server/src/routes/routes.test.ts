@@ -73,6 +73,7 @@ function mockStacksService(): StacksService {
 		updateStackTags: async () => {},
 		replaceStackTags: async () => {},
 		getStackByFQN: async () => mockStackInfo,
+		getStackByNames: async () => mockStackInfo,
 	};
 }
 

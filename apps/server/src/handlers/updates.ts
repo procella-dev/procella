@@ -139,12 +139,16 @@ export function updateHandlers(
 
 			if (
 				org &&
+				project &&
+				stack &&
 				webhooks &&
 				(body.status === "succeeded" || body.status === "failed" || body.status === "cancelled")
 			) {
+				const stackInfo = await stacks.getStackByNames(org, project, stack).catch((): null => null);
+				const tenantId = stackInfo?.tenantId ?? org;
 				await webhooks
 					.emitAndWait({
-						tenantId: org,
+						tenantId,
 						event:
 							body.status === "succeeded"
 								? "update.succeeded"

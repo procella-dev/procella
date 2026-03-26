@@ -50,6 +50,7 @@ function mockStacksService(overrides?: Partial<StacksService>): StacksService {
 		updateStackTags: async () => {},
 		replaceStackTags: async () => {},
 		getStackByFQN: async () => mockStackInfo,
+		getStackByNames: async () => mockStackInfo,
 		...overrides,
 	};
 }

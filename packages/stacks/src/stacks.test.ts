@@ -158,6 +158,7 @@ describe("@procella/stacks", () => {
 				updateStackTags: async () => {},
 				replaceStackTags: async () => {},
 				getStackByFQN: async () => mockInfo,
+				getStackByNames: async () => mockInfo,
 			};
 
 			// Type-level check: all methods exist and are callable
@@ -181,6 +182,7 @@ describe("@procella/stacks", () => {
 				updateStackTags: async () => {},
 				replaceStackTags: async () => {},
 				getStackByFQN: async () => ({}) as StackInfo,
+				getStackByNames: async () => ({}) as StackInfo,
 			};
 
 			// No filters
