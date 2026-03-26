@@ -16,7 +16,6 @@ export function Webhooks() {
 	const { org, isLoading: orgLoading } = useOrg();
 	const [selectedWebhookId, setSelectedWebhookId] = useState<string | null>(null);
 	const [showCreateModal, setShowCreateModal] = useState(false);
-	const [editingWebhookId, setEditingWebhookId] = useState<string | null>(null);
 
 	const {
 		data: webhooks,
@@ -87,17 +86,15 @@ export function Webhooks() {
 				<WebhookTable items={items} onSelect={(id) => setSelectedWebhookId(id)} />
 			)}
 
-			{(showCreateModal || editingWebhookId) && (
+			{showCreateModal && (
 				<WebhookModal
 					org={org}
-					webhookId={editingWebhookId}
+					webhookId={null}
 					onClose={() => {
 						setShowCreateModal(false);
-						setEditingWebhookId(null);
 					}}
 					onSaved={() => {
 						setShowCreateModal(false);
-						setEditingWebhookId(null);
 						refetchList();
 					}}
 				/>

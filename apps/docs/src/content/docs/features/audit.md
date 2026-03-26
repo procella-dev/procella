@@ -72,8 +72,7 @@ GET /api/orgs/:org/auditlogs
 | `startTime` | ISO 8601 | Filter events after this time |
 | `endTime` | ISO 8601 | Filter events before this time |
 | `action` | string | Filter by action type (e.g. `stack.create`) |
-| `user` | string | Filter by user login |
-| `continuationToken` | string | Cursor for next page |
+| `page` | number | 1-based page number (default: 1) |
 | `pageSize` | number | Results per page (default: 50, max: 200) |
 
 ```bash

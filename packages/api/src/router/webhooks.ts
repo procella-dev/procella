@@ -1,14 +1,19 @@
+import { ALL_WEBHOOK_EVENTS } from "@procella/webhooks";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod/v4";
 import { publicProcedure, router } from "../trpc.js";
 
 const orgInput = z.object({ org: z.string() });
+const allWebhookEvents: readonly string[] = ALL_WEBHOOK_EVENTS;
+const webhookEventSchema = z
+	.string()
+	.refine((event) => allWebhookEvents.includes(event), "Invalid webhook event");
 
 const createWebhookInput = z.object({
 	org: z.string(),
 	name: z.string().min(1),
 	url: z.string().url(),
-	events: z.array(z.string()).min(1),
+	events: z.array(webhookEventSchema).min(1),
 	secret: z.string().min(1).optional(),
 });
 
@@ -17,7 +22,7 @@ const updateWebhookInput = z.object({
 	webhookId: z.string().uuid(),
 	name: z.string().min(1).optional(),
 	url: z.string().url().optional(),
-	events: z.array(z.string()).min(1).optional(),
+	events: z.array(webhookEventSchema).min(1).optional(),
 	secret: z.string().min(1).optional(),
 });
 

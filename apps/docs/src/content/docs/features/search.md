@@ -68,9 +68,7 @@ curl "https://your-procella.example.com/api/stacks?query=api&tagName=region&tagV
       "projectName": "my-app",
       "stackName": "production",
       "tags": { "env": "production", "region": "us-east-1" },
-      "lastUpdate": "2024-03-15T10:42:00Z",
-      "resourceCount": 42,
-      "url": "https://your-procella.example.com/api/stacks/my-org/my-app/production"
+      "lastUpdate": 1711234567
     }
   ],
   "continuationToken": "eyJvcmciOiJteS1vcmciLCJwcm9qIjoibXktYXBwIn0="

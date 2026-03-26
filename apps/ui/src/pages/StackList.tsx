@@ -27,6 +27,7 @@ export function StackList() {
 	const [tagValue, setTagValue] = useState("");
 	const [sortBy, setSortBy] = useState<SortBy>("name");
 	const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
+	const [hasLoadedMore, setHasLoadedMore] = useState(false);
 
 	const debouncedSearch = useDebounce(searchText, 300);
 
@@ -49,7 +50,9 @@ export function StackList() {
 		data: stacks,
 		isLoading: loading,
 		error: queryError,
-	} = trpc.stacks.list.useQuery(queryInput, { refetchInterval: 5000 });
+	} = trpc.stacks.list.useQuery(queryInput, {
+		refetchInterval: hasLoadedMore ? false : 5000,
+	});
 	const error = queryError?.message ?? null;
 
 	// Pagination state
@@ -76,6 +79,7 @@ export function StackList() {
 		setContinuationToken(undefined);
 		setNextPageToken(undefined);
 		setIsLoadingMore(false);
+		setHasLoadedMore(false);
 	}, [searchKey]);
 
 	useEffect(() => {
@@ -87,6 +91,7 @@ export function StackList() {
 	const loadMore = useCallback(() => {
 		if (!continuationToken || isLoadingMore) return;
 		setIsLoadingMore(true);
+		setHasLoadedMore(true);
 		setNextPageToken(continuationToken);
 	}, [continuationToken, isLoadingMore]);
 

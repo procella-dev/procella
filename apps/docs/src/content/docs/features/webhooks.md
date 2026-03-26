@@ -29,7 +29,7 @@ Set `events` to the event types you want to subscribe to.
 
 ### Via the dashboard
 
-Go to **Settings** and open the **Webhooks** tab. Click **Add webhook**, fill in the URL and optional secret, and choose which event types to subscribe to.
+Go to the top-level **Webhooks** page from the main navigation. Click **Create Webhook**, fill in the URL and optional secret, and choose which event types to subscribe to.
 
 ## Event Types
 
@@ -37,10 +37,7 @@ Go to **Settings** and open the **Webhooks** tab. Click **Add webhook**, fill in
 |---|---|
 | `stack.created` | A new stack is initialized |
 | `stack.deleted` | A stack is permanently deleted |
-| `stack.renamed` | A stack is renamed |
-| `stack.exported` | Stack state is exported |
-| `stack.imported` | Stack state is imported |
-| `update.created` | An update, preview, refresh, or destroy is created |
+| `stack.updated` | A stack is updated |
 | `update.started` | An update begins execution |
 | `update.succeeded` | An update finishes with status `succeeded` |
 | `update.failed` | An update finishes with status `failed` |
@@ -52,24 +49,15 @@ Every delivery is a `POST` with `Content-Type: application/json`. The body follo
 
 ```json
 {
-  "id": "wh_01HQ7Z...",
   "event": "update.succeeded",
   "timestamp": "2024-03-15T10:42:00Z",
-  "organization": "my-org",
-  "project": "my-project",
-  "stack": "production",
-  "update": {
-    "id": "upd_01HQ7Z...",
-    "kind": "update",
-    "status": "succeeded",
-    "startedAt": "2024-03-15T10:40:00Z",
-    "completedAt": "2024-03-15T10:42:00Z",
-    "requestedBy": "alice"
+  "data": {
+    "org": "my-org",
+    "project": "my-project",
+    "stack": "production"
   }
 }
 ```
-
-Stack events (`stack.created`, `stack.deleted`, etc.) omit the `update` field. The `organization`, `project`, and `stack` fields are always present.
 
 ## Delivery Headers
 
@@ -79,7 +67,8 @@ Every request includes these headers:
 |---|---|
 | `X-Webhook-Id` | Unique delivery ID (use for deduplication) |
 | `X-Webhook-Event` | The event type, e.g. `update.succeeded` |
-| `X-Webhook-Signature` | HMAC-SHA256 signature (see below) |
+| `X-Webhook-Signature` | `sha256=<hex>` HMAC-SHA256 signature (see below) |
+| `User-Agent` | `Procella-Webhooks/1.0` |
 | `Content-Type` | `application/json` |
 
 ## Verifying Signatures
@@ -128,13 +117,12 @@ Use `timingSafeEqual` to prevent timing attacks. Reject any request where the si
 
 Procella considers a delivery successful when your endpoint returns any `2xx` status code within 10 seconds.
 
-If the delivery fails (non-2xx response, timeout, or connection error), Procella retries up to 3 times with exponential backoff:
+If the delivery fails (non-2xx response, timeout, or connection error), Procella retries up to 3 attempts with exponential backoff and a 10-second timeout per attempt:
 
 | Attempt | Delay |
 |---|---|
-| 1st retry | 30 seconds |
-| 2nd retry | 5 minutes |
-| 3rd retry | 30 minutes |
+| 2nd attempt | 1 second |
+| 3rd attempt | 2 seconds |
 
 After 3 failed attempts, the delivery is marked as `failed` and no further retries occur. You can manually re-deliver from the delivery history view.
 
@@ -174,7 +162,7 @@ curl -X POST https://your-procella.example.com/api/orgs/my-org/hooks/wh_01HQ7Z..
 
 ## Viewing Delivery History
 
-Open the webhook detail page in the dashboard (**Settings** > **Webhooks** > click a webhook). You'll see a chronological list of deliveries with:
+Open the webhook detail page in the dashboard (**Webhooks** > click a webhook). You'll see a chronological list of deliveries with:
 
 - Timestamp
 - Event type
