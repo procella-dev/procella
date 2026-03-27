@@ -37,6 +37,21 @@ jobs:
           aws-region: us-east-1
           role-session-name: GitHubActions-Cleanup-${{ github.run_id }}
 
+      - name: Drop stage database
+        continue-on-error: true
+        run: |
+          STAGE=pr-${{ github.event.number }}
+          DB_NAME="procella_${STAGE//-/_}"
+          CLUSTER_ARN=$(npx sst output clusterArn --stage production 2>/dev/null || npx sst output clusterArn --stage "$STAGE" 2>/dev/null)
+          SECRET_ARN=$(npx sst output secretArn --stage production 2>/dev/null || npx sst output secretArn --stage "$STAGE" 2>/dev/null)
+          if [ -n "$CLUSTER_ARN" ] && [ -n "$SECRET_ARN" ]; then
+            aws rds-data execute-statement \
+              --resource-arn "$CLUSTER_ARN" \
+              --secret-arn "$SECRET_ARN" \
+              --database "postgres" \
+              --sql "DROP DATABASE IF EXISTS $DB_NAME"
+          fi
+
       - name: Remove SST stack
         run: npx sst remove --stage pr-${{ github.event.number }}
         continue-on-error: true

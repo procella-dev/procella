@@ -1,21 +1,42 @@
-// VPC is required for Aurora even though Lambda accesses via Data API (HTTP).
-// Using ec2 NAT (fck-nat) — 10x cheaper than managed NAT gateway.
-export const vpc = new sst.aws.Vpc("ProcellaVpc", { nat: "ec2" });
+const stage = $app.stage;
 
-export const database = new sst.aws.Aurora("ProcellaDatabase", {
-	engine: "postgres",
-	dataApi: true,
-	scaling: {
-		min: "0.5 ACU",
-		max: "16 ACU",
-	},
-	vpc,
-	// In `sst dev`, connect to local Docker PostgreSQL instead of deploying Aurora.
-	dev: {
-		username: "procella",
-		password: "procella",
-		database: "procella",
-		host: "localhost",
-		port: 5432,
-	},
-});
+export const vpc = await aws.ec2
+	.getVpc({ tags: { "sst:app": $app.name } })
+	.catch(() => undefined)
+	.then(async (existing) => {
+		if (existing && existing.tags?.["sst:stage"] !== stage) {
+			return sst.aws.Vpc.get("ProcellaVpc", existing.id);
+		}
+		return new sst.aws.Vpc("ProcellaVpc", { nat: "ec2" });
+	});
+
+export const database = await aws.rds
+	.getClusters({
+		filters: [{ name: "tag:sst:app", values: [$app.name] }],
+	})
+	.catch(() => undefined)
+	.then(async (result) => {
+		const clusterId = result?.clusterIdentifiers?.[0];
+		if (!$dev && clusterId) {
+			return sst.aws.Aurora.get("ProcellaDatabase", clusterId);
+		}
+		return new sst.aws.Aurora("ProcellaDatabase", {
+			engine: "postgres",
+			dataApi: true,
+			scaling: { min: "0.5 ACU", max: "16 ACU" },
+			vpc,
+			dev: {
+				username: "procella",
+				password: "procella",
+				database: "procella",
+				host: "localhost",
+				port: 5432,
+			},
+		});
+	});
+
+export const databaseName = $dev
+	? "procella"
+	: stage === "production"
+		? "procella"
+		: `procella_${stage.replace(/-/g, "_")}`;

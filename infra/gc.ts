@@ -1,4 +1,4 @@
-import { database } from "./database";
+import { database, databaseName } from "./database";
 import { bucket } from "./storage";
 import { allSecrets, encryptionKey, devAuthToken } from "./secrets";
 
@@ -12,7 +12,7 @@ const dbEnv = $dev
 			PROCELLA_DATABASE_DRIVER: "data-api",
 			PROCELLA_DATABASE_SECRET_ARN: database.secretArn,
 			PROCELLA_DATABASE_CLUSTER_ARN: database.clusterArn,
-			PROCELLA_DATABASE_NAME: database.database,
+			PROCELLA_DATABASE_NAME: databaseName,
 		};
 
 const gcFunction = new sst.aws.Function("ProcellaGc", {

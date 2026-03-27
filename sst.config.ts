@@ -23,10 +23,15 @@ export default $config({
 		const { site } = await import("./infra/site");
 		const { docs } = await import("./infra/docs");
 
+		const { database, databaseName } = await import("./infra/database");
+
 		return {
 			api: router.url,
 			app: site.url,
 			docs: docs.url,
+			clusterArn: database.clusterArn,
+			secretArn: database.secretArn,
+			databaseName,
 		};
 	},
 });

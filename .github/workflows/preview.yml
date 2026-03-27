@@ -50,12 +50,36 @@ jobs:
           SST_SECRET_ProcellaDevAuthToken: ${{ secrets.PROCELLA_DEV_AUTH_TOKEN }}
           SST_SECRET_ProcellaDescopeManagementKey: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
 
+      - name: Create stage database
+        run: |
+          STAGE=pr-${{ github.event.number }}
+          CLUSTER_ARN=$(npx sst output clusterArn --stage "$STAGE" 2>/dev/null)
+          SECRET_ARN=$(npx sst output secretArn --stage "$STAGE" 2>/dev/null)
+          DB_NAME=$(npx sst output databaseName --stage "$STAGE" 2>/dev/null)
+          aws rds-data execute-statement \
+            --resource-arn "$CLUSTER_ARN" \
+            --secret-arn "$SECRET_ARN" \
+            --database "postgres" \
+            --sql "SELECT 1 FROM pg_database WHERE datname = '$DB_NAME'" \
+            --output text | grep -q "1" || \
+          aws rds-data execute-statement \
+            --resource-arn "$CLUSTER_ARN" \
+            --secret-arn "$SECRET_ARN" \
+            --database "postgres" \
+            --sql "CREATE DATABASE $DB_NAME"
+
+      - name: Run migrations
+        run: |
+          STAGE=pr-${{ github.event.number }}
+          npx sst shell --stage "$STAGE" -- bun run scripts/migrate.ts
+
       - name: Get stack outputs
         id: outputs
         run: |
-          API=$(npx sst output api --stage pr-${{ github.event.number }} 2>/dev/null || echo "")
-          APP=$(npx sst output app --stage pr-${{ github.event.number }} 2>/dev/null || echo "")
-          DOCS=$(npx sst output docs --stage pr-${{ github.event.number }} 2>/dev/null || echo "")
+          STAGE=pr-${{ github.event.number }}
+          API=$(npx sst output api --stage "$STAGE" 2>/dev/null || echo "")
+          APP=$(npx sst output app --stage "$STAGE" 2>/dev/null || echo "")
+          DOCS=$(npx sst output docs --stage "$STAGE" 2>/dev/null || echo "")
           echo "api=$API" >> $GITHUB_OUTPUT
           echo "app=$APP" >> $GITHUB_OUTPUT
           echo "docs=$DOCS" >> $GITHUB_OUTPUT
