@@ -1,4 +1,0 @@
-name: procella-descope
-runtime:
-  name: bun
-description: Descope auth configuration for Procella
