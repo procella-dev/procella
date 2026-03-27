@@ -17,7 +17,7 @@ export default $config({
 		const isProd = $app.stage === "production";
 
 		await import("./infra/secrets");
-		const { database, databaseName } = await import("./infra/database");
+		await import("./infra/database");
 		await import("./infra/storage");
 		if (isProd) await import("./infra/descope");
 		const { router } = await import("./infra/api");
@@ -29,9 +29,6 @@ export default $config({
 			api: router.url,
 			app: site.url,
 			docs: docs.url,
-			clusterArn: database.clusterArn,
-			secretArn: database.secretArn,
-			databaseName,
 		};
 	},
 });

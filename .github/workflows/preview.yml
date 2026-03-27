@@ -60,16 +60,22 @@ jobs:
         run: |
           set -x
           STAGE="pr-${{ github.event.number }}"
-          CLUSTER_ARN=$(npx sst output clusterArn --stage "$STAGE")
-          SECRET_ARN=$(npx sst output secretArn --stage "$STAGE")
-          DB_NAME=$(npx sst output databaseName --stage "$STAGE")
+          DB_NAME="procella_${STAGE//-/_}"
+          CLUSTER_ID=$(aws rds describe-db-clusters \
+            --query "DBClusters[?starts_with(DBClusterIdentifier, 'procella')].DBClusterIdentifier | [0]" \
+            --output text)
+          echo "CLUSTER_ID=$CLUSTER_ID"
+          if [ -z "$CLUSTER_ID" ] || [ "$CLUSTER_ID" = "None" ]; then
+            echo "::warning::No Aurora cluster found — skipping database setup"
+            exit 0
+          fi
+          CLUSTER_ARN=$(aws rds describe-db-clusters --db-cluster-identifier "$CLUSTER_ID" \
+            --query "DBClusters[0].DBClusterArn" --output text)
+          SECRET_ARN=$(aws rds describe-db-clusters --db-cluster-identifier "$CLUSTER_ID" \
+            --query "DBClusters[0].MasterUserSecret.SecretArn" --output text)
           echo "CLUSTER_ARN=$CLUSTER_ARN"
           echo "SECRET_ARN=$SECRET_ARN"
           echo "DB_NAME=$DB_NAME"
-          if [ -z "$CLUSTER_ARN" ] || [ -z "$SECRET_ARN" ] || [ -z "$DB_NAME" ]; then
-            echo "::warning::Missing SST outputs — skipping database setup"
-            exit 0
-          fi
           aws rds-data execute-statement \
             --resource-arn "$CLUSTER_ARN" \
             --secret-arn "$SECRET_ARN" \
@@ -79,11 +85,12 @@ jobs:
 
       - name: Get stack outputs
         id: outputs
+        shell: bash {0}
         run: |
-          STAGE=pr-${{ github.event.number }}
-          API=$(npx sst output api --stage "$STAGE" 2>/dev/null || echo "")
-          APP=$(npx sst output app --stage "$STAGE" 2>/dev/null || echo "")
-          DOCS=$(npx sst output docs --stage "$STAGE" 2>/dev/null || echo "")
+          STAGE="pr-${{ github.event.number }}"
+          echo "api=https://api.${STAGE}.procella.cloud" >> $GITHUB_OUTPUT
+          echo "app=https://app.${STAGE}.procella.cloud" >> $GITHUB_OUTPUT
+          echo "docs=https://docs.${STAGE}.procella.cloud" >> $GITHUB_OUTPUT
           echo "api=$API" >> $GITHUB_OUTPUT
           echo "app=$APP" >> $GITHUB_OUTPUT
           echo "docs=$DOCS" >> $GITHUB_OUTPUT
