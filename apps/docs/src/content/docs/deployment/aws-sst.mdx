@@ -5,7 +5,7 @@ description: Deploy Procella serverlessly on AWS using SST, Aurora Serverless v2
 
 import { Aside } from '@astrojs/starlight/components';
 
-Procella can be deployed serverlessly on AWS using SST (Serverless Stack). This approach uses Lambda for the API, Aurora Serverless v2 with Data API for the database, S3 for blob storage, and CloudFront for the static UI. Zero servers to manage, scales to zero, ~$43/month base cost.
+Procella can be deployed serverlessly on AWS using SST (Serverless Stack). This approach uses Lambda for the API, Aurora Serverless v2 with Data API for the database, S3 for blob storage, and CloudFront for the static UI. Zero servers to manage, scales to zero, ~$55-65/month base cost.
 
 **Official docs**: [sst.dev/docs](https://sst.dev/docs/)
 
@@ -81,7 +81,7 @@ In dev mode:
 - All AWS resources are stubbed or use local equivalents
 
 <Aside type="note">
-The `dev` override in `infra/database.ts` sets `enabled: false` for Aurora, causing SST to skip deploying the cluster during development. This saves significant time and AWS costs.
+The `dev` override in `infra/database.ts` configures SST to use your local Docker PostgreSQL connection details during `sst dev`, so Aurora isn't provisioned in this mode. This keeps iteration fast and avoids AWS costs during development.
 </Aside>
 
 ---
@@ -183,8 +183,11 @@ SST automatically maps `PROCELLA_*` environment variables via `infra/api.ts`. Th
 
 | Variable | Source |
 |---|---|
-| `PROCELLA_DATABASE_DRIVER` | Set to `data-api` automatically |
-| `PROCELLA_DATABASE_URL` | Aurora Data API endpoint |
+| `PROCELLA_DATABASE_DRIVER` | Set to `data-api` in deployed stages (omitted in `sst dev`) |
+| `PROCELLA_DATABASE_SECRET_ARN` | Aurora Data API secret ARN from `infra/api.ts` |
+| `PROCELLA_DATABASE_CLUSTER_ARN` | Aurora cluster ARN from `infra/api.ts` |
+| `PROCELLA_DATABASE_NAME` | Database name from `infra/api.ts` |
+| `PROCELLA_DATABASE_URL` | Set automatically in `sst dev` for local PostgreSQL |
 | `PROCELLA_BLOB_BACKEND` | Set to `s3` automatically |
 | `PROCELLA_BLOB_S3_BUCKET` | S3 bucket name from `infra/storage.ts` |
 

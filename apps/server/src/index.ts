@@ -25,10 +25,22 @@ if (process.argv.includes("--healthz")) {
 		const nextArg = process.argv[process.argv.indexOf("--migrate") + 1];
 		const migrationsFolder = nextArg && !nextArg.startsWith("-") ? nextArg : "./migrations";
 		logger.info({ migrationsFolder }, "Running migrations...");
-		if (!config.databaseUrl) {
-			throw new Error("PROCELLA_DATABASE_URL is required for --migrate in Bun mode");
+		if (config.databaseDriver === "data-api") {
+			await runMigrations(
+				{
+					driver: "data-api" as const,
+					secretArn: config.databaseSecretArn as string,
+					resourceArn: config.databaseClusterArn as string,
+					database: config.databaseName as string,
+				},
+				migrationsFolder,
+			);
+		} else {
+			if (!config.databaseUrl) {
+				throw new Error("PROCELLA_DATABASE_URL is required for --migrate");
+			}
+			await runMigrations(config.databaseUrl, migrationsFolder);
 		}
-		await runMigrations(config.databaseUrl, migrationsFolder);
 		logger.info("Migrations complete.");
 		logger.flush();
 		process.exit(0);

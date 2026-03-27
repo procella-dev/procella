@@ -1,6 +1,6 @@
 import { handle } from "hono/aws-lambda";
 
-let handlerFn: ReturnType<typeof handle> | null = null;
+let appPromise: Promise<ReturnType<typeof handle>> | null = null;
 
 async function init() {
 	const { bootstrap } = await import("./bootstrap.js");
@@ -9,6 +9,7 @@ async function init() {
 }
 
 export const handler: ReturnType<typeof handle> = async (event, lambdaContext) => {
-	if (!handlerFn) handlerFn = await init();
+	if (!appPromise) appPromise = init();
+	const handlerFn = await appPromise;
 	return handlerFn(event, lambdaContext);
 };
