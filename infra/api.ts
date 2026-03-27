@@ -1,0 +1,41 @@
+import { database } from "./database";
+import { bucket } from "./storage";
+import {
+	allSecrets,
+	encryptionKey,
+	devAuthToken,
+	descopeProjectId,
+	descopeManagementKey,
+} from "./secrets";
+
+const isProd = $app.stage === "production";
+
+export const api = new sst.aws.Function("ProcellaApi", {
+	handler: "apps/server/src/lambda.handler",
+	url: true,
+	timeout: "60 seconds",
+	memory: "512 MB",
+	link: [database, bucket, ...allSecrets],
+	environment: {
+		// Database — Data API mode
+		PROCELLA_DATABASE_DRIVER: "data-api",
+		PROCELLA_DATABASE_SECRET_ARN: database.secretArn,
+		PROCELLA_DATABASE_CLUSTER_ARN: database.clusterArn,
+		PROCELLA_DATABASE_NAME: database.database,
+		// Blob storage — always S3 on AWS
+		PROCELLA_BLOB_BACKEND: "s3",
+		PROCELLA_BLOB_S3_BUCKET: bucket.name,
+		PROCELLA_BLOB_S3_REGION: "us-east-1",
+		// Auth
+		PROCELLA_AUTH_MODE: isProd ? "descope" : "dev",
+		PROCELLA_DEV_AUTH_TOKEN: devAuthToken.value,
+		PROCELLA_ENCRYPTION_KEY: encryptionKey.value,
+		PROCELLA_DESCOPE_PROJECT_ID: descopeProjectId.value,
+		PROCELLA_DESCOPE_MANAGEMENT_KEY: descopeManagementKey.value,
+	},
+	nodejs: {
+		esbuild: {
+			external: ["bun"],
+		},
+	},
+});
