@@ -46,10 +46,10 @@ jobs:
       - name: Deploy
         run: npx sst deploy --stage pr-${{ github.event.number }}
         env:
-          SST_SECRET_ProcellaEncryptionKey: ${{ secrets.SST_SECRET_PROCELLA_ENCRYPTION_KEY }}
-          SST_SECRET_ProcellaDevAuthToken: ${{ secrets.SST_SECRET_PROCELLA_DEV_AUTH_TOKEN }}
-          SST_SECRET_ProcellaDescopeProjectId: ${{ secrets.SST_SECRET_PROCELLA_DESCOPE_PROJECT_ID }}
-          SST_SECRET_ProcellaDescopeManagementKey: ${{ secrets.SST_SECRET_PROCELLA_DESCOPE_MANAGEMENT_KEY }}
+          SST_SECRET_ProcellaEncryptionKey: ${{ secrets.PROCELLA_ENCRYPTION_KEY }}
+          SST_SECRET_ProcellaDevAuthToken: ${{ secrets.PROCELLA_DEV_AUTH_TOKEN }}
+          SST_SECRET_ProcellaDescopeProjectId: placeholder
+          SST_SECRET_ProcellaDescopeManagementKey: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
 
       - name: Get stack outputs
         id: outputs
