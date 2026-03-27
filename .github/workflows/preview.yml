@@ -43,17 +43,13 @@ jobs:
           aws-region: us-east-1
           role-session-name: GitHubActions-Preview-${{ github.run_id }}
 
-      - name: Set SST secrets for preview stage
-        env:
-          STAGE: pr-${{ github.event.number }}
-        run: |
-          npx sst secret set ProcellaEncryptionKey "${{ secrets.PROCELLA_ENCRYPTION_KEY }}" --stage "$STAGE"
-          npx sst secret set ProcellaDevAuthToken "${{ secrets.PROCELLA_DEV_AUTH_TOKEN }}" --stage "$STAGE"
-          npx sst secret set ProcellaDescopeProjectId "${{ secrets.DESCOPE_PROJECT_ID }}" --stage "$STAGE"
-          npx sst secret set ProcellaDescopeManagementKey "${{ secrets.DESCOPE_MANAGEMENT_KEY }}" --stage "$STAGE"
-
       - name: Deploy
         run: npx sst deploy --stage pr-${{ github.event.number }}
+        env:
+          SST_SECRET_ProcellaEncryptionKey: ${{ secrets.SST_SECRET_PROCELLA_ENCRYPTION_KEY }}
+          SST_SECRET_ProcellaDevAuthToken: ${{ secrets.SST_SECRET_PROCELLA_DEV_AUTH_TOKEN }}
+          SST_SECRET_ProcellaDescopeProjectId: ${{ secrets.SST_SECRET_PROCELLA_DESCOPE_PROJECT_ID }}
+          SST_SECRET_ProcellaDescopeManagementKey: ${{ secrets.SST_SECRET_PROCELLA_DESCOPE_MANAGEMENT_KEY }}
 
       - name: Get stack outputs
         id: outputs
