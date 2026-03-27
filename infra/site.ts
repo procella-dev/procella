@@ -11,13 +11,13 @@ export const site = new sst.aws.StaticSite("ProcellaSite", {
 	},
 	domain: isProd
 		? {
-				name: "app.procella.sh",
-				redirects: ["www.procella.sh", "procella.sh"],
+				name: "app.procella.dev",
+				redirects: ["www.procella.dev", "procella.dev"],
 			}
-		: `app.${stage}.procella.sh`,
+		: `app.${stage}.procella.dev`,
 	environment: {
 		VITE_API_URL: router.url,
-		VITE_APP_URL: isProd ? "https://app.procella.sh" : `https://app.${stage}.procella.sh`,
+		VITE_APP_URL: isProd ? "https://app.procella.dev" : `https://app.${stage}.procella.dev`,
 	},
 	transform: {
 		cdn: (args) => {

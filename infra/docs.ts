@@ -7,5 +7,5 @@ export const docs = new sst.aws.StaticSite("ProcellaDocs", {
 		command: "bun run build",
 		output: "dist",
 	},
-	domain: isProd ? "docs.procella.sh" : `docs.${stage}.procella.sh`,
+	domain: isProd ? "docs.procella.dev" : `docs.${stage}.procella.dev`,
 });

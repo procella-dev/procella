@@ -60,6 +60,6 @@ jobs:
           echo "| Triggered by | ${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**URLs:**" >> $GITHUB_STEP_SUMMARY
-          echo "- API: https://api.procella.sh" >> $GITHUB_STEP_SUMMARY
-          echo "- App: https://app.procella.sh" >> $GITHUB_STEP_SUMMARY
-          echo "- Docs: https://docs.procella.sh" >> $GITHUB_STEP_SUMMARY
+          echo "- API: https://api.procella.dev" >> $GITHUB_STEP_SUMMARY
+          echo "- App: https://app.procella.dev" >> $GITHUB_STEP_SUMMARY
+          echo "- Docs: https://docs.procella.dev" >> $GITHUB_STEP_SUMMARY
