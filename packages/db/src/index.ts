@@ -106,9 +106,9 @@ export async function createDb(
 	const urlOpts = options as CreateDbUrlOptions;
 
 	if (!isNeonHost(urlOpts.url)) {
-		const { SQL } = require("bun") as typeof import("bun");
+		const bunMod = await import("bun");
 		const { drizzle } = await import("drizzle-orm/bun-sql");
-		const client = new SQL({
+		const client = new bunMod.SQL({
 			url: urlOpts.url,
 			max: urlOpts.max ?? 20,
 			idleTimeout: Math.max(1, Math.ceil((urlOpts.idleTimeout ?? 30_000) / 1000)),
@@ -175,10 +175,10 @@ export async function runMigrations(
 	const urlOpts = resolved as CreateDbUrlOptions;
 	const url = urlOpts.url;
 	if (!isNeonHost(url)) {
-		const { SQL } = require("bun") as typeof import("bun");
+		const bunMod = await import("bun");
 		const { drizzle } = await import("drizzle-orm/bun-sql");
 		const { migrate } = await import("drizzle-orm/bun-sql/migrator");
-		const client = new SQL({ url });
+		const client = new bunMod.SQL({ url });
 		try {
 			const db = drizzle({ client });
 			await migrate(db, { migrationsFolder });
