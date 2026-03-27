@@ -2,8 +2,6 @@ import { database, databaseName } from "./database";
 import { bucket } from "./storage";
 import { allSecrets, encryptionKey, devAuthToken } from "./secrets";
 
-const isProd = $app.stage === "production";
-
 const dbEnv = $dev
 	? {
 			PROCELLA_DATABASE_URL: $interpolate`postgresql://${database.username}:${database.password}@${database.host}:${database.port}/${database.database}`,
