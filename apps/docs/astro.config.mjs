@@ -59,7 +59,12 @@ export default defineConfig({
         {
           label: 'Deployment',
           items: [
-            { label: 'AWS ECS', slug: 'deployment/aws-ecs' },
+            { label: 'AWS (SST)', slug: 'deployment/aws-sst' },
+            { label: 'AWS (ECS)', slug: 'deployment/aws-ecs' },
+            { label: 'Fly.io', slug: 'deployment/fly-io' },
+            { label: 'Railway', slug: 'deployment/railway' },
+            { label: 'Render', slug: 'deployment/render' },
+            { label: 'Coolify', slug: 'deployment/coolify' },
           ],
         },
         {
@@ -77,15 +82,6 @@ export default defineConfig({
             { label: 'Update API', slug: 'api/updates' },
             { label: 'State Operations API', slug: 'api/state' },
             { label: 'Encryption API', slug: 'api/encryption' },
-          ],
-        },
-        {
-          label: 'Deployment',
-          items: [
-            { label: 'Fly.io', slug: 'deployment/fly-io' },
-            { label: 'Railway', slug: 'deployment/railway' },
-            { label: 'Render', slug: 'deployment/render' },
-            { label: 'Coolify', slug: 'deployment/coolify' },
           ],
         },
       ],

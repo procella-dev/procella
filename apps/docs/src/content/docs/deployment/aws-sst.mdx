@@ -1,0 +1,227 @@
+---
+title: Deploying to AWS with SST
+description: Deploy Procella serverlessly on AWS using SST, Aurora Serverless v2, Lambda, and CloudFront. Zero servers to manage, scales to zero, ~$55-65/month base cost.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Procella can be deployed serverlessly on AWS using SST (Serverless Stack). This approach uses Lambda for the API, Aurora Serverless v2 with Data API for the database, S3 for blob storage, and CloudFront for the static UI. Zero servers to manage, scales to zero, ~$43/month base cost.
+
+**Official docs**: [sst.dev/docs](https://sst.dev/docs/)
+
+---
+
+## Prerequisites
+
+- AWS account with credentials configured
+- Node.js 18+ and Bun
+- SST CLI (`npx sst`)
+
+---
+
+## Infrastructure Overview
+
+The SST configuration is split into modular infrastructure components:
+
+| File | Purpose |
+|---|---|
+| `sst.config.ts` | Root configuration, stacks assembly |
+| `infra/database.ts` | Aurora Serverless v2 with Data API (0.5-16 ACU) |
+| `infra/storage.ts` | S3 bucket for Pulumi state blobs |
+| `infra/secrets.ts` | SST secrets (encryption key, auth tokens, Descope keys) |
+| `infra/api.ts` | Hono Lambda function (handler at `apps/server/src/lambda.ts`) |
+| `infra/gc.ts` | GC worker Lambda on 1-minute EventBridge schedule |
+| `infra/site.ts` | React UI dashboard (StaticSite with CloudFront) |
+| `infra/descope.ts` | Descope auth provisioning (optional) |
+
+<Aside type="note">
+The `dev` property in `infra/database.ts` overrides Aurora with local Docker PostgreSQL during `sst dev`. This keeps iteration fast and avoids AWS costs during development.
+</Aside>
+
+---
+
+## Set Secrets
+
+Set required secrets before deploying:
+
+```bash
+npx sst secret set ProcellaEncryptionKey "$(openssl rand -hex 32)"
+npx sst secret set ProcellaDevAuthToken "your-token-here"
+```
+
+For Descope authentication mode:
+
+```bash
+npx sst secret set ProcellaDescopeProjectId "P..."
+npx sst secret set ProcellaDescopeManagementKey "..."
+```
+
+<Aside type="tip">
+Secrets are encrypted and stored in AWS Systems Manager Parameter Store. They are automatically injected as environment variables into your Lambda functions.
+</Aside>
+
+---
+
+## Local Development
+
+SST provides a local development mode that uses your local Docker PostgreSQL instead of Aurora:
+
+```bash
+# Start local PostgreSQL
+docker compose up -d postgres
+
+# Run SST dev mode
+npx sst dev
+```
+
+In dev mode:
+- The database uses local Docker PostgreSQL (skips Aurora deployment)
+- Lambda functions run locally with hot reloading via Live Lambda Development
+- The React UI is served by Vite dev server with HMR
+- All AWS resources are stubbed or use local equivalents
+
+<Aside type="note">
+The `dev` override in `infra/database.ts` sets `enabled: false` for Aurora, causing SST to skip deploying the cluster during development. This saves significant time and AWS costs.
+</Aside>
+
+---
+
+## Deploy
+
+Deploy to a specific stage (environment):
+
+```bash
+npx sst deploy --stage production
+```
+
+SST uses stage-based deployment:
+- `dev` — Local development with live Lambda
+- `staging` — Pre-production testing
+- `production` — Production workload
+
+Each stage gets isolated resources. View outputs after deployment:
+
+```bash
+npx sst state --stage production
+```
+
+This shows the API URL, CloudFront distribution URL, and other stack outputs.
+
+---
+
+## Database and Migrations
+
+Procella uses Aurora Serverless v2 with Data API. This provides HTTP-based database access, eliminating the need for VPC networking in Lambda functions.
+
+**Key benefits of Data API:**
+- No VPC configuration required for Lambda
+- HTTP-based connections (no connection pooling needed)
+- Automatic IAM authentication
+- Compatible with `drizzle-orm/aws-data-api/pg`
+
+Run database migrations:
+
+```bash
+npx sst shell -- bunx drizzle-kit migrate --config packages/db/drizzle.config.ts
+```
+
+<Aside type="caution">
+Aurora Data API adds ~10-30ms overhead per query compared to direct TCP connections. This is negligible for Pulumi CLI operations but may matter for high-frequency dashboard queries.
+</Aside>
+
+---
+
+## Scaling
+
+**Aurora Serverless v2 scaling:**
+
+| Setting | Default | Description |
+|---|---|---|
+| min | 0.5 ACU | Minimum capacity (can set to 0 for dev) |
+| max | 16 ACU | Maximum capacity |
+
+Adjust in `infra/database.ts`:
+
+```typescript
+scaling: {
+  min: "0.5 ACU",
+  max: "16 ACU"
+}
+```
+
+**Lambda scaling:**
+- Automatic concurrency scaling
+- No configuration needed
+- Pay per invocation
+
+**StaticSite (CloudFront):**
+- Global CDN with edge caching
+- Automatic scaling
+
+<Aside type="tip">
+Set `scaling.min` to `"0 ACU"` in dev/staging to pause the database when idle. Saves ~$43/month per non-production stage. Resume takes ~15 seconds on first connection.
+</Aside>
+
+---
+
+## Cost Breakdown
+
+| Component | Cost/Month | Notes |
+|---|---|---|
+| Aurora Serverless v2 | ~$43 | 0.5 ACU minimum, scales with load |
+| Lambda | ~$0-5 | Pay per invocation, generous free tier |
+| S3 | ~$1-5 | Depends on number of stacks |
+| CloudFront | ~$1-5 | Static site CDN |
+| VPC (NAT) | ~$6 | fck-nat EC2 instance |
+| **Total** | **~$55-65** | Scales with usage |
+
+---
+
+## Environment Variables
+
+SST automatically maps `PROCELLA_*` environment variables via `infra/api.ts`. The following are set automatically:
+
+| Variable | Source |
+|---|---|
+| `PROCELLA_DATABASE_DRIVER` | Set to `data-api` automatically |
+| `PROCELLA_DATABASE_URL` | Aurora Data API endpoint |
+| `PROCELLA_BLOB_BACKEND` | Set to `s3` automatically |
+| `PROCELLA_BLOB_S3_BUCKET` | S3 bucket name from `infra/storage.ts` |
+
+All other `PROCELLA_*` config works unchanged. See the [configuration reference](../getting-started/configuration.md) for the full list.
+
+---
+
+## GC Worker
+
+The GC worker runs as a separate Lambda function triggered by an EventBridge cron schedule (1 minute). It cleans up stale updates:
+
+- Running updates with expired leases
+- Not-started updates older than 1 hour
+- Requested updates that never started
+
+The GC worker is defined in `infra/gc.ts` and uses the handler at `apps/server/src/gc-handler.ts`. It runs independently from the API Lambda to ensure cleanup continues even if the API is under heavy load.
+
+---
+
+## Removing
+
+To tear down a stage:
+
+```bash
+npx sst remove --stage <stage>
+```
+
+<Aside type="caution">
+Production stages use `removal: "retain"` — Aurora databases and S3 buckets are NOT deleted on `sst remove`. This prevents accidental data loss. Delete them manually in the AWS console if needed.
+</Aside>
+
+---
+
+## Additional Notes
+
+**esbuild externals:** The Lambda function configuration excludes `bun` from the bundle to prevent including the Bun runtime in the deployment package.
+
+**VPC configuration:** Aurora requires a VPC (AWS requirement), but Lambda functions do not need VPC access thanks to Data API. The VPC uses fck-nat for cost-effective NAT instead of AWS NAT Gateway.
+
+**Production protection:** The production stage has `protect: true` set, preventing accidental deletion via `sst remove`.
