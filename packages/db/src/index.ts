@@ -17,7 +17,6 @@ export {
 	projects,
 	schema,
 	stacks,
-	streamTickets,
 	updateEvents,
 	updates,
 } from "./schema.js";

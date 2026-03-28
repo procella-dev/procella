@@ -16,11 +16,5 @@ CREATE TABLE "journal_entries" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "stream_tickets" (
-	"id" text PRIMARY KEY NOT NULL,
-	"update_id" text NOT NULL,
-	"expires_at" timestamp NOT NULL
-);
---> statement-breakpoint
 ALTER TABLE "journal_entries" ADD CONSTRAINT "journal_entries_update_id_updates_id_fk" FOREIGN KEY ("update_id") REFERENCES "public"."updates"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "idx_journal_entries_update_seq" ON "journal_entries" USING btree ("update_id","sequence_id");

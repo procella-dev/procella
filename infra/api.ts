@@ -16,6 +16,7 @@ export const api = new sst.aws.Function("ProcellaApi", {
 	handler: "bootstrap",
 	url: {
 		cors: false,
+		streaming: true,
 	},
 	timeout: "60 seconds",
 	memory: "512 MB",

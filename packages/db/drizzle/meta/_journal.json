@@ -22,6 +22,13 @@
       "when": 1772914600000,
       "tag": "0002_extend_journal_entries",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1774700184194,
+      "tag": "0003_nervous_blackheart",
+      "breakpoints": true
     }
   ]
 }
