@@ -22,6 +22,6 @@
       "when": 1772914600000,
       "tag": "0002_extend_journal_entries",
       "breakpoints": true
-    },
+    }
   ]
 }
