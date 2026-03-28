@@ -12,11 +12,15 @@ export const vpc = await aws.ec2
 
 export const database = await aws.rds
 	.getClusters({
-		filters: [{ name: "tag:sst:app", values: [$app.name] }],
+		// tag: filters are not supported by DescribeDBClusters — use engine filter instead,
+		// then match the production cluster by name prefix.
+		filters: [{ name: "engine", values: ["aurora-postgresql"] }],
 	})
 	.catch(() => undefined)
 	.then(async (result) => {
-		const clusterId = result?.clusterIdentifiers?.[0];
+		const clusterId = result?.clusterIdentifiers?.find((id) =>
+			id.startsWith(`${$app.name}-production-`),
+		);
 		if (!$dev && clusterId) {
 			return sst.aws.Aurora.get("ProcellaDatabase", clusterId);
 		}
