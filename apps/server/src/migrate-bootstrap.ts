@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 (async () => {
@@ -8,7 +9,10 @@ import { join } from "node:path";
 	const { runMigrations } = await import("@procella/db");
 
 	const config = loadConfig();
-	const migrationsDir = join(import.meta.dir, "drizzle");
+
+	const binaryDir = join(import.meta.dir, "drizzle");
+	const devDir = join(import.meta.dir, "../../../packages/db/drizzle");
+	const migrationsDir = existsSync(binaryDir) ? binaryDir : devDir;
 
 	const res = await fetch(`${BASE_URL}/invocation/next`);
 	const requestId = res.headers.get("Lambda-Runtime-Aws-Request-Id")!;

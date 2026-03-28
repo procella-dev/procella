@@ -80,7 +80,9 @@ export const migrateFn = new sst.aws.Function("ProcellaMigrate", {
 	},
 });
 
-new command.local.Command("ProcellaMigrateRun", {
-	create: $interpolate`aws lambda invoke --function-name ${migrateFn.name} --payload '{}' --cli-binary-format raw-in-base64-out --cli-read-timeout 360 /tmp/migrate-out-${stage}.json && cat /tmp/migrate-out-${stage}.json`,
-	triggers: [migrationHash],
-});
+if (!$dev) {
+	new command.local.Command("ProcellaMigrateRun", {
+		create: $interpolate`aws lambda invoke --function-name ${migrateFn.name} --payload '{}' --cli-binary-format raw-in-base64-out --cli-read-timeout 360 /tmp/migrate-out-${stage}.json && cat /tmp/migrate-out-${stage}.json`,
+		triggers: [migrationHash],
+	});
+}
