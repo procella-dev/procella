@@ -1,6 +1,7 @@
 // @procella/api — updates.list + updates.latest tRPC procedures.
 
 import { updateEvents, updates } from "@procella/db";
+import { eventBus, on } from "@procella/updates";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import { publicProcedure, router } from "../trpc.js";
@@ -119,4 +120,12 @@ export const updatesRouter = router({
 			resourceChanges: summaryRow ? parseResourceChanges(summaryRow.fields) : {},
 		};
 	}),
+
+	onEvents: publicProcedure
+		.input(z.object({ updateId: z.string() }))
+		.subscription(async function* (opts) {
+			for await (const _ of on(eventBus, opts.input.updateId, { signal: opts.signal })) {
+				yield { ts: Date.now() };
+			}
+		}),
 });

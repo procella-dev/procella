@@ -1,9 +1,9 @@
+import { useQueryClient } from "@tanstack/react-query";
+import { getQueryKey } from "@trpc/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
-import { ConnectionIndicator } from "../components/ui/ConnectionIndicator";
 import type { UpdateStatus } from "../components/ui/status";
 import { StatusBadge } from "../components/ui/status";
-import { useEventSource } from "../hooks/useEventSource";
 import {
 	type ResourceStatus,
 	type TrackedResource,
@@ -129,7 +129,7 @@ export function UpdateDetail() {
 	const continuationTokenRef = useRef<string | undefined>(undefined);
 	const eventsEndRef = useRef<HTMLDivElement>(null);
 	const logContainerRef = useRef<HTMLDivElement>(null);
-	const connectionStatus = useEventSource(updateID);
+	const queryClient = useQueryClient();
 
 	const { data: updateInfo } = trpc.updates.latest.useQuery(
 		{ org: org ?? "", project: project ?? "", stack: stack ?? "" },
@@ -147,6 +147,21 @@ export function UpdateDetail() {
 		{
 			enabled: Boolean(org && project && stack && updateID),
 			refetchInterval: isPolling ? 2000 : false,
+		},
+	);
+
+	trpc.updates.onEvents.useSubscription(
+		{ updateId: updateID ?? "" },
+		{
+			enabled: Boolean(updateID),
+			onData: () => {
+				queryClient.invalidateQueries({
+					queryKey: getQueryKey(trpc.events.list, undefined, "query"),
+				});
+				queryClient.invalidateQueries({
+					queryKey: getQueryKey(trpc.updates.latest, undefined, "query"),
+				});
+			},
 		},
 	);
 
@@ -227,6 +242,7 @@ export function UpdateDetail() {
 	}, [isRunning]);
 
 	useEffect(() => {
+		if (!updateInfo?.endTime) return;
 		setNowMs(Date.now());
 	}, [updateInfo?.endTime]);
 
@@ -250,7 +266,7 @@ export function UpdateDetail() {
 
 	// Auto-scroll to bottom when new events arrive
 	useEffect(() => {
-		if (!isAtBottom) return;
+		if (filteredEvents.length === 0 || !isAtBottom) return;
 		eventsEndRef.current?.scrollIntoView({ behavior: "smooth" });
 	}, [filteredEvents, isAtBottom]);
 
@@ -444,7 +460,6 @@ export function UpdateDetail() {
 					</div>
 					<div className="flex items-center gap-3 shrink-0">
 						<StatusBadge status={updateStatus} />
-						{isPolling && <ConnectionIndicator status={connectionStatus} />}
 					</div>
 				</div>
 

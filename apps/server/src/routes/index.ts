@@ -16,7 +16,6 @@ import {
 	cryptoHandlers,
 	eventHandlers,
 	healthHandlers,
-	sseHandlers,
 	stackHandlers,
 	stateHandlers,
 	updateHandlers,
@@ -24,7 +23,6 @@ import {
 } from "../handlers/index.js";
 import {
 	apiAuth,
-	apiAuthWithQueryToken,
 	decompress,
 	errorHandler,
 	pulumiAccept,
@@ -65,11 +63,9 @@ export function createApp(deps: {
 	const eventH = eventHandlers(deps.updates);
 	const cryptoH = cryptoHandlers(deps.updates);
 	const stateH = stateHandlers(deps.updates, deps.stacks);
-	const sseH = sseHandlers(deps.updates);
 
 	// Middleware instances
 	const withApiAuth = apiAuth(deps.auth);
-	const withApiAuthWithQueryToken = apiAuthWithQueryToken(deps.auth);
 	const withPulumiAccept = pulumiAccept();
 	const withUpdateAuth = updateAuth(deps.auth);
 
@@ -165,7 +161,6 @@ export function createApp(deps: {
 	app.post(R.postEngineEventBatch.path, withUpdateAuth, eventH.postEvents);
 	app.post(R.renewLease.path, withUpdateAuth, eventH.renewLease);
 	app.post(R.completeUpdate.path, withUpdateAuth, updateH.completeUpdate);
-	app.get("/api/updates/:updateId/stream", withApiAuthWithQueryToken, sseH.streamEvents);
 
 	// ========================================================================
 	// API-token authenticated routes

@@ -5,11 +5,15 @@
 	"main": "src/index.ts",
 	"types": "src/index.ts",
 	"dependencies": {
-		"@procella/types": "workspace:*",
+		"@procella/crypto": "workspace:*",
 		"@procella/db": "workspace:*",
 		"@procella/storage": "workspace:*",
-		"@procella/crypto": "workspace:*",
 		"@procella/telemetry": "workspace:*",
-		"drizzle-orm": "catalog:"
+		"@procella/types": "workspace:*",
+		"drizzle-orm": "catalog:",
+		"pg": "^8.20.0"
+	},
+	"devDependencies": {
+		"@types/pg": "^8.20.0"
 	}
 }

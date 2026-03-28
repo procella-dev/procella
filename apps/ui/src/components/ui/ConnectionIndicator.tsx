@@ -1,4 +1,4 @@
-import type { ConnectionStatus } from "../../hooks/useEventSource";
+export type ConnectionStatus = "connected" | "reconnecting" | "disconnected";
 
 const STATUS_COLORS: Record<ConnectionStatus, string> = {
 	connected: "var(--color-status-success)",

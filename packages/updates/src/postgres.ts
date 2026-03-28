@@ -442,6 +442,7 @@ export class PostgresUpdatesService implements UpdatesService {
 					});
 
 				eventBus.publish(updateId, events);
+				await this.db.execute(sql`SELECT pg_notify('update_events', ${updateId})`);
 			},
 		);
 	}
