@@ -201,6 +201,27 @@ All state lives in PostgreSQL. No in-memory caches, no local-only state.
 - **Dev mode** uses `Authorization: token <PROCELLA_DEV_AUTH_TOKEN>`. The cookie fallback is Descope-only.
 - **CLI** uses `Authorization: token <access-key>` (long-lived Descope access key, NOT a session JWT).
 
+### Lambda Architecture (CRITICAL — read before touching lambda-bootstrap.ts)
+
+**Current approach**: `runtime: "provided.al2023"` + custom Bun-compiled binary + manual runtime loop.
+- `apps/server/src/lambda-bootstrap.ts` polls `http://$AWS_LAMBDA_RUNTIME_API/2018-06-01/runtime/invocation/next` in a `while(true)` loop
+- This is a **custom runtime** — AWS does NOT inject the `awslambda` global, does NOT call `exports.handler`
+- `hono/aws-lambda`'s `handle(app)` works correctly via this loop
+- `hono/aws-lambda`'s `streamHandle(app)` does NOT work — it calls `awslambda.streamifyResponse` which is undefined in custom runtimes
+- **SST's `streaming: true` prop** sets `InvokeMode: RESPONSE_STREAM` on the Function URL but this does NOT inject `awslambda` for custom runtimes
+
+**Alternative (Bun docs recommended)**: Docker + `aws-lambda-adapter` extension
+- Run `Bun.serve()` on port 8080 inside a container
+- `public.ecr.aws/awsguru/aws-lambda-adapter` extension proxies Lambda invocations to port 8080 as plain HTTP
+- SSE/streaming works natively via Bun's `new Response(async function*() { yield ... })`
+- No `awslambda` globals needed, no custom runtime loop
+- This is the correct path for SSE streaming on Lambda with Bun
+
+**DO NOT**:
+- Export `handler` from `lambda-bootstrap.ts` — custom runtimes don't call exported functions
+- Use `streamHandle()` from `hono/aws-lambda` with `provided.al2023` — crashes immediately
+- Use `awslambda.streamifyResponse` — only available in Node.js managed runtimes
+
 ### Cluster-Safety Checklist
 
 Before adding ANY new stateful thing, ask: "what happens when this runs on 3 replicas simultaneously?"
