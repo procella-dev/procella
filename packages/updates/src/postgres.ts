@@ -260,8 +260,8 @@ export class PostgresUpdatesService implements UpdatesService {
 				({
 					updateID: row.id,
 					kind: row.kind,
-					startTime: row.startedAt?.getTime() ?? 0,
-					endTime: row.completedAt?.getTime() ?? 0,
+					startTime: row.startedAt ? Math.floor(row.startedAt.getTime() / 1000) : 0,
+					endTime: row.completedAt ? Math.floor(row.completedAt.getTime() / 1000) : 0,
 					version: row.version ?? 0,
 					message: row.message ?? "",
 					result: row.result ?? "",

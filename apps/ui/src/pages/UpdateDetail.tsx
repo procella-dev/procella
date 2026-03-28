@@ -150,16 +150,20 @@ export function UpdateDetail() {
 		},
 	);
 
+	const lastSeqRef = useRef<number>(0);
+
 	trpc.updates.onEvents.useSubscription(
 		{
 			org: org ?? "",
 			project: project ?? "",
 			stack: stack ?? "",
 			updateId: updateID ?? "",
+			lastEventId: lastSeqRef.current || undefined,
 		},
 		{
 			enabled: Boolean(org && project && stack && updateID),
-			onData: () => {
+			onData: (data) => {
+				if (data.seq) lastSeqRef.current = data.seq;
 				queryClient.invalidateQueries({
 					queryKey: getQueryKey(trpc.events.list, undefined, "query"),
 				});
