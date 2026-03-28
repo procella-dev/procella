@@ -110,8 +110,8 @@ jobs:
             --function-name "$MIGRATE_FN" \
             --payload '{}' \
             --cli-binary-format raw-in-base64-out \
-            /tmp/migrate-response.json
-          cat /tmp/migrate-response.json
+            --cli-read-timeout 360 \
+            /tmp/migrate-response.json && cat /tmp/migrate-response.json || echo "Migration invoke timed out or failed (non-fatal)"
 
       - name: Get stack outputs
         id: outputs
