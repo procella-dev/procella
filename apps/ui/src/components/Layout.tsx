@@ -39,9 +39,7 @@ export function Layout() {
 							<NavLink to="/" end className={navLinkClass}>
 								Stacks
 							</NavLink>
-							<NavLink to="/design" className={navLinkClass}>
-								Design System
-							</NavLink>
+
 							{config?.mode === "descope" && (
 								<NavLink to="/tokens" className={navLinkClass}>
 									Tokens

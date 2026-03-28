@@ -67,6 +67,7 @@ function mockStacksService(): StacksService {
 		deleteStack: async () => {},
 		renameStack: async () => {},
 		updateStackTags: async () => {},
+		replaceStackTags: async () => {},
 		getStackByFQN: async () => mockStackInfo,
 	};
 }
