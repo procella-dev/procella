@@ -34,7 +34,10 @@ export function createTRPCClient() {
 				condition: (op) => op.type === "subscription",
 				true: httpSubscriptionLink({
 					url: `${apiBase}/trpc`,
-					headers: getAuthHeaders,
+					connectionParams: async () => {
+						const headers = getAuthHeaders();
+						return headers.Authorization ? { authorization: headers.Authorization } : {};
+					},
 					transformer: superjson,
 				}),
 				false: httpBatchLink({

@@ -75,25 +75,36 @@ export function createApp(deps: {
 	// ========================================================================
 
 	app.all("/trpc/*", async (c) => {
-		const caller = await deps.auth.authenticate(c.req.raw).catch(() => null);
-
-		if (!caller) {
-			return c.json({ code: 401, message: "Unauthorized" }, 401);
-		}
-
-		const ctx: TRPCContext = {
-			caller,
-			db: deps.db,
-			dbUrl: deps.dbUrl,
-			stacks: deps.stacks,
-			updates: deps.updates,
-		};
-
 		return fetchRequestHandler({
 			endpoint: "/trpc",
 			req: c.req.raw,
 			router: appRouter,
-			createContext: () => ctx,
+			createContext: async (opts) => {
+				const connectionParams = opts.info?.connectionParams as Record<string, string> | undefined;
+
+				let req = c.req.raw;
+				if (connectionParams?.authorization && !req.headers.get("Authorization")) {
+					const headers = new Headers(req.headers);
+					headers.set("Authorization", connectionParams.authorization);
+					req = new Request(req, { headers });
+				}
+
+				const caller = await deps.auth.authenticate(req).catch(() => null);
+				if (!caller) throw new Error("Unauthorized");
+
+				return {
+					caller,
+					db: deps.db,
+					dbUrl: deps.dbUrl,
+					stacks: deps.stacks,
+					updates: deps.updates,
+				} satisfies TRPCContext;
+			},
+			onError({ error }) {
+				if (error.code !== "UNAUTHORIZED") {
+					console.error("[trpc]", error);
+				}
+			},
 		});
 	});
 

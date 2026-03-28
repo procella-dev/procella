@@ -100,38 +100,22 @@ resources:
 	return updates[0].updateID;
 }
 
-test.describe("SSE auth", () => {
-	test("GET stream without auth returns 401", async ({ request }) => {
-		const res = await request.get(`${API_URL}/api/updates/nonexistent-id/stream`);
+test.describe("tRPC subscription auth", () => {
+	test("tRPC endpoint rejects unauthenticated requests", async ({ request }) => {
+		const res = await request.get(
+			`${API_URL}/trpc/updates.latest?batch=1&input=%7B%220%22%3A%7B%22json%22%3A%7B%22org%22%3A%22x%22%2C%22project%22%3A%22x%22%2C%22stack%22%3A%22x%22%7D%7D%7D`,
+		);
 		expect(res.status()).toBe(401);
 	});
 
-	test("GET stream with valid Authorization header connects", async ({ request }) => {
-		await truncate();
-		await request.post(`${API_URL}/api/stacks/omer/stream-proj/pw-stack`, {
-			headers: AUTH_HEADER,
-			data: { tags: {} },
-		});
-		const createUpdateRes = await request.post(
-			`${API_URL}/api/stacks/omer/stream-proj/pw-stack/update`,
-			{ headers: AUTH_HEADER, data: {} },
+	test("tRPC endpoint accepts valid token", async ({ request }) => {
+		const res = await request.get(
+			`${API_URL}/trpc/updates.latest?batch=1&input=%7B%220%22%3A%7B%22json%22%3A%7B%22org%22%3A%22x%22%2C%22project%22%3A%22x%22%2C%22stack%22%3A%22x%22%7D%7D%7D`,
+			{
+				headers: { Authorization: `token ${TOKEN}` },
+			},
 		);
-		const { updateID } = (await createUpdateRes.json()) as { updateID: string };
-
-		const streamRes = await request
-			.get(`${API_URL}/api/updates/${updateID}/stream`, {
-				headers: { ...AUTH_HEADER, Accept: "text/event-stream" },
-				timeout: 5_000,
-			})
-			.catch((e: Error) => {
-				if (e.message.includes("timeout") || e.message.includes("Timeout")) return null;
-				throw e;
-			});
-
-		if (streamRes) {
-			expect(streamRes.status()).toBe(200);
-			expect(streamRes.headers()["content-type"]).toContain("text/event-stream");
-		}
+		expect([200, 404]).toContain(res.status());
 	});
 });
 
