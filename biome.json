@@ -82,6 +82,14 @@
 					"suspicious": { "noConsole": "off" }
 				}
 			}
+		},
+		{
+			"includes": ["apps/server/src/*-bootstrap.ts"],
+			"linter": {
+				"rules": {
+					"style": { "noNonNullAssertion": "off" }
+				}
+			}
 		}
 	]
 }
