@@ -41,6 +41,4 @@ export const databaseName = $dev
 		? "procella"
 		: `procella_${stage.replace(/-/g, "_")}`;
 
-export const databaseUrl = $dev
-	? $interpolate`postgresql://${database.username}:${database.password}@${database.host}:${database.port}/${databaseName}`
-	: $interpolate`postgresql://${database.username}:${database.password}@${database.host}:${database.port}/${databaseName}`;
+export const databaseUrl = $interpolate`postgresql://${database.username}:${database.password}@${database.host}:${database.port}/${databaseName}`;

@@ -26,11 +26,11 @@ The SST configuration is split into modular infrastructure components:
 | File | Purpose |
 |---|---|
 | `sst.config.ts` | Root configuration, stacks assembly |
-| `infra/database.ts` | Aurora Serverless v2 with Data API (0.5-16 ACU) |
+| `infra/database.ts` | Shared VPC, Aurora Serverless v2 with RDS Proxy (0.5-16 ACU) |
 | `infra/storage.ts` | S3 bucket for Pulumi state blobs |
 | `infra/secrets.ts` | SST secrets (encryption key, auth tokens, Descope keys) |
-| `infra/api.ts` | Hono Lambda function (handler at `apps/server/src/lambda.ts`) |
-| `infra/gc.ts` | GC worker Lambda on 1-minute EventBridge schedule |
+| `infra/api.ts` | Compiled Bun binary on Lambda (`provided.al2023`, handler at `apps/server/src/lambda-bootstrap.ts`) |
+| `infra/gc.ts` | GC worker Lambda on 1-minute EventBridge schedule (same Bun binary approach) |
 | `infra/site.ts` | React UI dashboard (StaticSite with CloudFront) |
 | `infra/descope.ts` | Descope auth provisioning (optional) |
 
@@ -110,22 +110,22 @@ This shows the API URL, CloudFront distribution URL, and other stack outputs.
 
 ## Database and Migrations
 
-Procella uses Aurora Serverless v2 with Data API. This provides HTTP-based database access, eliminating the need for VPC networking in Lambda functions.
+Procella uses Aurora Serverless v2 with RDS Proxy for connection pooling. Lambda functions connect directly via `Bun.sql` (the same driver used in local development and Docker deployments), running inside the VPC for Aurora connectivity.
 
-**Key benefits of Data API:**
-- No VPC configuration required for Lambda
-- HTTP-based connections (no connection pooling needed)
-- Automatic IAM authentication
-- Compatible with `drizzle-orm/aws-data-api/pg`
+**Key benefits of direct PG via RDS Proxy:**
+- Same `Bun.sql` driver as local dev (no separate Data API driver)
+- RDS Proxy handles Lambda connection pooling automatically
+- No per-query HTTP overhead (direct TCP connections)
+- `PROCELLA_DATABASE_URL` is the only config needed, everywhere
 
 Run database migrations:
 
 ```bash
-npx sst shell -- bunx drizzle-kit migrate --config packages/db/drizzle.config.ts
+npx sst shell --stage production -- bun apps/server/src/index.ts --migrate
 ```
 
-<Aside type="caution">
-Aurora Data API adds ~10-30ms overhead per query compared to direct TCP connections. This is negligible for Pulumi CLI operations but may matter for high-frequency dashboard queries.
+<Aside type="tip">
+Lambda functions are compiled Bun binaries (`bun build --compile --bytecode --minify`) deployed as custom runtimes (`provided.al2023`). This eliminates all Node.js/esbuild bundling and runs the exact same Bun runtime as local development.
 </Aside>
 
 ---
@@ -182,11 +182,7 @@ SST automatically maps `PROCELLA_*` environment variables via `infra/api.ts`. Th
 
 | Variable | Source |
 |---|---|
-| `PROCELLA_DATABASE_DRIVER` | Set to `data-api` in deployed stages (omitted in `sst dev`) |
-| `PROCELLA_DATABASE_SECRET_ARN` | Aurora Data API secret ARN from `infra/api.ts` |
-| `PROCELLA_DATABASE_CLUSTER_ARN` | Aurora cluster ARN from `infra/api.ts` |
-| `PROCELLA_DATABASE_NAME` | Database name from `infra/api.ts` |
-| `PROCELLA_DATABASE_URL` | Set automatically in `sst dev` for local PostgreSQL |
+| `PROCELLA_DATABASE_URL` | Constructed from Aurora RDS Proxy host/port/credentials in `infra/database.ts` |
 | `PROCELLA_BLOB_BACKEND` | Set to `s3` automatically |
 | `PROCELLA_BLOB_S3_BUCKET` | S3 bucket name from `infra/storage.ts` |
 
