@@ -438,7 +438,7 @@ export class PostgresUpdatesService implements UpdatesService {
 						set: { kind: sql`excluded.kind`, fields: sql`excluded.fields` },
 					});
 
-				await this.db.execute(sql`SELECT pg_notify('update_events', ${updateId})`);
+				this.db.execute(sql`SELECT pg_notify('update_events', ${updateId})`).catch(() => {});
 			},
 		);
 	}
