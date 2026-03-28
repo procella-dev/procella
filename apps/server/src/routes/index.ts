@@ -78,7 +78,7 @@ export function createApp(deps: {
 		let req = c.req.raw;
 
 		const cpRaw = c.req.query("connectionParams");
-		if (cpRaw && !req.headers.get("Authorization")) {
+		if (cpRaw && req.method === "GET" && !req.headers.get("Authorization")) {
 			try {
 				const cp = JSON.parse(decodeURIComponent(cpRaw)) as Record<string, string>;
 				if (cp.authorization) {

@@ -176,7 +176,7 @@ export const updatesRouter = router({
 					yield { seq: lastSeq, ts: Date.now() };
 				}
 
-				const signal = opts.signal!;
+				const signal = opts.signal ?? AbortSignal.timeout(3_600_000);
 				while (!signal.aborted) {
 					await new Promise<void>((resolve, reject) => {
 						const done = () => {
