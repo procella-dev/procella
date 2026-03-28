@@ -31,6 +31,34 @@ export function apiAuth(authService: AuthService): MiddlewareHandler<Env> {
 	};
 }
 
+export function apiAuthWithQueryToken(authService: AuthService): MiddlewareHandler<Env> {
+	return async (c, next) => {
+		try {
+			const tokenFromQuery = c.req.query("token");
+			const authHeader = c.req.header("Authorization");
+
+			let request = c.req.raw;
+			if (!authHeader && tokenFromQuery) {
+				const headers = new Headers(request.headers);
+				headers.set("Authorization", tokenFromQuery);
+				request = new Request(request, { headers });
+			}
+
+			const caller = await authService.authenticate(request);
+			c.set("caller", caller);
+			await next();
+		} catch (error) {
+			if (error instanceof ProcellaError) {
+				return c.json(
+					{ code: error.statusCode, message: error.message },
+					error.statusCode as ContentfulStatusCode,
+				);
+			}
+			return c.json({ code: 401, message: "Unauthorized" }, 401);
+		}
+	};
+}
+
 // ============================================================================
 // Update Token Auth
 // ============================================================================
