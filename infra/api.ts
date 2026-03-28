@@ -10,14 +10,17 @@ const descopeProjectId = !$dev ? (await import("./descope")).projectId : undefin
 const appOrigin = isProd ? "https://app.procella.cloud" : `https://app.${stage}.procella.cloud`;
 
 export const api = new sst.aws.Function("ProcellaApi", {
-	runtime: "provided.al2023",
+	runtime: "container",
+	image: {
+		dockerfile: "Dockerfile.lambda",
+		context: ".",
+	},
 	architecture: "x86_64",
-	bundle: ".build/api",
-	handler: "bootstrap",
 	url: {
 		cors: false,
 	},
-	timeout: "60 seconds",
+	streaming: true,
+	timeout: "15 minutes",
 	memory: "512 MB",
 	vpc,
 	link: [database, bucket, ...allSecrets],
