@@ -2,6 +2,7 @@
 
 import { updateEvents, updates } from "@procella/db";
 
+import { TRPCError } from "@trpc/server";
 import { and, asc, desc, eq, gt, inArray } from "drizzle-orm";
 import { Client } from "pg";
 import { z } from "zod/v4";
@@ -146,7 +147,8 @@ export const updatesRouter = router({
 				.from(updates)
 				.where(and(eq(updates.id, updateId), eq(updates.stackId, stackInfo.id)))
 				.limit(1);
-			if (owned.length === 0) throw new Error("Update not found");
+			if (owned.length === 0)
+				throw new TRPCError({ code: "NOT_FOUND", message: "Update not found" });
 
 			let lastSeq = lastEventId ?? 0;
 
