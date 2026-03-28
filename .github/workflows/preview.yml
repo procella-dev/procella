@@ -38,7 +38,7 @@ jobs:
 
       - name: Build Lambda binaries
         run: |
-          mkdir -p .build/api .build/gc
+          mkdir -p .build/api .build/gc .build/migrate
           bun build --compile --target=bun-linux-x64 --production --sourcemap --compile-exec-argv="--smol" apps/server/src/lambda-bootstrap.ts --outfile .build/api/bootstrap
           bun build --compile --target=bun-linux-x64 --production --sourcemap --compile-exec-argv="--smol" apps/server/src/gc-bootstrap.ts --outfile .build/gc/bootstrap
           bun build --compile --target=bun-linux-x64 --production --sourcemap --compile-exec-argv="--smol" apps/server/src/migrate-bootstrap.ts --outfile .build/migrate/bootstrap

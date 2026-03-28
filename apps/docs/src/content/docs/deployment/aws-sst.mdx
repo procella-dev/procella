@@ -27,7 +27,7 @@ The SST configuration is split into modular infrastructure components:
 |---|---|
 | `sst.config.ts` | Root configuration, stacks assembly |
 | `infra/database.ts` | Shared VPC, Aurora Serverless v2 with RDS Proxy (0.5-16 ACU) |
-| `infra/storage.ts` | S3 bucket for Pulumi state blobs |
+| `infra/storage.ts` | S3 bucket for Procella checkpoint blob storage |
 | `infra/secrets.ts` | SST secrets (encryption key, auth tokens, Descope keys) |
 | `infra/api.ts` | Compiled Bun binary on Lambda (`provided.al2023`, handler at `apps/server/src/lambda-bootstrap.ts`) |
 | `infra/gc.ts` | GC worker Lambda on 1-minute EventBridge schedule (same Bun binary approach) |
@@ -49,14 +49,14 @@ npx sst secret set ProcellaEncryptionKey "$(openssl rand -hex 32)"
 npx sst secret set ProcellaDevAuthToken "your-token-here"
 ```
 
-For Descope authentication mode (production only — the Descope project ID is provisioned automatically via `infra/descope.ts`):
+In CI/CD, secrets are passed as `SST_SECRET_*` environment variables — no manual `sst secret set` needed. For local or one-off deploys:
 
 ```bash
 npx sst secret set ProcellaDescopeManagementKey "..."
 ```
 
 <Aside type="tip">
-Secrets are encrypted and stored in AWS Systems Manager Parameter Store. They are automatically injected as environment variables into your Lambda functions.
+SST secrets are encrypted in AWS SSM Parameter Store. In GitHub Actions they are passed via `SST_SECRET_*` env vars on the deploy step and applied automatically at deploy time.
 </Aside>
 
 ---
@@ -218,7 +218,7 @@ Production stages use `removal: "retain"` — Aurora databases and S3 buckets ar
 
 ## Additional Notes
 
-**Compiled Bun binaries:** Lambda functions use `bun build --compile --bytecode --minify` to create self-contained executables deployed as `provided.al2023` custom runtimes. No Node.js, no esbuild, no runtime layers.
+**Compiled Bun binaries:** Lambda functions use `bun build --compile --production --sourcemap` to create self-contained executables deployed as `provided.al2023` custom runtimes. No Node.js, no esbuild, no runtime layers. `--production` enables dead code elimination and minification. `--sourcemap` embeds compressed source maps so stack traces resolve to original file:line.
 
 **VPC configuration:** Both Aurora and Lambda functions run inside the VPC. Lambda connects to Aurora through RDS Proxy for connection pooling. The VPC uses fck-nat for cost-effective NAT instead of AWS NAT Gateway.
 
