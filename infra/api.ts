@@ -52,11 +52,10 @@ import * as command from "@pulumi/command";
 const migrationHash = crypto
 	.createHash("sha256")
 	.update(
-		[
-			"0000_medical_fabian_cortez.sql",
-			"0001_add_journal_entries.sql",
-			"0002_extend_journal_entries.sql",
-		]
+		fs
+			.readdirSync("packages/db/drizzle", { recursive: true })
+			.filter((f) => typeof f === "string")
+			.sort()
 			.map((f) => fs.readFileSync(`packages/db/drizzle/${f}`, "utf8"))
 			.join("\n"),
 	)

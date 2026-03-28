@@ -42,6 +42,7 @@ jobs:
           bun build --compile --target=bun-linux-x64 --production --sourcemap --compile-exec-argv="--smol" apps/server/src/lambda-bootstrap.ts --outfile .build/api/bootstrap
           bun build --compile --target=bun-linux-x64 --production --sourcemap --compile-exec-argv="--smol" apps/server/src/gc-bootstrap.ts --outfile .build/gc/bootstrap
           bun build --compile --target=bun-linux-x64 --production --sourcemap --compile-exec-argv="--smol" apps/server/src/migrate-bootstrap.ts --outfile .build/migrate/bootstrap
+          cp -rf packages/db/drizzle .build/migrate/drizzle
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4

@@ -4,7 +4,7 @@
 		"outDir": "dist",
 		"rootDir": "src"
 	},
-	"include": ["src/**/*.ts", "bun-embed.d.ts"],
+	"include": ["src/**/*.ts"],
 	"references": [
 		{ "path": "../../packages/api" },
 		{ "path": "../../packages/types" },
