@@ -151,9 +151,14 @@ export function UpdateDetail() {
 	);
 
 	trpc.updates.onEvents.useSubscription(
-		{ updateId: updateID ?? "" },
 		{
-			enabled: Boolean(updateID),
+			org: org ?? "",
+			project: project ?? "",
+			stack: stack ?? "",
+			updateId: updateID ?? "",
+		},
+		{
+			enabled: Boolean(org && project && stack && updateID),
 			onData: () => {
 				queryClient.invalidateQueries({
 					queryKey: getQueryKey(trpc.events.list, undefined, "query"),

@@ -15,7 +15,7 @@ async function api(path: string, opts?: { method?: string; body?: unknown }) {
 	const res = await fetch(`${API_URL}/api${path}`, {
 		method: opts?.method ?? "GET",
 		headers: { ...AUTH_HEADER, ...(opts?.body ? { "Content-Type": "application/json" } : {}) },
-		body: opts?.body ? JSON.stringify(opts.body) : undefined,
+		body: opts?.body ? JSON.stringify(opts?.body) : undefined,
 	});
 	if (!res.ok) throw new Error(`API ${opts?.method ?? "GET"} ${path} → ${res.status}`);
 	return res.json() as Promise<Record<string, unknown>>;

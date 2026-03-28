@@ -125,12 +125,29 @@ export const updatesRouter = router({
 	onEvents: publicProcedure
 		.input(
 			z.object({
+				org: z.string(),
+				project: z.string(),
+				stack: z.string(),
 				updateId: z.string(),
 				lastEventId: z.coerce.number().nullish(),
 			}),
 		)
 		.subscription(async function* (opts) {
-			const { updateId, lastEventId } = opts.input;
+			const { org, project, stack, updateId, lastEventId } = opts.input;
+
+			const stackInfo = await opts.ctx.stacks.getStack(
+				opts.ctx.caller.tenantId,
+				org,
+				project,
+				stack,
+			);
+			const owned = await opts.ctx.db
+				.select({ id: updates.id })
+				.from(updates)
+				.where(and(eq(updates.id, updateId), eq(updates.stackId, stackInfo.id)))
+				.limit(1);
+			if (owned.length === 0) throw new Error("Update not found");
+
 			let lastSeq = lastEventId ?? 0;
 
 			const pg = new Client({ connectionString: opts.ctx.dbUrl });
@@ -141,7 +158,9 @@ export const updatesRouter = router({
 			pg.on("notification", (msg) => {
 				if (msg.payload === updateId) notify.dispatchEvent(new Event("ping"));
 			});
-			pg.on("error", () => {});
+			pg.on("error", (err) => {
+				notify.dispatchEvent(new CustomEvent("dberror", { detail: err }));
+			});
 
 			try {
 				const replay = await opts.ctx.db
@@ -152,7 +171,7 @@ export const updatesRouter = router({
 
 				for (const row of replay) {
 					lastSeq = row.sequence;
-					yield { ts: Date.now() };
+					yield { seq: lastSeq, ts: Date.now() };
 				}
 
 				const signal = opts.signal!;
@@ -160,15 +179,24 @@ export const updatesRouter = router({
 					await new Promise<void>((resolve, reject) => {
 						const done = () => {
 							notify.removeEventListener("ping", done);
+							notify.removeEventListener("dberror", onErr);
 							signal.removeEventListener("abort", abort);
 							resolve();
 						};
 						const abort = () => {
 							notify.removeEventListener("ping", done);
+							notify.removeEventListener("dberror", onErr);
 							signal.removeEventListener("abort", abort);
 							reject(new DOMException("Aborted", "AbortError"));
 						};
+						const onErr = (e: Event) => {
+							notify.removeEventListener("ping", done);
+							notify.removeEventListener("dberror", onErr);
+							signal.removeEventListener("abort", abort);
+							reject((e as CustomEvent).detail ?? new Error("DB connection error"));
+						};
 						notify.addEventListener("ping", done, { once: true });
+						notify.addEventListener("dberror", onErr, { once: true });
 						signal.addEventListener("abort", abort, { once: true });
 					});
 
@@ -180,7 +208,7 @@ export const updatesRouter = router({
 
 					for (const row of newRows) {
 						lastSeq = row.sequence;
-						yield { ts: Date.now() };
+						yield { seq: lastSeq, ts: Date.now() };
 					}
 				}
 			} catch (e) {

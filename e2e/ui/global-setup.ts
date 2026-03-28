@@ -29,12 +29,12 @@ async function waitFor(url: string, timeoutMs: number): Promise<void> {
 	throw new Error(`Timed out waiting for ${url}`);
 }
 
-async function isListening(port: number): Promise<boolean> {
+async function isListening(port: number, path = "/healthz"): Promise<boolean> {
 	try {
-		const r = await fetch(`http://localhost:${port}/healthz`, {
+		const r = await fetch(`http://localhost:${port}${path}`, {
 			signal: AbortSignal.timeout(500),
 		});
-		return r.ok;
+		return r.ok || r.status < 500;
 	} catch {
 		return false;
 	}
@@ -88,7 +88,7 @@ export default async function globalSetup(_config: FullConfig) {
 		await waitFor(`http://localhost:${TEST_PORT}/healthz`, 30_000);
 	}
 
-	const uiAlreadyUp = await isListening(UI_PORT).catch(() => false);
+	const uiAlreadyUp = await isListening(UI_PORT, "/").catch(() => false);
 	if (!uiAlreadyUp) {
 		const ui = spawn(
 			"bun",

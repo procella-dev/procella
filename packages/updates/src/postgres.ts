@@ -671,23 +671,21 @@ export class PostgresUpdatesService implements UpdatesService {
 				const checkpointData: unknown = data;
 				if (serialized.length > BLOB_THRESHOLD) {
 					blobKey = formatBlobKey(stackId, updateId, version);
-					await Promise.all([
-						this.storage.put(blobKey, new TextEncoder().encode(serialized)),
-						this.db
-							.insert(checkpoints)
-							.values({
-								updateId,
-								stackId,
-								version,
-								data: null,
-								blobKey,
-								isDelta: false,
-							})
-							.onConflictDoUpdate({
-								target: [checkpoints.updateId, checkpoints.version],
-								set: { data: null, blobKey, isDelta: false },
-							}),
-					]);
+					await this.storage.put(blobKey, new TextEncoder().encode(serialized));
+					await this.db
+						.insert(checkpoints)
+						.values({
+							updateId,
+							stackId,
+							version,
+							data: null,
+							blobKey,
+							isDelta: false,
+						})
+						.onConflictDoUpdate({
+							target: [checkpoints.updateId, checkpoints.version],
+							set: { data: null, blobKey, isDelta: false },
+						});
 					return;
 				}
 
