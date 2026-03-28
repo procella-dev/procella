@@ -1,6 +1,6 @@
-import { vpc, database, databaseUrl } from "./database";
+import { database, databaseUrl, vpc } from "./database";
+import { allSecrets, devAuthToken, encryptionKey } from "./secrets";
 import { bucket } from "./storage";
-import { allSecrets, encryptionKey, devAuthToken } from "./secrets";
 
 export const gc = new sst.aws.Cron("ProcellaGcCron", {
 	schedule: "rate(1 minute)",
