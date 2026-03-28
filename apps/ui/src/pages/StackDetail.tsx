@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { Link, useParams } from "react-router";
+import { Dialog, UpdateCard, type UpdateStatus } from "../components/ui";
 import { trpc } from "../trpc";
 
 // ============================================================================
@@ -20,54 +22,6 @@ function getResultColor(result: string) {
 	}
 }
 
-function getKindColor(kind: string) {
-	switch (kind) {
-		case "update":
-			return "bg-lightning/10 text-lightning border-lightning/20";
-		case "preview":
-			return "bg-purple-900/30 text-purple-400 border-purple-900/50";
-		case "destroy":
-			return "bg-red-900/30 text-red-400 border-red-900/50";
-		case "refresh":
-			return "bg-teal-900/30 text-teal-400 border-teal-900/50";
-		case "import":
-			return "bg-cyan-900/30 text-cyan-400 border-cyan-900/50";
-		default:
-			return "bg-slate-brand text-cloud border-cloud/30";
-	}
-}
-
-function getOpColor(op: string) {
-	switch (op) {
-		case "create":
-			return "text-green-400";
-		case "update":
-			return "text-yellow-400";
-		case "delete":
-			return "text-red-400";
-		case "same":
-			return "text-cloud";
-		case "replace":
-			return "text-orange-400";
-		default:
-			return "text-lightning";
-	}
-}
-
-function formatDuration(start: number, end: number) {
-	if (!start || !end) return null;
-	const seconds = end - start;
-	if (seconds < 60) return `${String(seconds)}s`;
-	const mins = Math.floor(seconds / 60);
-	const secs = seconds % 60;
-	return `${String(mins)}m ${String(secs)}s`;
-}
-
-function formatDate(timestamp: number) {
-	if (!timestamp) return "-";
-	return new Date(timestamp * 1000).toLocaleString();
-}
-
 function formatRelativeTime(timestamp: number) {
 	if (!timestamp) return "-";
 	const now = Math.floor(Date.now() / 1000);
@@ -77,6 +31,34 @@ function formatRelativeTime(timestamp: number) {
 	if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
 	if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
 	return new Date(timestamp * 1000).toLocaleDateString();
+}
+
+function toUpdateStatus(result: string): UpdateStatus {
+	switch (result) {
+		case "succeeded":
+			return "succeeded";
+		case "failed":
+			return "failed";
+		case "cancelled":
+			return "cancelled";
+		case "in-progress":
+			return "updating";
+		default:
+			return "queued";
+	}
+}
+
+function toIsoOrNull(timestamp?: number | null): string | null {
+	if (!timestamp) return null;
+	return new Date(timestamp * 1000).toISOString();
+}
+
+function toChangeSummary(resourceChanges: Record<string, number>) {
+	return {
+		creates: resourceChanges.create ?? 0,
+		updates: resourceChanges.update ?? 0,
+		deletes: resourceChanges.delete ?? 0,
+	};
 }
 
 /** Truncate a string in the middle for display. */
@@ -92,6 +74,119 @@ function shortType(type: string) {
 	const colonIdx = type.indexOf(":");
 	if (colonIdx === -1) return type;
 	return type.slice(colonIdx + 1);
+}
+
+interface RepairSectionProps {
+	org: string;
+	project: string;
+	stack: string;
+}
+
+function RepairSection({ org, project, stack }: RepairSectionProps) {
+	const [dialogOpen, setDialogOpen] = useState(false);
+	const [result, setResult] = useState<{
+		mutations: Array<{ type: string; urn: string; detail?: string }>;
+		mutationCount: number;
+	} | null>(null);
+
+	const repair = trpc.stacks.repair.useMutation({
+		onSuccess: (data) => {
+			setResult(data);
+			setDialogOpen(false);
+		},
+	});
+
+	return (
+		<section>
+			<div className="mb-4">
+				<h2 className="text-lg font-semibold text-mist">State Repair</h2>
+				<p className="text-sm text-cloud mt-1">
+					Scan and fix dangling parent references and orphaned resources in the Pulumi checkpoint.
+				</p>
+			</div>
+
+			<div className="bg-slate-brand/50 border border-slate-brand rounded-lg p-4 space-y-3">
+				{result === null ? (
+					<button
+						type="button"
+						onClick={() => setDialogOpen(true)}
+						className="inline-flex items-center rounded-md border border-cloud/40 bg-slate-brand px-3 py-2 text-sm font-medium text-mist transition-colors hover:border-cloud/60"
+					>
+						Run Repair
+					</button>
+				) : result.mutationCount === 0 ? (
+					<div
+						className="rounded-md border p-3 text-sm"
+						style={{
+							borderColor: "color-mix(in srgb, var(--color-status-success) 45%, transparent)",
+							color: "var(--color-status-success)",
+						}}
+					>
+						✓ No issues found — state is healthy
+					</div>
+				) : (
+					<div className="space-y-3">
+						<div
+							className="rounded-md border p-3 text-sm"
+							style={{
+								borderColor: "color-mix(in srgb, var(--color-status-success) 45%, transparent)",
+								color: "var(--color-status-success)",
+							}}
+						>
+							✓ Repair complete — {result.mutationCount} issue
+							{result.mutationCount !== 1 ? "s" : ""} fixed
+						</div>
+						<ul className="space-y-2">
+							{result.mutations.map((m) => (
+								<li
+									key={`${m.type}-${m.urn}-${m.detail ?? ""}`}
+									className="rounded-md bg-slate-brand p-3"
+								>
+									<div className="text-sm text-mist font-medium">{m.type}</div>
+									<code className="block mt-1 text-xs text-cloud break-all">{m.urn}</code>
+								</li>
+							))}
+						</ul>
+						<button
+							type="button"
+							onClick={() => setResult(null)}
+							className="inline-flex items-center rounded-md border border-cloud/40 bg-slate-brand px-3 py-2 text-sm font-medium text-mist transition-colors hover:border-cloud/60"
+						>
+							Run Again
+						</button>
+					</div>
+				)}
+			</div>
+
+			<Dialog open={dialogOpen} onOpenChange={setDialogOpen} title="Repair Stack State">
+				<div className="space-y-3 text-sm text-cloud">
+					<p>
+						This will scan the checkpoint for dangling parent refs and orphaned resources, and
+						remove them.
+					</p>
+					<p style={{ color: "var(--color-status-error)" }}>This cannot be undone.</p>
+					<div className="flex justify-end gap-2 pt-2">
+						<button
+							type="button"
+							onClick={() => setDialogOpen(false)}
+							className="inline-flex items-center rounded-md border border-cloud/40 bg-slate-brand px-3 py-2 text-sm font-medium text-mist transition-colors hover:border-cloud/60"
+						>
+							Cancel
+						</button>
+						<button
+							type="button"
+							onClick={() => repair.mutate({ org, project, stack })}
+							disabled={repair.isPending}
+							className="inline-flex items-center rounded-md px-3 py-2 text-sm font-medium text-deep-night transition-opacity disabled:opacity-60"
+							style={{ backgroundColor: "var(--color-lightning)" }}
+						>
+							{repair.isPending ? "Repairing…" : "Run Repair"}
+						</button>
+					</div>
+				</div>
+			</Dialog>
+		</section>
+	);
 }
 
 // ============================================================================
@@ -393,57 +488,28 @@ export function StackDetail() {
 						</p>
 					</div>
 				) : (
-					<div className="space-y-3">
+					<div className="bg-slate-brand/50 border border-slate-brand rounded-lg overflow-hidden">
 						{updateItems.map((update) => {
-							const duration = formatDuration(update.startTime, update.endTime);
-							const changes = Object.entries(update.resourceChanges);
-
 							return (
-								<Link
+								<UpdateCard
 									key={update.updateID}
-									to={`/stacks/${org}/${project}/${stack}/updates/${update.updateID}`}
-									className="block bg-slate-brand border border-slate-brand rounded-lg p-5 hover:border-cloud/30 transition-colors group"
-								>
-									<div className="flex items-start justify-between mb-2">
-										<div className="flex items-center gap-2.5">
-											<span
-												className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${getKindColor(update.kind)}`}
-											>
-												{update.kind}
-											</span>
-											<span
-												className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${getResultColor(update.result)}`}
-											>
-												{update.result || "pending"}
-											</span>
-											<span className="text-sm text-cloud">v{update.version}</span>
-										</div>
-										<div className="text-right text-sm">
-											<div className="text-cloud">{formatDate(update.startTime)}</div>
-											{duration && <div className="text-cloud/60 text-xs">{duration}</div>}
-										</div>
-									</div>
-
-									{update.message && (
-										<div className="text-cloud text-sm mb-2 truncate">{update.message}</div>
-									)}
-
-									{changes.length > 0 && (
-										<div className="flex gap-3 text-xs mt-2 pt-2 border-t border-slate-brand/50">
-											{changes.map(([op, count]) => (
-												<span key={op} className="flex items-center gap-1">
-													<span className={`font-bold ${getOpColor(op)}`}>{count}</span>
-													<span className="text-cloud">{op}</span>
-												</span>
-											))}
-										</div>
-									)}
-								</Link>
+									updateId={update.updateID}
+									href={`/stacks/${org}/${project}/${stack}/updates/${update.updateID}`}
+									kind={update.kind}
+									status={toUpdateStatus(update.result)}
+									resourceChanges={toChangeSummary(update.resourceChanges)}
+									startedAt={toIsoOrNull(update.startTime)}
+									completedAt={toIsoOrNull(update.endTime)}
+									isFirst={updateItems[0]?.updateID === update.updateID}
+									isLast={updateItems[updateItems.length - 1]?.updateID === update.updateID}
+								/>
 							);
 						})}
 					</div>
 				)}
 			</section>
+
+			<RepairSection org={params.org} project={params.project} stack={params.stack} />
 		</div>
 	);
 }

@@ -1,4 +1,6 @@
-import { Link } from "react-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { getQueryKey } from "@trpc/react-query";
+import { StackCard, type UpdateStatus } from "../components/ui";
 import { apiBase } from "../config";
 import { trpc } from "../trpc";
 
@@ -158,95 +160,51 @@ interface StackItem {
 	projectName: string;
 	stackName: string;
 	version: number;
-	activeUpdate: string;
-	currentOperation: string;
+	activeUpdate: boolean;
+	currentOperation: string | null;
 	tags: Record<string, string>;
 }
 
 function StackTable({ items }: { items: StackItem[] }) {
+	const queryClient = useQueryClient();
+	const utils = trpc.useUtils();
+
+	const handleMouseEnter = (stack: StackItem) => {
+		queryClient.prefetchQuery({
+			queryKey: getQueryKey(
+				trpc.stacks.detail,
+				{ org: stack.orgName, project: stack.projectName, stack: stack.stackName },
+				"query",
+			),
+			queryFn: () =>
+				utils.stacks.detail.fetch({
+					org: stack.orgName,
+					project: stack.projectName,
+					stack: stack.stackName,
+				}),
+			staleTime: 10_000,
+		});
+	};
+
 	return (
 		<div className="bg-slate-brand/50 border border-slate-brand rounded-xl overflow-hidden">
-			<table className="min-w-full divide-y divide-slate-brand">
-				<thead>
-					<tr className="bg-slate-brand">
-						<th
-							scope="col"
-							className="px-5 py-3 text-left text-xs font-medium text-cloud uppercase tracking-wider"
-						>
-							Stack
-						</th>
-						<th
-							scope="col"
-							className="px-5 py-3 text-left text-xs font-medium text-cloud uppercase tracking-wider"
-						>
-							Version
-						</th>
-						<th
-							scope="col"
-							className="px-5 py-3 text-left text-xs font-medium text-cloud uppercase tracking-wider"
-						>
-							Status
-						</th>
-						<th
-							scope="col"
-							className="px-5 py-3 text-left text-xs font-medium text-cloud uppercase tracking-wider"
-						>
-							Tags
-						</th>
-					</tr>
-				</thead>
-				<tbody className="divide-y divide-slate-brand/60">
-					{items.map((stack) => (
-						<tr
-							key={`${stack.orgName}/${stack.projectName}/${stack.stackName}`}
-							className="hover:bg-slate-brand/30 transition-colors"
-						>
-							<td className="px-5 py-4 whitespace-nowrap">
-								<Link
-									to={`/stacks/${stack.orgName}/${stack.projectName}/${stack.stackName}`}
-									className="text-lightning hover:text-lightning/80 font-medium text-sm transition-colors"
-								>
-									{stack.orgName}/{stack.projectName}/{stack.stackName}
-								</Link>
-							</td>
-							<td className="px-5 py-4 whitespace-nowrap text-sm text-cloud tabular-nums">
-								v{stack.version}
-							</td>
-							<td className="px-5 py-4 whitespace-nowrap">
-								{stack.activeUpdate ? (
-									<span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-950/40 text-amber-400 border border-amber-900/40">
-										<span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-										{stack.currentOperation || "In Progress"}
-									</span>
-								) : (
-									<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-brand/60 text-cloud border border-cloud/20">
-										Idle
-									</span>
-								)}
-							</td>
-							<td className="px-5 py-4 whitespace-nowrap text-sm text-cloud">
-								<div className="flex gap-1.5">
-									{Object.entries(stack.tags)
-										.slice(0, 2)
-										.map(([k, v]) => (
-											<span
-												key={k}
-												className="px-2 py-0.5 bg-slate-brand/60 rounded text-xs border border-cloud/20 text-cloud"
-											>
-												{k}: {v}
-											</span>
-										))}
-									{Object.keys(stack.tags).length > 2 && (
-										<span className="px-2 py-0.5 bg-slate-brand/60 rounded text-xs border border-cloud/20 text-cloud">
-											+{Object.keys(stack.tags).length - 2} more
-										</span>
-									)}
-								</div>
-							</td>
-						</tr>
-					))}
-				</tbody>
-			</table>
+			{items.map((stack, index) => {
+				const status: UpdateStatus = stack.activeUpdate ? "updating" : "succeeded";
+
+				return (
+					<StackCard
+						key={`${stack.orgName}/${stack.projectName}/${stack.stackName}`}
+						orgName={stack.orgName}
+						projectName={stack.projectName}
+						stackName={stack.stackName}
+						href={`/stacks/${stack.orgName}/${stack.projectName}/${stack.stackName}`}
+						lastUpdateStatus={status}
+						onHover={() => handleMouseEnter(stack)}
+						isFirst={index === 0}
+						isLast={index === items.length - 1}
+					/>
+				);
+			})}
 		</div>
 	);
 }

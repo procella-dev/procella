@@ -10,6 +10,7 @@ import { FullPageSpinner } from "./components/FullPageSpinner";
 import { HomeRoute } from "./components/HomeRoute";
 import { Layout } from "./components/Layout";
 import { CliLogin } from "./pages/CliLogin";
+import { Design } from "./pages/Design";
 import { ResourceDetail } from "./pages/ResourceDetail";
 import { Settings } from "./pages/Settings";
 import { StackDetail } from "./pages/StackDetail";
@@ -39,6 +40,8 @@ function TRPCProvider({ children }: { children: React.ReactNode }) {
 			new QueryClient({
 				defaultOptions: {
 					queries: {
+						staleTime: 30_000,
+						gcTime: 5 * 60_000,
 						retry: false,
 						refetchOnWindowFocus: false,
 					},
@@ -77,6 +80,7 @@ function App() {
 						/>
 						<Route path="/cli-login" element={<CliLogin />} />
 						<Route path="/welcome/cli" element={<WelcomeCli />} />
+						<Route path="/design" element={<Design />} />
 						<Route element={<HomeRoute />}>
 							<Route path="/" element={<Layout />}>
 								<Route index element={<StackList />} />

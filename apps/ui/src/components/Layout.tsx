@@ -2,6 +2,7 @@ import { getCurrentTenant, getJwtRoles, useDescope, useSession, useUser } from "
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router";
 import { useAuthConfig } from "../hooks/useAuthConfig";
+import { CommandBar, openCommandBar } from "./CommandBar";
 import { ProcellaLogo } from "./ProcellaLogo";
 
 function useIsAdmin() {
@@ -38,6 +39,9 @@ export function Layout() {
 							<NavLink to="/" end className={navLinkClass}>
 								Stacks
 							</NavLink>
+							<NavLink to="/design" className={navLinkClass}>
+								Design System
+							</NavLink>
 							{config?.mode === "descope" && (
 								<NavLink to="/tokens" className={navLinkClass}>
 									Tokens
@@ -50,12 +54,23 @@ export function Layout() {
 							)}
 						</nav>
 					</div>
-					{config?.mode === "descope" ? <DescopeUserMenu /> : <DevTokenInput />}
+					<div className="flex items-center gap-3">
+						<button
+							type="button"
+							onClick={openCommandBar}
+							className="flex items-center gap-1.5 rounded-md border border-slate-brand px-2 py-1 text-xs text-cloud transition-colors hover:border-cloud/50 hover:text-mist"
+						>
+							<span>Search</span>
+							<kbd className="font-mono text-xs">⌘K</kbd>
+						</button>
+						{config?.mode === "descope" ? <DescopeUserMenu /> : <DevTokenInput />}
+					</div>
 				</div>
 			</header>
 			<main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
 				<Outlet />
 			</main>
+			<CommandBar />
 		</div>
 	);
 }
