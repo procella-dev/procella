@@ -10,15 +10,9 @@ import { join } from "node:path";
 
 	const config = loadConfig();
 
-	// In Lambda, the bundle contents are at /var/task (not import.meta.dir which is /$bunfs/root)
-	const lambdaDir = join("/var/task", "drizzle");
 	const binaryDir = join(import.meta.dir, "drizzle");
 	const devDir = join(import.meta.dir, "../../../packages/db/drizzle");
-	const migrationsDir = existsSync(lambdaDir)
-		? lambdaDir
-		: existsSync(binaryDir)
-			? binaryDir
-			: devDir;
+	const migrationsDir = existsSync(binaryDir) ? binaryDir : devDir;
 
 	const res = await fetch(`${BASE_URL}/invocation/next`);
 	const requestId = res.headers.get("Lambda-Runtime-Aws-Request-Id")!;
