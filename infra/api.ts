@@ -71,7 +71,7 @@ export const migrateFn = new sst.aws.Function("ProcellaMigrate", {
 	timeout: "5 minutes",
 	memory: "256 MB",
 	vpc,
-	link: [database, ...allSecrets],
+	link: [database, devAuthToken, encryptionKey],
 	environment: {
 		PROCELLA_DATABASE_URL: databaseUrl,
 		PROCELLA_AUTH_MODE: "dev",
