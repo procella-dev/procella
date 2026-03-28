@@ -81,10 +81,8 @@ export default async function globalSetup(_config: FullConfig) {
 				PROCELLA_BLOB_LOCAL_PATH: blobDir,
 			},
 			cwd: PROJECT_ROOT,
-			stdio: ["ignore", "pipe", "pipe"],
+			stdio: "ignore",
 		});
-		server.stderr?.on("data", (d: Buffer) => process.stderr.write(`[server] ${d}`));
-		server.stdout?.on("data", (d: Buffer) => process.stdout.write(`[server] ${d}`));
 		// biome-ignore lint/suspicious/noExplicitAny: storing on global for teardown
 		(globalThis as any).__PW_SERVER__ = server;
 		await waitFor(`http://localhost:${TEST_PORT}/healthz`, 30_000);
