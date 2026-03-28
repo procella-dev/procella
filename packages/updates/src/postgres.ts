@@ -258,14 +258,17 @@ export class PostgresUpdatesService implements UpdatesService {
 		const updateList: UpdateInfo[] = rows.map(
 			(row) =>
 				({
+					updateID: row.id,
 					kind: row.kind,
 					startTime: row.startedAt?.getTime() ?? 0,
+					endTime: row.completedAt?.getTime() ?? 0,
+					version: row.version ?? 0,
 					message: row.message ?? "",
 					result: row.result ?? "",
 					environment: {},
 					config: (row.config ?? {}) as Record<string, unknown>,
 					resourceChanges: {},
-				}) as UpdateInfo,
+				}) as unknown as UpdateInfo,
 		);
 
 		return { updates: updateList } as GetHistoryResponse;

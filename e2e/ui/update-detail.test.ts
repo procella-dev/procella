@@ -146,14 +146,6 @@ test.describe("UpdateDetail page — completed update", () => {
 		await setDevToken(page);
 		await gotoUpdate(page, "dev-org", "pw-test", "pw-stack", updateID);
 
-		const url = page.url();
-		const title = await page.title();
-		const bodyText = await page
-			.locator("body")
-			.innerText()
-			.catch(() => "ERROR");
-		console.log(`[DEBUG] url=${url} title=${title} body=${bodyText.slice(0, 200)}`);
-
 		await expect(page.locator("text=Resource Tracker")).toBeVisible({ timeout: 15_000 });
 		await expect(page.locator("text=Event Log")).toBeVisible();
 	});
