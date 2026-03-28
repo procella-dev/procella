@@ -62,15 +62,10 @@ async function gotoUpdate(
 	stack: string,
 	updateID: string,
 ) {
-	const [, response] = await Promise.all([
-		page.goto(`${UI_URL}/stacks/${org}/${project}/${stack}/updates/${updateID}`),
-		page
-			.waitForResponse((r) => r.url().includes("/api/auth/config"), { timeout: 8_000 })
-			.catch(() => null),
-	]);
-	if (!response) {
-		await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => {});
-	}
+	await page.goto(`${UI_URL}/stacks/${org}/${project}/${stack}/updates/${updateID}`);
+	await page
+		.waitForSelector(".animate-spin", { state: "detached", timeout: 8_000 })
+		.catch(() => {});
 }
 
 async function runPulumiUp(org: string, project: string, _stack: string): Promise<string> {
@@ -150,6 +145,14 @@ test.describe("UpdateDetail page — completed update", () => {
 	test("page loads and shows resource tracker", async ({ page }) => {
 		await setDevToken(page);
 		await gotoUpdate(page, "dev-org", "pw-test", "pw-stack", updateID);
+
+		const url = page.url();
+		const title = await page.title();
+		const bodyText = await page
+			.locator("body")
+			.innerText()
+			.catch(() => "ERROR");
+		console.log(`[DEBUG] url=${url} title=${title} body=${bodyText.slice(0, 200)}`);
 
 		await expect(page.locator("text=Resource Tracker")).toBeVisible({ timeout: 15_000 });
 		await expect(page.locator("text=Event Log")).toBeVisible();
