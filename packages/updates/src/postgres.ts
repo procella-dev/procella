@@ -56,6 +56,32 @@ import {
 import type { UpdatesService } from "./types.js";
 import { BLOB_THRESHOLD, LEASE_DURATION_SECONDS } from "./types.js";
 
+function pgErrorCode(err: unknown): string | undefined {
+	let current: unknown = err;
+	for (let i = 0; i < 10 && current != null; i++) {
+		if (typeof current === "object") {
+			const rec = current as Record<string, unknown>;
+			for (const key of ["code", "errno"] as const) {
+				const val = rec[key];
+				const str = typeof val === "number" ? String(val) : val;
+				if (typeof str === "string" && /^[0-9A-Z]{5}$/i.test(str)) return str;
+			}
+			if (Array.isArray(rec.errors)) {
+				for (const inner of rec.errors) {
+					const found = pgErrorCode(inner);
+					if (found) return found;
+				}
+			}
+			if ("cause" in rec) {
+				current = rec.cause;
+				continue;
+			}
+		}
+		current = undefined;
+	}
+	return undefined;
+}
+
 // ============================================================================
 // PostgresUpdatesService
 // ============================================================================
@@ -99,19 +125,28 @@ export class PostgresUpdatesService implements UpdatesService {
 
 			const version = (versionRow?.maxVersion ?? 0) + 1;
 
-			const [row] = await this.db
-				.insert(updates)
-				.values({
-					stackId,
-					kind,
-					status: "not started",
-					version,
-					config: config ?? null,
-					program: program ?? null,
-				})
-				.returning();
+			try {
+				const [row] = await this.db
+					.insert(updates)
+					.values({
+						stackId,
+						kind,
+						status: "not started",
+						version,
+						config: config ?? null,
+						program: program ?? null,
+					})
+					.returning();
 
-			return { updateID: row.id, version } as UpdateProgramResponse;
+				return { updateID: row.id, version } as UpdateProgramResponse;
+			} catch (err: unknown) {
+				if (pgErrorCode(err) === "23505") {
+					throw new UpdateConflictError(
+						"Another update is already in progress for this stack. Run `pulumi cancel` to cancel it first.",
+					);
+				}
+				throw err;
+			}
 		});
 	}
 

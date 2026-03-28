@@ -6,6 +6,7 @@ import {
 	JournalEntrySecretsManager,
 	JournalEntrySuccess,
 	JournalEntryWrite,
+	UpdateConflictError,
 } from "@procella/types";
 import {
 	applyDelta,
@@ -21,6 +22,7 @@ import {
 	detectEventKind,
 	type JournalRow,
 	mapStatusToApiStatus,
+	PostgresUpdatesService,
 } from "./postgres.js";
 import type { UpdatesService } from "./types.js";
 import {
@@ -400,6 +402,120 @@ describe("@procella/updates helpers", () => {
 
 		test("returns 'unknown' for empty event", () => {
 			expect(detectEventKind({} as never)).toBe("unknown");
+		});
+	});
+
+	// ========================================================================
+	// pgErrorCode (via PostgresUpdatesService.createUpdate)
+	// The pgErrorCode helper is internal; we test it through observable behavior:
+	// a 23505 unique-constraint violation on idx_updates_active must surface as
+	// UpdateConflictError (not a raw DB error).
+	// ========================================================================
+
+	describe("createUpdate — conflict detection (pgErrorCode)", () => {
+		function makeDb(insertResult: () => Promise<{ id: string }[]>) {
+			const chainable = {
+				from: () => chainable,
+				where: () => Promise.resolve([]),
+				values: () => chainable,
+				returning: insertResult,
+			};
+			return {
+				select: () => chainable,
+				insert: () => chainable,
+			} as never;
+		}
+
+		const noopStorage = {} as never;
+		const noopCrypto = {} as never;
+
+		test("resolves with updateID when insert succeeds", async () => {
+			const db = makeDb(() => Promise.resolve([{ id: "upd-1" }]));
+			const svc = new PostgresUpdatesService({ db, storage: noopStorage, crypto: noopCrypto });
+			const result = await svc.createUpdate("stack-1", "update");
+			expect(result.updateID).toBe("upd-1");
+		});
+
+		test("throws UpdateConflictError on 23505 unique-constraint violation (direct code)", async () => {
+			const conflict = Object.assign(new Error("duplicate key"), { code: "23505" });
+			const db = makeDb(() => Promise.reject(conflict));
+			const svc = new PostgresUpdatesService({ db, storage: noopStorage, crypto: noopCrypto });
+			await expect(svc.createUpdate("stack-1", "update")).rejects.toBeInstanceOf(
+				UpdateConflictError,
+			);
+		});
+
+		test("UpdateConflictError message mentions pulumi cancel", async () => {
+			const conflict = Object.assign(new Error("duplicate key"), { code: "23505" });
+			const db = makeDb(() => Promise.reject(conflict));
+			const svc = new PostgresUpdatesService({ db, storage: noopStorage, crypto: noopCrypto });
+			await expect(svc.createUpdate("stack-1", "update")).rejects.toMatchObject({
+				message: expect.stringContaining("pulumi cancel"),
+			});
+		});
+
+		test("throws UpdateConflictError when 23505 is nested in cause chain", async () => {
+			const inner = Object.assign(new Error("unique violation"), { code: "23505" });
+			const outer = Object.assign(new Error("query failed"), { cause: inner });
+			const db = makeDb(() => Promise.reject(outer));
+			const svc = new PostgresUpdatesService({ db, storage: noopStorage, crypto: noopCrypto });
+			await expect(svc.createUpdate("stack-1", "update")).rejects.toBeInstanceOf(
+				UpdateConflictError,
+			);
+		});
+
+		test("throws UpdateConflictError when 23505 is in errno (Bun.sql driver shape)", async () => {
+			const bunSqlErr = Object.assign(new Error("ERR_POSTGRES_SERVER_ERROR"), {
+				code: "ERR_POSTGRES_SERVER_ERROR",
+				errno: "23505",
+			});
+			const db = makeDb(() => Promise.reject(bunSqlErr));
+			const svc = new PostgresUpdatesService({ db, storage: noopStorage, crypto: noopCrypto });
+			await expect(svc.createUpdate("stack-1", "update")).rejects.toBeInstanceOf(
+				UpdateConflictError,
+			);
+		});
+
+		test("ignores non-SQLSTATE strings in code field (e.g. ERR_POSTGRES_SERVER_ERROR)", async () => {
+			const bunSqlErr = Object.assign(new Error("server error"), {
+				code: "ERR_POSTGRES_SERVER_ERROR",
+			});
+			const db = makeDb(() => Promise.reject(bunSqlErr));
+			const svc = new PostgresUpdatesService({ db, storage: noopStorage, crypto: noopCrypto });
+			await expect(svc.createUpdate("stack-1", "update")).rejects.toThrow("server error");
+			await expect(svc.createUpdate("stack-1", "update")).rejects.not.toBeInstanceOf(
+				UpdateConflictError,
+			);
+		});
+
+		test("re-throws non-conflict DB errors unchanged", async () => {
+			const dbErr = Object.assign(new Error("connection reset"), { code: "08006" });
+			const db = makeDb(() => Promise.reject(dbErr));
+			const svc = new PostgresUpdatesService({ db, storage: noopStorage, crypto: noopCrypto });
+			await expect(svc.createUpdate("stack-1", "update")).rejects.toThrow("connection reset");
+		});
+
+		test("re-throws errors with no code unchanged", async () => {
+			const db = makeDb(() => Promise.reject(new Error("unexpected")));
+			const svc = new PostgresUpdatesService({ db, storage: noopStorage, crypto: noopCrypto });
+			await expect(svc.createUpdate("stack-1", "update")).rejects.toThrow("unexpected");
+		});
+
+		test("version defaults to 1 when no prior checkpoints exist", async () => {
+			let capturedVersion = 0;
+			const chainable = {
+				from: () => chainable,
+				where: () => Promise.resolve([]),
+				values: (vals: { version: number }) => {
+					capturedVersion = vals.version;
+					return chainable;
+				},
+				returning: () => Promise.resolve([{ id: "upd-2" }]),
+			};
+			const db = { select: () => chainable, insert: () => chainable } as never;
+			const svc = new PostgresUpdatesService({ db, storage: noopStorage, crypto: noopCrypto });
+			await svc.createUpdate("stack-1", "update");
+			expect(capturedVersion).toBe(1);
 		});
 	});
 
