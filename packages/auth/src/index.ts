@@ -319,49 +319,28 @@ export function requireRole(caller: Caller, ...roles: Role[]): void {
 // Internal Helpers
 // ============================================================================
 
-/**
- * Extract bearer/token from Authorization header (supports Pulumi CLI + standard formats).
- * Falls back to the `DS` Descope session cookie for browser-initiated requests
- * (e.g. EventSource) that cannot set custom headers.
- */
+/** Extract bearer/token from Authorization header (supports Pulumi CLI + standard formats). */
 function extractToken(request: Request): { scheme: "token" | "bearer"; token: string } {
 	const header = request.headers.get("Authorization");
-
-	if (header) {
-		// Pulumi CLI format: "token <value>"
-		if (header.startsWith("token ")) {
-			const value = header.slice(6).trim();
-			if (!value) throw new UnauthorizedError("Empty token value");
-			return { scheme: "token", token: value };
-		}
-
-		// Standard Bearer format: "Bearer <value>"
-		if (header.startsWith("Bearer ")) {
-			const value = header.slice(7).trim();
-			if (!value) throw new UnauthorizedError("Empty Bearer token");
-			return { scheme: "bearer", token: value };
-		}
-
-		throw new UnauthorizedError("Invalid Authorization header format");
+	if (!header) {
+		throw new UnauthorizedError("Missing Authorization header");
 	}
 
-	// Cookie fallback: Descope sets DS (session JWT) as an httpOnly cookie.
-	// EventSource and fetch() send cookies automatically on same-origin requests.
-	const cookieHeader = request.headers.get("Cookie");
-	if (cookieHeader) {
-		const ds = parseCookie(cookieHeader, "DS");
-		if (ds) return { scheme: "bearer", token: ds };
+	// Pulumi CLI format: "token <value>"
+	if (header.startsWith("token ")) {
+		const value = header.slice(6).trim();
+		if (!value) throw new UnauthorizedError("Empty token value");
+		return { scheme: "token", token: value };
 	}
 
-	throw new UnauthorizedError("Missing Authorization header");
-}
-
-function parseCookie(cookieHeader: string, name: string): string | undefined {
-	for (const part of cookieHeader.split(";")) {
-		const [k, ...rest] = part.trim().split("=");
-		if (k?.trim() === name) return rest.join("=").trim();
+	// Standard Bearer format: "Bearer <value>"
+	if (header.startsWith("Bearer ")) {
+		const value = header.slice(7).trim();
+		if (!value) throw new UnauthorizedError("Empty Bearer token");
+		return { scheme: "bearer", token: value };
 	}
-	return undefined;
+
+	throw new UnauthorizedError("Invalid Authorization header format");
 }
 
 /** Parse update token format: "update:<updateId>:<stackId>" */

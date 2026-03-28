@@ -1,3 +1,4 @@
+import { getSessionToken } from "@descope/react-sdk";
 import { useQueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
 import { useEffect, useRef, useState } from "react";
@@ -6,9 +7,12 @@ import { getAuthConfig } from "./useAuthConfig";
 
 export type ConnectionStatus = "connected" | "reconnecting" | "disconnected";
 
-function devAuthHeader(): string {
+function sseAuthToken(): string {
 	const config = getAuthConfig();
-	if (config?.mode === "descope") return "";
+	if (config?.mode === "descope") {
+		const jwt = getSessionToken();
+		return jwt ? `Bearer ${jwt}` : "";
+	}
 	const token = localStorage.getItem("procella-token") ?? "";
 	return token ? `token ${token}` : "";
 }
@@ -26,15 +30,11 @@ export function useEventSource(updateId: string | undefined) {
 		let cancelled = false;
 
 		const connect = async () => {
-			const config = getAuthConfig();
+			const auth = sseAuthToken();
 			let url = `/api/updates/${updateId}/stream`;
+			if (auth) url += `?token=${encodeURIComponent(auth)}`;
 
-			if (config?.mode !== "descope") {
-				const header = devAuthHeader();
-				if (header) url += `?token=${encodeURIComponent(header)}`;
-			}
-
-			const es = new EventSource(url, { withCredentials: true });
+			const es = new EventSource(url);
 			esRef.current = es;
 
 			es.onopen = () => {

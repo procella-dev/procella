@@ -193,8 +193,10 @@ All state lives in PostgreSQL. No in-memory caches, no local-only state.
 ### Auth
 
 - **Descope** is the auth provider in production. Session JWTs are issued as the `DS` httpOnly cookie by the Descope React SDK.
-- **`authenticate(request)`** in `packages/auth/src/index.ts` reads `Authorization: Bearer <jwt>` OR falls back to the `DS` cookie — so browser-initiated requests (including `EventSource`) are authenticated automatically via cookie without any extra steps.
-- **NEVER invent a separate auth mechanism** (tickets, tokens, query params) for browser-to-server communication. If `EventSource` or `fetch()` needs auth, it already has it via the `DS` cookie on same-origin requests.
+- **`authenticate(request)`** in `packages/auth/src/index.ts` reads `Authorization: Bearer <jwt>` or `Authorization: token <key>`.
+- **Descope's `DS` cookie lives on `api.descope.com`**, NOT on our domain — browsers will NOT send it to our server. Do not rely on the cookie for our API auth.
+- **`EventSource` cannot set custom headers.** For SSE auth, use `apiAuthWithQueryToken` and pass the auth value as `?token=<value>` in the URL. The Descope session JWT is available in-memory via `getSessionToken()` from `@descope/react-sdk`. Pass it as `?token=Bearer%20eyJ...`.
+- **NEVER invent a separate auth mechanism** (tickets, Postgres tables, etc.) — use the existing `apiAuthWithQueryToken` middleware with the in-memory session token.
 - **Dev mode** uses `Authorization: token <PROCELLA_DEV_AUTH_TOKEN>`. The cookie fallback is Descope-only.
 - **CLI** uses `Authorization: token <access-key>` (long-lived Descope access key, NOT a session JWT).
 
