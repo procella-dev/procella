@@ -41,6 +41,7 @@ jobs:
           mkdir -p .build/api .build/gc
           bun build --compile --target=bun-linux-x64 --production --sourcemap --compile-exec-argv="--smol" apps/server/src/lambda-bootstrap.ts --outfile .build/api/bootstrap
           bun build --compile --target=bun-linux-x64 --production --sourcemap --compile-exec-argv="--smol" apps/server/src/gc-bootstrap.ts --outfile .build/gc/bootstrap
+          bun build --compile --target=bun-linux-x64 --production --sourcemap --compile-exec-argv="--smol" apps/server/src/migrate-bootstrap.ts --outfile .build/migrate/bootstrap
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -101,15 +102,16 @@ jobs:
               --database "postgres" \
               --sql "CREATE DATABASE \"$DB_NAME\"" 2>&1 || echo "Database may already exist"
           fi
-          for SQL_FILE in packages/db/drizzle/0000_medical_fabian_cortez.sql packages/db/drizzle/0001_add_journal_entries.sql packages/db/drizzle/0002_extend_journal_entries.sql; do
-            echo "Applying migration: $SQL_FILE"
-            SQL=$(cat "$SQL_FILE")
-            aws rds-data execute-statement \
-              --resource-arn "$CLUSTER_ARN" \
-              --secret-arn "$SECRET_ARN" \
-              --database "$DB_NAME" \
-              --sql "$SQL" 2>&1 || echo "Migration may have already been applied: $SQL_FILE"
-          done
+          MIGRATE_FN=$(aws lambda list-functions \
+            --query "Functions[?starts_with(FunctionName, 'procella-${STAGE}-ProcellaMigrate')].FunctionName | [0]" \
+            --output text)
+          echo "Invoking migration Lambda: $MIGRATE_FN"
+          aws lambda invoke \
+            --function-name "$MIGRATE_FN" \
+            --payload '{}' \
+            --cli-binary-format raw-in-base64-out \
+            /tmp/migrate-response.json
+          cat /tmp/migrate-response.json
 
       - name: Get stack outputs
         id: outputs

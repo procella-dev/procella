@@ -36,6 +36,7 @@ jobs:
           mkdir -p .build/api .build/gc
           bun build --compile --target=bun-linux-x64 --production --sourcemap --compile-exec-argv="--smol" apps/server/src/lambda-bootstrap.ts --outfile .build/api/bootstrap
           bun build --compile --target=bun-linux-x64 --production --sourcemap --compile-exec-argv="--smol" apps/server/src/gc-bootstrap.ts --outfile .build/gc/bootstrap
+          bun build --compile --target=bun-linux-x64 --production --sourcemap --compile-exec-argv="--smol" apps/server/src/migrate-bootstrap.ts --outfile .build/migrate/bootstrap
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -58,25 +59,16 @@ jobs:
       - name: Run database migrations
         shell: bash {0}
         run: |
-          CLUSTER_ID=$(aws rds describe-db-clusters \
-            --query "DBClusters[?starts_with(DBClusterIdentifier, 'procella-production')].DBClusterIdentifier | [0]" \
+          MIGRATE_FN=$(aws lambda list-functions \
+            --query "Functions[?starts_with(FunctionName, 'procella-production-ProcellaMigrate')].FunctionName | [0]" \
             --output text)
-          CLUSTER_ARN=$(aws rds describe-db-clusters --db-cluster-identifier "$CLUSTER_ID" \
-            --query "DBClusters[0].DBClusterArn" --output text)
-          PROXY_NAME=$(aws rds describe-db-proxies \
-            --query "DBProxies[?starts_with(DBProxyName, 'procella-production')].DBProxyName | [0]" \
-            --output text)
-          SECRET_ARN=$(aws rds describe-db-proxies --db-proxy-name "$PROXY_NAME" \
-            --query "DBProxies[0].Auth[0].SecretArn" --output text)
-          for SQL_FILE in packages/db/drizzle/0000_medical_fabian_cortez.sql packages/db/drizzle/0001_add_journal_entries.sql packages/db/drizzle/0002_extend_journal_entries.sql; do
-            echo "Applying migration: $SQL_FILE"
-            SQL=$(cat "$SQL_FILE")
-            aws rds-data execute-statement \
-              --resource-arn "$CLUSTER_ARN" \
-              --secret-arn "$SECRET_ARN" \
-              --database "procella" \
-              --sql "$SQL" 2>&1 || echo "Migration may have already been applied: $SQL_FILE"
-          done
+          echo "Invoking migration Lambda: $MIGRATE_FN"
+          aws lambda invoke \
+            --function-name "$MIGRATE_FN" \
+            --payload '{}' \
+            --cli-binary-format raw-in-base64-out \
+            /tmp/migrate-response.json
+          cat /tmp/migrate-response.json
 
       - name: Deployment summary
         if: always()

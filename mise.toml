@@ -4,13 +4,6 @@ node = "24"
 "github:caddyserver/caddy" = "2.11.2"
 
 [env]
-PROCELLA_LISTEN_ADDR = ":8081"
-PROCELLA_DATABASE_URL = "postgres://procella:procella@localhost:5432/procella?sslmode=disable"
-PROCELLA_AUTH_MODE = "dev"
-PROCELLA_DEV_AUTH_TOKEN = "devtoken123"
-PROCELLA_BLOB_BACKEND = "s3"
-PROCELLA_BLOB_S3_BUCKET = "procella-checkpoints"
-PROCELLA_BLOB_S3_ENDPOINT = "http://localhost:9000"
 CADDY_GO_UPSTREAM = "localhost:8081"
 CADDY_UI_UPSTREAM = "localhost:5173"
 CADDY_DOCS_UPSTREAM = "localhost:4321"

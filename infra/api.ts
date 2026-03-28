@@ -46,3 +46,22 @@ export const router = new sst.aws.Router("ProcellaRouter", {
 		"/*": api.url,
 	},
 });
+
+export const migrateFn = new sst.aws.Function("ProcellaMigrate", {
+	runtime: "provided.al2023",
+	architecture: "x86_64",
+	bundle: ".build/migrate",
+	handler: "bootstrap",
+	timeout: "5 minutes",
+	memory: "256 MB",
+	vpc,
+	link: [database, ...allSecrets],
+	environment: {
+		PROCELLA_DATABASE_URL: databaseUrl,
+		PROCELLA_AUTH_MODE: "dev",
+		PROCELLA_DEV_AUTH_TOKEN: devAuthToken.value,
+		PROCELLA_ENCRYPTION_KEY: encryptionKey.value,
+		PROCELLA_BLOB_BACKEND: "s3",
+		PROCELLA_BLOB_S3_BUCKET: bucket.name,
+	},
+});
