@@ -153,6 +153,16 @@ export const journalEntries = pgTable(
 );
 
 // ============================================================================
+// stream_tickets — Short-lived SSE auth tickets (cluster-safe)
+// ============================================================================
+
+export const streamTickets = pgTable("stream_tickets", {
+	id: text().primaryKey(),
+	updateId: text("update_id").notNull(),
+	expiresAt: timestamp("expires_at").notNull(),
+});
+
+// ============================================================================
 // Schema export — pass to drizzle() for relational queries
 // ============================================================================
 
@@ -163,4 +173,5 @@ export const schema = {
 	checkpoints,
 	updateEvents,
 	journalEntries,
+	streamTickets,
 };

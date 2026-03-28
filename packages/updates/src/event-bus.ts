@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-
 type EventHandler = (events: unknown[]) => void;
 
 export class EventBus {
@@ -38,26 +36,3 @@ export class EventBus {
 }
 
 export const eventBus = new EventBus();
-
-const TICKET_TTL_MS = 60_000;
-
-interface Ticket {
-	updateId: string;
-	expiresAt: number;
-}
-
-const tickets = new Map<string, Ticket>();
-
-export function mintTicket(updateId: string): string {
-	const id = randomUUID();
-	tickets.set(id, { updateId, expiresAt: Date.now() + TICKET_TTL_MS });
-	return id;
-}
-
-export function redeemTicket(ticket: string): string | null {
-	const entry = tickets.get(ticket);
-	if (!entry) return null;
-	tickets.delete(ticket);
-	if (Date.now() > entry.expiresAt) return null;
-	return entry.updateId;
-}

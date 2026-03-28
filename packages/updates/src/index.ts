@@ -1,7 +1,7 @@
 // @procella/updates — Update lifecycle domain (updates, events, checkpoints, GC)
 
 export { checkpointDedup } from "./checkpoint-dedup.js";
-export { eventBus, mintTicket, redeemTicket } from "./event-bus.js";
+export { eventBus } from "./event-bus.js";
 export { GCWorker } from "./gc-worker.js";
 export * from "./helpers.js";
 export { detectEventKind, mapStatusToApiStatus, PostgresUpdatesService } from "./postgres.js";

@@ -64,7 +64,7 @@ export function createApp(deps: {
 	const eventH = eventHandlers(deps.updates);
 	const cryptoH = cryptoHandlers(deps.updates);
 	const stateH = stateHandlers(deps.updates, deps.stacks);
-	const sseH = sseHandlers(deps.updates);
+	const sseH = sseHandlers(deps.updates, deps.db);
 
 	// Middleware instances
 	const withApiAuth = apiAuth(deps.auth);

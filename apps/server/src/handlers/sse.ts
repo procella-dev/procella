@@ -1,13 +1,38 @@
-import { eventBus, mintTicket, redeemTicket, type UpdatesService } from "@procella/updates";
+import { randomUUID } from "node:crypto";
+import type { Database } from "@procella/db";
+import { streamTickets } from "@procella/db";
+import { eventBus, type UpdatesService } from "@procella/updates";
+import { eq, lt, sql } from "drizzle-orm";
 import type { Context } from "hono";
 import type { Env } from "../types.js";
 import { param } from "./params.js";
 
-export function sseHandlers(_updates: UpdatesService) {
+const TICKET_TTL_MS = 60_000;
+
+async function mintTicket(db: Database, updateId: string): Promise<string> {
+	const id = randomUUID();
+	const expiresAt = new Date(Date.now() + TICKET_TTL_MS);
+	await db.insert(streamTickets).values({ id, updateId, expiresAt });
+	await db.delete(streamTickets).where(lt(streamTickets.expiresAt, sql`now()`));
+	return id;
+}
+
+async function redeemTicket(db: Database, ticket: string): Promise<string | null> {
+	const rows = await db
+		.delete(streamTickets)
+		.where(eq(streamTickets.id, ticket))
+		.returning({ updateId: streamTickets.updateId, expiresAt: streamTickets.expiresAt });
+	const row = rows[0];
+	if (!row) return null;
+	if (row.expiresAt < new Date()) return null;
+	return row.updateId;
+}
+
+export function sseHandlers(_updates: UpdatesService, db: Database) {
 	return {
 		mintStreamTicket: async (c: Context<Env>) => {
 			const updateId = param(c, "updateId");
-			const ticket = mintTicket(updateId);
+			const ticket = await mintTicket(db, updateId);
 			return c.json({ ticket });
 		},
 
@@ -17,7 +42,7 @@ export function sseHandlers(_updates: UpdatesService) {
 				return c.json({ code: 401, message: "Missing stream ticket" }, 401);
 			}
 
-			const updateId = redeemTicket(ticket);
+			const updateId = await redeemTicket(db, ticket);
 			if (!updateId) {
 				return c.json({ code: 401, message: "Invalid or expired stream ticket" }, 401);
 			}
