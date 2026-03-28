@@ -1,14 +1,36 @@
-import m1 from "../../../../packages/db/drizzle/0000_medical_fabian_cortez.sql" with {
-	type: "file",
-};
-import m2 from "../../../../packages/db/drizzle/0001_add_journal_entries.sql" with { type: "file" };
-import m3 from "../../../../packages/db/drizzle/0002_extend_journal_entries.sql" with {
-	type: "file",
-};
-import m0 from "../../../../packages/db/drizzle/meta/_journal.json" with { type: "file" };
+import m1 from "../../../packages/db/drizzle/0000_medical_fabian_cortez.sql" with { type: "file" };
+import m2 from "../../../packages/db/drizzle/0001_add_journal_entries.sql" with { type: "file" };
+import m3 from "../../../packages/db/drizzle/0002_extend_journal_entries.sql" with { type: "file" };
 
-const embeddedFiles: Record<string, string> = {
-	"_journal.json": m0,
+const JOURNAL = JSON.stringify({
+	version: "7",
+	dialect: "postgresql",
+	entries: [
+		{
+			idx: 0,
+			version: "7",
+			when: 1772914464231,
+			tag: "0000_medical_fabian_cortez",
+			breakpoints: true,
+		},
+		{
+			idx: 1,
+			version: "7",
+			when: 1772914500000,
+			tag: "0001_add_journal_entries",
+			breakpoints: true,
+		},
+		{
+			idx: 2,
+			version: "7",
+			when: 1772914600000,
+			tag: "0002_extend_journal_entries",
+			breakpoints: true,
+		},
+	],
+});
+
+const SQL_FILES: Record<string, string> = {
 	"0000_medical_fabian_cortez.sql": m1,
 	"0001_add_journal_entries.sql": m2,
 	"0002_extend_journal_entries.sql": m3,
@@ -34,12 +56,10 @@ const embeddedFiles: Record<string, string> = {
 		const migrationsDir = join(tmpdir(), `procella-migrations-${Date.now()}`);
 		mkdirSync(join(migrationsDir, "meta"), { recursive: true });
 
-		for (const [name, embeddedPath] of Object.entries(embeddedFiles)) {
-			const content = await Bun.file(embeddedPath).text();
-			const dest = name.startsWith("_")
-				? join(migrationsDir, "meta", name)
-				: join(migrationsDir, name);
-			writeFileSync(dest, content);
+		writeFileSync(join(migrationsDir, "meta", "_journal.json"), JOURNAL);
+
+		for (const [name, embeddedPath] of Object.entries(SQL_FILES)) {
+			writeFileSync(join(migrationsDir, name), await Bun.file(embeddedPath).text());
 		}
 
 		await runMigrations(config.databaseUrl as string, migrationsDir);
