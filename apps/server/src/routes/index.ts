@@ -8,6 +8,7 @@ import type { StacksService } from "@procella/stacks";
 import { tracingMiddleware } from "@procella/telemetry";
 import { PulumiRoutes } from "@procella/types";
 import { GCWorker, type UpdatesService } from "@procella/updates";
+import { TRPCError } from "@trpc/server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -90,7 +91,7 @@ export function createApp(deps: {
 				}
 
 				const caller = await deps.auth.authenticate(req).catch(() => null);
-				if (!caller) throw new Error("Unauthorized");
+				if (!caller) throw new TRPCError({ code: "UNAUTHORIZED" });
 
 				return {
 					caller,
