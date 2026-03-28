@@ -141,6 +141,7 @@ jobs:
           PROCELLA_DEV_AUTH_TOKEN: devtoken123
           PLAYWRIGHT_API_URL: http://localhost:18080
           PLAYWRIGHT_BASE_URL: http://localhost:5173
+          VITE_API_PORT: "18080"
         run: bun run e2e:ui
       - uses: actions/upload-artifact@v4
         if: failure()

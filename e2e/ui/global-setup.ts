@@ -94,7 +94,7 @@ export default async function globalSetup(_config: FullConfig) {
 			"bun",
 			["run", "--cwd", "apps/ui", "dev", "--port", String(UI_PORT), "--strictPort"],
 			{
-				env: { ...process.env, VITE_API_URL: `http://localhost:${TEST_PORT}` },
+				env: { ...process.env, VITE_API_PORT: String(TEST_PORT) },
 				cwd: PROJECT_ROOT,
 				stdio: "ignore",
 			},
