@@ -50,6 +50,7 @@ async function truncate() {
 async function setDevToken(page: Page) {
 	await page.goto(`${UI_URL}/`);
 	await page.evaluate((token) => localStorage.setItem("procella-token", token), TOKEN);
+	await page.waitForResponse(`${API_URL}/api/auth/config`, { timeout: 5_000 }).catch(() => {});
 }
 
 async function runPulumiUp(org: string, project: string, _stack: string): Promise<string> {
