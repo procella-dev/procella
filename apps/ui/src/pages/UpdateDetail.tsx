@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
 import type { UpdateStatus } from "../components/ui/status";
 import { StatusBadge } from "../components/ui/status";
@@ -150,6 +150,22 @@ export function UpdateDetail() {
 
 	const lastSeqRef = useRef<number>(0);
 
+	const invalidateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const invalidateEvents = useCallback(() => {
+		if (invalidateTimerRef.current) return;
+		invalidateTimerRef.current = setTimeout(() => {
+			invalidateTimerRef.current = null;
+			utils.events.list.invalidate();
+			utils.updates.latest.invalidate();
+		}, 500);
+	}, [utils]);
+
+	useEffect(() => {
+		return () => {
+			if (invalidateTimerRef.current) clearTimeout(invalidateTimerRef.current);
+		};
+	}, []);
+
 	trpc.updates.onEvents.useSubscription(
 		{
 			org: org ?? "",
@@ -162,8 +178,7 @@ export function UpdateDetail() {
 			enabled: Boolean(org && project && stack && updateID),
 			onData: (data) => {
 				if (data.seq) lastSeqRef.current = data.seq;
-				utils.events.list.invalidate();
-				utils.updates.latest.invalidate();
+				invalidateEvents();
 			},
 		},
 	);
