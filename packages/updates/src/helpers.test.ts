@@ -423,6 +423,7 @@ describe("@procella/updates helpers", () => {
 			return {
 				select: () => chainable,
 				insert: () => chainable,
+				execute: () => Promise.resolve(),
 			} as never;
 		}
 
@@ -512,7 +513,11 @@ describe("@procella/updates helpers", () => {
 				},
 				returning: () => Promise.resolve([{ id: "upd-2" }]),
 			};
-			const db = { select: () => chainable, insert: () => chainable } as never;
+			const db = {
+				select: () => chainable,
+				insert: () => chainable,
+				execute: () => Promise.resolve(),
+			} as never;
 			const svc = new PostgresUpdatesService({ db, storage: noopStorage, crypto: noopCrypto });
 			await svc.createUpdate("stack-1", "update");
 			expect(capturedVersion).toBe(1);
