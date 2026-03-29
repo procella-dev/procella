@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { StackCard, type UpdateStatus } from "../components/ui";
 import { apiBase } from "../config";
 import { trpc } from "../trpc";
@@ -8,27 +8,63 @@ import { trpc } from "../trpc";
 type SortBy = "name" | "lastUpdated" | "created";
 type SortOrder = "asc" | "desc";
 
-function useDebounce<T>(value: T, delay: number): T {
-	const [debouncedValue, setDebouncedValue] = useState<T>(value);
+const DebouncedSearchInput = memo(function DebouncedSearchInput({
+	onSearch,
+	delay = 300,
+}: {
+	onSearch: (value: string) => void;
+	delay?: number;
+}) {
+	const [text, setText] = useState("");
+	const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+	const onSearchRef = useRef(onSearch);
+	onSearchRef.current = onSearch;
 
-	useEffect(() => {
-		const handler = setTimeout(() => setDebouncedValue(value), delay);
-		return () => clearTimeout(handler);
-	}, [value, delay]);
+	const handleChange = useCallback(
+		(e: React.ChangeEvent<HTMLInputElement>) => {
+			const val = e.target.value;
+			setText(val);
+			clearTimeout(timerRef.current);
+			timerRef.current = setTimeout(() => onSearchRef.current(val), delay);
+		},
+		[delay],
+	);
 
-	return debouncedValue;
-}
+	return (
+		<div className="relative">
+			<svg
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				strokeWidth="2"
+				className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none"
+				aria-hidden="true"
+			>
+				<path
+					strokeLinecap="round"
+					strokeLinejoin="round"
+					d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
+				/>
+			</svg>
+			<input
+				type="text"
+				value={text}
+				onChange={handleChange}
+				placeholder="Search stacks..."
+				className="w-full bg-zinc-900 border border-zinc-700 text-zinc-100 rounded-lg pl-10 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-zinc-500"
+			/>
+		</div>
+	);
+});
 
 export function StackList() {
-	const [searchText, setSearchText] = useState("");
+	const [debouncedSearch, setDebouncedSearch] = useState("");
 	const [project, setProject] = useState("");
 	const [tagName, setTagName] = useState("");
 	const [tagValue, setTagValue] = useState("");
 	const [sortBy, setSortBy] = useState<SortBy>("name");
 	const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
 	const [hasLoadedMore, setHasLoadedMore] = useState(false);
-
-	const debouncedSearch = useDebounce(searchText, 300);
 
 	const hasFilters = debouncedSearch !== "" || project !== "" || tagName !== "" || tagValue !== "";
 
@@ -59,19 +95,6 @@ export function StackList() {
 	const [continuationToken, setContinuationToken] = useState<string | undefined>(undefined);
 	const [isLoadingMore, setIsLoadingMore] = useState(false);
 	const [nextPageToken, setNextPageToken] = useState<string | undefined>(undefined);
-
-	const _searchKey = useMemo(
-		() =>
-			JSON.stringify({
-				query: debouncedSearch || "",
-				project: project || "",
-				tagName: tagName || "",
-				tagValue: tagValue || "",
-				sortBy,
-				sortOrder,
-			}),
-		[debouncedSearch, project, tagName, tagValue, sortBy, sortOrder],
-	);
 
 	useEffect(() => {
 		setAllItems([]);
@@ -122,7 +145,7 @@ export function StackList() {
 	}, [nextPage, isLoadingMore]);
 
 	const clearFilters = () => {
-		setSearchText("");
+		setDebouncedSearch("");
 		setProject("");
 		setTagName("");
 		setTagValue("");
@@ -177,29 +200,7 @@ export function StackList() {
 			{/* Search bar */}
 			{!hasNoStacks && (
 				<div className="space-y-3">
-					<div className="relative">
-						<svg
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							strokeWidth="2"
-							className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none"
-							aria-hidden="true"
-						>
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
-							/>
-						</svg>
-						<input
-							type="text"
-							value={searchText}
-							onChange={(e) => setSearchText(e.target.value)}
-							placeholder="Search stacks..."
-							className="w-full bg-zinc-900 border border-zinc-700 text-zinc-100 rounded-lg pl-10 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-zinc-500"
-						/>
-					</div>
+					<DebouncedSearchInput onSearch={setDebouncedSearch} />
 
 					{/* Filter row */}
 					<div className="flex flex-wrap items-center gap-3">
