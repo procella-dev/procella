@@ -5,9 +5,9 @@
 // Call initTelemetry() before any other imports that need tracing.
 
 import { DiagConsoleLogger, DiagLogLevel, diag, metrics } from "@opentelemetry/api";
-import { Resource } from "@opentelemetry/resources";
+import { defaultResource, resourceFromAttributes } from "@opentelemetry/resources";
 import { MeterProvider, PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
-import { BatchSpanProcessor, type SpanProcessor } from "@opentelemetry/sdk-trace-base";
+import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from "@opentelemetry/semantic-conventions";
 import { FetchOtlpTraceExporter } from "./fetch-exporter.js";
@@ -45,22 +45,24 @@ export function initTelemetry(config: TelemetryConfig): void {
 			envAttrs[pair.slice(0, idx).trim()] = pair.slice(idx + 1).trim();
 		}
 	}
-	const resource = Resource.default().merge(
-		new Resource({
+	const resource = defaultResource().merge(
+		resourceFromAttributes({
 			...envAttrs,
 			[ATTR_SERVICE_NAME]: serviceName,
 			[ATTR_SERVICE_VERSION]: config.serviceVersion ?? "0.0.0",
 		}),
 	);
 
-	traceProvider = new NodeTracerProvider({ resource });
 	const baseUrl = config.otlpEndpoint
 		? config.otlpEndpoint.replace(/\/v1\/(traces|metrics)$/, "")
 		: undefined;
 	const traceExporter = new FetchOtlpTraceExporter(
 		baseUrl ? { url: `${baseUrl}/v1/traces` } : undefined,
 	);
-	traceProvider.addSpanProcessor(new BatchSpanProcessor(traceExporter) as SpanProcessor);
+	traceProvider = new NodeTracerProvider({
+		resource,
+		spanProcessors: [new BatchSpanProcessor(traceExporter)],
+	});
 	traceProvider.register();
 
 	const metricExporter = new FetchOtlpMetricExporter(
