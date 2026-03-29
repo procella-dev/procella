@@ -23,11 +23,10 @@ function isAppSubdomain(): boolean {
  */
 export function HomeRoute() {
 	const location = useLocation();
-	const { config, isLoading } = useAuthConfig();
+	const isLandingPage = location.pathname === "/" && !isAppSubdomain();
+	const { config, isLoading } = useAuthConfig({ enabled: !isLandingPage });
 
-	// On the root domain, "/" always shows the marketing landing page
-	// immediately — no auth config or session check needed.
-	if (location.pathname === "/" && !isAppSubdomain()) {
+	if (isLandingPage) {
 		return <HomePage />;
 	}
 

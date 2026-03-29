@@ -24,14 +24,17 @@ export function getAuthConfig(): AuthConfigResponse | null {
 	return cachedConfig;
 }
 
-export function useAuthConfig(): {
+export function useAuthConfig(options?: { enabled?: boolean }): {
 	config: AuthConfigResponse | null;
 	isLoading: boolean;
 } {
+	const enabled = options?.enabled ?? true;
 	const [config, setConfig] = useState<AuthConfigResponse | null>(cachedConfig);
-	const [isLoading, setIsLoading] = useState(cachedConfig === null);
+	const [isLoading, setIsLoading] = useState(enabled && cachedConfig === null);
 
 	useEffect(() => {
+		if (!enabled) return;
+
 		if (cachedConfig) {
 			setConfig(cachedConfig);
 			setIsLoading(false);
@@ -42,7 +45,7 @@ export function useAuthConfig(): {
 			setConfig(data);
 			setIsLoading(false);
 		});
-	}, []);
+	}, [enabled]);
 
 	return { config, isLoading };
 }
