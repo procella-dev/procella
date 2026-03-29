@@ -1,4 +1,4 @@
-import { database, databaseUrl, vpc } from "./database";
+import { database, databaseName, databaseUrl, vpc } from "./database";
 import {
 	allSecrets,
 	descopeManagementKey,
@@ -56,6 +56,14 @@ export const router = new sst.aws.Router("ProcellaRouter", {
 });
 
 import * as command from "@pulumi/command";
+
+if (!$dev && stage !== "production") {
+	const adminUrl = $interpolate`postgresql://${database.username}:${database.password}@${database.host}:${database.port}/postgres?sslmode=require`;
+	new command.local.Command("ProcellaCreateDatabase", {
+		create: $interpolate`psql "${adminUrl}" -tc "SELECT 1 FROM pg_database WHERE datname = '${databaseName}'" | grep -q 1 || psql "${adminUrl}" -c "CREATE DATABASE ${databaseName}"`,
+		triggers: [databaseName],
+	});
+}
 
 export const migrateFn = new sst.aws.Function("ProcellaMigrate", {
 	runtime: "provided.al2023",
