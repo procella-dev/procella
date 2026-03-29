@@ -55,33 +55,7 @@ export const router = new sst.aws.Router("ProcellaRouter", {
 	},
 });
 
-import * as crypto from "node:crypto";
-import * as fs from "node:fs";
 import * as command from "@pulumi/command";
-
-const migrationInputs = [
-	"packages/db/drizzle",
-	"packages/db/src",
-	"apps/server/src/migrate-bootstrap.ts",
-	"scripts/migrate.ts",
-];
-const migrationHash = crypto
-	.createHash("sha256")
-	.update(
-		migrationInputs
-			.flatMap((dir) => {
-				const stat = fs.statSync(dir, { throwIfNoEntry: false });
-				if (!stat) return [];
-				if (stat.isFile()) return [[dir, fs.readFileSync(dir, "utf8")] as const];
-				return (fs.readdirSync(dir, { recursive: true }) as string[])
-					.filter((f) => !fs.statSync(`${dir}/${f}`).isDirectory())
-					.sort()
-					.map((f) => [`${dir}/${f}`, fs.readFileSync(`${dir}/${f}`, "utf8")] as const);
-			})
-			.map(([path, content]) => `${path}:${content}`)
-			.join("\n"),
-	)
-	.digest("hex");
 
 export const migrateFn = new sst.aws.Function("ProcellaMigrate", {
 	runtime: "provided.al2023",
@@ -103,8 +77,10 @@ export const migrateFn = new sst.aws.Function("ProcellaMigrate", {
 });
 
 if (!$dev) {
+	const migrateCmd = $interpolate`aws lambda invoke --function-name ${migrateFn.name} --payload '{}' --cli-binary-format raw-in-base64-out --cli-read-timeout 360 /tmp/migrate-out-${stage}.json && cat /tmp/migrate-out-${stage}.json`;
 	new command.local.Command("ProcellaMigrateRun", {
-		create: $interpolate`aws lambda invoke --function-name ${migrateFn.name} --payload '{}' --cli-binary-format raw-in-base64-out --cli-read-timeout 360 /tmp/migrate-out-${stage}.json && cat /tmp/migrate-out-${stage}.json`,
-		triggers: [migrationHash],
+		create: migrateCmd,
+		update: migrateCmd,
+		triggers: [Date.now().toString()],
 	});
 }
