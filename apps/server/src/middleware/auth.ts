@@ -66,7 +66,7 @@ export type LeaseTokenVerifier = (updateId: string, token: string) => Promise<vo
 
 export function updateAuth(
 	authService: AuthService,
-	verifyLeaseToken?: LeaseTokenVerifier,
+	verifyLeaseToken: LeaseTokenVerifier,
 ): MiddlewareHandler<Env> {
 	return async (c, next) => {
 		try {
@@ -79,10 +79,7 @@ export function updateAuth(
 				return c.json({ code: 401, message: "Empty update-token" }, 401);
 			}
 			const ctx = await authService.authenticateUpdateToken(token);
-
-			if (verifyLeaseToken) {
-				await verifyLeaseToken(ctx.updateId, token);
-			}
+			await verifyLeaseToken(ctx.updateId, token);
 
 			c.set("updateContext", ctx);
 			await next();

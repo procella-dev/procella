@@ -23,8 +23,12 @@ export function decompress(): MiddlewareHandler {
 				decompressed = gunzipSync(Buffer.from(compressed), {
 					maxOutputLength: MAX_DECOMPRESSED_BYTES,
 				});
-			} catch {
-				return c.json({ code: 413, message: "Decompressed payload exceeds size limit" }, 413);
+			} catch (err) {
+				const error = err as { code?: unknown } | null;
+				if (error && error.code === "ERR_BUFFER_TOO_LARGE") {
+					return c.json({ code: 413, message: "Decompressed payload exceeds size limit" }, 413);
+				}
+				return c.json({ code: 400, message: "Invalid gzip payload" }, 400);
 			}
 			const text = new TextDecoder().decode(decompressed);
 			const json = JSON.parse(text);

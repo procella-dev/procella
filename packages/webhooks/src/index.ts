@@ -1,3 +1,4 @@
+import { isIP } from "node:net";
 import { type Database, webhookDeliveries, webhooks } from "@procella/db";
 import { BadRequestError, NotFoundError } from "@procella/types";
 import { and, desc, eq } from "drizzle-orm";
@@ -6,26 +7,54 @@ import { and, desc, eq } from "drizzle-orm";
 // SSRF Protection
 // ============================================================================
 
-const PRIVATE_IP_PATTERNS = [
+const PRIVATE_IPV4_PATTERNS = [
 	/^127\./,
 	/^10\./,
 	/^172\.(1[6-9]|2\d|3[01])\./,
 	/^192\.168\./,
 	/^169\.254\./,
 	/^0\./,
-	/^::1$/,
-	/^fc00:/i,
-	/^fe80:/i,
-	/^fd[0-9a-f]{2}:/i,
 ];
+
+const PRIVATE_IPV6_PATTERNS = [/^::1$/, /^fc00:/i, /^fe80:/i, /^fd[0-9a-f]{2}:/i];
 
 const BLOCKED_HOSTNAMES = new Set([
 	"localhost",
 	"localhost.localdomain",
 	"metadata.google.internal",
-	"169.254.169.254",
-	"[::1]",
 ]);
+
+function stripBrackets(hostname: string): string {
+	if (hostname.startsWith("[") && hostname.endsWith("]")) {
+		return hostname.slice(1, -1);
+	}
+	return hostname;
+}
+
+function ipv4MappedToIpv4(ipv6: string): string | null {
+	const match = ipv6.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+	if (!match) return null;
+	const hi = Number.parseInt(match[1], 16);
+	const lo = Number.parseInt(match[2], 16);
+	return `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`;
+}
+
+function isPrivateIp(raw: string): boolean {
+	const bare = stripBrackets(raw);
+
+	if (isIP(bare) === 4) {
+		return PRIVATE_IPV4_PATTERNS.some((p) => p.test(bare));
+	}
+
+	if (isIP(bare) === 6) {
+		if (PRIVATE_IPV6_PATTERNS.some((p) => p.test(bare))) return true;
+		const mapped = ipv4MappedToIpv4(bare);
+		if (mapped) return PRIVATE_IPV4_PATTERNS.some((p) => p.test(mapped));
+		return false;
+	}
+
+	return false;
+}
 
 export function validateWebhookUrl(url: string): void {
 	let parsed: URL;
@@ -44,10 +73,8 @@ export function validateWebhookUrl(url: string): void {
 		throw new BadRequestError("Webhook URL cannot target private or metadata addresses");
 	}
 
-	for (const pattern of PRIVATE_IP_PATTERNS) {
-		if (pattern.test(hostname)) {
-			throw new BadRequestError("Webhook URL cannot target private or reserved IP addresses");
-		}
+	if (isPrivateIp(hostname)) {
+		throw new BadRequestError("Webhook URL cannot target private or reserved IP addresses");
 	}
 }
 
@@ -378,6 +405,7 @@ export class PostgresWebhooksService implements WebhooksService {
 					headers: requestHeaders,
 					body,
 					signal: AbortSignal.timeout(10_000),
+					redirect: "manual",
 				});
 				const duration = Date.now() - start;
 				const responseBody = await resp.text().catch(() => "");
@@ -452,6 +480,7 @@ export class PostgresWebhooksService implements WebhooksService {
 				headers: requestHeaders,
 				body,
 				signal: AbortSignal.timeout(10_000),
+				redirect: "manual",
 			});
 			const duration = Date.now() - start;
 			const responseBody = await resp.text().catch(() => "");

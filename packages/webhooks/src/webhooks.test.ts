@@ -39,7 +39,7 @@ describe("@procella/webhooks", () => {
 	});
 
 	describe("validateWebhookUrl", () => {
-		test("allows public HTTPS URLs", () => {
+		test("allows public HTTP and HTTPS URLs", () => {
 			expect(() => validateWebhookUrl("https://example.com/webhook")).not.toThrow();
 			expect(() => validateWebhookUrl("https://hooks.slack.com/services/T123")).not.toThrow();
 			expect(() => validateWebhookUrl("http://203.0.113.1:8080/hook")).not.toThrow();
@@ -90,6 +90,15 @@ describe("@procella/webhooks", () => {
 
 		test("blocks link-local range", () => {
 			expect(() => validateWebhookUrl("http://169.254.1.1/")).toThrow(BadRequestError);
+		});
+
+		test("blocks IPv4-mapped IPv6 loopback", () => {
+			expect(() => validateWebhookUrl("http://[::ffff:127.0.0.1]/")).toThrow(BadRequestError);
+		});
+
+		test("allows hostnames that look like private IPs but are not", () => {
+			expect(() => validateWebhookUrl("https://10.example.com/hook")).not.toThrow();
+			expect(() => validateWebhookUrl("https://192.168.evil.com/hook")).not.toThrow();
 		});
 	});
 });

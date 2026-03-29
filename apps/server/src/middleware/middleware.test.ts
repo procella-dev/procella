@@ -31,7 +31,7 @@ function mockAuthService(opts?: { failAuth?: boolean }): AuthService {
 		},
 		authenticateUpdateToken: async (token: string) => {
 			const parts = token.split(":");
-			if (parts.length !== 3 || parts[0] !== "update") {
+			if (parts.length !== 4 || parts[0] !== "update") {
 				throw new UnauthorizedError("Invalid update token");
 			}
 			return { updateId: parts[1], stackId: parts[2] };
@@ -88,13 +88,18 @@ describe("@procella/server middleware", () => {
 	// ========================================================================
 
 	describe("updateAuth", () => {
+		const stubVerifier = async () => {};
+
 		test("sets updateContext for valid update-token", async () => {
 			const app = new Hono<Env>();
-			app.use("*", updateAuth(mockAuthService()));
+			app.use("*", updateAuth(mockAuthService(), stubVerifier));
 			app.get("/test", (c) => c.json(c.get("updateContext")));
 
 			const res = await app.request("/test", {
-				headers: { Authorization: "update-token update:uid-1:sid-1" },
+				headers: {
+					Authorization:
+						"update-token update:uid-1:sid-1:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+				},
 			});
 			expect(res.status).toBe(200);
 			const body = await res.json();
@@ -104,7 +109,7 @@ describe("@procella/server middleware", () => {
 
 		test("returns 401 for missing update-token", async () => {
 			const app = new Hono<Env>();
-			app.use("*", updateAuth(mockAuthService()));
+			app.use("*", updateAuth(mockAuthService(), stubVerifier));
 			app.get("/test", (c) => c.json({ ok: true }));
 
 			const res = await app.request("/test");
@@ -113,7 +118,7 @@ describe("@procella/server middleware", () => {
 
 		test("returns 401 for malformed token", async () => {
 			const app = new Hono<Env>();
-			app.use("*", updateAuth(mockAuthService()));
+			app.use("*", updateAuth(mockAuthService(), stubVerifier));
 			app.get("/test", (c) => c.json({ ok: true }));
 
 			const res = await app.request("/test", {
