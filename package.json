@@ -24,7 +24,8 @@
 		"db:generate": "drizzle-kit generate --config packages/db/drizzle.config.ts",
 		"db:migrate": "drizzle-kit migrate --config packages/db/drizzle.config.ts",
 		"bench": "bun run bench/run-benchmark.ts",
-		"bench:check": "bun run bench/analyze.ts"
+		"bench:check": "bun run bench/analyze.ts",
+		"load-test": "bun run bench/load-test.ts"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.6",

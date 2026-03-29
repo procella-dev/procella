@@ -29,6 +29,7 @@ procella
 
 # Benchmarks
 bench/results.json
+bench/load-results.json
 bench/*.log
 bench/auth-debug/
 
