@@ -7,16 +7,27 @@
 import { gunzipSync } from "node:zlib";
 import type { MiddlewareHandler } from "hono";
 
-/** Decompress gzip request bodies so downstream handlers can use c.req.json(). */
+const MAX_COMPRESSED_BYTES = 20 * 1024 * 1024; // 20 MB
+const MAX_DECOMPRESSED_BYTES = 128 * 1024 * 1024; // 128 MB
+
 export function decompress(): MiddlewareHandler {
 	return async (c, next) => {
 		const encoding = c.req.header("Content-Encoding");
 		if (encoding === "gzip") {
 			const compressed = await c.req.arrayBuffer();
-			const decompressed = gunzipSync(Buffer.from(compressed));
+			if (compressed.byteLength > MAX_COMPRESSED_BYTES) {
+				return c.json({ code: 413, message: "Compressed payload too large" }, 413);
+			}
+			let decompressed: Buffer;
+			try {
+				decompressed = gunzipSync(Buffer.from(compressed), {
+					maxOutputLength: MAX_DECOMPRESSED_BYTES,
+				});
+			} catch {
+				return c.json({ code: 413, message: "Decompressed payload exceeds size limit" }, 413);
+			}
 			const text = new TextDecoder().decode(decompressed);
 			const json = JSON.parse(text);
-			// Hono's #cachedBody expects Promise values in bodyCache
 			// biome-ignore lint/suspicious/noExplicitAny: Hono internal body cache
 			(c.req as any).bodyCache = {
 				json: Promise.resolve(json),

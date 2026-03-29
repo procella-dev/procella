@@ -62,8 +62,12 @@ function extractTokenValue(request: Request): string {
 // Update Token Auth
 // ============================================================================
 
-/** Authenticate using "Authorization: update-token <value>". */
-export function updateAuth(authService: AuthService): MiddlewareHandler<Env> {
+export type LeaseTokenVerifier = (updateId: string, token: string) => Promise<void>;
+
+export function updateAuth(
+	authService: AuthService,
+	verifyLeaseToken?: LeaseTokenVerifier,
+): MiddlewareHandler<Env> {
 	return async (c, next) => {
 		try {
 			const header = c.req.header("Authorization");
@@ -75,6 +79,11 @@ export function updateAuth(authService: AuthService): MiddlewareHandler<Env> {
 				return c.json({ code: 401, message: "Empty update-token" }, 401);
 			}
 			const ctx = await authService.authenticateUpdateToken(token);
+
+			if (verifyLeaseToken) {
+				await verifyLeaseToken(ctx.updateId, token);
+			}
+
 			c.set("updateContext", ctx);
 			await next();
 		} catch (error) {

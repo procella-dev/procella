@@ -11,7 +11,7 @@ import type { UpdatesService } from "@procella/updates";
 import type { WebhooksService } from "@procella/webhooks";
 import type { Context } from "hono";
 import type { Env } from "../types.js";
-import { param } from "./params.js";
+import { param, updateContext } from "./params.js";
 
 // ============================================================================
 // Update Handlers
@@ -61,7 +61,8 @@ export function updateHandlers(
 		},
 
 		completeUpdate: async (c: Context<Env>) => {
-			const updateId = param(c, "updateId");
+			const updateCtx = updateContext(c);
+			const updateId = updateCtx.updateId;
 			const body = await c.req.json<CompleteUpdateRequest>();
 			await updates.completeUpdate(updateId, body);
 

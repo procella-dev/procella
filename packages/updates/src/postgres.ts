@@ -45,6 +45,7 @@ import {
 	JournalEntrySuccess,
 	JournalEntryWrite,
 	LeaseExpiredError,
+	UnauthorizedError,
 	UpdateConflictError,
 	UpdateNotFoundError,
 } from "@procella/types";
@@ -57,6 +58,7 @@ import {
 	formatBlobKey,
 	generateLeaseToken,
 	leaseExpiresAt,
+	safeTokenCompare,
 } from "./helpers.js";
 import type { UpdatesService } from "./types.js";
 import { BLOB_THRESHOLD, LEASE_DURATION_SECONDS } from "./types.js";
@@ -206,6 +208,27 @@ export class PostgresUpdatesService implements UpdatesService {
 			if (notifyStackId)
 				this.db.execute(sql`SELECT pg_notify('stack_updates', ${notifyStackId})`).catch(() => {});
 			return result;
+		});
+	}
+
+	async verifyLeaseToken(updateId: string, token: string): Promise<void> {
+		return withDbSpan("verifyLeaseToken", { "update.id": updateId }, async () => {
+			const [row] = await this.db
+				.select({ leaseToken: updates.leaseToken, leaseExpiresAt: updates.leaseExpiresAt })
+				.from(updates)
+				.where(eq(updates.id, updateId));
+
+			if (!row?.leaseToken) {
+				throw new UnauthorizedError("Invalid or expired update token");
+			}
+
+			if (row.leaseExpiresAt && row.leaseExpiresAt.getTime() < Date.now()) {
+				throw new UnauthorizedError("Update lease has expired");
+			}
+
+			if (!safeTokenCompare(row.leaseToken, token)) {
+				throw new UnauthorizedError("Invalid update token");
+			}
 		});
 	}
 

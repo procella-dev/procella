@@ -1,5 +1,6 @@
 // @procella/updates — Pure helper functions.
 
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import type { UntypedDeployment } from "@procella/types";
 import { InvalidUpdateTokenError } from "@procella/types";
 import { LEASE_DURATION_SECONDS } from "./types.js";
@@ -8,18 +9,25 @@ import { LEASE_DURATION_SECONDS } from "./types.js";
 // Lease Token
 // ============================================================================
 
-/** Generate a lease token string for an active update. */
+/** Generate a cryptographically secure lease token for an active update. */
 export function generateLeaseToken(updateId: string, stackId: string): string {
-	return `update:${updateId}:${stackId}`;
+	const secret = randomBytes(32).toString("hex");
+	return `update:${updateId}:${stackId}:${secret}`;
 }
 
 /** Parse a lease token back into its components. */
 export function parseLeaseToken(token: string): { updateId: string; stackId: string } {
 	const parts = token.split(":");
-	if (parts.length !== 3 || parts[0] !== "update" || !parts[1] || !parts[2]) {
+	if (parts.length !== 4 || parts[0] !== "update" || !parts[1] || !parts[2] || !parts[3]) {
 		throw new InvalidUpdateTokenError();
 	}
 	return { updateId: parts[1], stackId: parts[2] };
+}
+
+/** Constant-time comparison of two lease token strings. */
+export function safeTokenCompare(a: string, b: string): boolean {
+	if (a.length !== b.length) return false;
+	return timingSafeEqual(Buffer.from(a), Buffer.from(b));
 }
 
 // ============================================================================

@@ -94,17 +94,25 @@ describe("DevAuthService", () => {
 		expect(caller.roles).toEqual(["admin"]);
 	});
 
-	test("authenticateUpdateToken parses valid format", async () => {
-		const result = await svc.authenticateUpdateToken("update:abc-123:stack-456");
+	test("authenticateUpdateToken parses valid 4-part format", async () => {
+		const result = await svc.authenticateUpdateToken(
+			"update:abc-123:stack-456:deadbeef01234567890abcdef01234567890abcdef01234567890abcdef0123",
+		);
 
 		expect(result.updateId).toBe("abc-123");
 		expect(result.stackId).toBe("stack-456");
 	});
 
-	test("authenticateUpdateToken rejects invalid format — missing prefix", async () => {
-		await expect(svc.authenticateUpdateToken("abc-123:stack-456")).rejects.toBeInstanceOf(
+	test("authenticateUpdateToken rejects old 3-part format", async () => {
+		await expect(svc.authenticateUpdateToken("update:abc-123:stack-456")).rejects.toBeInstanceOf(
 			UnauthorizedError,
 		);
+	});
+
+	test("authenticateUpdateToken rejects invalid format — missing prefix", async () => {
+		await expect(
+			svc.authenticateUpdateToken("abc-123:stack-456:secret:extra"),
+		).rejects.toBeInstanceOf(UnauthorizedError);
 	});
 
 	test("authenticateUpdateToken rejects invalid format — too few parts", async () => {
@@ -114,7 +122,7 @@ describe("DevAuthService", () => {
 	});
 
 	test("authenticateUpdateToken rejects empty segments", async () => {
-		await expect(svc.authenticateUpdateToken("update::stack-456")).rejects.toBeInstanceOf(
+		await expect(svc.authenticateUpdateToken("update::stack-456:secret")).rejects.toBeInstanceOf(
 			UnauthorizedError,
 		);
 	});

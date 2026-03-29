@@ -1,6 +1,55 @@
 import { type Database, webhookDeliveries, webhooks } from "@procella/db";
-import { NotFoundError } from "@procella/types";
+import { BadRequestError, NotFoundError } from "@procella/types";
 import { and, desc, eq } from "drizzle-orm";
+
+// ============================================================================
+// SSRF Protection
+// ============================================================================
+
+const PRIVATE_IP_PATTERNS = [
+	/^127\./,
+	/^10\./,
+	/^172\.(1[6-9]|2\d|3[01])\./,
+	/^192\.168\./,
+	/^169\.254\./,
+	/^0\./,
+	/^::1$/,
+	/^fc00:/i,
+	/^fe80:/i,
+	/^fd[0-9a-f]{2}:/i,
+];
+
+const BLOCKED_HOSTNAMES = new Set([
+	"localhost",
+	"localhost.localdomain",
+	"metadata.google.internal",
+	"169.254.169.254",
+	"[::1]",
+]);
+
+export function validateWebhookUrl(url: string): void {
+	let parsed: URL;
+	try {
+		parsed = new URL(url);
+	} catch {
+		throw new BadRequestError("Invalid webhook URL");
+	}
+
+	if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+		throw new BadRequestError("Webhook URL must use HTTP or HTTPS");
+	}
+
+	const hostname = parsed.hostname.toLowerCase();
+	if (BLOCKED_HOSTNAMES.has(hostname)) {
+		throw new BadRequestError("Webhook URL cannot target private or metadata addresses");
+	}
+
+	for (const pattern of PRIVATE_IP_PATTERNS) {
+		if (pattern.test(hostname)) {
+			throw new BadRequestError("Webhook URL cannot target private or reserved IP addresses");
+		}
+	}
+}
 
 export const WebhookEvent = {
 	STACK_CREATED: "stack.created",
@@ -100,6 +149,7 @@ export class PostgresWebhooksService implements WebhooksService {
 		input: CreateWebhookInput,
 		createdBy: string,
 	): Promise<WebhookInfo & { secret: string }> {
+		validateWebhookUrl(input.url);
 		const secret = input.secret ?? crypto.randomUUID();
 		const [row] = await this.db
 			.insert(webhooks)
@@ -153,7 +203,10 @@ export class PostgresWebhooksService implements WebhooksService {
 		};
 
 		if (typeof updates.name === "string") patch.name = updates.name;
-		if (typeof updates.url === "string") patch.url = updates.url;
+		if (typeof updates.url === "string") {
+			validateWebhookUrl(updates.url);
+			patch.url = updates.url;
+		}
 		if (Array.isArray(updates.events)) patch.events = updates.events;
 		if (typeof updates.secret === "string") patch.secret = updates.secret;
 
@@ -304,6 +357,7 @@ export class PostgresWebhooksService implements WebhooksService {
 		event: string,
 		payload: Record<string, unknown>,
 	): Promise<void> {
+		validateWebhookUrl(webhook.url);
 		const body = JSON.stringify({ event, timestamp: new Date().toISOString(), data: payload });
 		const signature = await signPayload(body, webhook.secret);
 
@@ -380,6 +434,7 @@ export class PostgresWebhooksService implements WebhooksService {
 		event: string,
 		payload: Record<string, unknown>,
 	): Promise<string> {
+		validateWebhookUrl(webhook.url);
 		const body = JSON.stringify({ event, timestamp: new Date().toISOString(), data: payload });
 		const signature = await signPayload(body, webhook.secret);
 		const start = Date.now();

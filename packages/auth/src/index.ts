@@ -425,10 +425,10 @@ function extractToken(request: Request): { scheme: "token" | "bearer"; token: st
 	throw new UnauthorizedError("Invalid Authorization header format");
 }
 
-/** Parse update token format: "update:<updateId>:<stackId>" */
+/** Parse update token format: "update:<updateId>:<stackId>:<secret>" */
 function parseUpdateToken(token: string): { updateId: string; stackId: string } {
 	const parts = token.split(":");
-	if (parts.length !== 3 || parts[0] !== "update" || !parts[1] || !parts[2]) {
+	if (parts.length !== 4 || parts[0] !== "update" || !parts[1] || !parts[2] || !parts[3]) {
 		throw new UnauthorizedError("Invalid update token format");
 	}
 	return { updateId: parts[1], stackId: parts[2] };

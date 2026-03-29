@@ -39,9 +39,20 @@ describe("@procella/updates helpers", () => {
 	// ========================================================================
 
 	describe("generateLeaseToken", () => {
-		test("returns correct format", () => {
+		test("returns 4-part format with random secret", () => {
 			const token = generateLeaseToken("update-1", "stack-1");
-			expect(token).toBe("update:update-1:stack-1");
+			const parts = token.split(":");
+			expect(parts).toHaveLength(4);
+			expect(parts[0]).toBe("update");
+			expect(parts[1]).toBe("update-1");
+			expect(parts[2]).toBe("stack-1");
+			expect(parts[3]).toHaveLength(64);
+		});
+
+		test("generates unique tokens for same inputs", () => {
+			const token1 = generateLeaseToken("update-1", "stack-1");
+			const token2 = generateLeaseToken("update-1", "stack-1");
+			expect(token1).not.toBe(token2);
 		});
 	});
 
@@ -57,17 +68,22 @@ describe("@procella/updates helpers", () => {
 			expect(parsed.stackId).toBe("stack-xyz");
 		});
 
+		test("throws InvalidUpdateTokenError on too few parts (3-part old format)", () => {
+			expect(() => parseLeaseToken("update:abc:def")).toThrow(InvalidUpdateTokenError);
+		});
+
 		test("throws InvalidUpdateTokenError on too few parts", () => {
 			expect(() => parseLeaseToken("update:only-one")).toThrow(InvalidUpdateTokenError);
 		});
 
 		test("throws InvalidUpdateTokenError on wrong prefix", () => {
-			expect(() => parseLeaseToken("token:abc:def")).toThrow(InvalidUpdateTokenError);
+			expect(() => parseLeaseToken("token:abc:def:secret")).toThrow(InvalidUpdateTokenError);
 		});
 
 		test("throws InvalidUpdateTokenError on empty segments", () => {
-			expect(() => parseLeaseToken("update::stack-1")).toThrow(InvalidUpdateTokenError);
-			expect(() => parseLeaseToken("update:abc:")).toThrow(InvalidUpdateTokenError);
+			expect(() => parseLeaseToken("update::stack-1:secret")).toThrow(InvalidUpdateTokenError);
+			expect(() => parseLeaseToken("update:abc::secret")).toThrow(InvalidUpdateTokenError);
+			expect(() => parseLeaseToken("update:abc:stack:")).toThrow(InvalidUpdateTokenError);
 		});
 	});
 
@@ -357,8 +373,9 @@ describe("@procella/updates helpers", () => {
 				decryptValue: noop,
 				batchEncrypt: noop,
 				batchDecrypt: noop,
+				verifyLeaseToken: noop,
 			};
-			expect(Object.keys(mock)).toHaveLength(19);
+			expect(Object.keys(mock)).toHaveLength(20);
 		});
 	});
 
