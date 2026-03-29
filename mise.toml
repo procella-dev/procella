@@ -3,9 +3,5 @@ bun = "1.3.11"
 node = "24"
 awscli = { version = "latest", symlink_bins = "true" }
 
-[env]
-PULUMI_CONSOLE_DOMAIN = "localhost:9090"
-_.file = ".env"
-
 [settings]
 experimental = true

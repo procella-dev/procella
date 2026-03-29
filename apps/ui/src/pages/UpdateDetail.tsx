@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { skipToken } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
 import type { UpdateStatus } from "../components/ui/status";
 import { StatusBadge } from "../components/ui/status";
@@ -119,7 +120,6 @@ export function UpdateDetail() {
 	}>();
 
 	const [events, setEvents] = useState<EngineEvent[]>([]);
-	const [isPolling, setIsPolling] = useState(true);
 	const [filter, setFilter] = useState<EventFilter>("all");
 	const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 	const [isAtBottom, setIsAtBottom] = useState(true);
@@ -134,7 +134,16 @@ export function UpdateDetail() {
 		{ enabled: Boolean(org && project && stack) },
 	);
 
-	const { data: eventsData, error: queryError } = trpc.events.list.useQuery(
+	const updateStatus = mapUpdateStatus(updateInfo?.result, events.length > 0);
+	const isRunning = updateStatus === "running" || updateStatus === "updating";
+	const isTerminal =
+		updateStatus === "succeeded" || updateStatus === "failed" || updateStatus === "cancelled";
+
+	const {
+		data: eventsData,
+		error: queryError,
+		refetch: refetchEvents,
+	} = trpc.events.list.useQuery(
 		{
 			org: org ?? "",
 			project: project ?? "",
@@ -144,50 +153,47 @@ export function UpdateDetail() {
 		},
 		{
 			enabled: Boolean(org && project && stack && updateID),
-			refetchInterval: isPolling ? 2000 : false,
 		},
 	);
 
 	const lastSeqRef = useRef<number>(0);
 
-	const invalidateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const invalidateEvents = useCallback(() => {
-		if (invalidateTimerRef.current) return;
-		invalidateTimerRef.current = setTimeout(() => {
-			invalidateTimerRef.current = null;
-			utils.events.list.invalidate();
-			utils.updates.latest.invalidate();
-		}, 500);
-	}, [utils]);
-
-	useEffect(() => {
-		return () => {
-			if (invalidateTimerRef.current) clearTimeout(invalidateTimerRef.current);
-		};
-	}, []);
+	// Subscribe to real-time events via SSE — only for active (non-terminal) updates.
+	// Streams full event data directly (no separate HTTP fetch needed).
+	// Uses skipToken for completed updates to prevent SSE connection.
+	// initialLastSeqRef is stable (never mutated) to prevent tRPC reconnection.
+	const initialLastSeqRef = useRef<number | undefined>(undefined);
+	const subscriptionEnabled = Boolean(org && project && stack && updateID) && !isTerminal;
 
 	trpc.updates.onEvents.useSubscription(
+		subscriptionEnabled
+			? {
+					org: org ?? "",
+					project: project ?? "",
+					stack: stack ?? "",
+					updateId: updateID ?? "",
+					lastEventId: initialLastSeqRef.current,
+				}
+			: skipToken,
 		{
-			org: org ?? "",
-			project: project ?? "",
-			stack: stack ?? "",
-			updateId: updateID ?? "",
-			lastEventId: lastSeqRef.current || undefined,
-		},
-		{
-			enabled: Boolean(org && project && stack && updateID),
-			onData: (data) => {
-				if (data.seq) lastSeqRef.current = data.seq;
-				invalidateEvents();
+			onData: (event) => {
+				const data = event.data as unknown as EngineEvent;
+				if (!data?.sequence) return;
+				lastSeqRef.current = data.sequence;
+				setEvents((prev) => {
+					if (prev.some((e) => e.sequence === data.sequence)) return prev;
+					return [...prev, data].sort((a, b) => a.sequence - b.sequence);
+				});
+				// Refresh update status only on events that signal completion/cancellation
+				if (data.summaryEvent || data.cancelEvent) {
+					utils.updates.latest.invalidate();
+				}
 			},
 		},
 	);
 
 	const error = queryError?.message ?? null;
 	const { grouped, completed, total } = useResourceTracker(events);
-
-	const updateStatus = mapUpdateStatus(updateInfo?.result, events.length > 0);
-	const isRunning = updateStatus === "running" || updateStatus === "updating";
 
 	const firstEventTimestampMs = useMemo(
 		() => (events.length > 0 ? eventTimestampMs(events[0]) : undefined),
@@ -246,8 +252,7 @@ export function UpdateDetail() {
 
 		if (eventsData.continuationToken) {
 			continuationTokenRef.current = eventsData.continuationToken;
-		} else {
-			setIsPolling(false);
+			refetchEvents();
 		}
 	}, [eventsData]);
 
