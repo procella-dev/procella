@@ -1,9 +1,55 @@
 import { describe, expect, mock, test } from "bun:test";
+import type { StackInfo, StacksService } from "@procella/stacks";
+import type { Caller } from "@procella/types";
 import type { UpdatesService } from "@procella/updates";
 import { Hono } from "hono";
 import { errorHandler } from "../middleware/error-handler.js";
 import type { Env } from "../types.js";
 import { eventHandlers } from "./events.js";
+
+const validCaller: Caller = {
+	tenantId: "t-1",
+	orgSlug: "my-org",
+	userId: "u-1",
+	login: "test-user",
+	roles: ["admin"],
+};
+
+const mockStackInfo: StackInfo = {
+	id: "stack-uuid-1",
+	projectId: "proj-uuid-1",
+	tenantId: "t-1",
+	orgName: "myorg",
+	projectName: "myproj",
+	stackName: "dev",
+	tags: {},
+	activeUpdateId: null,
+	lastUpdate: null,
+	resourceCount: null,
+	createdAt: new Date("2025-01-01"),
+	updatedAt: new Date("2025-01-01"),
+};
+
+function mockStacksService(): StacksService {
+	return {
+		createStack: mock(async () => mockStackInfo),
+		getStack: mock(async () => mockStackInfo),
+		listStacks: mock(async () => [mockStackInfo]),
+		deleteStack: mock(async () => {}),
+		renameStack: mock(async () => {}),
+		updateStackTags: mock(async () => {}),
+		replaceStackTags: mock(async () => {}),
+		getStackByFQN: mock(async () => mockStackInfo),
+		getStackByNames: mock(async () => mockStackInfo),
+	};
+}
+
+function injectCaller(caller: Caller) {
+	return async (c: { set: (key: string, value: unknown) => void }, next: () => Promise<void>) => {
+		c.set("caller", caller);
+		await next();
+	};
+}
 
 function mockUpdatesService(overrides?: Partial<UpdatesService>): UpdatesService {
 	return {
@@ -35,6 +81,7 @@ function mockUpdatesService(overrides?: Partial<UpdatesService>): UpdatesService
 		batchEncrypt: mock(async () => []),
 		batchDecrypt: mock(async () => []),
 		verifyLeaseToken: mock(async () => {}),
+		verifyUpdateOwnership: mock(async () => {}),
 		...overrides,
 	};
 }
@@ -51,7 +98,7 @@ describe("eventHandlers", () => {
 		const updates = mockUpdatesService();
 		const app = new Hono<Env>();
 		app.use("*", injectUpdateContext("u-1", "s-1"));
-		const h = eventHandlers(updates);
+		const h = eventHandlers(updates, mockStacksService());
 		app.post("/events", h.postEvents);
 
 		const body = { events: [{ sequence: 1, timestamp: 0 }] };
@@ -69,10 +116,11 @@ describe("eventHandlers", () => {
 	test("getUpdateEvents returns events with continuationToken", async () => {
 		const updates = mockUpdatesService();
 		const app = new Hono<Env>();
-		const h = eventHandlers(updates);
-		app.get("/updates/:updateId/events", h.getUpdateEvents);
+		app.use("*", injectCaller(validCaller));
+		const h = eventHandlers(updates, mockStacksService());
+		app.get("/stacks/:org/:project/:stack/updates/:updateId/events", h.getUpdateEvents);
 
-		const res = await app.request("/updates/upd-42/events");
+		const res = await app.request("/stacks/myorg/myproj/dev/updates/upd-42/events");
 		expect(res.status).toBe(200);
 		const body = await res.json();
 		expect(body.events).toBeArray();
@@ -83,10 +131,13 @@ describe("eventHandlers", () => {
 	test("getUpdateEvents passes continuationToken query param", async () => {
 		const updates = mockUpdatesService();
 		const app = new Hono<Env>();
-		const h = eventHandlers(updates);
-		app.get("/updates/:updateId/events", h.getUpdateEvents);
+		app.use("*", injectCaller(validCaller));
+		const h = eventHandlers(updates, mockStacksService());
+		app.get("/stacks/:org/:project/:stack/updates/:updateId/events", h.getUpdateEvents);
 
-		const res = await app.request("/updates/upd-42/events?continuationToken=tok-1");
+		const res = await app.request(
+			"/stacks/myorg/myproj/dev/updates/upd-42/events?continuationToken=tok-1",
+		);
 		expect(res.status).toBe(200);
 		expect(updates.getUpdateEvents).toHaveBeenCalledWith("upd-42", "tok-1");
 	});
@@ -95,7 +146,7 @@ describe("eventHandlers", () => {
 		const updates = mockUpdatesService();
 		const app = new Hono<Env>();
 		app.use("*", injectUpdateContext("u-5", "s-5"));
-		const h = eventHandlers(updates);
+		const h = eventHandlers(updates, mockStacksService());
 		app.post("/renew", h.renewLease);
 
 		const reqBody = { token: "old-lease" };
@@ -116,7 +167,7 @@ describe("eventHandlers", () => {
 		const updates = mockUpdatesService();
 		const app = new Hono<Env>();
 		app.onError(errorHandler());
-		const h = eventHandlers(updates);
+		const h = eventHandlers(updates, mockStacksService());
 		app.post("/events", h.postEvents);
 
 		const res = await app.request("/events", {

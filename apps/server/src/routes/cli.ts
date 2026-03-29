@@ -74,7 +74,7 @@ export function createCliApp(deps: CliAppDeps): Hono<Env> {
 		verifySignature: verifyGitHubWebhookSignature,
 	});
 	const checkpointH = checkpointHandlers(deps.updates);
-	const eventH = eventHandlers(deps.updates);
+	const eventH = eventHandlers(deps.updates, deps.stacks);
 	const cryptoH = cryptoHandlers(deps.updates);
 	const stateH = stateHandlers(deps.updates, deps.stacks);
 

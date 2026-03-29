@@ -44,12 +44,14 @@ export function updateHandlers(
 
 		startUpdate: async (c: Context<Env>) => {
 			const caller = c.get("caller");
+			const org = param(c, "org");
+			const project = param(c, "project");
+			const stack = param(c, "stack");
 			const updateId = param(c, "updateId");
+			const stackInfo = await stacks.getStack(caller.tenantId, org, project, stack);
+			await updates.verifyUpdateOwnership(updateId, stackInfo.id);
 			const body = await c.req.json<StartUpdateRequest>();
 			const result = await updates.startUpdate(updateId, body);
-			const org = c.req.param("org");
-			const project = c.req.param("project");
-			const stack = c.req.param("stack");
 			if (org) {
 				void webhooks?.emit({
 					tenantId: caller.tenantId,
@@ -169,13 +171,25 @@ export function updateHandlers(
 		},
 
 		cancelUpdate: async (c: Context<Env>) => {
+			const caller = c.get("caller");
+			const org = param(c, "org");
+			const project = param(c, "project");
+			const stack = param(c, "stack");
 			const updateId = param(c, "updateId");
+			const stackInfo = await stacks.getStack(caller.tenantId, org, project, stack);
+			await updates.verifyUpdateOwnership(updateId, stackInfo.id);
 			await updates.cancelUpdate(updateId);
 			return c.body(null, 204);
 		},
 
 		getUpdate: async (c: Context<Env>) => {
+			const caller = c.get("caller");
+			const org = param(c, "org");
+			const project = param(c, "project");
+			const stack = param(c, "stack");
 			const updateId = param(c, "updateId");
+			const stackInfo = await stacks.getStack(caller.tenantId, org, project, stack);
+			await updates.verifyUpdateOwnership(updateId, stackInfo.id);
 			const result = await updates.getUpdate(updateId);
 			return c.json(result);
 		},

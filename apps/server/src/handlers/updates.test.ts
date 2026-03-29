@@ -71,6 +71,7 @@ function mockUpdatesService(overrides?: Partial<UpdatesService>): UpdatesService
 		batchEncrypt: mock(async () => []),
 		batchDecrypt: mock(async () => []),
 		verifyLeaseToken: mock(async () => {}),
+		verifyUpdateOwnership: mock(async () => {}),
 		...overrides,
 	};
 }
@@ -137,10 +138,10 @@ describe("updateHandlers", () => {
 		const app = new Hono<Env>();
 		app.use("*", injectCaller(validCaller));
 		const h = updateHandlers(updates, stacks);
-		app.post("/updates/:updateId/start", h.startUpdate);
+		app.post("/stacks/:org/:project/:stack/update/:updateId", h.startUpdate);
 
 		const reqBody = { tags: { "pulumi:target": "*" } };
-		const res = await app.request("/updates/upd-1/start", {
+		const res = await app.request("/stacks/myorg/myproj/dev/update/upd-1", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify(reqBody),
@@ -182,9 +183,11 @@ describe("updateHandlers", () => {
 		const app = new Hono<Env>();
 		app.use("*", injectCaller(validCaller));
 		const h = updateHandlers(updates, stacks);
-		app.post("/updates/:updateId/cancel", h.cancelUpdate);
+		app.post("/stacks/:org/:project/:stack/update/:updateId/cancel", h.cancelUpdate);
 
-		const res = await app.request("/updates/upd-1/cancel", { method: "POST" });
+		const res = await app.request("/stacks/myorg/myproj/dev/update/upd-1/cancel", {
+			method: "POST",
+		});
 		expect(res.status).toBe(204);
 		expect(updates.cancelUpdate).toHaveBeenCalledWith("upd-1");
 	});
@@ -195,9 +198,9 @@ describe("updateHandlers", () => {
 		const app = new Hono<Env>();
 		app.use("*", injectCaller(validCaller));
 		const h = updateHandlers(updates, stacks);
-		app.get("/updates/:updateId", h.getUpdate);
+		app.get("/stacks/:org/:project/:stack/update/:updateId", h.getUpdate);
 
-		const res = await app.request("/updates/upd-42");
+		const res = await app.request("/stacks/myorg/myproj/dev/update/upd-42");
 		expect(res.status).toBe(200);
 		const body = await res.json();
 		expect(body.status).toBe("succeeded");

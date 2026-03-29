@@ -34,6 +34,7 @@ function mockUpdatesService(overrides?: Partial<UpdatesService>): UpdatesService
 			cts.map(() => new Uint8Array([112])),
 		),
 		verifyLeaseToken: mock(async () => {}),
+		verifyUpdateOwnership: mock(async () => {}),
 		...overrides,
 	};
 }

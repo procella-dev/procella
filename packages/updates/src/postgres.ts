@@ -211,6 +211,19 @@ export class PostgresUpdatesService implements UpdatesService {
 		});
 	}
 
+	async verifyUpdateOwnership(updateId: string, stackId: string): Promise<void> {
+		return withDbSpan("verifyUpdateOwnership", { "update.id": updateId }, async () => {
+			const [row] = await this.db
+				.select({ stackId: updates.stackId })
+				.from(updates)
+				.where(eq(updates.id, updateId));
+
+			if (!row || row.stackId !== stackId) {
+				throw new UpdateNotFoundError(updateId);
+			}
+		});
+	}
+
 	async verifyLeaseToken(updateId: string, token: string): Promise<void> {
 		return withDbSpan("verifyLeaseToken", { "update.id": updateId }, async () => {
 			const [row] = await this.db

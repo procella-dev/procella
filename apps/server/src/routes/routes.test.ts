@@ -106,6 +106,7 @@ function mockUpdatesService(): UpdatesService {
 		batchEncrypt: async () => [new Uint8Array([1])],
 		batchDecrypt: async () => [new Uint8Array([2])],
 		verifyLeaseToken: async () => {},
+		verifyUpdateOwnership: async () => {},
 	} as unknown as UpdatesService;
 }
 
