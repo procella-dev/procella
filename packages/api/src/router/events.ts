@@ -2,6 +2,7 @@
 
 import { z } from "zod/v4";
 import { publicProcedure, router } from "../trpc.js";
+import { resolveUpdateId } from "./updates.js";
 
 // ============================================================================
 // Events Router
@@ -19,10 +20,15 @@ export const eventsRouter = router({
 			}),
 		)
 		.query(async ({ ctx, input }) => {
-			// Resolve stack to verify access
-			await ctx.stacks.getStack(ctx.caller.tenantId, input.org, input.project, input.stack);
+			const stackInfo = await ctx.stacks.getStack(
+				ctx.caller.tenantId,
+				input.org,
+				input.project,
+				input.stack,
+			);
+			const updateId = await resolveUpdateId(ctx.db, stackInfo.id, input.updateID);
 
-			const result = await ctx.updates.getUpdateEvents(input.updateID, input.continuationToken);
+			const result = await ctx.updates.getUpdateEvents(updateId, input.continuationToken);
 
 			return {
 				events: result.events ?? [],

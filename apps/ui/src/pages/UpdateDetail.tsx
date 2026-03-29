@@ -129,15 +129,22 @@ export function UpdateDetail() {
 	const logContainerRef = useRef<HTMLDivElement>(null);
 	const utils = trpc.useUtils();
 
-	const { data: updateInfo } = trpc.updates.latest.useQuery(
-		{ org: org ?? "", project: project ?? "", stack: stack ?? "" },
-		{ enabled: Boolean(org && project && stack) },
+	const { data: updateInfo } = trpc.updates.get.useQuery(
+		{
+			org: org ?? "",
+			project: project ?? "",
+			stack: stack ?? "",
+			updateIdOrVersion: updateID ?? "",
+		},
+		{ enabled: Boolean(org && project && stack && updateID) },
 	);
 
 	const updateStatus = mapUpdateStatus(updateInfo?.result, events.length > 0);
 	const isRunning = updateStatus === "running" || updateStatus === "updating";
 	const isTerminal =
 		updateStatus === "succeeded" || updateStatus === "failed" || updateStatus === "cancelled";
+
+	const resolvedUpdateID = updateInfo?.updateID ?? updateID ?? "";
 
 	const {
 		data: eventsData,
@@ -148,11 +155,11 @@ export function UpdateDetail() {
 			org: org ?? "",
 			project: project ?? "",
 			stack: stack ?? "",
-			updateID: updateID ?? "",
+			updateID: resolvedUpdateID,
 			continuationToken: continuationTokenRef.current,
 		},
 		{
-			enabled: Boolean(org && project && stack && updateID),
+			enabled: Boolean(org && project && stack && resolvedUpdateID),
 		},
 	);
 
@@ -163,7 +170,7 @@ export function UpdateDetail() {
 	// Uses skipToken for completed updates to prevent SSE connection.
 	// initialLastSeqRef is stable (never mutated) to prevent tRPC reconnection.
 	const initialLastSeqRef = useRef<number | undefined>(undefined);
-	const subscriptionEnabled = Boolean(org && project && stack && updateID) && !isTerminal;
+	const subscriptionEnabled = Boolean(org && project && stack && resolvedUpdateID) && !isTerminal;
 
 	trpc.updates.onEvents.useSubscription(
 		subscriptionEnabled
@@ -171,7 +178,7 @@ export function UpdateDetail() {
 					org: org ?? "",
 					project: project ?? "",
 					stack: stack ?? "",
-					updateId: updateID ?? "",
+					updateId: resolvedUpdateID,
 					lastEventId: initialLastSeqRef.current,
 				}
 			: skipToken,
@@ -254,7 +261,7 @@ export function UpdateDetail() {
 			continuationTokenRef.current = eventsData.continuationToken;
 			refetchEvents();
 		}
-	}, [eventsData]);
+	}, [eventsData, refetchEvents]);
 
 	useEffect(() => {
 		if (!isRunning) return;

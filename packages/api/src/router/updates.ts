@@ -1,5 +1,6 @@
 // @procella/api — updates.list + updates.latest tRPC procedures.
 
+import type { Database } from "@procella/db";
 import { updateEvents, updates } from "@procella/db";
 
 import { TRPCError, tracked } from "@trpc/server";
@@ -27,6 +28,32 @@ function parseResourceChanges(fields: unknown): Record<string, number> {
 	if (!fields || typeof fields !== "object") return {};
 	const f = fields as { summaryEvent?: { resourceChanges?: Record<string, number> } };
 	return f.summaryEvent?.resourceChanges ?? {};
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export async function resolveUpdateId(
+	db: Database,
+	stackId: string,
+	updateIdOrVersion: string,
+): Promise<string> {
+	if (UUID_RE.test(updateIdOrVersion)) return updateIdOrVersion;
+
+	const version = Number(updateIdOrVersion);
+	if (!Number.isInteger(version) || version <= 0) {
+		throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid update identifier" });
+	}
+
+	const [row] = await db
+		.select({ id: updates.id })
+		.from(updates)
+		.where(and(eq(updates.stackId, stackId), eq(updates.version, version)))
+		.limit(1);
+
+	if (!row) {
+		throw new TRPCError({ code: "NOT_FOUND", message: `Update version ${version} not found` });
+	}
+	return row.id;
 }
 
 // ============================================================================
@@ -123,6 +150,54 @@ export const updatesRouter = router({
 		};
 	}),
 
+	get: publicProcedure
+		.input(
+			z.object({
+				org: z.string(),
+				project: z.string(),
+				stack: z.string(),
+				updateIdOrVersion: z.string(),
+			}),
+		)
+		.query(async ({ ctx, input }) => {
+			const stackInfo = await ctx.stacks.getStack(
+				ctx.caller.tenantId,
+				input.org,
+				input.project,
+				input.stack,
+			);
+
+			const updateId = await resolveUpdateId(ctx.db, stackInfo.id, input.updateIdOrVersion);
+
+			const [row] = await ctx.db
+				.select()
+				.from(updates)
+				.where(and(eq(updates.id, updateId), eq(updates.stackId, stackInfo.id)))
+				.limit(1);
+
+			if (!row) {
+				throw new TRPCError({ code: "NOT_FOUND", message: "Update not found" });
+			}
+
+			const [summaryRow] = await ctx.db
+				.select({ fields: updateEvents.fields })
+				.from(updateEvents)
+				.where(and(eq(updateEvents.updateId, row.id), eq(updateEvents.kind, "summary")))
+				.orderBy(desc(updateEvents.sequence))
+				.limit(1);
+
+			return {
+				updateID: row.id,
+				kind: row.kind,
+				result: row.result ?? "",
+				version: row.version,
+				message: row.message ?? "",
+				startTime: row.startedAt ? Math.floor(row.startedAt.getTime() / 1000) : 0,
+				endTime: row.completedAt ? Math.floor(row.completedAt.getTime() / 1000) : 0,
+				resourceChanges: summaryRow ? parseResourceChanges(summaryRow.fields) : {},
+			};
+		}),
+
 	onEvents: publicProcedure
 		.input(
 			z.object({
@@ -134,7 +209,7 @@ export const updatesRouter = router({
 			}),
 		)
 		.subscription(async function* (opts) {
-			const { org, project, stack, updateId, lastEventId } = opts.input;
+			const { org, project, stack, updateId: rawUpdateId, lastEventId } = opts.input;
 
 			const stackInfo = await opts.ctx.stacks.getStack(
 				opts.ctx.caller.tenantId,
@@ -142,13 +217,7 @@ export const updatesRouter = router({
 				project,
 				stack,
 			);
-			const owned = await opts.ctx.db
-				.select({ id: updates.id })
-				.from(updates)
-				.where(and(eq(updates.id, updateId), eq(updates.stackId, stackInfo.id)))
-				.limit(1);
-			if (owned.length === 0)
-				throw new TRPCError({ code: "NOT_FOUND", message: "Update not found" });
+			const updateId = await resolveUpdateId(opts.ctx.db, stackInfo.id, rawUpdateId);
 
 			let lastSeq = lastEventId ?? 0;
 
