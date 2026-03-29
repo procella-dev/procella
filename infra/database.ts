@@ -10,6 +10,8 @@ export const vpc = await aws.ec2
 		return new sst.aws.Vpc("ProcellaVpc", { nat: "ec2" });
 	});
 
+let clusterDirectHost: string | undefined;
+
 export const database = await (async () => {
 	if ($dev || stage === "production") {
 		return new sst.aws.Aurora("ProcellaDatabase", {
@@ -42,6 +44,8 @@ export const database = await (async () => {
 				`Available clusters: ${result.clusterIdentifiers.join(", ") || "none"}`,
 		);
 	}
+	const cluster = await aws.rds.getCluster({ clusterIdentifier: clusterId });
+	clusterDirectHost = cluster.endpoint;
 	return sst.aws.Aurora.get("ProcellaDatabase", clusterId);
 })();
 
@@ -51,6 +55,8 @@ export const databaseName = $dev
 		? "procella"
 		: `procella_${stage.replace(/-/g, "_")}`;
 
+const dbHost = clusterDirectHost ?? database.host;
+
 export const databaseUrl = $dev
 	? $interpolate`postgresql://${database.username}:${database.password}@${database.host}:${database.port}/${databaseName}`
-	: $interpolate`postgresql://${database.username}:${database.password}@${database.host}:${database.port}/${databaseName}?sslmode=require`;
+	: $interpolate`postgresql://${database.username}:${database.password}@${dbHost}:${database.port}/${databaseName}?sslmode=require`;
