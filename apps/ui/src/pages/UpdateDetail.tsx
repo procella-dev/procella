@@ -1,5 +1,3 @@
-import { useQueryClient } from "@tanstack/react-query";
-import { getQueryKey } from "@trpc/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
 import type { UpdateStatus } from "../components/ui/status";
@@ -129,7 +127,7 @@ export function UpdateDetail() {
 	const continuationTokenRef = useRef<string | undefined>(undefined);
 	const eventsEndRef = useRef<HTMLDivElement>(null);
 	const logContainerRef = useRef<HTMLDivElement>(null);
-	const queryClient = useQueryClient();
+	const utils = trpc.useUtils();
 
 	const { data: updateInfo } = trpc.updates.latest.useQuery(
 		{ org: org ?? "", project: project ?? "", stack: stack ?? "" },
@@ -164,12 +162,8 @@ export function UpdateDetail() {
 			enabled: Boolean(org && project && stack && updateID),
 			onData: (data) => {
 				if (data.seq) lastSeqRef.current = data.seq;
-				queryClient.invalidateQueries({
-					queryKey: getQueryKey(trpc.events.list, undefined, "query"),
-				});
-				queryClient.invalidateQueries({
-					queryKey: getQueryKey(trpc.updates.latest, undefined, "query"),
-				});
+				utils.events.list.invalidate();
+				utils.updates.latest.invalidate();
 			},
 		},
 	);
