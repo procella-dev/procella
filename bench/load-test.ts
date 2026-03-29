@@ -98,11 +98,6 @@ async function runWorker(example: string, workerId: number): Promise<WorkerResul
 			throw new Error(`stack init failed (exit ${init.exit}): ${init.stderr.slice(0, 300)}`);
 		}
 
-		const sel = await pulumi(["stack", "select", stackName], { cwd: isolatedDir });
-		if (sel.exit !== 0) {
-			throw new Error(`stack select failed (exit ${sel.exit}): ${sel.stderr.slice(0, 300)}`);
-		}
-
 		for (let c = 0; c < CYCLES; c++) {
 			let upMs = 0;
 			let destroyMs = 0;
@@ -113,7 +108,9 @@ async function runWorker(example: string, workerId: number): Promise<WorkerResul
 			try {
 				const t0 = performance.now();
 				console.log(`${tag} cycle ${c + 1}/${CYCLES}: up`);
-				const up = await pulumi(["up", "--yes", "--skip-preview"], { cwd: isolatedDir });
+				const up = await pulumi(["up", "--yes", "--skip-preview", "--stack", stackName], {
+					cwd: isolatedDir,
+				});
 				upMs = performance.now() - t0;
 				upOk = up.exit === 0;
 				if (!upOk) {
@@ -123,7 +120,9 @@ async function runWorker(example: string, workerId: number): Promise<WorkerResul
 
 				const t1 = performance.now();
 				console.log(`${tag} cycle ${c + 1}/${CYCLES}: destroy`);
-				const des = await pulumi(["destroy", "--yes", "--skip-preview"], { cwd: isolatedDir });
+				const des = await pulumi(["destroy", "--yes", "--skip-preview", "--stack", stackName], {
+					cwd: isolatedDir,
+				});
 				destroyMs = performance.now() - t1;
 				destroyOk = des.exit === 0;
 				if (!destroyOk) {
@@ -139,7 +138,7 @@ async function runWorker(example: string, workerId: number): Promise<WorkerResul
 		}
 
 		console.log(`${tag} stack rm ${stackName}`);
-		await pulumi(["stack", "rm", "--yes", stackName], { cwd: isolatedDir });
+		await pulumi(["stack", "rm", "--yes", "--stack", stackName], { cwd: isolatedDir });
 	} finally {
 		rmSync(isolatedDir, { recursive: true, force: true });
 	}
