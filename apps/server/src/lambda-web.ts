@@ -1,20 +1,17 @@
-// Custom Lambda runtime with response streaming support.
+// Custom Lambda runtime with response streaming support for Web API.
 //
-// Instead of using hono/aws-lambda (which buffers entire responses), this
-// converts Lambda events to standard Request objects, passes them through
-// app.fetch(), and streams the Response back via the Lambda Runtime API
-// using the streaming protocol:
+// Handles tRPC dashboard traffic (/trpc/*) and auth routes (/api/auth/*)
+// with streaming responses for SSE subscriptions.
 //
+// Uses the Lambda Runtime API streaming protocol:
 //   Content-Type: application/vnd.awslambda.http-integration-response
 //   Lambda-Runtime-Function-Response-Mode: streaming
 //   Transfer-Encoding: chunked
 //   Body: {JSON prelude}\x00\x00\x00\x00\x00\x00\x00\x00{response body}
-//
-// This enables SSE (tRPC subscriptions) to stream through Lambda Function
-// URLs with InvokeMode: RESPONSE_STREAM.
 
 import type { APIGatewayProxyEventV2 } from "aws-lambda";
 
+// biome-ignore lint/style/noNonNullAssertion: Lambda Runtime API always sets this
 const RUNTIME_API = process.env.AWS_LAMBDA_RUNTIME_API!;
 const BASE_URL = `http://${RUNTIME_API}/2018-06-01/runtime`;
 
@@ -37,7 +34,6 @@ function eventToRequest(event: APIGatewayProxyEventV2): Request {
 			if (value !== undefined) reqHeaders.set(key, value);
 		}
 	}
-	// Lambda delivers cookies as a separate array — reassemble into Cookie header
 	if (event.cookies?.length) {
 		reqHeaders.set("cookie", event.cookies.join("; "));
 	}
@@ -101,11 +97,12 @@ async function streamResponse(requestId: string, response: Response): Promise<vo
 }
 
 (async () => {
-	const { bootstrap } = await import("./bootstrap.js");
-	const { app } = await bootstrap();
+	const { bootstrapWeb } = await import("./bootstrap.js");
+	const { app } = await bootstrapWeb();
 
 	while (true) {
 		const next = await fetch(`${BASE_URL}/invocation/next`);
+		// biome-ignore lint/style/noNonNullAssertion: Lambda Runtime API always sets this
 		const requestId = next.headers.get("Lambda-Runtime-Aws-Request-Id")!;
 		const event = (await next.json()) as APIGatewayProxyEventV2;
 
