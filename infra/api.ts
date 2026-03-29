@@ -14,6 +14,9 @@ const stage = $app.stage;
 
 const descopeProjectId = !$dev ? (await import("./descope")).projectId : undefined;
 
+const appOrigin = isProd ? "https://app.procella.cloud" : `https://app.${stage}.procella.cloud`;
+const rootOrigin = isProd ? "https://procella.cloud" : `https://${stage}.procella.cloud`;
+
 export const api = new sst.aws.Function("ProcellaCliApi", {
 	runtime: "provided.al2023",
 	architecture: "x86_64",
@@ -32,6 +35,7 @@ export const api = new sst.aws.Function("ProcellaCliApi", {
 		PROCELLA_BLOB_S3_BUCKET: bucket.name,
 		PROCELLA_AUTH_MODE: $dev ? "dev" : "descope",
 		PROCELLA_ENCRYPTION_KEY: encryptionKey.value,
+		PROCELLA_CORS_ORIGINS: `${appOrigin},${rootOrigin}`,
 		PROCELLA_OTEL_ENABLED: "true",
 		OTEL_EXPORTER_OTLP_ENDPOINT: otelEndpoint.value,
 		OTEL_EXPORTER_OTLP_HEADERS: otelHeaders.value,

@@ -22,8 +22,14 @@ function isAppSubdomain(): boolean {
  * For non-root paths, unauthenticated users are redirected to /login.
  */
 export function HomeRoute() {
-	const { config, isLoading } = useAuthConfig();
 	const location = useLocation();
+	const { config, isLoading } = useAuthConfig();
+
+	// On the root domain, "/" always shows the marketing landing page
+	// immediately — no auth config or session check needed.
+	if (location.pathname === "/" && !isAppSubdomain()) {
+		return <HomePage />;
+	}
 
 	if (isLoading || !config) {
 		return <FullPageSpinner />;
@@ -36,9 +42,6 @@ export function HomeRoute() {
 	// Dev mode: check localStorage token
 	const token = localStorage.getItem("procella-token");
 	if (!token) {
-		if (location.pathname === "/" && !isAppSubdomain()) {
-			return <HomePage />;
-		}
 		return <Navigate to="/login" state={{ returnTo: location.pathname }} replace />;
 	}
 
@@ -54,9 +57,6 @@ function DescopeHomeRoute() {
 	}
 
 	if (!isAuthenticated) {
-		if (location.pathname === "/" && !isAppSubdomain()) {
-			return <HomePage />;
-		}
 		return <Navigate to="/login" state={{ returnTo: location.pathname }} replace />;
 	}
 
