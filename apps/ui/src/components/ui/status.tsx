@@ -46,7 +46,7 @@ export function StatusDot({ status, size = 10 }: StatusDotProps) {
 				height: size,
 				borderRadius: "50%",
 				backgroundColor: isOutline ? "transparent" : color,
-				border: isOutline ? `1.5px solid var(--color-status-idle)` : "none",
+				border: isOutline ? `2px solid var(--color-status-idle)` : "none",
 				flexShrink: 0,
 				animation: isActive ? "status-pulse 1.7s ease-in-out infinite" : undefined,
 			}}

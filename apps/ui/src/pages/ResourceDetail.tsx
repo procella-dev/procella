@@ -222,7 +222,7 @@ export function ResourceDetail() {
 					</Link>
 					<h1 className="text-2xl font-bold text-mist">Error</h1>
 				</div>
-				<div className="bg-red-900/20 border border-red-900/50 text-red-400 p-4 rounded-lg">
+				<div className="bg-red-900/20 border border-red-900/50 text-red-300 p-4 rounded-lg">
 					{queryError.message}
 				</div>
 			</div>
@@ -277,7 +277,7 @@ export function ResourceDetail() {
 							</span>
 						)}
 						{resource.delete && (
-							<span className="px-2 py-1 rounded bg-red-900/30 text-red-400 text-xs border border-red-900/50">
+							<span className="px-2 py-1 rounded bg-red-900/30 text-red-300 text-xs border border-red-900/50">
 								pending delete
 							</span>
 						)}
@@ -359,7 +359,7 @@ export function ResourceDetail() {
 			{/* ── Init Errors ──────────────────────────────────────────── */}
 			{resource.initErrors.length > 0 && (
 				<div className="bg-red-900/10 border border-red-900/50 rounded-lg p-4">
-					<div className="text-xs font-medium text-red-400 uppercase tracking-wider mb-2">
+					<div className="text-xs font-medium text-red-300 uppercase tracking-wider mb-2">
 						Initialization Errors
 					</div>
 					<div className="space-y-1.5">

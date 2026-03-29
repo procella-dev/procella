@@ -13,7 +13,7 @@ function getResultColor(result: string) {
 		case "succeeded":
 			return "bg-green-900/30 text-green-400 border-green-900/50";
 		case "failed":
-			return "bg-red-900/30 text-red-400 border-red-900/50";
+			return "bg-red-900/30 text-red-300 border-red-900/50";
 		case "in-progress":
 			return "bg-yellow-900/30 text-yellow-400 border-yellow-900/50";
 		case "cancelled":
@@ -267,7 +267,7 @@ const SYSTEM_TAG_PREFIX = "pulumi:";
 const btnBase =
 	"inline-flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors disabled:opacity-60";
 const btnSecondary = `${btnBase} border border-cloud/40 bg-slate-brand text-mist hover:border-cloud/60`;
-const btnDanger = `${btnBase} border border-red-900/50 bg-red-900/20 text-red-400 hover:bg-red-900/30`;
+const btnDanger = `${btnBase} border border-red-900/50 bg-red-900/20 text-red-300 hover:bg-red-900/30`;
 const inputStyle =
 	"rounded-md border border-cloud/30 bg-deep-sky px-3 py-2 text-sm text-mist placeholder:text-cloud/50 outline-none focus:border-lightning/50";
 
@@ -402,7 +402,7 @@ function SettingsTab({ org, project, stack, tags }: SettingsTabProps) {
 										type="button"
 										onClick={() => handleRemoveTag(k)}
 										disabled={updateTags.isPending}
-										className="ml-auto text-cloud/50 hover:text-red-400 transition-colors text-xs"
+										className="ml-auto text-cloud/50 hover:text-red-300 transition-colors text-xs"
 										aria-label={`Remove tag ${k}`}
 									>
 										&times;
@@ -490,7 +490,7 @@ function SettingsTab({ org, project, stack, tags }: SettingsTabProps) {
 						</button>
 					</div>
 					{renameMut.error && (
-						<p className="mt-2 text-sm text-red-400">{renameMut.error.message}</p>
+						<p className="mt-2 text-sm text-red-300">{renameMut.error.message}</p>
 					)}
 				</div>
 			</section>
@@ -548,7 +548,7 @@ function SettingsTab({ org, project, stack, tags }: SettingsTabProps) {
 							&check; State imported successfully
 						</div>
 					)}
-					{importError && <p className="text-sm text-red-400">{importError}</p>}
+					{importError && <p className="text-sm text-red-300">{importError}</p>}
 				</div>
 			</section>
 
@@ -645,7 +645,7 @@ function SettingsTab({ org, project, stack, tags }: SettingsTabProps) {
 			{/* ── Danger Zone ──────────────────────────────────────── */}
 			<section>
 				<div className="mb-4">
-					<h3 className="text-base font-semibold text-red-400">Danger Zone</h3>
+					<h3 className="text-base font-semibold text-red-300">Danger Zone</h3>
 				</div>
 				<div className="rounded-lg border border-red-900/50 p-4 space-y-3">
 					<p className="text-sm text-cloud">
@@ -694,7 +694,7 @@ function SettingsTab({ org, project, stack, tags }: SettingsTabProps) {
 								{deleteMut.isPending ? "Deleting…" : "Delete Permanently"}
 							</button>
 						</div>
-						{deleteMut.error && <p className="text-sm text-red-400">{deleteMut.error.message}</p>}
+						{deleteMut.error && <p className="text-sm text-red-300">{deleteMut.error.message}</p>}
 					</div>
 				</Dialog>
 			</section>
@@ -777,7 +777,7 @@ export function StackDetail() {
 						{org}/{project}/{stack}
 					</h1>
 				</div>
-				<div className="bg-red-900/20 border border-red-900/50 text-red-400 p-4 rounded-lg">
+				<div className="bg-red-900/20 border border-red-900/50 text-red-300 p-4 rounded-lg">
 					{queryError.message}
 				</div>
 			</div>

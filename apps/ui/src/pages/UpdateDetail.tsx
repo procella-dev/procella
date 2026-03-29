@@ -280,7 +280,7 @@ export function UpdateDetail() {
 			case "update":
 				return "text-yellow-400";
 			case "delete":
-				return "text-red-400";
+				return "text-red-300";
 			case "same":
 				return "text-cloud";
 			default:
@@ -295,7 +295,7 @@ export function UpdateDetail() {
 			const { severity, message } = event.diagnosticEvent;
 			const colorClass =
 				severity === "error"
-					? "text-red-400"
+					? "text-red-300"
 					: severity === "warning"
 						? "text-yellow-400"
 						: "text-lightning";
@@ -371,7 +371,7 @@ export function UpdateDetail() {
 					className="flex gap-4 py-2 border-b border-slate-brand/50 last:border-0 bg-red-900/10 px-2 -mx-2 rounded"
 				>
 					<span className="text-cloud shrink-0 w-20">{time}</span>
-					<span className="shrink-0 w-16 font-medium text-red-400">cancel</span>
+					<span className="shrink-0 w-16 font-medium text-red-300">cancel</span>
 					<span className="text-red-300 font-mono text-sm">Update cancelled</span>
 				</div>
 			);
@@ -482,7 +482,7 @@ export function UpdateDetail() {
 			</header>
 
 			{error && (
-				<div className="bg-red-900/20 border border-red-900/50 text-red-400 p-4 rounded-lg shrink-0">
+				<div className="bg-red-900/20 border border-red-900/50 text-red-300 p-4 rounded-lg shrink-0">
 					{error}
 				</div>
 			)}

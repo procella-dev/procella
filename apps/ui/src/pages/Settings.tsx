@@ -204,7 +204,7 @@ function GitHubSettingsTab() {
 					<button
 						type="button"
 						onClick={() => setShowDisconnectConfirm(true)}
-						className="bg-red-950/40 hover:bg-red-950/60 text-red-400 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border border-red-900/40"
+						className="bg-red-950/40 hover:bg-red-950/60 text-red-300 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border border-red-900/40"
 					>
 						Disconnect
 					</button>

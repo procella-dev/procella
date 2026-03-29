@@ -43,7 +43,7 @@ export function Webhooks() {
 		return (
 			<div className="space-y-6">
 				<h1 className="text-xl font-semibold text-zinc-100">Webhooks</h1>
-				<div className="bg-red-950/30 border border-red-900/40 text-red-400 p-4 rounded-xl text-sm">
+				<div className="bg-red-950/30 border border-red-900/40 text-red-300 p-4 rounded-xl text-sm">
 					{error}
 				</div>
 			</div>
@@ -363,7 +363,7 @@ function WebhookModal({
 				</h2>
 
 				{formError && (
-					<div className="bg-red-950/30 border border-red-900/40 text-red-400 p-3 rounded-lg text-sm mb-4">
+					<div className="bg-red-950/30 border border-red-900/40 text-red-300 p-3 rounded-lg text-sm mb-4">
 						{formError}
 					</div>
 				)}
@@ -515,7 +515,7 @@ function WebhookDetail({
 				>
 					← Back to webhooks
 				</button>
-				<div className="bg-red-950/30 border border-red-900/40 text-red-400 p-4 rounded-xl text-sm">
+				<div className="bg-red-950/30 border border-red-900/40 text-red-300 p-4 rounded-xl text-sm">
 					{error ?? "Webhook not found"}
 				</div>
 			</div>
@@ -558,7 +558,7 @@ function WebhookDetail({
 						<button
 							type="button"
 							onClick={() => setShowDeleteConfirm(true)}
-							className="bg-red-950/40 hover:bg-red-950/60 text-red-400 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border border-red-900/40"
+							className="bg-red-950/40 hover:bg-red-950/60 text-red-300 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border border-red-900/40"
 						>
 							Delete
 						</button>
@@ -671,7 +671,7 @@ function WebhookDetail({
 													Success
 												</span>
 											) : (
-												<span className="inline-flex items-center gap-1.5 text-xs text-red-400">
+												<span className="inline-flex items-center gap-1.5 text-xs text-red-300">
 													<span className="w-2 h-2 rounded-full bg-red-400" />
 													Failed
 												</span>

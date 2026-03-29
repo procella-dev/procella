@@ -170,7 +170,7 @@ export function StackList() {
 		return (
 			<div className="space-y-6">
 				<h1 className="text-xl font-semibold text-mist">Stacks</h1>
-				<div className="bg-red-950/30 border border-red-900/40 text-red-400 p-4 rounded-xl text-sm">
+				<div className="bg-red-950/30 border border-red-900/40 text-red-300 p-4 rounded-xl text-sm">
 					{error}
 				</div>
 			</div>

@@ -13,7 +13,7 @@
 	--color-lightning: #00d4ff;
 	--color-flash: #ffb800;
 	--color-slate-brand: #1b2838;
-	--color-cloud: #4a5568;
+	--color-cloud: #8b9bb0;
 	--color-mist: #e2e8f0;
 	--color-success: #10b981;
 	--color-danger: #ef4444;
@@ -22,7 +22,7 @@
 	--color-status-success: #3b82f6;
 	--color-status-error: #ef4444;
 	--color-status-active: #f59e0b;
-	--color-status-idle: #6b7280;
+	--color-status-idle: #8494a7;
 
 	/* Surface alias tokens */
 	--color-surface-primary: #0d1b2a;
