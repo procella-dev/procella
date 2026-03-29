@@ -1,9 +1,14 @@
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
 @import "tailwindcss";
 
 @theme {
 	--font-sans:
 		"Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
 		"Segoe UI Symbol", "Noto Color Emoji";
+	--font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+	/* Brand palette */
 	--color-deep-sky: #0d1b2a;
 	--color-lightning: #00d4ff;
 	--color-flash: #ffb800;
@@ -12,11 +17,54 @@
 	--color-mist: #e2e8f0;
 	--color-success: #10b981;
 	--color-danger: #ef4444;
+
+	/* Status semantic tokens */
+	--color-status-success: #3b82f6;
+	--color-status-error: #ef4444;
+	--color-status-active: #f59e0b;
+	--color-status-idle: #6b7280;
+
+	/* Surface alias tokens */
+	--color-surface-primary: #0d1b2a;
+	--color-surface-secondary: #1b2838;
+	--color-surface-popup: #0f1f30;
+
+	/* Shadow tokens */
+	--shadow-drop-short: 0 1px 3px 0 rgb(0 0 0 / 0.3), 0 1px 2px -1px rgb(0 0 0 / 0.3);
+	--shadow-drop-medium: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.4);
+
+	/* Mono font size scale */
+	--text-mono-xs: 0.75rem;
+	--text-mono-sm: 0.8125rem;
+	--text-mono-base: 0.875rem;
+	--text-mono-lg: 1rem;
 }
 
 @layer base {
 	body {
 		@apply bg-deep-sky text-mist antialiased;
+	}
+}
+
+@keyframes skeleton-shimmer {
+	0% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.4;
+	}
+	100% {
+		opacity: 1;
+	}
+}
+
+@keyframes status-pulse {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.35;
 	}
 }
 

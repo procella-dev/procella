@@ -5,11 +5,11 @@
 	"main": "src/index.ts",
 	"types": "src/index.ts",
 	"dependencies": {
-		"@procella/types": "workspace:*",
+		"@procella/crypto": "workspace:*",
 		"@procella/db": "workspace:*",
 		"@procella/storage": "workspace:*",
-		"@procella/crypto": "workspace:*",
 		"@procella/telemetry": "workspace:*",
+		"@procella/types": "workspace:*",
 		"drizzle-orm": "catalog:"
 	}
 }

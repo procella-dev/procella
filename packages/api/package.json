@@ -11,6 +11,7 @@
 		"@procella/updates": "workspace:*",
 		"@trpc/server": "catalog:",
 		"drizzle-orm": "catalog:",
+		"pg": "^8.20.0",
 		"superjson": "catalog:",
 		"zod": "catalog:"
 	}

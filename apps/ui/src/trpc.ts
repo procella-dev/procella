@@ -1,6 +1,11 @@
 import { getSessionToken } from "@descope/react-sdk";
 import type { AppRouter } from "@procella/api/src/router/index.js";
-import { createTRPCUntypedClient, httpBatchLink } from "@trpc/client";
+import {
+	createTRPCUntypedClient,
+	httpBatchLink,
+	httpSubscriptionLink,
+	splitLink,
+} from "@trpc/client";
 import { type CreateTRPCReact, createTRPCReact } from "@trpc/react-query";
 import superjson from "superjson";
 import { apiBase } from "./config";
@@ -25,10 +30,21 @@ function getAuthHeaders(): Record<string, string> {
 export function createTRPCClient() {
 	return createTRPCUntypedClient({
 		links: [
-			httpBatchLink({
-				url: `${apiBase}/trpc`,
-				headers: getAuthHeaders,
-				transformer: superjson,
+			splitLink({
+				condition: (op) => op.type === "subscription",
+				true: httpSubscriptionLink({
+					url: `${apiBase}/trpc`,
+					connectionParams: async () => {
+						const headers = getAuthHeaders();
+						return headers.Authorization ? { authorization: headers.Authorization } : {};
+					},
+					transformer: superjson,
+				}),
+				false: httpBatchLink({
+					url: `${apiBase}/trpc`,
+					headers: getAuthHeaders,
+					transformer: superjson,
+				}),
 			}),
 		],
 	});

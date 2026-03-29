@@ -40,6 +40,7 @@ export function createApp(deps: {
 	authConfig: AuthConfig;
 	corsOrigins?: string[];
 	db: Database;
+	dbUrl: string;
 	stacks: StacksService;
 	updates: UpdatesService;
 }): Hono<Env> {
@@ -74,7 +75,21 @@ export function createApp(deps: {
 	// ========================================================================
 
 	app.all("/trpc/*", async (c) => {
-		const caller = await deps.auth.authenticate(c.req.raw).catch(() => null);
+		let req = c.req.raw;
+
+		const cpRaw = c.req.query("connectionParams");
+		if (cpRaw && req.method === "GET" && !req.headers.get("Authorization")) {
+			try {
+				const cp = JSON.parse(decodeURIComponent(cpRaw)) as Record<string, string>;
+				if (cp.authorization) {
+					const headers = new Headers(req.headers);
+					headers.set("Authorization", cp.authorization);
+					req = new Request(req, { headers });
+				}
+			} catch {}
+		}
+
+		const caller = await deps.auth.authenticate(req).catch(() => null);
 
 		if (!caller) {
 			return c.json({ code: 401, message: "Unauthorized" }, 401);
@@ -83,15 +98,21 @@ export function createApp(deps: {
 		const ctx: TRPCContext = {
 			caller,
 			db: deps.db,
+			dbUrl: deps.dbUrl,
 			stacks: deps.stacks,
 			updates: deps.updates,
 		};
 
 		return fetchRequestHandler({
 			endpoint: "/trpc",
-			req: c.req.raw,
+			req,
 			router: appRouter,
 			createContext: () => ctx,
+			onError({ error }) {
+				if (error.code !== "UNAUTHORIZED") {
+					console.error("[trpc]", error);
+				}
+			},
 		});
 	});
 

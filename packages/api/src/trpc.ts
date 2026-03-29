@@ -14,6 +14,7 @@ import superjson from "superjson";
 export interface TRPCContext {
 	caller: Caller;
 	db: Database;
+	dbUrl: string;
 	stacks: StacksService;
 	updates: UpdatesService;
 }

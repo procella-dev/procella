@@ -67,6 +67,7 @@ function mockStacksService(): StacksService {
 		deleteStack: async () => {},
 		renameStack: async () => {},
 		updateStackTags: async () => {},
+		replaceStackTags: async () => {},
 		getStackByFQN: async () => mockStackInfo,
 	};
 }
@@ -119,6 +120,7 @@ describe("@procella/server routes", () => {
 			auth: mockAuthService(),
 			authConfig,
 			db: { execute: async () => ({ rows: [{ acquired: false }] }) } as unknown as Database,
+			dbUrl: "postgres://test:test@localhost:5432/test",
 			stacks: mockStacksService(),
 			updates: mockUpdatesService(),
 		});

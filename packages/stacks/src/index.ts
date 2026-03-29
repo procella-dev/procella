@@ -88,6 +88,14 @@ export interface StacksService {
 		tags: Record<string, string>,
 	): Promise<void>;
 
+	replaceStackTags(
+		tenantId: string,
+		org: string,
+		project: string,
+		stack: string,
+		tags: Record<string, string>,
+	): Promise<void>;
+
 	getStackByFQN(tenantId: string, fqn: string): Promise<StackInfo>;
 }
 
@@ -358,6 +366,31 @@ export class PostgresStacksService implements StacksService {
 		await this.db
 			.update(stacks)
 			.set({ tags: merged, updatedAt: sql`now()` })
+			.where(eq(stacks.id, rows[0].stackId));
+	}
+
+	async replaceStackTags(
+		tenantId: string,
+		_org: string,
+		project: string,
+		stack: string,
+		tags: Record<string, string>,
+	): Promise<void> {
+		const rows = await this.db
+			.select({ stackId: stacks.id })
+			.from(stacks)
+			.innerJoin(projects, eq(stacks.projectId, projects.id))
+			.where(
+				and(eq(projects.tenantId, tenantId), eq(projects.name, project), eq(stacks.name, stack)),
+			);
+
+		if (rows.length === 0) {
+			throw new StackNotFoundError(tenantId, project, stack);
+		}
+
+		await this.db
+			.update(stacks)
+			.set({ tags, updatedAt: sql`now()` })
 			.where(eq(stacks.id, rows[0].stackId));
 	}
 

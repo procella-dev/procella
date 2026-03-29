@@ -152,6 +152,7 @@ describe("@procella/stacks", () => {
 				deleteStack: async () => {},
 				renameStack: async () => {},
 				updateStackTags: async () => {},
+				replaceStackTags: async () => {},
 				getStackByFQN: async () => mockInfo,
 			};
 
@@ -162,6 +163,7 @@ describe("@procella/stacks", () => {
 			expect(typeof mock.deleteStack).toBe("function");
 			expect(typeof mock.renameStack).toBe("function");
 			expect(typeof mock.updateStackTags).toBe("function");
+			expect(typeof mock.replaceStackTags).toBe("function");
 			expect(typeof mock.getStackByFQN).toBe("function");
 		});
 
@@ -173,6 +175,7 @@ describe("@procella/stacks", () => {
 				deleteStack: async () => {},
 				renameStack: async () => {},
 				updateStackTags: async () => {},
+				replaceStackTags: async () => {},
 				getStackByFQN: async () => ({}) as StackInfo,
 			};
 

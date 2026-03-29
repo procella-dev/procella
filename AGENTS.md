@@ -36,92 +36,27 @@ cp -rf source dest          # NOT: cp -r source dest
 - `apt-get` - use `-y` flag
 - `brew` - use `HOMEBREW_NO_AUTO_UPDATE=1` env var
 
-<!-- BEGIN BEADS INTEGRATION -->
-## Issue Tracking with bd (beads)
+<!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
+## Beads Issue Tracker
 
-**IMPORTANT**: This project uses **bd (beads)** for ALL issue tracking. Do NOT use markdown TODOs, task lists, or other tracking methods.
+This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and commands.
 
-### Why bd?
-
-- Dependency-aware: Track blockers and relationships between issues
-- Version-controlled: Built on Dolt with cell-level merge
-- Agent-optimized: JSON output, ready work detection, discovered-from links
-- Prevents duplicate tracking systems and confusion
-
-### Quick Start
-
-**Check for ready work:**
+### Quick Reference
 
 ```bash
-bd ready --json
+bd ready              # Find available work
+bd show <id>          # View issue details
+bd update <id> --claim  # Claim work
+bd close <id>         # Complete work
 ```
 
-**Create new issues:**
+### Rules
 
-```bash
-bd create "Issue title" --description="Detailed context" -t bug|feature|task -p 0-4 --json
-bd create "Issue title" --description="What this issue is about" -p 1 --deps discovered-from:bd-123 --json
-```
+- Use `bd` for ALL task tracking — do NOT use TodoWrite, TaskCreate, or markdown TODO lists
+- Run `bd prime` for detailed command reference and session close protocol
+- Use `bd remember` for persistent knowledge — do NOT use MEMORY.md files
 
-**Claim and update:**
-
-```bash
-bd update <id> --claim --json
-bd update bd-42 --priority 1 --json
-```
-
-**Complete work:**
-
-```bash
-bd close bd-42 --reason "Completed" --json
-```
-
-### Issue Types
-
-- `bug` - Something broken
-- `feature` - New functionality
-- `task` - Work item (tests, docs, refactoring)
-- `epic` - Large feature with subtasks
-- `chore` - Maintenance (dependencies, tooling)
-
-### Priorities
-
-- `0` - Critical (security, data loss, broken builds)
-- `1` - High (major features, important bugs)
-- `2` - Medium (default, nice-to-have)
-- `3` - Low (polish, optimization)
-- `4` - Backlog (future ideas)
-
-### Workflow for AI Agents
-
-1. **Check ready work**: `bd ready` shows unblocked issues
-2. **Claim your task atomically**: `bd update <id> --claim`
-3. **Work on it**: Implement, test, document
-4. **Discover new work?** Create linked issue:
-   - `bd create "Found bug" --description="Details about what was found" -p 1 --deps discovered-from:<parent-id>`
-5. **Complete**: `bd close <id> --reason "Done"`
-
-### Auto-Sync
-
-bd automatically syncs with git:
-
-- Exports to `.beads/issues.jsonl` after changes (5s debounce)
-- Imports from JSONL when newer (e.g., after `git pull`)
-- No manual export/import needed!
-
-### Important Rules
-
-- ✅ Use bd for ALL task tracking
-- ✅ Always use `--json` flag for programmatic use
-- ✅ Link discovered work with `discovered-from` dependencies
-- ✅ Check `bd ready` before asking "what should I work on?"
-- ❌ Do NOT create markdown TODO lists
-- ❌ Do NOT use external issue trackers
-- ❌ Do NOT duplicate tracking systems
-
-For more details, see README.md.
-
-## Landing the Plane (Session Completion)
+## Session Completion
 
 **When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
 
@@ -133,7 +68,7 @@ For more details, see README.md.
 4. **PUSH TO REMOTE** - This is MANDATORY:
    ```bash
    git pull --rebase
-   bd sync
+   bd dolt push
    git push
    git status  # MUST show "up to date with origin"
    ```
@@ -146,7 +81,6 @@ For more details, see README.md.
 - NEVER stop before pushing - that leaves work stranded locally
 - NEVER say "ready to push when you are" - YOU must push
 - If push fails, resolve and retry until it succeeds
-
 <!-- END BEADS INTEGRATION -->
 
 ## Project Architecture
@@ -254,6 +188,69 @@ All state lives in PostgreSQL. No in-memory caches, no local-only state.
 - **Unique index** prevents multiple active updates per stack.
 - **pg advisory locks** ensure only one GC worker runs across the cluster.
 - **Local blob storage** is the only non-clusterable component — use S3 (`PROCELLA_BLOB_BACKEND=s3`) for multi-node.
+- **Railway runs 3 replicas** — any in-process state (Maps, caches, etc.) is NOT shared across instances. If you need something shared, it goes in PostgreSQL.
+
+### Auth
+
+- **Descope** is the auth provider in production. Session JWTs are issued as the `DS` httpOnly cookie by the Descope React SDK.
+- **`authenticate(request)`** in `packages/auth/src/index.ts` reads `Authorization: Bearer <jwt>` or `Authorization: token <key>`.
+- **Descope's `DS` cookie lives on `api.descope.com`**, NOT on our domain — browsers will NOT send it to our server. Do not rely on the cookie for our API auth.
+- **`EventSource` cannot set custom headers.** For tRPC subscriptions (SSE), use `httpSubscriptionLink` with `connectionParams` — tRPC serializes these as URL query params and the server reads them in `createContext` via `opts.info.connectionParams`. See `apps/server/src/routes/index.ts`.
+- **NEVER invent a separate auth mechanism** (tickets, Postgres tables, custom query-token middleware) — use tRPC `connectionParams` for subscription auth and the standard `Authorization` header for all other requests.
+- **`sessionTokenViaCookie` mode**: If the Descope project is configured to store sessions in cookies (`sessionTokenViaCookie: true` on `AuthProvider`), the `DS` cookie IS set on our domain and browsers send it automatically. BUT in that mode `getSessionToken()` returns `null` — the JWT is not accessible to JS. We currently do NOT use this mode (`AuthProvider` has no `sessionTokenViaCookie`), so `getSessionToken()` works and tRPC `connectionParams` is the correct subscription auth pattern.
+- **Dev mode** uses `Authorization: token <PROCELLA_DEV_AUTH_TOKEN>`. The cookie fallback is Descope-only.
+- **CLI** uses `Authorization: token <access-key>` (long-lived Descope access key, NOT a session JWT).
+
+### Lambda Architecture (CRITICAL — read before touching lambda-bootstrap.ts)
+
+**Current approach**: Docker + `aws-lambda-adapter` extension.
+- `apps/server/src/lambda-bootstrap.ts` runs `Bun.serve()` on port 8080
+- `public.ecr.aws/awsguru/aws-lambda-adapter` extension proxies Lambda invocations to port 8080 as plain HTTP
+- SSE/streaming works natively via Bun's `new Response(async function*() { yield ... })`
+- No `awslambda` globals needed, no custom runtime loop
+- `Dockerfile.lambda` builds the container image
+- SST's `streaming: true` prop sets `InvokeMode: RESPONSE_STREAM` on the Function URL
+
+**Migrate function** uses `provided.al2023` + custom runtime loop (one-shot, no streaming needed).
+
+**DO NOT**:
+- Export `handler` from `lambda-bootstrap.ts` — the adapter calls the HTTP server directly
+- Use `streamHandle()` from `hono/aws-lambda` — that's for Node.js managed runtimes only
+- Use `awslambda.streamifyResponse` — only available in Node.js managed runtimes
+
+### Cluster-Safety Checklist
+
+Before adding ANY new stateful thing, ask: "what happens when this runs on 3 replicas simultaneously?"
+- In-process Maps, caches, counters → NOT safe. Put it in PostgreSQL.
+- Background timers/workers → use `pg_try_advisory_lock` so only one replica runs it.
+- The `pg advisory lock` pattern is already used by `GCWorker` — follow that.
+
+### Pulumi API Path Is Sacred
+
+`/api/*` routes are the Pulumi Service API. Custom endpoints MUST NOT go there.
+- All dashboard/UI-only features go through tRPC (`/trpc/*`)
+- The only exceptions are the CLI protocol routes defined in `PulumiRoutes`
+- Adding custom REST endpoints to `/api/*` breaks the Pulumi CLI
+
+### Vite Dev Server Proxy
+
+`apps/ui/vite.config.ts` proxies `/trpc`, `/api`, `/healthz` to the backend.
+- Default port: `9090` (production/dev)
+- Override with `VITE_API_PORT` env var for tests (e.g. Playwright uses `18080`)
+- Playwright tests MUST set `VITE_API_PORT` to match `PLAYWRIGHT_API_URL` port
+
+### Playwright Tests Use Node, Not Bun
+
+Playwright runs in Node.js context — NOT Bun. This means:
+- `Bun.spawn`, `Bun.write`, `Bun.sleep`, `SQL from bun` are NOT available in test files or `global-setup.ts`
+- Use `node:child_process.spawn`, `node:fs/promises.writeFile`, `setTimeout` instead
+- Use `pg` npm package for direct DB access (not `bun:sql`)
+- `import.meta.dirname` may not work — use `__dirname` in CommonJS context
+- Keep a separate `tsconfig.playwright.json` with `"module": "CommonJS"` for Playwright files
+
+### Mocks Must Be Updated With Interfaces
+
+When a new method is added to an interface (e.g. `StacksService`, `UpdatesService`), ALL test mock objects implementing that interface must be updated too. CI catches this via `tsc --build` (project references) even when local typecheck passes.
 
 ### Quality Gates
 

@@ -329,18 +329,14 @@ function extractToken(request: Request): { scheme: "token" | "bearer"; token: st
 	// Pulumi CLI format: "token <value>"
 	if (header.startsWith("token ")) {
 		const value = header.slice(6).trim();
-		if (!value) {
-			throw new UnauthorizedError("Empty token value");
-		}
+		if (!value) throw new UnauthorizedError("Empty token value");
 		return { scheme: "token", token: value };
 	}
 
 	// Standard Bearer format: "Bearer <value>"
 	if (header.startsWith("Bearer ")) {
 		const value = header.slice(7).trim();
-		if (!value) {
-			throw new UnauthorizedError("Empty Bearer token");
-		}
+		if (!value) throw new UnauthorizedError("Empty Bearer token");
 		return { scheme: "bearer", token: value };
 	}
 

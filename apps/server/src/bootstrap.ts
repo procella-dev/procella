@@ -60,6 +60,7 @@ export async function bootstrap() {
 		authConfig,
 		corsOrigins: config.corsOrigins,
 		db,
+		dbUrl: config.databaseUrl,
 		stacks: stacksService,
 		updates: updatesService,
 	});
