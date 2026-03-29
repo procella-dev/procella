@@ -1,6 +1,6 @@
 import stormPetrelSvg from "../assets/storm-petrel.svg";
 import { ProcellaLogo } from "../components/ProcellaLogo";
-import { appUrl } from "../config";
+import { appUrl, DOMAIN } from "../config";
 
 const features = [
 	{
@@ -164,7 +164,7 @@ export function HomePage() {
 					</div>
 					<div className="flex items-center gap-4">
 						<a
-							href="https://docs.procella.dev"
+							href={`https://docs.${DOMAIN}`}
 							target="_blank"
 							rel="noopener noreferrer"
 							className="text-sm text-cloud hover:text-mist/80 transition-colors"
@@ -274,9 +274,9 @@ export function HomePage() {
 						</div>
 						<div className="p-5 font-mono text-sm leading-relaxed">
 							<div className="text-cloud">
-								<span className="text-emerald-400">$</span> pulumi login https://api.procella.sh
+								<span className="text-emerald-400">$</span> pulumi login https://api.{DOMAIN}
 							</div>
-							<div className="text-cloud mt-1">Logged in to api.procella.sh as dev-user</div>
+							<div className="text-cloud mt-1">Logged in to api.{DOMAIN} as dev-user</div>
 							<div className="mt-4 text-cloud">
 								<span className="text-emerald-400">$</span> pulumi stack init
 								myorg/myproject/production
@@ -354,7 +354,7 @@ export function HomePage() {
 						<Step
 							number="1"
 							title="Login to your backend"
-							code="pulumi login https://api.procella.sh"
+							code={`pulumi login https://api.${DOMAIN}`}
 						/>
 						<Step
 							number="2"
@@ -399,7 +399,7 @@ export function HomePage() {
 					</div>
 					<div className="flex items-center gap-4">
 						<a
-							href="https://docs.procella.dev"
+							href={`https://docs.${DOMAIN}`}
 							target="_blank"
 							rel="noopener noreferrer"
 							className="text-sm text-cloud/60 hover:text-cloud transition-colors"

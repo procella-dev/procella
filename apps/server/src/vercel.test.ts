@@ -16,7 +16,7 @@ describe("normalizeRequest", () => {
 			url: "/api/auth/config",
 			method: "GET",
 			headers: {
-				host: "app.procella.sh",
+				host: "app.procella.cloud",
 				"x-forwarded-proto": "https",
 				accept: "application/json",
 			},
@@ -27,10 +27,10 @@ describe("normalizeRequest", () => {
 
 		expect(result).toBeInstanceOf(Request);
 		expect(result.headers).toBeInstanceOf(Headers);
-		expect(result.url).toBe("https://app.procella.sh/api/auth/config");
+		expect(result.url).toBe("https://app.procella.cloud/api/auth/config");
 		expect(result.method).toBe("GET");
 		expect(result.headers.get("accept")).toBe("application/json");
-		expect(result.headers.get("host")).toBe("app.procella.sh");
+		expect(result.headers.get("host")).toBe("app.procella.cloud");
 	});
 
 	test("defaults to https://localhost when host header is missing", () => {

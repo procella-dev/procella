@@ -6,7 +6,7 @@ import { FullPageSpinner } from "./FullPageSpinner";
 
 /**
  * Returns true when the app is running on the dashboard subdomain
- * (app.procella.sh). On that domain unauthenticated visitors should go
+ * (app.procella.cloud). On that domain unauthenticated visitors should go
  * straight to /login rather than seeing the marketing landing page.
  */
 function isAppSubdomain(): boolean {
@@ -17,7 +17,7 @@ function isAppSubdomain(): boolean {
  * Layout route that shows the landing page for unauthenticated users at "/",
  * or renders <Outlet /> (the protected dashboard) for authenticated users.
  *
- * On the app subdomain (app.procella.sh) the landing page is never shown;
+ * On the app subdomain (app.procella.cloud) the landing page is never shown;
  * unauthenticated visitors are redirected to /login instead.
  * For non-root paths, unauthenticated users are redirected to /login.
  */
