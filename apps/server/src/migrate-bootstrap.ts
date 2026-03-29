@@ -11,9 +11,9 @@ import { join } from "node:path";
 	const config = loadConfig();
 	const dbUrl = config.databaseUrl as string;
 
-	const binaryDir = join(import.meta.dir, "drizzle");
-	const devDir = join(import.meta.dir, "../../../packages/db/drizzle");
-	const migrationsDir = existsSync(binaryDir) ? binaryDir : devDir;
+	const taskDir = join(process.cwd(), "drizzle");
+	const devDir = join(__dirname, "../../../packages/db/drizzle");
+	const migrationsDir = existsSync(taskDir) ? taskDir : devDir;
 
 	const res = await fetch(`${BASE_URL}/invocation/next`);
 	const requestId = res.headers.get("Lambda-Runtime-Aws-Request-Id")!;
