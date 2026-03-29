@@ -12,8 +12,8 @@
 	},
 	"scripts": {
 		"prepare": "husky",
-		"dev": "bun run dev:deps && trap 'kill 0' EXIT && bun --watch apps/server/src/index.ts & bun run --cwd apps/ui dev & bun run --cwd apps/docs dev --port 4321 & mise exec -- caddy run --config Caddyfile & wait",
-		"dev:deps": "docker compose up -d && printf 'Waiting for postgres' && until docker compose exec -T postgres pg_isready -U procella -q 2>/dev/null; do printf '.'; sleep 1; done && echo ' ready'",
+		"dev": "bun run dev:deps && trap 'kill 0' EXIT && bun --watch apps/server/src/index.ts & bun run --cwd apps/ui dev & bun run --cwd apps/docs dev --port 4321 & wait",
+		"dev:deps": "docker compose up -d && printf 'Waiting for postgres' && until docker compose exec -T postgres pg_isready -U procella -q 2>/dev/null; do printf '.'; sleep 1; done && echo ' ready' && bun run db:migrate",
 		"dev:down": "docker compose down -v",
 		"check": "biome check . && bun run typecheck && bun test packages/ apps/ scripts/",
 		"typecheck": "tsc --build",

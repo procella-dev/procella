@@ -143,6 +143,8 @@ export class PostgresUpdatesService implements UpdatesService {
 					})
 					.returning();
 
+				this.db.execute(sql`SELECT pg_notify('stack_updates', ${stackId})`).catch(() => {});
+
 				return { updateID: row.id, version } as UpdateProgramResponse;
 			} catch (err: unknown) {
 				if (pgErrorCode(err) === "23505") {
@@ -157,6 +159,7 @@ export class PostgresUpdatesService implements UpdatesService {
 
 	async startUpdate(updateId: string, request: StartUpdateRequest): Promise<StartUpdateResponse> {
 		return withDbSpan("startUpdate", { "update.id": updateId }, async () => {
+			let notifyStackId: string | undefined;
 			const result = await this.db.transaction(async (tx) => {
 				const [row] = await tx.select().from(updates).where(eq(updates.id, updateId));
 
@@ -170,6 +173,7 @@ export class PostgresUpdatesService implements UpdatesService {
 					);
 				}
 
+				notifyStackId = row.stackId;
 				const token = generateLeaseToken(updateId, row.stackId);
 				const expiry = leaseExpiresAt();
 
@@ -199,11 +203,14 @@ export class PostgresUpdatesService implements UpdatesService {
 				} as StartUpdateResponse;
 			});
 			activeUpdatesGauge().add(1);
+			if (notifyStackId)
+				this.db.execute(sql`SELECT pg_notify('stack_updates', ${notifyStackId})`).catch(() => {});
 			return result;
 		});
 	}
 
 	async completeUpdate(updateId: string, request: CompleteUpdateRequest): Promise<void> {
+		let notifyStackId: string | undefined;
 		await withDbSpan(
 			"completeUpdate",
 			{ "update.id": updateId, "update.status": request.status },
@@ -220,6 +227,8 @@ export class PostgresUpdatesService implements UpdatesService {
 							`Update ${updateId} is in status "${row.status}", expected "running"`,
 						);
 					}
+
+					notifyStackId = row.stackId;
 
 					await tx
 						.update(updates)
@@ -242,9 +251,12 @@ export class PostgresUpdatesService implements UpdatesService {
 
 		activeUpdatesGauge().add(-1);
 		this.clearUpdateCaches(updateId);
+		if (notifyStackId)
+			this.db.execute(sql`SELECT pg_notify('stack_updates', ${notifyStackId})`).catch(() => {});
 	}
 
 	async cancelUpdate(updateId: string): Promise<void> {
+		let notifyStackId: string | undefined;
 		const wasRunning = await withDbSpan("cancelUpdate", { "update.id": updateId }, () =>
 			this.db.transaction(async (tx) => {
 				const [row] = await tx.select().from(updates).where(eq(updates.id, updateId));
@@ -257,6 +269,7 @@ export class PostgresUpdatesService implements UpdatesService {
 					return false;
 				}
 
+				notifyStackId = row.stackId;
 				const previouslyRunning = row.status === "running";
 
 				await tx
@@ -283,6 +296,8 @@ export class PostgresUpdatesService implements UpdatesService {
 			activeUpdatesGauge().add(-1);
 		}
 		this.clearUpdateCaches(updateId);
+		if (notifyStackId)
+			this.db.execute(sql`SELECT pg_notify('stack_updates', ${notifyStackId})`).catch(() => {});
 	}
 
 	async getUpdate(updateId: string): Promise<UpdateResults> {

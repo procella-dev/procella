@@ -14,9 +14,11 @@ import { createBlobStorage } from "@procella/storage";
 import { initTelemetry } from "@procella/telemetry";
 import { PostgresUpdatesService } from "@procella/updates";
 import { PostgresWebhooksService } from "@procella/webhooks";
+import { createCliApp } from "./routes/cli.js";
 import { createApp } from "./routes/index.js";
+import { createWebApp } from "./routes/web.js";
 
-export async function bootstrap() {
+async function bootstrapServices() {
 	const config = loadConfig();
 
 	initTelemetry({ enabled: config.otelEnabled, serviceName: "procella" });
@@ -74,20 +76,58 @@ export async function bootstrap() {
 		? new OctokitGitHubService({ db, config: githubConfig })
 		: null;
 
-	// Hono app
-	const app = createApp({
+	return {
 		auth,
 		authConfig,
 		audit: auditService,
 		corsOrigins: config.corsOrigins,
 		db,
 		dbUrl: config.databaseUrl,
+		client,
+		config,
 		stacks: stacksService,
 		updates: updatesService,
 		webhooks: webhooksService,
 		github: githubService,
 		githubWebhookSecret: githubConfig?.webhookSecret,
-	});
+	};
+}
 
-	return { app, auth, config, db, client };
+/** Bootstrap with all routes — local dev + Vercel. */
+export async function bootstrap() {
+	const services = await bootstrapServices();
+	const app = createApp(services);
+	return {
+		app,
+		auth: services.auth,
+		config: services.config,
+		db: services.db,
+		client: services.client,
+	};
+}
+
+/** Bootstrap CLI-only routes — Pulumi CLI Lambda (buffered). */
+export async function bootstrapCli() {
+	const services = await bootstrapServices();
+	const app = createCliApp(services);
+	return {
+		app,
+		auth: services.auth,
+		config: services.config,
+		db: services.db,
+		client: services.client,
+	};
+}
+
+/** Bootstrap Web-only routes — dashboard Lambda (streaming). */
+export async function bootstrapWeb() {
+	const services = await bootstrapServices();
+	const app = createWebApp(services);
+	return {
+		app,
+		auth: services.auth,
+		config: services.config,
+		db: services.db,
+		client: services.client,
+	};
 }

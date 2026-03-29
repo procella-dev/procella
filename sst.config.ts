@@ -21,6 +21,7 @@ export default $config({
 		if (!$dev) await import("./infra/descope");
 		const { router } = await import("./infra/api");
 		await import("./infra/gc");
+		await import("./infra/web-api");
 		const { site } = await import("./infra/site");
 		const { docs } = await import("./infra/docs");
 

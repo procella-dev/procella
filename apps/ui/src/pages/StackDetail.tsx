@@ -739,6 +739,18 @@ export function StackDetail() {
 		error: updatesError,
 	} = trpc.updates.list.useQuery(params, { enabled, refetchOnMount: true });
 
+	// Real-time updates via SSE — new deployments and status changes appear instantly
+	const utils = trpc.useUtils();
+	trpc.updates.onStackActivity.useSubscription(params, {
+		enabled,
+		onData: () => {
+			// Refresh all stack data when an update is created/started/completed
+			utils.updates.list.invalidate();
+			utils.stacks.detail.invalidate();
+			utils.stacks.resources.invalidate();
+		},
+	});
+
 	const isLoading = (detailLoading && !detail) || (updatesLoading && !updates);
 
 	// ── Loading State ──────────────────────────────────────────────────
