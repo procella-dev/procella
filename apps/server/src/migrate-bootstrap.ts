@@ -18,7 +18,17 @@ import { join } from "node:path";
 	const requestId = res.headers.get("Lambda-Runtime-Aws-Request-Id")!;
 
 	try {
-		await runMigrations(config.databaseUrl as string, migrationsDir);
+		const dbUrl = config.databaseUrl as string;
+		const parsed = new URL(dbUrl.replace(/^postgres(ql)?:\/\//, "http://"));
+		const dbName = parsed.pathname.slice(1).split("?")[0];
+
+		if (dbName && dbName !== "postgres") {
+			const adminUrl = dbUrl.replace(`/${dbName}`, "/postgres");
+			const { ensureDatabase } = await import("@procella/db");
+			await ensureDatabase(adminUrl, dbName);
+		}
+
+		await runMigrations(dbUrl, migrationsDir);
 
 		await fetch(`${BASE_URL}/invocation/${requestId}/response`, {
 			method: "POST",

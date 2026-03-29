@@ -2,18 +2,24 @@
 // Migration script with retry logic for Neon compute wake-up.
 // Uses shared runMigrations() from @procella/db for driver selection.
 
-import { runMigrations } from "@procella/db";
+import { ensureDatabase, runMigrations } from "@procella/db";
 
 const DATABASE_URL = process.env.PROCELLA_DATABASE_URL;
 if (!DATABASE_URL) throw new Error("PROCELLA_DATABASE_URL is required");
 
 try {
 	const parsed = new URL(DATABASE_URL.replace(/^postgres(ql)?:\/\//, "http://"));
+	const dbName = parsed.pathname.slice(1).split("?")[0];
 	console.log(
-		`Target: ${parsed.hostname}:${parsed.port || 5432} (neon=${parsed.hostname.endsWith(".neon.tech")})`,
+		`Target: ${parsed.hostname}:${parsed.port || 5432} db=${dbName} (neon=${parsed.hostname.endsWith(".neon.tech")})`,
 	);
-} catch {
-	/* ignore parse errors */
+	if (dbName && dbName !== "postgres") {
+		const adminUrl = DATABASE_URL.replace(`/${dbName}`, "/postgres");
+		await ensureDatabase(adminUrl, dbName);
+		console.log(`Database "${dbName}" ensured.`);
+	}
+} catch (err) {
+	console.error("Database ensure failed (non-fatal):", err);
 }
 
 const MAX_RETRIES = 5;

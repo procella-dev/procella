@@ -124,6 +124,36 @@ export async function createDbFromUrl(
 // Migrations
 // ============================================================================
 
+export async function ensureDatabase(adminUrl: string, dbName: string): Promise<void> {
+	if (!isNeonHost(adminUrl)) {
+		const { SQL } = require("bun") as typeof import("bun");
+		const client = new SQL({ url: adminUrl });
+		try {
+			const rows = await client.unsafe("SELECT 1 FROM pg_database WHERE datname = $1", [dbName]);
+			if (rows.length === 0) {
+				await client.unsafe(`CREATE DATABASE "${dbName}"`);
+			}
+		} finally {
+			await client.close();
+		}
+		return;
+	}
+
+	const { neonConfig, Pool } = await import("@neondatabase/serverless");
+	if (typeof globalThis.WebSocket === "undefined") {
+		neonConfig.webSocketConstructor = (await import("ws")).default;
+	}
+	const pool = new Pool({ connectionString: adminUrl });
+	try {
+		const { rows } = await pool.query("SELECT 1 FROM pg_database WHERE datname = $1", [dbName]);
+		if (rows.length === 0) {
+			await pool.query(`CREATE DATABASE "${dbName}"`);
+		}
+	} finally {
+		await pool.end();
+	}
+}
+
 export async function runMigrations(
 	options: CreateDbOptions | string,
 	migrationsFolder: string,
