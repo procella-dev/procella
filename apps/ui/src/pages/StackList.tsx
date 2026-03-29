@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useRef, useState } from "react";
 import { StackCard, type UpdateStatus } from "../components/ui";
 import { apiBase } from "../config";
 import { trpc } from "../trpc";
@@ -8,70 +8,133 @@ import { trpc } from "../trpc";
 type SortBy = "name" | "lastUpdated" | "created";
 type SortOrder = "asc" | "desc";
 
-const DebouncedSearchInput = memo(function DebouncedSearchInput({
-	onSearch,
+// ============================================================================
+// Debounced input — manages its own text state, notifies parent after delay
+// ============================================================================
+
+const DebouncedInput = memo(function DebouncedInput({
+	onCommit,
+	placeholder,
+	className,
 	delay = 300,
+	resetKey,
 }: {
-	onSearch: (value: string) => void;
+	onCommit: (value: string) => void;
+	placeholder: string;
+	className?: string;
 	delay?: number;
+	resetKey?: number;
 }) {
 	const [text, setText] = useState("");
 	const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-	const onSearchRef = useRef(onSearch);
-	onSearchRef.current = onSearch;
+	const commitRef = useRef(onCommit);
+	commitRef.current = onCommit;
 
-	const handleChange = useCallback(
-		(e: React.ChangeEvent<HTMLInputElement>) => {
-			const val = e.target.value;
-			setText(val);
-			clearTimeout(timerRef.current);
-			timerRef.current = setTimeout(() => onSearchRef.current(val), delay);
+	const prevKeyRef = useRef(resetKey);
+	if (resetKey !== prevKeyRef.current) {
+		prevKeyRef.current = resetKey;
+		setText("");
+	}
+
+	return (
+		<input
+			type="text"
+			value={text}
+			onChange={(e) => {
+				const val = e.target.value;
+				setText(val);
+				clearTimeout(timerRef.current);
+				timerRef.current = setTimeout(() => commitRef.current(val), delay);
+			}}
+			placeholder={placeholder}
+			className={
+				className ??
+				"bg-zinc-900 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-zinc-500"
+			}
+		/>
+	);
+});
+
+// ============================================================================
+// Stack table — memoized to avoid rerendering when parent state changes
+// ============================================================================
+
+interface StackItem {
+	orgName: string;
+	projectName: string;
+	stackName: string;
+	version: number;
+	activeUpdate: boolean;
+	currentOperation: string | null;
+	tags: Record<string, string>;
+}
+
+const StackTable = memo(function StackTable({ items }: { items: StackItem[] }) {
+	const queryClient = useQueryClient();
+	const utils = trpc.useUtils();
+
+	const handleMouseEnter = useCallback(
+		(stack: StackItem) => {
+			queryClient.prefetchQuery({
+				queryKey: getQueryKey(
+					trpc.stacks.detail,
+					{ org: stack.orgName, project: stack.projectName, stack: stack.stackName },
+					"query",
+				),
+				queryFn: () =>
+					utils.stacks.detail.fetch({
+						org: stack.orgName,
+						project: stack.projectName,
+						stack: stack.stackName,
+					}),
+				staleTime: 10_000,
+			});
 		},
-		[delay],
+		[queryClient, utils],
 	);
 
 	return (
-		<div className="relative">
-			<svg
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				strokeWidth="2"
-				className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none"
-				aria-hidden="true"
-			>
-				<path
-					strokeLinecap="round"
-					strokeLinejoin="round"
-					d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
-				/>
-			</svg>
-			<input
-				type="text"
-				value={text}
-				onChange={handleChange}
-				placeholder="Search stacks..."
-				className="w-full bg-zinc-900 border border-zinc-700 text-zinc-100 rounded-lg pl-10 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-zinc-500"
-			/>
+		<div className="bg-slate-brand/50 border border-slate-brand rounded-xl overflow-hidden">
+			{items.map((stack, index) => {
+				const status: UpdateStatus = stack.activeUpdate ? "updating" : "succeeded";
+				return (
+					<StackCard
+						key={`${stack.orgName}/${stack.projectName}/${stack.stackName}`}
+						orgName={stack.orgName}
+						projectName={stack.projectName}
+						stackName={stack.stackName}
+						href={`/stacks/${stack.orgName}/${stack.projectName}/${stack.stackName}`}
+						lastUpdateStatus={status}
+						onHover={() => handleMouseEnter(stack)}
+						isFirst={index === 0}
+						isLast={index === items.length - 1}
+					/>
+				);
+			})}
 		</div>
 	);
 });
 
+// ============================================================================
+// Main component
+// ============================================================================
+
 export function StackList() {
-	const [debouncedSearch, setDebouncedSearch] = useState("");
+	const [query, setQuery] = useState("");
 	const [project, setProject] = useState("");
 	const [tagName, setTagName] = useState("");
 	const [tagValue, setTagValue] = useState("");
 	const [sortBy, setSortBy] = useState<SortBy>("name");
 	const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
-	const [hasLoadedMore, setHasLoadedMore] = useState(false);
+	const [resetKey, setResetKey] = useState(0);
 
-	const hasFilters = debouncedSearch !== "" || project !== "" || tagName !== "" || tagValue !== "";
+	const hasFilters = query !== "" || project !== "" || tagName !== "" || tagValue !== "";
+	const hasNonDefaultSort = sortBy !== "name" || sortOrder !== "asc";
 
 	const queryInput =
-		hasFilters || sortBy !== "name" || sortOrder !== "asc"
+		hasFilters || hasNonDefaultSort
 			? {
-					query: debouncedSearch || undefined,
+					query: query || undefined,
 					project: project || undefined,
 					tagName: tagName || undefined,
 					tagValue: tagValue || undefined,
@@ -82,80 +145,23 @@ export function StackList() {
 			: undefined;
 
 	const {
-		data: stacks,
+		data: page,
 		isLoading: loading,
 		error: queryError,
-	} = trpc.stacks.list.useQuery(queryInput, {
-		refetchInterval: hasLoadedMore ? false : 5000,
-	});
+	} = trpc.stacks.list.useQuery(queryInput, { refetchInterval: 5000 });
 	const error = queryError?.message ?? null;
 
-	// Pagination state
-	const [allItems, setAllItems] = useState<StackItem[]>([]);
-	const [continuationToken, setContinuationToken] = useState<string | undefined>(undefined);
-	const [isLoadingMore, setIsLoadingMore] = useState(false);
-	const [nextPageToken, setNextPageToken] = useState<string | undefined>(undefined);
+	const items: StackItem[] = page?.stacks ?? [];
 
-	useEffect(() => {
-		setAllItems([]);
-		setContinuationToken(undefined);
-		setNextPageToken(undefined);
-		setIsLoadingMore(false);
-		setHasLoadedMore(false);
-	}, []);
-
-	useEffect(() => {
-		if (!stacks) return;
-		setAllItems(stacks.stacks ?? []);
-		setContinuationToken(stacks.continuationToken);
-	}, [stacks]);
-
-	const loadMore = useCallback(() => {
-		if (!continuationToken || isLoadingMore) return;
-		setIsLoadingMore(true);
-		setHasLoadedMore(true);
-		setNextPageToken(continuationToken);
-	}, [continuationToken, isLoadingMore]);
-
-	// Fetch next page when loadMore is triggered
-	const nextPageInput = nextPageToken
-		? {
-				query: debouncedSearch || undefined,
-				project: project || undefined,
-				tagName: tagName || undefined,
-				tagValue: tagValue || undefined,
-				sortBy,
-				sortOrder,
-				pageSize: 50,
-				continuationToken: nextPageToken,
-			}
-		: undefined;
-	const { data: nextPage } = trpc.stacks.list.useQuery(nextPageInput, {
-		enabled: !!nextPageInput && isLoadingMore,
-		refetchOnWindowFocus: false,
-	});
-
-	useEffect(() => {
-		if (nextPage && isLoadingMore) {
-			setAllItems((prev) => [...prev, ...(nextPage.stacks ?? [])]);
-			setContinuationToken(nextPage.continuationToken);
-			setIsLoadingMore(false);
-			setNextPageToken(undefined);
-		}
-	}, [nextPage, isLoadingMore]);
-
-	const clearFilters = () => {
-		setDebouncedSearch("");
+	const clearFilters = useCallback(() => {
+		setQuery("");
 		setProject("");
 		setTagName("");
 		setTagValue("");
 		setSortBy("name");
 		setSortOrder("asc");
-	};
-
-	const toggleSortOrder = () => {
-		setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
-	};
+		setResetKey((k) => k + 1);
+	}, []);
 
 	if (loading) {
 		return (
@@ -183,7 +189,6 @@ export function StackList() {
 		);
 	}
 
-	const items = allItems.length > 0 ? allItems : (stacks?.stacks ?? []);
 	const hasNoStacks = !hasFilters && items.length === 0;
 
 	return (
@@ -197,32 +202,48 @@ export function StackList() {
 				)}
 			</div>
 
-			{/* Search bar */}
 			{!hasNoStacks && (
 				<div className="space-y-3">
-					<DebouncedSearchInput onSearch={setDebouncedSearch} />
+					<div className="relative">
+						<svg
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							strokeWidth="2"
+							className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none"
+							aria-hidden="true"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
+							/>
+						</svg>
+						<DebouncedInput
+							onCommit={setQuery}
+							placeholder="Search stacks..."
+							resetKey={resetKey}
+							className="w-full bg-zinc-900 border border-zinc-700 text-zinc-100 rounded-lg pl-10 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-zinc-500"
+						/>
+					</div>
 
-					{/* Filter row */}
 					<div className="flex flex-wrap items-center gap-3">
-						<input
-							type="text"
-							value={project}
-							onChange={(e) => setProject(e.target.value)}
+						<DebouncedInput
+							onCommit={setProject}
 							placeholder="Filter by project..."
+							resetKey={resetKey}
 							className="bg-zinc-900 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-zinc-500 w-48"
 						/>
-						<input
-							type="text"
-							value={tagName}
-							onChange={(e) => setTagName(e.target.value)}
+						<DebouncedInput
+							onCommit={setTagName}
 							placeholder="Tag name..."
+							resetKey={resetKey}
 							className="bg-zinc-900 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-zinc-500 w-36"
 						/>
-						<input
-							type="text"
-							value={tagValue}
-							onChange={(e) => setTagValue(e.target.value)}
+						<DebouncedInput
+							onCommit={setTagValue}
 							placeholder="Tag value..."
+							resetKey={resetKey}
 							className="bg-zinc-900 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-zinc-500 w-36"
 						/>
 
@@ -238,7 +259,7 @@ export function StackList() {
 							</select>
 							<button
 								type="button"
-								onClick={toggleSortOrder}
+								onClick={() => setSortOrder((p) => (p === "asc" ? "desc" : "asc"))}
 								className="bg-zinc-900 border border-zinc-700 text-zinc-400 hover:text-zinc-100 rounded-lg px-2.5 py-2 text-sm transition-colors"
 								title={sortOrder === "asc" ? "Ascending" : "Descending"}
 							>
@@ -264,29 +285,15 @@ export function StackList() {
 			) : items.length === 0 && hasFilters ? (
 				<EmptySearchState onClear={clearFilters} />
 			) : (
-				<>
-					<StackTable items={items} />
-					{continuationToken && !isLoadingMore && (
-						<div className="flex justify-center">
-							<button
-								type="button"
-								onClick={loadMore}
-								className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-							>
-								Load more
-							</button>
-						</div>
-					)}
-					{isLoadingMore && (
-						<div className="flex justify-center">
-							<div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-700 border-t-blue-500" />
-						</div>
-					)}
-				</>
+				<StackTable items={items} />
 			)}
 		</div>
 	);
 }
+
+// ============================================================================
+// Empty states
+// ============================================================================
 
 function EmptySearchState({ onClear }: { onClear: () => void }) {
 	return (
@@ -321,7 +328,6 @@ function EmptySearchState({ onClear }: { onClear: () => void }) {
 function EmptyState() {
 	return (
 		<div className="space-y-6">
-			{/* Getting started card */}
 			<div className="bg-slate-brand/50 border border-slate-brand rounded-xl p-8">
 				<div className="flex items-start gap-4">
 					<div className="w-10 h-10 rounded-lg bg-lightning/10 border border-lightning/20 flex items-center justify-center shrink-0">
@@ -345,7 +351,6 @@ function EmptyState() {
 						<p className="text-sm text-cloud leading-relaxed mb-5">
 							Connect the Pulumi CLI to this backend and create your first stack.
 						</p>
-
 						<div className="space-y-3">
 							<CommandStep
 								step="1"
@@ -363,7 +368,6 @@ function EmptyState() {
 				</div>
 			</div>
 
-			{/* Quick reference cards */}
 			<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 				<QuickRefCard
 					title="API Token Authentication"
@@ -413,60 +417,6 @@ function QuickRefCard({
 			<pre className="bg-deep-sky border border-slate-brand rounded-lg px-3 py-2.5 font-mono text-xs text-cloud overflow-x-auto whitespace-pre leading-relaxed">
 				{code}
 			</pre>
-		</div>
-	);
-}
-
-interface StackItem {
-	orgName: string;
-	projectName: string;
-	stackName: string;
-	version: number;
-	activeUpdate: boolean;
-	currentOperation: string | null;
-	tags: Record<string, string>;
-}
-
-function StackTable({ items }: { items: StackItem[] }) {
-	const queryClient = useQueryClient();
-	const utils = trpc.useUtils();
-
-	const handleMouseEnter = (stack: StackItem) => {
-		queryClient.prefetchQuery({
-			queryKey: getQueryKey(
-				trpc.stacks.detail,
-				{ org: stack.orgName, project: stack.projectName, stack: stack.stackName },
-				"query",
-			),
-			queryFn: () =>
-				utils.stacks.detail.fetch({
-					org: stack.orgName,
-					project: stack.projectName,
-					stack: stack.stackName,
-				}),
-			staleTime: 10_000,
-		});
-	};
-
-	return (
-		<div className="bg-slate-brand/50 border border-slate-brand rounded-xl overflow-hidden">
-			{items.map((stack, index) => {
-				const status: UpdateStatus = stack.activeUpdate ? "updating" : "succeeded";
-
-				return (
-					<StackCard
-						key={`${stack.orgName}/${stack.projectName}/${stack.stackName}`}
-						orgName={stack.orgName}
-						projectName={stack.projectName}
-						stackName={stack.stackName}
-						href={`/stacks/${stack.orgName}/${stack.projectName}/${stack.stackName}`}
-						lastUpdateStatus={status}
-						onHover={() => handleMouseEnter(stack)}
-						isFirst={index === 0}
-						isLast={index === items.length - 1}
-					/>
-				);
-			})}
 		</div>
 	);
 }
