@@ -1,3 +1,4 @@
+-- Phase 1: Full-text search support
 ALTER TABLE "stacks" ADD COLUMN "search_vector" text;--> statement-breakpoint
 CREATE INDEX "idx_stacks_search" ON "stacks" USING gin (("search_vector"::tsvector));--> statement-breakpoint
 CREATE OR REPLACE FUNCTION stacks_search_vector_update() RETURNS trigger AS $$
