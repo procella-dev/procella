@@ -22,3 +22,15 @@ export const apiBase: string = (import.meta.env.VITE_API_URL ?? "").replace(/\/+
  * resolve as relative paths on the same origin.
  */
 export const appUrl: string = (import.meta.env.VITE_APP_URL ?? "").replace(/\/+$/, "");
+
+/**
+ * URL for the Pulumi CLI API (the backend that `pulumi login` connects to).
+ *
+ * In production this is https://api.procella.cloud (or api.{stage}.procella.cloud
+ * for preview envs) — a separate Lambda from the dashboard's web API.
+ *
+ * During local dev VITE_CLI_API_URL is empty; the Vite proxy forwards /api/*
+ * to the same Hono server on localhost:9090, so window.location.origin works.
+ */
+export const cliApiUrl: string =
+	(import.meta.env.VITE_CLI_API_URL ?? "").replace(/\/+$/, "") || window.location.origin;

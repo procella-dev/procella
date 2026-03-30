@@ -4,7 +4,6 @@ import { webApi } from "./web-api";
 const isProd = $app.stage === "production";
 const stage = $app.stage;
 
-const appDomain = isProd ? "app.procella.cloud" : `app.${stage}.procella.cloud`;
 const rootDomain = isProd ? "procella.cloud" : `${stage}.procella.cloud`;
 
 export const site = new sst.aws.StaticSite("ProcellaSite", {
@@ -15,17 +14,22 @@ export const site = new sst.aws.StaticSite("ProcellaSite", {
 	},
 	router: {
 		instance: router,
-		domain: appDomain,
+		domain: `app.${rootDomain}`,
 	},
 	environment: {
 		VITE_API_URL: "",
-		VITE_APP_URL: `https://${appDomain}`,
+		VITE_APP_URL: `https://app.${rootDomain}`,
+		VITE_CLI_API_URL: `https://api.${rootDomain}`,
 	},
 });
 
 // Root domain serves the same UI
-router.route(`${rootDomain}/*`, site.url);
+router.route(rootDomain, site.url);
 
 // tRPC + Descope auth routes go to the Web Lambda (streaming, no cache)
-router.route(`${appDomain}/trpc/*`, webApi.url);
-router.route(`${appDomain}/api/auth/*`, webApi.url);
+// SST Router uses prefix matching — do NOT use /* (the * is stored literally
+// and startsWith() in the CloudFront Function won't treat it as a wildcard).
+router.route(`app.${rootDomain}/trpc`, webApi.url);
+router.route(`app.${rootDomain}/api/auth`, webApi.url);
+router.route(`${rootDomain}/trpc`, webApi.url);
+router.route(`${rootDomain}/api/auth`, webApi.url);

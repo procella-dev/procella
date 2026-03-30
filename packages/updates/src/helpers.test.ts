@@ -16,6 +16,7 @@ import {
 	generateLeaseToken,
 	leaseExpiresAt,
 	parseLeaseToken,
+	safeTokenCompare,
 } from "./helpers.js";
 import {
 	applyJournalEntries,
@@ -84,6 +85,31 @@ describe("@procella/updates helpers", () => {
 			expect(() => parseLeaseToken("update::stack-1:secret")).toThrow(InvalidUpdateTokenError);
 			expect(() => parseLeaseToken("update:abc::secret")).toThrow(InvalidUpdateTokenError);
 			expect(() => parseLeaseToken("update:abc:stack:")).toThrow(InvalidUpdateTokenError);
+		});
+	});
+
+	// ========================================================================
+	// safeTokenCompare
+	// ========================================================================
+
+	describe("safeTokenCompare", () => {
+		test("returns true for identical tokens", () => {
+			const token = generateLeaseToken("update-1", "stack-1");
+			expect(safeTokenCompare(token, token)).toBe(true);
+		});
+
+		test("returns false for different content", () => {
+			const a = generateLeaseToken("update-1", "stack-1");
+			const b = generateLeaseToken("update-1", "stack-1");
+			expect(safeTokenCompare(a, b)).toBe(false);
+		});
+
+		test("returns false for different lengths", () => {
+			expect(safeTokenCompare("short", "a-much-longer-token-string")).toBe(false);
+		});
+
+		test("returns true for identical plain strings", () => {
+			expect(safeTokenCompare("abc123", "abc123")).toBe(true);
 		});
 	});
 

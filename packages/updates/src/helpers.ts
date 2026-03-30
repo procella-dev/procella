@@ -1,6 +1,6 @@
 // @procella/updates — Pure helper functions.
 
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import type { UntypedDeployment } from "@procella/types";
 import { InvalidUpdateTokenError } from "@procella/types";
 import { LEASE_DURATION_SECONDS } from "./types.js";
@@ -24,12 +24,11 @@ export function parseLeaseToken(token: string): { updateId: string; stackId: str
 	return { updateId: parts[1], stackId: parts[2] };
 }
 
-/** Constant-time comparison of two lease token strings. */
+/** Constant-time comparison of two token strings via SHA-256 digest. */
 export function safeTokenCompare(a: string, b: string): boolean {
-	const aBuf = Buffer.from(a, "utf8");
-	const bBuf = Buffer.from(b, "utf8");
-	if (aBuf.length !== bBuf.length) return false;
-	return timingSafeEqual(aBuf, bBuf);
+	const hashA = createHash("sha256").update(a).digest();
+	const hashB = createHash("sha256").update(b).digest();
+	return timingSafeEqual(hashA, hashB);
 }
 
 // ============================================================================
