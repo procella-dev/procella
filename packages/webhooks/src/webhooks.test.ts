@@ -1,6 +1,12 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import { BadRequestError } from "@procella/types";
-import { ALL_WEBHOOK_EVENTS, signPayload, validateWebhookUrl, WebhookEvent } from "./index.js";
+import {
+	ALL_WEBHOOK_EVENTS,
+	resolveAndValidateWebhookUrl,
+	signPayload,
+	validateWebhookUrl,
+	WebhookEvent,
+} from "./index.js";
 
 describe("@procella/webhooks", () => {
 	test("signPayload is deterministic for same payload + secret", async () => {
@@ -99,6 +105,90 @@ describe("@procella/webhooks", () => {
 		test("allows hostnames that look like private IPs but are not", () => {
 			expect(() => validateWebhookUrl("https://10.example.com/hook")).not.toThrow();
 			expect(() => validateWebhookUrl("https://192.168.evil.com/hook")).not.toThrow();
+		});
+	});
+
+	describe("resolveAndValidateWebhookUrl", () => {
+		test("blocks DNS rebinding service hostnames (nip.io)", async () => {
+			await expect(
+				resolveAndValidateWebhookUrl("http://169.254.169.254.nip.io/latest/meta-data/"),
+			).rejects.toThrow(BadRequestError);
+		});
+
+		test("blocks DNS rebinding service hostnames (sslip.io)", async () => {
+			await expect(resolveAndValidateWebhookUrl("http://10.0.0.1.sslip.io/")).rejects.toThrow(
+				BadRequestError,
+			);
+		});
+
+		test("blocks DNS rebinding service hostnames (xip.io)", async () => {
+			await expect(resolveAndValidateWebhookUrl("http://127.0.0.1.xip.io/hook")).rejects.toThrow(
+				BadRequestError,
+			);
+		});
+
+		test("blocks DNS rebinding service hostnames (localtest.me)", async () => {
+			await expect(resolveAndValidateWebhookUrl("http://foo.localtest.me/")).rejects.toThrow(
+				BadRequestError,
+			);
+		});
+
+		test("blocks DNS rebinding service hostnames (lvh.me)", async () => {
+			await expect(resolveAndValidateWebhookUrl("http://app.lvh.me/")).rejects.toThrow(
+				BadRequestError,
+			);
+		});
+
+		test("blocks hostnames that resolve to private IPs", async () => {
+			const dns = await import("node:dns/promises");
+			const origV4 = dns.resolve4;
+			const origV6 = dns.resolve6;
+			mock.module("node:dns/promises", () => ({
+				resolve4: async () => ["127.0.0.1"],
+				resolve6: async () => [],
+			}));
+			try {
+				const { resolveAndValidateWebhookUrl: freshResolve } = await import("./index.js");
+				await expect(freshResolve("https://evil-rebind.example.com/hook")).rejects.toThrow(
+					BadRequestError,
+				);
+			} finally {
+				mock.module("node:dns/promises", () => ({ resolve4: origV4, resolve6: origV6 }));
+			}
+		});
+
+		test("still enforces string-level checks from validateWebhookUrl", async () => {
+			await expect(resolveAndValidateWebhookUrl("http://localhost/")).rejects.toThrow(
+				BadRequestError,
+			);
+			await expect(resolveAndValidateWebhookUrl("http://127.0.0.1/")).rejects.toThrow(
+				BadRequestError,
+			);
+			await expect(resolveAndValidateWebhookUrl("ftp://example.com/")).rejects.toThrow(
+				BadRequestError,
+			);
+		});
+
+		test("allows public URLs that resolve to public IPs", async () => {
+			const dns = await import("node:dns/promises");
+			const origV4 = dns.resolve4;
+			const origV6 = dns.resolve6;
+			mock.module("node:dns/promises", () => ({
+				resolve4: async () => ["93.184.216.34"],
+				resolve6: async () => [],
+			}));
+			try {
+				const { resolveAndValidateWebhookUrl: freshResolve } = await import("./index.js");
+				await expect(freshResolve("https://example.com/webhook")).resolves.toBeUndefined();
+			} finally {
+				mock.module("node:dns/promises", () => ({ resolve4: origV4, resolve6: origV6 }));
+			}
+		});
+
+		test("skips DNS resolution when hostname is already a validated public IP", async () => {
+			await expect(
+				resolveAndValidateWebhookUrl("http://203.0.113.1:8080/hook"),
+			).resolves.toBeUndefined();
 		});
 	});
 });
