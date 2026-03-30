@@ -1,3 +1,4 @@
+import { keepPreviousData } from "@tanstack/react-query";
 import { memo, useCallback, useRef, useState } from "react";
 import { StackCard, type UpdateStatus } from "../components/ui";
 import { cliApiUrl } from "../config";
@@ -134,10 +135,15 @@ export function StackList() {
 
 	const {
 		data: page,
-		isLoading: loading,
+		isLoading: initialLoading,
+		isFetching,
 		error: queryError,
-	} = trpc.stacks.list.useQuery(queryInput, { refetchInterval: 5000 });
+	} = trpc.stacks.list.useQuery(queryInput, {
+		refetchInterval: 5000,
+		placeholderData: keepPreviousData,
+	});
 	const error = queryError?.message ?? null;
+	const loading = initialLoading && !page;
 
 	const items: StackItem[] = page?.stacks ?? [];
 
@@ -183,11 +189,13 @@ export function StackList() {
 		<div className="space-y-6">
 			<div className="flex items-center justify-between">
 				<h1 className="text-xl font-semibold text-mist">Stacks</h1>
-				{items.length > 0 && (
-					<span className="text-xs text-cloud tabular-nums">
-						{items.length} stack{items.length !== 1 ? "s" : ""}
-					</span>
-				)}
+				<span className="text-xs text-cloud tabular-nums">
+					{isFetching && hasFilters ? (
+						<span className="text-zinc-500">Searching…</span>
+					) : (
+						items.length > 0 && `${items.length} stack${items.length !== 1 ? "s" : ""}`
+					)}
+				</span>
 			</div>
 
 			{!hasNoStacks && (

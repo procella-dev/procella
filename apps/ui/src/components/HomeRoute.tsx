@@ -10,7 +10,10 @@ import { FullPageSpinner } from "./FullPageSpinner";
  * straight to /login rather than seeing the marketing landing page.
  */
 function isAppSubdomain(): boolean {
-	return typeof window !== "undefined" && window.location.hostname.startsWith("app.");
+	if (typeof window === "undefined") return false;
+	const host = window.location.hostname;
+	// localhost is the app context in dev — skip the marketing landing page
+	return host.startsWith("app.") || host === "localhost" || host === "127.0.0.1";
 }
 
 /**

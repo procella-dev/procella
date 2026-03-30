@@ -164,7 +164,8 @@ export function sanitizeTsQuery(query: string): string | undefined {
 		return undefined;
 	}
 
-	return terms.join(" & ");
+	// Append :* for prefix matching so "g" matches "gamma", "comp" matches "component"
+	return terms.map((t) => `${t}:*`).join(" & ");
 }
 
 export function encodeContinuationToken(cursor: StackSearchCursor): string {

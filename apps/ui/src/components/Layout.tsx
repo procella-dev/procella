@@ -5,12 +5,28 @@ import { useAuthConfig } from "../hooks/useAuthConfig";
 import { CommandBar, openCommandBar } from "./CommandBar";
 import { ProcellaLogo } from "./ProcellaLogo";
 
-function useIsAdmin() {
+/** Descope-only nav items — only rendered inside AuthProvider. */
+function DescopeNav() {
 	const { sessionToken } = useSession();
-	if (!sessionToken) return false;
-	const tenantId = getCurrentTenant(sessionToken);
-	if (!tenantId) return false;
-	return getJwtRoles(sessionToken, tenantId).includes("admin");
+	const isAdmin = (() => {
+		if (!sessionToken) return false;
+		const tenantId = getCurrentTenant(sessionToken);
+		if (!tenantId) return false;
+		return getJwtRoles(sessionToken, tenantId).includes("admin");
+	})();
+
+	return (
+		<>
+			<NavLink to="/tokens" className={navLinkClass}>
+				Tokens
+			</NavLink>
+			{isAdmin && (
+				<NavLink to="/settings" className={navLinkClass}>
+					Settings
+				</NavLink>
+			)}
+		</>
+	);
 }
 
 function navLinkClass({ isActive }: { isActive: boolean }) {
@@ -23,7 +39,6 @@ function navLinkClass({ isActive }: { isActive: boolean }) {
 
 export function Layout() {
 	const { config } = useAuthConfig();
-	const isAdmin = useIsAdmin();
 
 	return (
 		<div className="min-h-screen flex flex-col bg-deep-sky">
@@ -40,16 +55,7 @@ export function Layout() {
 								Stacks
 							</NavLink>
 
-							{config?.mode === "descope" && (
-								<NavLink to="/tokens" className={navLinkClass}>
-									Tokens
-								</NavLink>
-							)}
-							{config?.mode === "descope" && isAdmin && (
-								<NavLink to="/settings" className={navLinkClass}>
-									Settings
-								</NavLink>
-							)}
+							{config?.mode === "descope" && <DescopeNav />}
 							<NavLink to="/webhooks" className={navLinkClass}>
 								Webhooks
 							</NavLink>
