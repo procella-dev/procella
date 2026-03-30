@@ -122,6 +122,8 @@ async function pulumi(
 		PULUMI_SKIP_UPDATE_CHECK: "true",
 		PULUMI_DIY_BACKEND_URL: "",
 	};
+	delete env.PULUMI_BACKEND_URL;
+	delete env.PULUMI_ACCESS_TOKEN;
 	if (PROCELLA_URL) env.PULUMI_BACKEND_URL = PROCELLA_URL;
 	if (ACCESS_TOKEN) env.PULUMI_ACCESS_TOKEN = ACCESS_TOKEN;
 
@@ -158,7 +160,9 @@ async function runWorker(example: string, workerId: number): Promise<WorkerResul
 		console.log(`${tag} stack init ${stackName}`);
 		const init = await run(["stack", "init", stackName]);
 		if (init.exit !== 0) {
-			throw new Error(`stack init failed (exit ${init.exit}): ${init.stderr.slice(0, 300)}`);
+			const msg = `stack init failed (exit ${init.exit}): ${init.stderr.slice(0, 300)}`;
+			console.error(`${tag} \x1b[31mFAILED\x1b[0m ${msg}`);
+			return { example, worker: workerId, stack: stackName, cycles, totalMs: performance.now() - start, ok: false, error: msg };
 		}
 
 		for (let c = 0; c < CYCLES; c++) {
