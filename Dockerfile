@@ -12,7 +12,7 @@ FROM base AS ui
 COPY --from=deps /usr/src/app/node_modules ./node_modules
 COPY packages/ packages/
 COPY apps/ui/ apps/ui/
-COPY tsconfig.json ./
+COPY tsconfig.json tsconfig.base.json ./
 RUN bun run --cwd apps/ui build
 
 FROM base AS build
