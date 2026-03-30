@@ -419,29 +419,29 @@ export class PostgresWebhooksService implements WebhooksService {
 		event: string,
 		payload: Record<string, unknown>,
 	): Promise<void> {
-		try {
-			await resolveAndValidateWebhookUrl(webhook.url);
-		} catch (err) {
-			await this.recordDelivery({
-				webhookId: webhook.id,
-				event,
-				payload,
-				requestHeaders: {},
-				responseStatus: 0,
-				responseHeaders: {},
-				responseBody: "",
-				success: false,
-				attempt: 1,
-				error: err instanceof Error ? err.message : "Invalid webhook URL",
-				duration: 0,
-			});
-			return;
-		}
 		const body = JSON.stringify({ event, timestamp: new Date().toISOString(), data: payload });
 		const signature = await signPayload(body, webhook.secret);
 
 		const maxAttempts = 3;
 		for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+			try {
+				await resolveAndValidateWebhookUrl(webhook.url);
+			} catch (err) {
+				await this.recordDelivery({
+					webhookId: webhook.id,
+					event,
+					payload: JSON.parse(body) as Record<string, unknown>,
+					requestHeaders: {},
+					responseStatus: 0,
+					responseHeaders: {},
+					responseBody: "",
+					success: false,
+					attempt,
+					error: err instanceof Error ? err.message : "Invalid webhook URL",
+					duration: 0,
+				});
+				return;
+			}
 			const start = Date.now();
 			try {
 				const requestHeaders: Record<string, string> = {

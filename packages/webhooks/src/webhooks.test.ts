@@ -140,10 +140,12 @@ describe("@procella/webhooks", () => {
 		});
 
 		test("blocks hostnames that resolve to private IPs", async () => {
-			const dnsLookup = await import("node:dns/promises");
-			const original = dnsLookup.lookup;
+			const dns = await import("node:dns/promises");
+			const origV4 = dns.resolve4;
+			const origV6 = dns.resolve6;
 			mock.module("node:dns/promises", () => ({
-				lookup: async () => [{ address: "127.0.0.1", family: 4 }],
+				resolve4: async () => ["127.0.0.1"],
+				resolve6: async () => [],
 			}));
 			try {
 				const { resolveAndValidateWebhookUrl: freshResolve } = await import("./index.js");
@@ -151,7 +153,7 @@ describe("@procella/webhooks", () => {
 					BadRequestError,
 				);
 			} finally {
-				mock.module("node:dns/promises", () => ({ lookup: original }));
+				mock.module("node:dns/promises", () => ({ resolve4: origV4, resolve6: origV6 }));
 			}
 		});
 
@@ -168,9 +170,19 @@ describe("@procella/webhooks", () => {
 		});
 
 		test("allows public URLs that resolve to public IPs", async () => {
-			await expect(
-				resolveAndValidateWebhookUrl("https://example.com/webhook"),
-			).resolves.toBeUndefined();
+			const dns = await import("node:dns/promises");
+			const origV4 = dns.resolve4;
+			const origV6 = dns.resolve6;
+			mock.module("node:dns/promises", () => ({
+				resolve4: async () => ["93.184.216.34"],
+				resolve6: async () => [],
+			}));
+			try {
+				const { resolveAndValidateWebhookUrl: freshResolve } = await import("./index.js");
+				await expect(freshResolve("https://example.com/webhook")).resolves.toBeUndefined();
+			} finally {
+				mock.module("node:dns/promises", () => ({ resolve4: origV4, resolve6: origV6 }));
+			}
 		});
 
 		test("skips DNS resolution when hostname is already a validated public IP", async () => {
