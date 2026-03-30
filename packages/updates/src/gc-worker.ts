@@ -118,7 +118,6 @@ export class GCWorker {
 			}
 		} catch (err) {
 			// GC is best-effort — log and retry on next interval. Never crash the server.
-			// biome-ignore lint/suspicious/noConsole: GC worker error logging
 			console.error("[gc] cycle failed:", err);
 		} finally {
 			this.running = false;

@@ -294,7 +294,6 @@ export class DescopeAuthService implements AuthService {
 					);
 					await new Promise((r) => setTimeout(r, delay));
 				} else {
-					// biome-ignore lint/suspicious/noConsole: auth failure logging
 					console.error(
 						`[auth] exchangeAccessKey FAILED after ${attempt} attempt(s) ${elapsed}ms: ${err}`,
 					);

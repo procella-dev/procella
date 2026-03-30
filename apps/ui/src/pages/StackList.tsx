@@ -1,6 +1,6 @@
 import { memo, useCallback, useRef, useState } from "react";
 import { StackCard, type UpdateStatus } from "../components/ui";
-import { apiBase } from "../config";
+import { cliApiUrl } from "../config";
 import { trpc } from "../trpc";
 
 type SortBy = "name" | "lastUpdated" | "created";
@@ -343,7 +343,7 @@ function EmptyState() {
 							<CommandStep
 								step="1"
 								label="Login to this backend"
-								command={`pulumi login ${apiBase || window.location.origin}`}
+								command={`pulumi login ${cliApiUrl}`}
 							/>
 							<CommandStep
 								step="2"
@@ -360,7 +360,7 @@ function EmptyState() {
 				<QuickRefCard
 					title="API Token Authentication"
 					description="Use your API token to authenticate the CLI."
-					code={`export PULUMI_ACCESS_TOKEN=<your-token>\npulumi login ${apiBase || window.location.origin}`}
+					code={`export PULUMI_ACCESS_TOKEN=<your-token>\npulumi login ${cliApiUrl}`}
 				/>
 				<QuickRefCard
 					title="Manage Stacks"

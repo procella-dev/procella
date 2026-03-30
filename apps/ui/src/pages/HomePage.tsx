@@ -1,6 +1,6 @@
 import stormPetrelSvg from "../assets/storm-petrel.svg";
 import { ProcellaLogo } from "../components/ProcellaLogo";
-import { appUrl, DOMAIN } from "../config";
+import { appUrl, cliApiUrl, DOMAIN } from "../config";
 
 const features = [
 	{
@@ -274,9 +274,11 @@ export function HomePage() {
 						</div>
 						<div className="p-5 font-mono text-sm leading-relaxed">
 							<div className="text-cloud">
-								<span className="text-emerald-400">$</span> pulumi login https://api.{DOMAIN}
+								<span className="text-emerald-400">$</span> pulumi login {cliApiUrl}
 							</div>
-							<div className="text-cloud mt-1">Logged in to api.{DOMAIN} as dev-user</div>
+							<div className="text-cloud mt-1">
+								Logged in to {new URL(cliApiUrl).host} as dev-user
+							</div>
 							<div className="mt-4 text-cloud">
 								<span className="text-emerald-400">$</span> pulumi stack init
 								myorg/myproject/production
@@ -351,11 +353,7 @@ export function HomePage() {
 					</div>
 
 					<div className="space-y-4">
-						<Step
-							number="1"
-							title="Login to your backend"
-							code={`pulumi login https://api.${DOMAIN}`}
-						/>
+						<Step number="1" title="Login to your backend" code={`pulumi login ${cliApiUrl}`} />
 						<Step
 							number="2"
 							title="Initialize a stack"

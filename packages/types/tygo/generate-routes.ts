@@ -94,14 +94,17 @@ async function main() {
 	const sdkVersion = extractSdkVersion();
 	const tag = sdkVersionToMonorepoTag(sdkVersion);
 
+	// biome-ignore lint/suspicious/noConsole: CLI script output
 	console.log(`Pulumi SDK: ${sdkVersion} (tag: ${tag})`);
 
 	const source = await fetchGoFile(tag, ENDPOINTS_PATH);
 	const routes = parseEndpoints(source);
+	// biome-ignore lint/suspicious/noConsole: CLI script output
 	console.log(`Parsed ${routes.length} routes from api_endpoints.go`);
 
 	const ts = generateTs(routes, sdkVersion);
 	writeFileSync(OUT_FILE, ts);
+	// biome-ignore lint/suspicious/noConsole: CLI script output
 	console.log(`✓ Generated ${OUT_FILE}`);
 }
 
