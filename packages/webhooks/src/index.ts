@@ -1,3 +1,4 @@
+import { resolve4, resolve6 } from "node:dns/promises";
 import { isIP } from "node:net";
 import { type Database, webhookDeliveries, webhooks } from "@procella/db";
 import { BadRequestError, NotFoundError } from "@procella/types";
@@ -23,6 +24,9 @@ const BLOCKED_HOSTNAMES = new Set([
 	"localhost.localdomain",
 	"metadata.google.internal",
 ]);
+
+/** Hostname suffixes used by DNS rebinding / wildcard DNS services. */
+const BLOCKED_HOSTNAME_SUFFIXES = [".nip.io", ".sslip.io", ".xip.io", ".localtest.me", ".lvh.me"];
 
 function stripBrackets(hostname: string): string {
 	if (hostname.startsWith("[") && hostname.endsWith("]")) {
@@ -75,6 +79,37 @@ export function validateWebhookUrl(url: string): void {
 
 	if (isPrivateIp(hostname)) {
 		throw new BadRequestError("Webhook URL cannot target private or reserved IP addresses");
+	}
+}
+
+export async function resolveAndValidateWebhookUrl(url: string): Promise<void> {
+	validateWebhookUrl(url);
+
+	const parsed = new URL(url);
+	const hostname = parsed.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+
+	if (BLOCKED_HOSTNAME_SUFFIXES.some((suffix) => hostname.endsWith(suffix))) {
+		throw new BadRequestError("Webhook URL uses a blocked DNS rebinding service");
+	}
+
+	if (isIP(hostname)) return;
+
+	const [v4, v6] = await Promise.all([
+		resolve4(hostname).catch((): string[] => []),
+		resolve6(hostname).catch((): string[] => []),
+	]);
+	const addresses = [...v4, ...v6];
+
+	if (addresses.length === 0) {
+		throw new BadRequestError("Webhook URL hostname could not be resolved");
+	}
+
+	for (const addr of addresses) {
+		if (isPrivateIp(addr)) {
+			throw new BadRequestError(
+				"Webhook URL hostname resolves to a private or reserved IP address",
+			);
+		}
 	}
 }
 
@@ -176,7 +211,7 @@ export class PostgresWebhooksService implements WebhooksService {
 		input: CreateWebhookInput,
 		createdBy: string,
 	): Promise<WebhookInfo & { secret: string }> {
-		validateWebhookUrl(input.url);
+		await resolveAndValidateWebhookUrl(input.url);
 		const secret = input.secret ?? crypto.randomUUID();
 		const [row] = await this.db
 			.insert(webhooks)
@@ -231,7 +266,7 @@ export class PostgresWebhooksService implements WebhooksService {
 
 		if (typeof updates.name === "string") patch.name = updates.name;
 		if (typeof updates.url === "string") {
-			validateWebhookUrl(updates.url);
+			await resolveAndValidateWebhookUrl(updates.url);
 			patch.url = updates.url;
 		}
 		if (Array.isArray(updates.events)) patch.events = updates.events;
@@ -384,29 +419,29 @@ export class PostgresWebhooksService implements WebhooksService {
 		event: string,
 		payload: Record<string, unknown>,
 	): Promise<void> {
-		try {
-			validateWebhookUrl(webhook.url);
-		} catch (err) {
-			await this.recordDelivery({
-				webhookId: webhook.id,
-				event,
-				payload,
-				requestHeaders: {},
-				responseStatus: 0,
-				responseHeaders: {},
-				responseBody: "",
-				success: false,
-				attempt: 1,
-				error: err instanceof Error ? err.message : "Invalid webhook URL",
-				duration: 0,
-			});
-			return;
-		}
 		const body = JSON.stringify({ event, timestamp: new Date().toISOString(), data: payload });
 		const signature = await signPayload(body, webhook.secret);
 
 		const maxAttempts = 3;
 		for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+			try {
+				await resolveAndValidateWebhookUrl(webhook.url);
+			} catch (err) {
+				await this.recordDelivery({
+					webhookId: webhook.id,
+					event,
+					payload: JSON.parse(body) as Record<string, unknown>,
+					requestHeaders: {},
+					responseStatus: 0,
+					responseHeaders: {},
+					responseBody: "",
+					success: false,
+					attempt,
+					error: err instanceof Error ? err.message : "Invalid webhook URL",
+					duration: 0,
+				});
+				return;
+			}
 			const start = Date.now();
 			try {
 				const requestHeaders: Record<string, string> = {
@@ -480,7 +515,7 @@ export class PostgresWebhooksService implements WebhooksService {
 		payload: Record<string, unknown>,
 	): Promise<string> {
 		try {
-			validateWebhookUrl(webhook.url);
+			await resolveAndValidateWebhookUrl(webhook.url);
 		} catch (err) {
 			return this.recordDelivery({
 				webhookId: webhook.id,
