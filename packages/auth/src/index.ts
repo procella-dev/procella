@@ -453,7 +453,9 @@ function extractTenantId(claims: Record<string, unknown>): string | undefined {
 
 /**
  * Derive a URL-safe org slug from the tenant name in JWT claims.
- * The `tenant_name` claim is set via Descope JWT Templates (mapped from `{{tenant.name}}`).
+ * Session JWTs carry `tenant_name` at the top level (mapped from `{{tenant.name}}`
+ * via Descope JWT Templates). CLI access key JWTs store it in
+ * `tenants.<tenantId>.name` instead. Both paths are checked.
  * Falls back to the raw tenantId if no name is available.
  */
 export function extractOrgSlug(claims: Record<string, unknown>, tenantId: string): string {

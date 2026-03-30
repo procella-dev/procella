@@ -46,8 +46,8 @@ const resolved: { url: string; token: string; source: "env" | "login" | "local" 
 		return { url: BENCH_URL, token: BENCH_TOKEN ?? "benchtoken", source: "env" as const };
 	}
 	const creds = readPulumiCredentials();
-	if (creds && !BENCH_TOKEN) {
-		return { url: creds.url, token: creds.token, source: "login" as const };
+	if (creds) {
+		return { url: creds.url, token: BENCH_TOKEN ?? creds.token, source: "login" as const };
 	}
 	return { url: `http://127.0.0.1:${BENCH_PORT}`, token: BENCH_TOKEN ?? "benchtoken", source: "local" as const };
 })();
@@ -238,8 +238,11 @@ async function runPulumi(
     PULUMI_HOME: pulumiHome,
     ...(mode === "journal" ? { PULUMI_ENABLE_JOURNALING: "true" } : { PULUMI_DISABLE_JOURNALING: "true" }),
   };
-  // For login-mode, credentials.json provides auth; for explicit modes, set env
-  if (resolved.source !== "login") {
+  if (resolved.source === "login") {
+    // Ensure inherited Pulumi auth vars don't override credentials.json
+    delete env.PULUMI_ACCESS_TOKEN;
+    delete env.PULUMI_BACKEND_URL;
+  } else {
     env.PULUMI_ACCESS_TOKEN = TEST_TOKEN;
     env.PULUMI_BACKEND_URL = BACKEND_URL;
   }
