@@ -118,9 +118,9 @@ describe("eventHandlers", () => {
 		const app = new Hono<Env>();
 		app.use("*", injectCaller(validCaller));
 		const h = eventHandlers(updates, mockStacksService());
-		app.get("/stacks/:org/:project/:stack/updates/:updateId/events", h.getUpdateEvents);
+		app.get("/stacks/:org/:project/:stack/update/:updateId/events", h.getUpdateEvents);
 
-		const res = await app.request("/stacks/myorg/myproj/dev/updates/upd-42/events");
+		const res = await app.request("/stacks/myorg/myproj/dev/update/upd-42/events");
 		expect(res.status).toBe(200);
 		const body = await res.json();
 		expect(body.events).toBeArray();
@@ -133,10 +133,10 @@ describe("eventHandlers", () => {
 		const app = new Hono<Env>();
 		app.use("*", injectCaller(validCaller));
 		const h = eventHandlers(updates, mockStacksService());
-		app.get("/stacks/:org/:project/:stack/updates/:updateId/events", h.getUpdateEvents);
+		app.get("/stacks/:org/:project/:stack/update/:updateId/events", h.getUpdateEvents);
 
 		const res = await app.request(
-			"/stacks/myorg/myproj/dev/updates/upd-42/events?continuationToken=tok-1",
+			"/stacks/myorg/myproj/dev/update/upd-42/events?continuationToken=tok-1",
 		);
 		expect(res.status).toBe(200);
 		expect(updates.getUpdateEvents).toHaveBeenCalledWith("upd-42", "tok-1");

@@ -384,7 +384,24 @@ export class PostgresWebhooksService implements WebhooksService {
 		event: string,
 		payload: Record<string, unknown>,
 	): Promise<void> {
-		validateWebhookUrl(webhook.url);
+		try {
+			validateWebhookUrl(webhook.url);
+		} catch (err) {
+			await this.recordDelivery({
+				webhookId: webhook.id,
+				event,
+				payload,
+				requestHeaders: {},
+				responseStatus: 0,
+				responseHeaders: {},
+				responseBody: "",
+				success: false,
+				attempt: 1,
+				error: err instanceof Error ? err.message : "Invalid webhook URL",
+				duration: 0,
+			});
+			return;
+		}
 		const body = JSON.stringify({ event, timestamp: new Date().toISOString(), data: payload });
 		const signature = await signPayload(body, webhook.secret);
 
@@ -462,7 +479,23 @@ export class PostgresWebhooksService implements WebhooksService {
 		event: string,
 		payload: Record<string, unknown>,
 	): Promise<string> {
-		validateWebhookUrl(webhook.url);
+		try {
+			validateWebhookUrl(webhook.url);
+		} catch (err) {
+			return this.recordDelivery({
+				webhookId: webhook.id,
+				event,
+				payload,
+				requestHeaders: null,
+				responseStatus: null,
+				responseBody: null,
+				responseHeaders: null,
+				success: false,
+				attempt: 1,
+				error: err instanceof Error ? err.message : "Invalid webhook URL",
+				duration: 0,
+			});
+		}
 		const body = JSON.stringify({ event, timestamp: new Date().toISOString(), data: payload });
 		const signature = await signPayload(body, webhook.secret);
 		const start = Date.now();

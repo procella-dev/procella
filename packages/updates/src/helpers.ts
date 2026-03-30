@@ -26,8 +26,10 @@ export function parseLeaseToken(token: string): { updateId: string; stackId: str
 
 /** Constant-time comparison of two lease token strings. */
 export function safeTokenCompare(a: string, b: string): boolean {
-	if (a.length !== b.length) return false;
-	return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+	const aBuf = Buffer.from(a, "utf8");
+	const bBuf = Buffer.from(b, "utf8");
+	if (aBuf.length !== bBuf.length) return false;
+	return timingSafeEqual(aBuf, bBuf);
 }
 
 // ============================================================================

@@ -152,6 +152,8 @@ describe("updateHandlers", () => {
 		expect(body.version).toBe(1);
 		expect(body.token).toBe("lease-tok");
 		expect(body.tokenExpiration).toBe("2025-01-01T01:00:00Z");
+		expect(stacks.getStack).toHaveBeenCalledWith("t-1", "myorg", "myproj", "dev");
+		expect(updates.verifyUpdateOwnership).toHaveBeenCalled();
 		expect(updates.startUpdate).toHaveBeenCalledWith("upd-1", reqBody);
 	});
 
@@ -189,6 +191,8 @@ describe("updateHandlers", () => {
 			method: "POST",
 		});
 		expect(res.status).toBe(204);
+		expect(stacks.getStack).toHaveBeenCalledWith("t-1", "myorg", "myproj", "dev");
+		expect(updates.verifyUpdateOwnership).toHaveBeenCalled();
 		expect(updates.cancelUpdate).toHaveBeenCalledWith("upd-1");
 	});
 
@@ -204,6 +208,8 @@ describe("updateHandlers", () => {
 		expect(res.status).toBe(200);
 		const body = await res.json();
 		expect(body.status).toBe("succeeded");
+		expect(stacks.getStack).toHaveBeenCalledWith("t-1", "myorg", "myproj", "dev");
+		expect(updates.verifyUpdateOwnership).toHaveBeenCalled();
 		expect(updates.getUpdate).toHaveBeenCalledWith("upd-42");
 	});
 

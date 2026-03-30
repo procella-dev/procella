@@ -55,7 +55,7 @@ function mockAuthService(): AuthService {
 		},
 		authenticateUpdateToken: async (token: string) => {
 			const parts = token.split(":");
-			if (parts.length !== 3 || parts[0] !== "update") {
+			if (parts.length !== 4 || parts[0] !== "update") {
 				throw new UnauthorizedError("Invalid update token");
 			}
 			return { updateId: parts[1], stackId: parts[2] };
