@@ -16,7 +16,6 @@ import { bucket } from "./storage";
 
 const descopeProjectId = !$dev ? (await import("./descope")).projectId : undefined;
 
-const isProd = $app.stage === "production";
 
 export const webApi = new sst.aws.Function("ProcellaWebApi", {
 	runtime: "provided.al2023",

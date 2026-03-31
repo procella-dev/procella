@@ -36,7 +36,7 @@ api.route("$default", {
 	architecture: "x86_64",
 	bundle: ".build/cli-api",
 	handler: "bootstrap",
-	timeout: "60 seconds",
+	timeout: "30 seconds",
 	memory: "512 MB",
 	// Provisioned concurrency keeps N Lambda instances warm at all times,
 	// eliminating cold starts (500-2000ms each) that compound across the
