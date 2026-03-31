@@ -23,6 +23,11 @@ export const database = !isProd
 			dataApi: true,
 			scaling: { min: "0 ACU", max: "16 ACU", pauseAfter: "5 minutes" },
 			vpc,
+			transform: {
+				cluster: {
+					storageType: "aurora-iopt1",
+				},
+			},
 			dev: {
 				username: "procella",
 				password: "procella",
