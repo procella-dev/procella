@@ -146,6 +146,24 @@ describe("@procella/config", () => {
 			expect(config.listenAddr).toBe(":8080");
 		});
 
+		test("normalizes PORT with leading colon", () => {
+			clearProcellaEnv();
+			setMinimalEnv();
+			delete Bun.env.PROCELLA_LISTEN_ADDR;
+			Bun.env.PORT = ":3000";
+			const config = loadConfig();
+			expect(config.listenAddr).toBe(":3000");
+		});
+
+		test("ignores non-numeric PORT value", () => {
+			clearProcellaEnv();
+			setMinimalEnv();
+			delete Bun.env.PROCELLA_LISTEN_ADDR;
+			Bun.env.PORT = "not-a-port";
+			const config = loadConfig();
+			expect(config.listenAddr).toBe(":9090");
+		});
+
 		test("accepts complete GitHub app configuration", () => {
 			clearProcellaEnv();
 			setMinimalEnv();
