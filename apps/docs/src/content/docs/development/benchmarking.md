@@ -109,7 +109,7 @@ For more on the journaling protocol, see [Pulumi's journaling blog post](https:/
 
 ## Procella vs Pulumi Cloud
 
-Benchmarks run from AWS us-east-1 (Iowa) — the same region as Procella's production deployment — show Procella matching or outperforming Pulumi Cloud at every operation size.
+Benchmarks run from Iowa (USA) against Procella deployed in us-east-1 (N. Virginia) — the same region — show Procella matching or outperforming Pulumi Cloud at every operation size.
 
 ### N=10 resources, journal mode, 3 trials
 

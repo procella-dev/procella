@@ -23,7 +23,7 @@ A self-hosted [Pulumi](https://www.pulumi.com/) backend. Run `pulumi login`, `pu
 
 ## Performance
 
-Benchmarked from AWS us-east-1 with N=10 resources, journal mode:
+Benchmarked from Iowa (USA) against Procella deployed in us-east-1 (N. Virginia), N=10 resources, journal mode:
 
 | Backend | `up` | `preview` | `destroy` |
 |---|---|---|---|
