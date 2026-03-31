@@ -30,7 +30,7 @@ export const webApi = new sst.aws.Function("ProcellaWebApi", {
 	timeout: "60 seconds",
 	memory: "512 MB",
 	// Provisioned concurrency eliminates cold starts for the dashboard API.
-	...(isProd ? { concurrency: { provisioned: 1 } } : {}),
+	...(!$dev ? { concurrency: { provisioned: 1 } } : {}),
 	vpc,
 	link: [database, bucket, ...allSecrets],
 	environment: {

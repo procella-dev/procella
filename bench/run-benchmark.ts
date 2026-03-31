@@ -234,7 +234,7 @@ async function runPulumi(
     ...cleanEnv(),
     PULUMI_CONFIG_PASSPHRASE: "test",
     PULUMI_SKIP_UPDATE_CHECK: "true",
-    PULUMI_DIY_BACKEND_URL: "",
+    ...(resolved.source !== "login" ? { PULUMI_DIY_BACKEND_URL: "" } : {}),
     PULUMI_HOME: pulumiHome,
     ...(mode === "journal" ? { PULUMI_ENABLE_JOURNALING: "true" } : { PULUMI_DISABLE_JOURNALING: "true" }),
   };
@@ -242,6 +242,7 @@ async function runPulumi(
     // Ensure inherited Pulumi auth vars don't override credentials.json
     delete env.PULUMI_ACCESS_TOKEN;
     delete env.PULUMI_BACKEND_URL;
+    delete env.PULUMI_DIY_BACKEND_URL;
   } else {
     env.PULUMI_ACCESS_TOKEN = TEST_TOKEN;
     env.PULUMI_BACKEND_URL = BACKEND_URL;

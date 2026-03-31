@@ -40,8 +40,8 @@ api.route("$default", {
 	memory: "512 MB",
 	// Provisioned concurrency keeps N Lambda instances warm at all times,
 	// eliminating cold starts (500-2000ms each) that compound across the
-	// chatty Pulumi CLI protocol. Only enabled in production to save costs.
-	...(isProd ? { concurrency: { provisioned: 2 } } : {}),
+	// chatty Pulumi CLI protocol. Disabled in dev mode only.
+	...(!$dev ? { concurrency: { provisioned: 2 } } : {}),
 	vpc,
 	link: [database, bucket, ...allSecrets],
 	environment: {
