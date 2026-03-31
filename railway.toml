@@ -20,3 +20,33 @@
   restartPolicyMaxRetries = 5
   overlapSeconds          = 30
   drainingSeconds         = 15
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Environment variables (set via Railway dashboard or CLI — not supported in
+# railway.toml). Template references resolve cross-service variables at deploy.
+#
+# Required:
+#   railway variables --set 'PROCELLA_DATABASE_URL=${{Postgres.DATABASE_URL}}'
+#   railway variables --set 'PROCELLA_AUTH_MODE=descope'
+#   railway variables --set 'PROCELLA_DESCOPE_PROJECT_ID=<your-project-id>'
+#   railway variables --set 'PROCELLA_DESCOPE_MANAGEMENT_KEY=<your-key>'
+#   railway variables --set 'PROCELLA_ENCRYPTION_KEY=<64-hex-chars>'
+#
+# Blob storage (S3-compatible — use Railway's built-in object store or external):
+#   railway variables --set 'PROCELLA_BLOB_BACKEND=s3'
+#   railway variables --set 'PROCELLA_BLOB_S3_BUCKET=<bucket-name>'
+#   railway variables --set 'PROCELLA_BLOB_S3_ENDPOINT=<endpoint-url>'  # if not AWS S3
+#   railway variables --set 'PROCELLA_BLOB_S3_REGION=us-east-1'
+#   railway variables --set 'AWS_ACCESS_KEY_ID=<key>'
+#   railway variables --set 'AWS_SECRET_ACCESS_KEY=<secret>'
+#
+# Telemetry (optional):
+#   railway variables --set 'PROCELLA_OTEL_ENABLED=true'
+#   railway variables --set 'OTEL_EXPORTER_OTLP_ENDPOINT=<grafana-otlp-url>'
+#   railway variables --set 'OTEL_EXPORTER_OTLP_HEADERS=<auth-header>'
+#   railway variables --set 'OTEL_SERVICE_NAME=procella-railway'
+#
+# For local blob storage (single replica only):
+#   railway variables --set 'PROCELLA_BLOB_BACKEND=local'
+#   railway variables --set 'PROCELLA_BLOB_LOCAL_PATH=/data/blobs'
+# ─────────────────────────────────────────────────────────────────────────────
