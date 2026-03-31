@@ -6,8 +6,8 @@
 // Uses the Lambda Runtime API directly (provided.al2023 custom runtime)
 // with a simple JSON response format (no streaming framing).
 
-import { sql } from "drizzle-orm";
 import type { APIGatewayProxyEventV2 } from "aws-lambda";
+import { sql } from "drizzle-orm";
 
 // biome-ignore lint/style/noNonNullAssertion: Lambda Runtime API always sets this
 const RUNTIME_API = process.env.AWS_LAMBDA_RUNTIME_API!;

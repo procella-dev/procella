@@ -9,8 +9,8 @@
 //   Transfer-Encoding: chunked
 //   Body: {JSON prelude}\x00\x00\x00\x00\x00\x00\x00\x00{response body}
 
-import { sql } from "drizzle-orm";
 import type { APIGatewayProxyEventV2 } from "aws-lambda";
+import { sql } from "drizzle-orm";
 
 // biome-ignore lint/style/noNonNullAssertion: Lambda Runtime API always sets this
 const RUNTIME_API = process.env.AWS_LAMBDA_RUNTIME_API!;
