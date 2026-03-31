@@ -16,6 +16,8 @@ import { bucket } from "./storage";
 
 const descopeProjectId = !$dev ? (await import("./descope")).projectId : undefined;
 
+const isProd = $app.stage === "production";
+
 export const webApi = new sst.aws.Function("ProcellaWebApi", {
 	runtime: "provided.al2023",
 	architecture: "x86_64",
@@ -27,6 +29,8 @@ export const webApi = new sst.aws.Function("ProcellaWebApi", {
 	},
 	timeout: "60 seconds",
 	memory: "512 MB",
+	// Provisioned concurrency eliminates cold starts for the dashboard API.
+	...(isProd ? { concurrency: { provisioned: 1 } } : {}),
 	vpc,
 	link: [database, bucket, ...allSecrets],
 	environment: {

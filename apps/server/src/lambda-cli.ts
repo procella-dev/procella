@@ -6,6 +6,7 @@
 // Uses the Lambda Runtime API directly (provided.al2023 custom runtime)
 // with a simple JSON response format (no streaming framing).
 
+import { sql } from "drizzle-orm";
 import type { APIGatewayProxyEventV2 } from "aws-lambda";
 
 // biome-ignore lint/style/noNonNullAssertion: Lambda Runtime API always sets this
@@ -64,8 +65,16 @@ async function postResponse(requestId: string, response: Response): Promise<void
 
 (async () => {
 	const { bootstrapCli } = await import("./bootstrap.js");
-	const { app } = await bootstrapCli();
+	const { app, db } = await bootstrapCli();
 
+	// Pre-warm DB connection pool during Lambda init phase.
+	// With provisioned concurrency, this runs once when the instance is
+	// initialized (free time), ensuring the first real request is fast.
+	try {
+		await db.execute(sql`SELECT 1`);
+	} catch {
+		/* DB warmup is best-effort */
+	}
 	while (true) {
 		const next = await fetch(`${BASE_URL}/invocation/next`);
 		// biome-ignore lint/style/noNonNullAssertion: Lambda Runtime API always sets this

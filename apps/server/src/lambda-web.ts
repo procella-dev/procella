@@ -9,6 +9,7 @@
 //   Transfer-Encoding: chunked
 //   Body: {JSON prelude}\x00\x00\x00\x00\x00\x00\x00\x00{response body}
 
+import { sql } from "drizzle-orm";
 import type { APIGatewayProxyEventV2 } from "aws-lambda";
 
 // biome-ignore lint/style/noNonNullAssertion: Lambda Runtime API always sets this
@@ -98,7 +99,14 @@ async function streamResponse(requestId: string, response: Response): Promise<vo
 
 (async () => {
 	const { bootstrapWeb } = await import("./bootstrap.js");
-	const { app } = await bootstrapWeb();
+	const { app, db } = await bootstrapWeb();
+
+	// Pre-warm DB connection pool during Lambda init phase.
+	try {
+		await db.execute(sql`SELECT 1`);
+	} catch {
+		/* DB warmup is best-effort */
+	}
 
 	while (true) {
 		const next = await fetch(`${BASE_URL}/invocation/next`);

@@ -1,5 +1,4 @@
 import { database, databaseUrl, vpc } from "./database";
-import { router } from "./router";
 import {
 	allSecrets,
 	descopeManagementKey,
@@ -18,20 +17,31 @@ const descopeProjectId = !$dev ? (await import("./descope")).projectId : undefin
 const appOrigin = isProd ? "https://app.procella.cloud" : `https://app.${stage}.procella.cloud`;
 const rootOrigin = isProd ? "https://procella.cloud" : `https://${stage}.procella.cloud`;
 
-export const api = new sst.aws.Function("ProcellaCliApi", {
+// ---------------------------------------------------------------------------
+// CLI API — API Gateway v2 (HTTP API)
+//
+// Bypasses CloudFront for lower per-request latency. The Pulumi CLI protocol
+// is extremely chatty (30-50+ sequential HTTP round trips per `pulumi up`),
+// so shaving even 10-20ms per request yields measurable improvements.
+//
+// API Gateway v2 invokes Lambda directly (not via Function URL HTTP request),
+// eliminating the CloudFront edge → origin HTTP round trip.
+// ---------------------------------------------------------------------------
+export const api = new sst.aws.ApiGatewayV2("ProcellaCliGw", {
+	domain: isProd ? "api.procella.cloud" : `api.${stage}.procella.cloud`,
+});
+
+api.route("$default", {
 	runtime: "provided.al2023",
 	architecture: "x86_64",
 	bundle: ".build/cli-api",
 	handler: "bootstrap",
-	url: {
-		cors: false,
-		router: {
-			instance: router,
-			domain: isProd ? "api.procella.cloud" : `api.${stage}.procella.cloud`,
-		},
-	},
 	timeout: "60 seconds",
 	memory: "512 MB",
+	// Provisioned concurrency keeps N Lambda instances warm at all times,
+	// eliminating cold starts (500-2000ms each) that compound across the
+	// chatty Pulumi CLI protocol. Only enabled in production to save costs.
+	...(isProd ? { concurrency: { provisioned: 2 } } : {}),
 	vpc,
 	link: [database, bucket, ...allSecrets],
 	environment: {
