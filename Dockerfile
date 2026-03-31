@@ -19,7 +19,7 @@ FROM base AS build
 COPY --from=deps /usr/src/app/node_modules ./node_modules
 COPY packages/ packages/
 COPY apps/server/ apps/server/
-COPY tsconfig.json ./
+COPY tsconfig.json tsconfig.base.json ./
 RUN bun build --compile \
     --production --sourcemap \
     --no-compile-autoload-dotenv --no-compile-autoload-bunfig \
@@ -31,7 +31,7 @@ COPY --from=adapter /lambda-adapter /opt/extensions/lambda-adapter
 COPY --from=deps /usr/src/app/node_modules ./node_modules
 COPY packages/ packages/
 COPY apps/server/ apps/server/
-COPY tsconfig.json ./
+COPY tsconfig.json tsconfig.base.json ./
 ENV PORT=8080
 ENV READINESS_CHECK_PATH=/healthz
 CMD ["bun", "run", "apps/server/src/lambda-bootstrap.ts"]
