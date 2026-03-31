@@ -3,9 +3,6 @@
 // Served from the same CloudFront distribution as the static site (app. domain)
 // via ordered cache behaviors in infra/site.ts. Streaming enabled for SSE.
 
-const isProd = $app.stage === "production";
-const stage = $app.stage;
-
 import { database, databaseUrl, vpc } from "./database";
 import {
 	allSecrets,
@@ -17,8 +14,9 @@ import {
 } from "./secrets";
 import { bucket } from "./storage";
 
+const isProd = $app.stage === "production";
+const stage = $app.stage;
 const descopeProjectId = !$dev ? (await import("./descope")).projectId : undefined;
-
 export const webApi = new sst.aws.Function("ProcellaWebApi", {
 	runtime: "provided.al2023",
 	architecture: "x86_64",
