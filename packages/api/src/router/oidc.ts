@@ -32,7 +32,9 @@ const createPolicyInput = z.object({
 	displayName: z.string().min(1).max(100),
 	issuer: z.string().url(),
 	maxExpiration: z.number().int().min(60).max(86400).default(7200),
-	claimConditions: z.record(z.string(), z.string()),
+	claimConditions: z.record(z.string(), z.string()).refine((v) => Object.keys(v).length > 0, {
+		message: "At least one claim condition is required to prevent unrestricted token acceptance",
+	}),
 	grantedRole: z.enum(["viewer", "member", "admin"]),
 });
 

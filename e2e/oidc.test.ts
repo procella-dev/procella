@@ -15,7 +15,9 @@ import { BACKEND_URL, cleanupDir, createPulumiHome, pulumi, truncateTables } fro
 
 // Skip this test suite if OIDC e2e is not configured.
 // Dev mode auth cannot mint Descope access keys so exchange will fail.
-const SKIP = !process.env.PROCELLA_OIDC_ENABLED || process.env.PROCELLA_AUTH_MODE === "dev";
+const SKIP =
+	(process.env.PROCELLA_OIDC_ENABLED !== "true" && process.env.PROCELLA_OIDC_ENABLED !== "1") ||
+	process.env.PROCELLA_AUTH_MODE === "dev";
 
 const describe_oidc = SKIP ? describe.skip : describe;
 
