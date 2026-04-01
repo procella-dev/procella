@@ -339,4 +339,60 @@ describe("@procella/server handlers", () => {
 			expect(body.defaultTeam.name).toBe("my-org");
 		});
 	});
+
+	// ========================================================================
+	// stackHandlers — searchStacks path
+	// ========================================================================
+
+	describe("stackHandlers — search", () => {
+		test("listStacks uses searchStacks when query params present", async () => {
+			const searchFn = async () => ({
+				stacks: [mockStackInfo],
+				continuationToken: "next-page",
+			});
+			const stacks = mockStacksService({
+				searchStacks: searchFn,
+			});
+			const app = new Hono<Env>();
+			app.use("*", injectCaller(validCaller));
+			const stackH = stackHandlers(stacks);
+			app.get("/stacks", stackH.listStacks);
+
+			const res = await app.request("/stacks?query=dev&pageSize=10");
+			expect(res.status).toBe(200);
+			const body = await res.json();
+			expect(body.stacks).toBeArray();
+			expect(body.continuationToken).toBe("next-page");
+		});
+
+		test("listStacks falls back to listStacks when searchStacks not available", async () => {
+			const stacks = mockStacksService();
+			// searchStacks is optional — not set in base mock
+			const app = new Hono<Env>();
+			app.use("*", injectCaller(validCaller));
+			const stackH = stackHandlers(stacks);
+			app.get("/stacks", stackH.listStacks);
+
+			const res = await app.request("/stacks?query=dev");
+			expect(res.status).toBe(200);
+			const body = await res.json();
+			expect(body.stacks).toBeArray();
+		});
+
+		test("listStacks passes sort params to searchStacks", async () => {
+			const searchFn = async (_tid: string, params: Record<string, unknown>) => {
+				expect(params.sortBy).toBe("lastUpdated");
+				expect(params.sortOrder).toBe("desc");
+				return { stacks: [] };
+			};
+			const stacks = mockStacksService({ searchStacks: searchFn });
+			const app = new Hono<Env>();
+			app.use("*", injectCaller(validCaller));
+			const stackH = stackHandlers(stacks);
+			app.get("/stacks", stackH.listStacks);
+
+			const res = await app.request("/stacks?sortBy=lastUpdated&sortOrder=desc");
+			expect(res.status).toBe(200);
+		});
+	});
 });

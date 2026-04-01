@@ -1,0 +1,241 @@
+import { describe, expect, mock, test } from "bun:test";
+import type { GitHubService } from "@procella/github";
+import type { Caller } from "@procella/types";
+import { Hono } from "hono";
+import type { Env } from "../types.js";
+import { githubHandlers } from "./github.js";
+
+// ============================================================================
+// Mock Data
+// ============================================================================
+
+const validCaller: Caller = {
+	tenantId: "t-1",
+	orgSlug: "my-org",
+	userId: "u-1",
+	login: "test-user",
+	roles: ["admin"],
+};
+
+const mockInstallation = {
+	id: "inst-uuid-1",
+	installationId: 12345,
+	tenantId: "t-1",
+	accountLogin: "my-org",
+	accountType: "Organization" as const,
+	repositorySelection: "all" as const,
+	createdAt: new Date("2025-01-01"),
+	updatedAt: new Date("2025-01-01"),
+};
+
+// ============================================================================
+// Mock Services
+// ============================================================================
+
+function mockGitHubService(overrides?: Partial<GitHubService>): GitHubService {
+	return {
+		handleWebhookEvent: mock(async () => {}),
+		postPRComment: mock(async () => {}),
+		setCommitStatus: mock(async () => {}),
+		saveInstallation: mock(async () => {}),
+		removeInstallation: mock(async () => {}),
+		getInstallation: mock(async () => mockInstallation),
+		...overrides,
+	};
+}
+
+function injectCaller(caller: Caller) {
+	return async (c: { set: (key: string, value: unknown) => void }, next: () => Promise<void>) => {
+		c.set("caller", caller);
+		await next();
+	};
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+describe("githubHandlers", () => {
+	describe("handleGitHubWebhook", () => {
+		test("returns 200 when github is not configured", async () => {
+			const app = new Hono<Env>();
+			const h = githubHandlers({
+				github: null,
+				webhookSecret: undefined,
+				verifySignature: mock(async () => true),
+			});
+			app.post("/webhooks/github", h.handleGitHubWebhook);
+
+			const res = await app.request("/webhooks/github", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					"X-GitHub-Event": "push",
+					"X-Hub-Signature-256": "sha256=abc",
+				},
+				body: JSON.stringify({ action: "completed" }),
+			});
+			expect(res.status).toBe(200);
+		});
+
+		test("processes valid webhook event", async () => {
+			const github = mockGitHubService();
+			const verifySignature = mock(async () => true);
+			const app = new Hono<Env>();
+			const h = githubHandlers({
+				github,
+				webhookSecret: "secret",
+				verifySignature,
+			});
+			app.post("/webhooks/github", h.handleGitHubWebhook);
+
+			const res = await app.request("/webhooks/github", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					"X-GitHub-Event": "installation",
+					"X-Hub-Signature-256": "sha256=valid",
+				},
+				body: JSON.stringify({ action: "created" }),
+			});
+			expect(res.status).toBe(200);
+			expect(github.handleWebhookEvent).toHaveBeenCalledTimes(1);
+		});
+
+		test("returns 401 for invalid signature", async () => {
+			const github = mockGitHubService();
+			const verifySignature = mock(async () => false);
+			const app = new Hono<Env>();
+			const h = githubHandlers({
+				github,
+				webhookSecret: "secret",
+				verifySignature,
+			});
+			app.post("/webhooks/github", h.handleGitHubWebhook);
+
+			const res = await app.request("/webhooks/github", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					"X-GitHub-Event": "push",
+					"X-Hub-Signature-256": "sha256=invalid",
+				},
+				body: JSON.stringify({}),
+			});
+			expect(res.status).toBe(401);
+		});
+
+		test("returns error when X-GitHub-Event header missing", async () => {
+			const github = mockGitHubService();
+			const app = new Hono<Env>();
+			app.onError((err, c) => c.json({ error: (err as Error).message }, 400));
+			const h = githubHandlers({
+				github,
+				webhookSecret: "secret",
+				verifySignature: mock(async () => true),
+			});
+			app.post("/webhooks/github", h.handleGitHubWebhook);
+
+			const res = await app.request("/webhooks/github", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({}),
+			});
+			expect(res.status).toBe(400);
+		});
+	});
+
+	describe("getInstallation", () => {
+		test("returns installation when configured", async () => {
+			const github = mockGitHubService();
+			const app = new Hono<Env>();
+			app.use("*", injectCaller(validCaller));
+			const h = githubHandlers({
+				github,
+				verifySignature: mock(async () => true),
+			});
+			app.get("/orgs/:org/integrations/github", h.getInstallation);
+
+			const res = await app.request("/orgs/my-org/integrations/github");
+			expect(res.status).toBe(200);
+			const body = await res.json();
+			expect(body.installation.installationId).toBe(12345);
+		});
+
+		test("returns null installation when github not configured", async () => {
+			const app = new Hono<Env>();
+			app.use("*", injectCaller(validCaller));
+			const h = githubHandlers({
+				github: null,
+				verifySignature: mock(async () => true),
+			});
+			app.get("/orgs/:org/integrations/github", h.getInstallation);
+
+			const res = await app.request("/orgs/my-org/integrations/github");
+			expect(res.status).toBe(200);
+			const body = await res.json();
+			expect(body.installation).toBeNull();
+		});
+
+		test("returns 400 for wrong org", async () => {
+			const app = new Hono<Env>();
+			app.use("*", injectCaller(validCaller));
+			app.onError((err, c) => c.json({ error: (err as Error).message }, 400));
+			const h = githubHandlers({
+				github: mockGitHubService(),
+				verifySignature: mock(async () => true),
+			});
+			app.get("/orgs/:org/integrations/github", h.getInstallation);
+
+			const res = await app.request("/orgs/wrong-org/integrations/github");
+			expect(res.status).toBe(400);
+		});
+	});
+
+	describe("removeInstallation", () => {
+		test("returns 204 after removing installation", async () => {
+			const github = mockGitHubService();
+			const app = new Hono<Env>();
+			app.use("*", injectCaller(validCaller));
+			const h = githubHandlers({
+				github,
+				verifySignature: mock(async () => true),
+			});
+			app.delete("/orgs/:org/integrations/github", h.removeInstallation);
+
+			const res = await app.request("/orgs/my-org/integrations/github", { method: "DELETE" });
+			expect(res.status).toBe(204);
+			expect(github.removeInstallation).toHaveBeenCalledWith(12345);
+		});
+
+		test("returns 204 when no installation exists", async () => {
+			const github = mockGitHubService({
+				getInstallation: mock(async () => null),
+			});
+			const app = new Hono<Env>();
+			app.use("*", injectCaller(validCaller));
+			const h = githubHandlers({
+				github,
+				verifySignature: mock(async () => true),
+			});
+			app.delete("/orgs/:org/integrations/github", h.removeInstallation);
+
+			const res = await app.request("/orgs/my-org/integrations/github", { method: "DELETE" });
+			expect(res.status).toBe(204);
+			expect(github.removeInstallation).not.toHaveBeenCalled();
+		});
+
+		test("returns 204 when github not configured", async () => {
+			const app = new Hono<Env>();
+			app.use("*", injectCaller(validCaller));
+			const h = githubHandlers({
+				github: null,
+				verifySignature: mock(async () => true),
+			});
+			app.delete("/orgs/:org/integrations/github", h.removeInstallation);
+
+			const res = await app.request("/orgs/my-org/integrations/github", { method: "DELETE" });
+			expect(res.status).toBe(204);
+		});
+	});
+});

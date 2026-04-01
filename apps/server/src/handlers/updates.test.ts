@@ -228,4 +228,180 @@ describe("updateHandlers", () => {
 		expect(stacks.getStack).toHaveBeenCalledWith("t-1", "myorg", "myproj", "dev");
 		expect(updates.getHistory).toHaveBeenCalledWith("stack-uuid-1");
 	});
+
+	test("completeUpdate emits webhook on succeeded status", async () => {
+		const updates = mockUpdatesService();
+		const stacks = mockStacksService();
+		const webhookEmitAndWait = mock(async () => {});
+		const webhooks = { emit: mock(() => {}), emitAndWait: webhookEmitAndWait } as never;
+		const app = new Hono<Env>();
+		app.use("*", injectCaller(validCaller));
+		app.use("*", async (c, next) => {
+			c.set("updateContext", { updateId: "upd-1", stackId: "s-1" });
+			await next();
+		});
+		const h = updateHandlers(updates, stacks, webhooks);
+		app.post("/stacks/:org/:project/:stack/update/:updateId/complete", h.completeUpdate);
+
+		const res = await app.request("/stacks/myorg/myproj/dev/update/upd-1/complete", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ status: "succeeded" }),
+		});
+		expect(res.status).toBe(204);
+		// emitAndWait is awaited by the handler before responding 204
+		expect(webhookEmitAndWait).toHaveBeenCalledTimes(1);
+		const call = (webhookEmitAndWait as ReturnType<typeof mock>).mock.calls[0]?.[0] as Record<
+			string,
+			unknown
+		>;
+		expect(call.event).toBe("update.succeeded");
+	});
+
+	test("completeUpdate emits webhook on failed status", async () => {
+		const updates = mockUpdatesService();
+		const stacks = mockStacksService();
+		const webhookEmitAndWait = mock(async () => {});
+		const webhooks = { emit: mock(() => {}), emitAndWait: webhookEmitAndWait } as never;
+		const app = new Hono<Env>();
+		app.use("*", injectCaller(validCaller));
+		app.use("*", async (c, next) => {
+			c.set("updateContext", { updateId: "upd-2", stackId: "s-1" });
+			await next();
+		});
+		const h = updateHandlers(updates, stacks, webhooks);
+		app.post("/stacks/:org/:project/:stack/update/:updateId/complete", h.completeUpdate);
+
+		const res = await app.request("/stacks/myorg/myproj/dev/update/upd-2/complete", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ status: "failed" }),
+		});
+		expect(res.status).toBe(204);
+		// emitAndWait is awaited by the handler before responding 204
+		expect(webhookEmitAndWait).toHaveBeenCalledTimes(1);
+		const call = (webhookEmitAndWait as ReturnType<typeof mock>).mock.calls[0]?.[0] as Record<
+			string,
+			unknown
+		>;
+		expect(call.event).toBe("update.failed");
+	});
+
+	test("startUpdate emits webhook event", async () => {
+		const updates = mockUpdatesService();
+		const stacks = mockStacksService();
+		const webhookEmit = mock(() => {});
+		const webhooks = { emit: webhookEmit, emitAndWait: mock(async () => {}) } as never;
+		const app = new Hono<Env>();
+		app.use("*", injectCaller(validCaller));
+		const h = updateHandlers(updates, stacks, webhooks);
+		app.post("/stacks/:org/:project/:stack/update/:updateId", h.startUpdate);
+
+		const res = await app.request("/stacks/myorg/myproj/dev/update/upd-1", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ tags: {} }),
+		});
+		expect(res.status).toBe(200);
+		expect(webhookEmit).toHaveBeenCalledTimes(1);
+		const call = (webhookEmit as ReturnType<typeof mock>).mock.calls[0]?.[0] as Record<
+			string,
+			unknown
+		>;
+		expect(call.event).toBe("update.started");
+	});
+
+	test("completeUpdate triggers GitHub status when tags present", async () => {
+		const updates = mockUpdatesService();
+		const stackWithGithubTags: StackInfo = {
+			...mockStackInfo,
+			tags: {
+				"github:owner": "octocat",
+				"github:repo": "hello-world",
+				"github:pr": "42",
+				"github:sha": "abc123",
+			},
+		};
+		const stacks = mockStacksService({
+			getStack: mock(async () => stackWithGithubTags),
+			getStackByNames: mock(async () => stackWithGithubTags),
+		});
+		const github = {
+			getInstallation: mock(async () => ({
+				id: "inst-1",
+				installationId: 999,
+				tenantId: "t-1",
+				accountLogin: "octocat",
+				accountType: "Organization" as const,
+				repositorySelection: "all" as const,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			})),
+			setCommitStatus: mock(async () => {}),
+			postPRComment: mock(async () => {}),
+			handleWebhookEvent: mock(async () => {}),
+			saveInstallation: mock(async () => {}),
+			removeInstallation: mock(async () => {}),
+		};
+		const webhooks = { emit: mock(() => {}), emitAndWait: mock(async () => {}) } as never;
+		const app = new Hono<Env>();
+		app.use("*", injectCaller(validCaller));
+		app.use("*", async (c, next) => {
+			c.set("updateContext", { updateId: "upd-gh", stackId: "s-1" });
+			await next();
+		});
+		const h = updateHandlers(updates, stacks, webhooks, github as never);
+		app.post("/stacks/:org/:project/:stack/update/:updateId/complete", h.completeUpdate);
+
+		const res = await app.request("/stacks/myorg/myproj/dev/update/upd-gh/complete", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ status: "succeeded" }),
+		});
+		expect(res.status).toBe(204);
+		// Give async GitHub call time to complete
+		await new Promise((r) => setTimeout(r, 100));
+		expect(github.setCommitStatus).toHaveBeenCalledTimes(1);
+		expect(github.postPRComment).toHaveBeenCalledTimes(1);
+	});
+
+	test("completeUpdate skips GitHub when tags are missing", async () => {
+		const updates = mockUpdatesService();
+		const stacks = mockStacksService();
+		const github = {
+			getInstallation: mock(async () => ({
+				id: "inst-2",
+				installationId: 999,
+				tenantId: "t-1",
+				accountLogin: "octocat",
+				accountType: "Organization" as const,
+				repositorySelection: "all" as const,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			})),
+			setCommitStatus: mock(async () => {}),
+			postPRComment: mock(async () => {}),
+			handleWebhookEvent: mock(async () => {}),
+			saveInstallation: mock(async () => {}),
+			removeInstallation: mock(async () => {}),
+		};
+		const app = new Hono<Env>();
+		app.use("*", injectCaller(validCaller));
+		app.use("*", async (c, next) => {
+			c.set("updateContext", { updateId: "upd-no-gh", stackId: "s-1" });
+			await next();
+		});
+		const h = updateHandlers(updates, stacks, undefined, github as never);
+		app.post("/stacks/:org/:project/:stack/update/:updateId/complete", h.completeUpdate);
+
+		const res = await app.request("/stacks/myorg/myproj/dev/update/upd-no-gh/complete", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ status: "succeeded" }),
+		});
+		expect(res.status).toBe(204);
+		await new Promise((r) => setTimeout(r, 100));
+		// No github:owner tag → should not call setCommitStatus
+		expect(github.setCommitStatus).not.toHaveBeenCalled();
+	});
 });

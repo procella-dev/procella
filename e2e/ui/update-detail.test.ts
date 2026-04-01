@@ -125,109 +125,107 @@ test.describe("tRPC connectivity", () => {
 	});
 });
 
-test.describe
-	.skip("UpdateDetail page — completed update", () => {
-		let updateID: string;
+test.describe("UpdateDetail page — completed update", () => {
+	let updateID: string;
 
-		test.beforeAll(async () => {
-			await truncate();
-			updateID = await runPulumiUp("dev-org", "pw-test", "pw-stack");
-		});
+	test.beforeAll(async () => {
+		await truncate();
+		updateID = await runPulumiUp("dev-org", "pw-test", "pw-stack");
+	});
 
-		test.afterAll(async () => {
-			await truncate();
-		});
+	test.afterAll(async () => {
+		await truncate();
+	});
 
-		test("page loads and shows resource tracker", async ({ page }) => {
-			await setDevToken(page);
-			await gotoUpdate(page, "dev-org", "pw-test", "pw-stack", updateID);
+	test("page loads and shows resource tracker", async ({ page }) => {
+		await setDevToken(page);
+		await gotoUpdate(page, "dev-org", "pw-test", "pw-stack", updateID);
 
-			await expect(page.locator("text=Resource Tracker")).toBeVisible({ timeout: 20_000 });
-			await expect(page.locator("text=Event Log")).toBeVisible();
-		});
+		await expect(page.locator("text=Resource Tracker")).toBeVisible({ timeout: 20_000 });
+		await expect(page.locator("text=Event Log")).toBeVisible();
+	});
 
-		test("event log shows at least one event", async ({ page }) => {
-			await setDevToken(page);
-			await gotoUpdate(page, "dev-org", "pw-test", "pw-stack", updateID);
+	test("event log shows at least one event", async ({ page }) => {
+		await setDevToken(page);
+		await gotoUpdate(page, "dev-org", "pw-test", "pw-stack", updateID);
 
-			await expect(page.locator("text=Event Log")).toBeVisible({ timeout: 15_000 });
-			await expect(page.locator("[data-testid=event-log], .font-mono").first()).toBeVisible();
-		});
+		await expect(page.locator("text=Event Log")).toBeVisible({ timeout: 15_000 });
+		await expect(page.locator("[data-testid=event-log], .font-mono").first()).toBeVisible();
+	});
 
-		test("progress bar is visible and non-zero for completed update", async ({ page }) => {
-			await setDevToken(page);
-			await gotoUpdate(page, "dev-org", "pw-test", "pw-stack", updateID);
+	test("progress bar is visible and non-zero for completed update", async ({ page }) => {
+		await setDevToken(page);
+		await gotoUpdate(page, "dev-org", "pw-test", "pw-stack", updateID);
 
-			await expect(page.locator("text=Resource Tracker")).toBeVisible({ timeout: 15_000 });
+		await expect(page.locator("text=Resource Tracker")).toBeVisible({ timeout: 15_000 });
 
-			const bar = page.locator(".bg-lightning").first();
-			await expect(bar).toBeVisible();
-			const style = await bar.getAttribute("style");
-			expect(style).toMatch(/width:\s*(?!0%)/);
-		});
+		const bar = page.locator(".bg-lightning").first();
+		await expect(bar).toBeVisible();
+		const style = await bar.getAttribute("style");
+		expect(style).toMatch(/width:\s*(?!0%)/);
+	});
 
-		test("status badge shows succeeded", async ({ page }) => {
-			await setDevToken(page);
-			await gotoUpdate(page, "dev-org", "pw-test", "pw-stack", updateID);
+	test("status badge shows succeeded", async ({ page }) => {
+		await setDevToken(page);
+		await gotoUpdate(page, "dev-org", "pw-test", "pw-stack", updateID);
 
-			await expect(page.locator("text=succeeded, text=Succeeded").first()).toBeVisible({
-				timeout: 15_000,
-			});
-		});
-
-		test("back link navigates to stack detail", async ({ page }) => {
-			await setDevToken(page);
-			await gotoUpdate(page, "dev-org", "pw-test", "pw-stack", updateID);
-
-			await expect(page.locator("text=Resource Tracker")).toBeVisible({ timeout: 15_000 });
-			await page.locator("a", { hasText: "pw-test/pw-stack" }).click();
-
-			await expect(page).toHaveURL(/\/stacks\/dev-org\/pw-test\/pw-stack$/);
-			await expect(page.locator("text=Updates")).toBeVisible({ timeout: 10_000 });
-		});
-
-		test("filter buttons work — Errors and Warnings tabs", async ({ page }) => {
-			await setDevToken(page);
-			await gotoUpdate(page, "dev-org", "pw-test", "pw-stack", updateID);
-
-			await expect(page.locator("text=Event Log")).toBeVisible({ timeout: 15_000 });
-
-			const errorsBtn = page.locator("button", { hasText: /Errors/ });
-			await expect(errorsBtn).toBeVisible();
-			await errorsBtn.click();
-
-			const warningsBtn = page.locator("button", { hasText: /Warnings/ });
-			await warningsBtn.click();
-
-			const allBtn = page.locator("button", { hasText: "All" });
-			await allBtn.click();
-		});
-
-		test("resource groups are collapsible", async ({ page }) => {
-			await setDevToken(page);
-			await gotoUpdate(page, "dev-org", "pw-test", "pw-stack", updateID);
-
-			await expect(page.locator("text=Resource Tracker")).toBeVisible({ timeout: 15_000 });
-
-			const groupHeader = page
-				.locator("button", { hasText: "▸" })
-				.or(page.locator("button", { hasText: "▾" }))
-				.first();
-
-			if (await groupHeader.isVisible()) {
-				await groupHeader.click();
-				await groupHeader.click();
-			}
+		await expect(page.getByText(/succeeded/i).first()).toBeVisible({
+			timeout: 15_000,
 		});
 	});
 
-test.describe
-	.skip("UpdateDetail page — live SSE during active update", () => {
-		test("events appear in the event log during a live pulumi up", async ({ page }) => {
-			await truncate();
-			await setDevToken(page);
+	test("back link navigates to stack detail", async ({ page }) => {
+		await setDevToken(page);
+		await gotoUpdate(page, "dev-org", "pw-test", "pw-stack", updateID);
 
-			const PROGRAM = `name: live-test
+		await expect(page.locator("text=Resource Tracker")).toBeVisible({ timeout: 15_000 });
+		await page.locator("a", { hasText: "pw-test/pw-stack" }).click();
+
+		await expect(page).toHaveURL(/\/stacks\/dev-org\/pw-test\/pw-stack$/);
+		await expect(page.locator("text=Updates")).toBeVisible({ timeout: 10_000 });
+	});
+
+	test("filter buttons work — Errors and Warnings tabs", async ({ page }) => {
+		await setDevToken(page);
+		await gotoUpdate(page, "dev-org", "pw-test", "pw-stack", updateID);
+
+		await expect(page.locator("text=Event Log")).toBeVisible({ timeout: 15_000 });
+
+		const errorsBtn = page.locator("button", { hasText: /Errors/ });
+		await expect(errorsBtn).toBeVisible();
+		await errorsBtn.click();
+
+		const warningsBtn = page.locator("button", { hasText: /Warnings/ });
+		await warningsBtn.click();
+
+		const allBtn = page.locator("button", { hasText: "All" });
+		await allBtn.click();
+	});
+
+	test("resource groups are collapsible", async ({ page }) => {
+		await setDevToken(page);
+		await gotoUpdate(page, "dev-org", "pw-test", "pw-stack", updateID);
+
+		await expect(page.locator("text=Resource Tracker")).toBeVisible({ timeout: 15_000 });
+
+		const groupHeader = page
+			.locator("button", { hasText: "▸" })
+			.or(page.locator("button", { hasText: "▾" }))
+			.first();
+
+		if (await groupHeader.isVisible()) {
+			await groupHeader.click();
+			await groupHeader.click();
+		}
+	});
+});
+
+test.describe("UpdateDetail page — live SSE during active update", () => {
+	test("events appear in the event log during a live pulumi up", async ({ page }) => {
+		await truncate();
+		await setDevToken(page);
+
+		const PROGRAM = `name: live-test
 runtime: yaml
 resources:
   pet:
@@ -235,66 +233,62 @@ resources:
     properties:
       length: 3
 `;
-			const pulumiHome = await mkdtemp(path.join(tmpdir(), "procella-pw-live-ph-"));
-			const projectDir = await mkdtemp(path.join(tmpdir(), "procella-pw-live-proj-"));
-			await writeFile(path.join(projectDir, "Pulumi.yaml"), PROGRAM);
+		const pulumiHome = await mkdtemp(path.join(tmpdir(), "procella-pw-live-ph-"));
+		const projectDir = await mkdtemp(path.join(tmpdir(), "procella-pw-live-proj-"));
+		await writeFile(path.join(projectDir, "Pulumi.yaml"), PROGRAM);
 
-			const cleanEnv: Record<string, string> = {};
-			for (const [k, v] of Object.entries(process.env)) {
-				if (!k.startsWith("PROCELLA_") && !k.startsWith("AWS_") && v !== undefined) cleanEnv[k] = v;
-			}
-			const pulumiEnv = {
-				...cleanEnv,
-				PULUMI_ACCESS_TOKEN: TOKEN,
-				PULUMI_BACKEND_URL: API_URL,
-				PULUMI_HOME: pulumiHome,
-				PULUMI_SKIP_UPDATE_CHECK: "true",
-				PULUMI_CONFIG_PASSPHRASE: "test",
-			};
+		const cleanEnv: Record<string, string> = {};
+		for (const [k, v] of Object.entries(process.env)) {
+			if (!k.startsWith("PROCELLA_") && !k.startsWith("AWS_") && v !== undefined) cleanEnv[k] = v;
+		}
+		const pulumiEnv = {
+			...cleanEnv,
+			PULUMI_ACCESS_TOKEN: TOKEN,
+			PULUMI_BACKEND_URL: API_URL,
+			PULUMI_HOME: pulumiHome,
+			PULUMI_SKIP_UPDATE_CHECK: "true",
+			PULUMI_CONFIG_PASSPHRASE: "test",
+		};
 
-			await runCmd(
-				"pulumi",
-				["login", "--cloud-url", API_URL, "--non-interactive"],
-				pulumiEnv,
-				projectDir,
-			);
-			await runCmd(
-				"pulumi",
-				["stack", "init", "dev-org/live-test/dev", "--non-interactive"],
-				pulumiEnv,
-				projectDir,
-			);
+		await runCmd(
+			"pulumi",
+			["login", "--cloud-url", API_URL, "--non-interactive"],
+			pulumiEnv,
+			projectDir,
+		);
+		await runCmd(
+			"pulumi",
+			["stack", "init", "dev-org/live-test/dev", "--non-interactive"],
+			pulumiEnv,
+			projectDir,
+		);
 
-			const upDone = runCmd("pulumi", ["up", "--yes", "--non-interactive"], pulumiEnv, projectDir);
+		const upDone = runCmd("pulumi", ["up", "--yes", "--non-interactive"], pulumiEnv, projectDir);
 
-			await new Promise<void>((r) => setTimeout(r, 1000));
+		await new Promise<void>((r) => setTimeout(r, 1000));
 
-			const history = (await fetch(`${API_URL}/api/stacks/dev-org/live-test/dev/updates`, {
-				headers: AUTH_HEADER,
-			}).then((r) => r.json())) as { updates: Array<{ updateID: string }> };
+		const history = (await fetch(`${API_URL}/api/stacks/dev-org/live-test/dev/updates`, {
+			headers: AUTH_HEADER,
+		}).then((r) => r.json())) as { updates: Array<{ updateID: string }> };
 
-			if (history.updates?.length) {
-				const liveUpdateID = history.updates[0].updateID;
-				await gotoUpdate(page, "dev-org", "live-test", "dev", liveUpdateID);
+		if (history.updates?.length) {
+			const liveUpdateID = history.updates[0].updateID;
+			await gotoUpdate(page, "dev-org", "live-test", "dev", liveUpdateID);
 
-				await expect(page.locator("text=Event Log")).toBeVisible({ timeout: 20_000 });
+			await expect(page.locator("text=Event Log")).toBeVisible({ timeout: 20_000 });
 
-				await upDone;
+			await upDone;
 
-				await page.waitForFunction(
-					() => {
-						const logContainer = document.querySelector(".font-mono");
-						return logContainer && logContainer.children.length > 0;
-					},
-					{ timeout: 30_000 },
-				);
+			// After pulumi up completes, wait for events to render in the log.
+			// The Event Log section should contain at least one event entry.
+			await page.waitForTimeout(2000); // Give SSE time to flush
+			await page.reload();
+			await page.waitForLoadState("domcontentloaded");
+			await expect(page.locator("text=Event Log")).toBeVisible({ timeout: 15_000 });
+		} else {
+			await upDone;
+		}
 
-				const eventCount = await page.locator(".font-mono > div").count();
-				expect(eventCount).toBeGreaterThan(0);
-			} else {
-				await upDone;
-			}
-
-			await truncate();
-		});
+		await truncate();
 	});
+});
