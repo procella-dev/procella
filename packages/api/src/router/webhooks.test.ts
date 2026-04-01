@@ -44,6 +44,7 @@ function mockContext(overrides?: Partial<TRPCContext>): TRPCContext {
 			userId: "u-1",
 			login: "admin",
 			roles: ["admin"],
+			principalType: "user",
 		},
 		db: {} as never,
 		dbUrl: "",
@@ -74,6 +75,7 @@ const viewerCtx = (): TRPCContext =>
 			userId: "u-2",
 			login: "viewer",
 			roles: ["viewer"],
+			principalType: "user",
 		},
 	});
 

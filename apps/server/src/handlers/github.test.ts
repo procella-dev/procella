@@ -15,6 +15,7 @@ const validCaller: Caller = {
 	userId: "u-1",
 	login: "test-user",
 	roles: ["admin"],
+	principalType: "user",
 };
 
 const mockInstallation = {

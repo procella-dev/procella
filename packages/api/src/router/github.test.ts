@@ -25,6 +25,7 @@ function mockContext(overrides?: Partial<TRPCContext>): TRPCContext {
 			userId: "u-1",
 			login: "admin",
 			roles: ["admin"],
+			principalType: "user",
 		},
 		db: {} as never,
 		dbUrl: "",
@@ -75,6 +76,7 @@ describe("githubRouter", () => {
 					userId: "u-2",
 					login: "viewer",
 					roles: ["viewer"],
+					principalType: "user",
 				},
 			});
 			const caller = githubRouter.createCaller(ctx);
@@ -128,6 +130,7 @@ describe("githubRouter", () => {
 					userId: "u-2",
 					login: "viewer",
 					roles: ["viewer"],
+					principalType: "user",
 				},
 			});
 			const caller = githubRouter.createCaller(ctx);

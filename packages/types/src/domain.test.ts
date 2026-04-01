@@ -37,6 +37,7 @@ describe("@procella/types domain", () => {
 			userId: "u-1",
 			login: "admin",
 			roles: ["admin"],
+			principalType: "user",
 		};
 
 		const viewerCaller: Caller = {
@@ -45,6 +46,7 @@ describe("@procella/types domain", () => {
 			userId: "u-2",
 			login: "viewer",
 			roles: ["viewer"],
+			principalType: "user",
 		};
 
 		test("returns true when caller has the role", () => {
@@ -67,6 +69,7 @@ describe("@procella/types domain", () => {
 			userId: "u-3",
 			login: "member",
 			roles: ["member"],
+			principalType: "user",
 		};
 
 		test("returns true when any role matches", () => {

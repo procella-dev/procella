@@ -14,6 +14,7 @@ function mockContext(overrides?: Partial<TRPCContext>): TRPCContext {
 			userId: "u-1",
 			login: "admin",
 			roles: ["admin"],
+			principalType: "user",
 		},
 		db: {} as never,
 		dbUrl: "",
@@ -62,6 +63,7 @@ describe("auditRouter", () => {
 					userId: "u-2",
 					login: "viewer",
 					roles: ["viewer"],
+					principalType: "user",
 				},
 			});
 			const caller = auditRouter.createCaller(ctx);
@@ -96,6 +98,7 @@ describe("auditRouter", () => {
 					userId: "u-2",
 					login: "member",
 					roles: ["member"],
+					principalType: "user",
 				},
 			});
 			const caller = auditRouter.createCaller(ctx);
