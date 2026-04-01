@@ -1,6 +1,7 @@
 import type { OidcService, TokenExchangeRequest } from "@procella/oidc";
 import { DEFAULT_EXCHANGE_EXPIRATION, OidcExchangeError } from "@procella/oidc";
 import type { Context } from "hono";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { Env } from "../types.js";
 
 export function oauthHandlers(oidc: OidcService | null) {
@@ -29,7 +30,7 @@ export function oauthHandlers(oidc: OidcService | null) {
 				if (err instanceof OidcExchangeError) {
 					return c.json(
 						{ error: err.error, error_description: err.errorDescription },
-						err.statusCode as 400,
+						err.statusCode as ContentfulStatusCode,
 					);
 				}
 				throw err;

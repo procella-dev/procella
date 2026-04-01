@@ -182,6 +182,7 @@ describe("DescopeAuthService", () => {
 			exp: Math.floor(Date.now() / 1000) + 3600,
 			[OidcClaims.principalType]: "workload",
 			[OidcClaims.workloadProvider]: "github",
+			[OidcClaims.workloadIssuer]: "https://token.actions.githubusercontent.com",
 			[OidcClaims.workloadSub]: "repo:org/repo:ref:refs/heads/main",
 			[OidcClaims.workloadRepo]: "org/repo",
 			[OidcClaims.workloadRepoId]: "123",
@@ -202,7 +203,7 @@ describe("DescopeAuthService", () => {
 		expect(caller.principalType).toBe("workload");
 		expect(caller.workload).toEqual({
 			provider: "github",
-			issuer: "repo",
+			issuer: "https://token.actions.githubusercontent.com",
 			subject: "repo:org/repo:ref:refs/heads/main",
 			repository: "org/repo",
 			repositoryId: "123",
@@ -236,7 +237,7 @@ describe("DescopeAuthService", () => {
 		expect(caller.principalType).toBe("workload");
 		expect(caller.workload).toEqual({
 			provider: "kubernetes",
-			issuer: "issuer",
+			issuer: "issuer:subject",
 			subject: "issuer:subject",
 			repository: undefined,
 			repositoryId: undefined,

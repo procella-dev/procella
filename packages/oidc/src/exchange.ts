@@ -1,4 +1,3 @@
-import type { AuthService } from "@procella/auth";
 import type { Caller } from "@procella/types";
 import {
 	AUDIENCE_PREFIX,
@@ -8,6 +7,7 @@ import {
 	REQUESTED_TOKEN_TYPE_ORG,
 	SUBJECT_TOKEN_TYPE_ID_TOKEN,
 } from "./claims.js";
+import { JwksValidationError } from "./jwks.js";
 import { findMatchingPolicy } from "./policy.js";
 import type {
 	JwksValidator,
@@ -18,11 +18,19 @@ import type {
 	TrustPolicyRepository,
 } from "./types.js";
 
+interface TokenMinter {
+	createCliAccessKey?(
+		caller: Caller,
+		name: string,
+		opts?: { expireTime?: number; customClaims?: Record<string, unknown> },
+	): Promise<string>;
+}
+
 export class OidcExchangeService implements OidcService {
 	constructor(
 		private jwks: JwksValidator,
 		private policies: TrustPolicyRepository,
-		private auth: AuthService,
+		private auth: TokenMinter,
 	) {}
 
 	async exchange(req: TokenExchangeRequest): Promise<TokenExchangeResponse> {
@@ -31,6 +39,12 @@ export class OidcExchangeService implements OidcService {
 		}
 		if (req.subjectTokenType !== SUBJECT_TOKEN_TYPE_ID_TOKEN) {
 			throw new OidcExchangeError("invalid_request", "Unsupported subject_token_type");
+		}
+		if (req.requestedTokenType && req.requestedTokenType !== REQUESTED_TOKEN_TYPE_ORG) {
+			throw new OidcExchangeError(
+				"invalid_request",
+				`Unsupported requested_token_type: ${req.requestedTokenType}. Only organization tokens are supported.`,
+			);
 		}
 
 		if (!req.audience.startsWith(AUDIENCE_PREFIX)) {
@@ -61,7 +75,12 @@ export class OidcExchangeService implements OidcService {
 					matchedPolicy = policy;
 					break;
 				}
-			} catch {}
+			} catch (err) {
+				if (err instanceof JwksValidationError) {
+					continue;
+				}
+				throw err;
+			}
 		}
 
 		if (!matchedPolicy || !claims) {
@@ -108,6 +127,7 @@ function buildWorkloadClaims(
 	return {
 		[OidcClaims.principalType]: "workload",
 		[OidcClaims.workloadProvider]: policy.provider,
+		[OidcClaims.workloadIssuer]: policy.issuer,
 		[OidcClaims.workloadSub]: String(jwtClaims.sub ?? ""),
 		[OidcClaims.workloadRepo]: optStr(jwtClaims.repository),
 		[OidcClaims.workloadRepoId]: optStr(jwtClaims.repository_id),

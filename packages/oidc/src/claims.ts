@@ -1,6 +1,7 @@
 export const OidcClaims = {
 	principalType: "procellaPrincipalType",
 	workloadProvider: "procellaWorkloadProvider",
+	workloadIssuer: "procellaWorkloadIssuer",
 	workloadSub: "procellaWorkloadSub",
 	workloadRepo: "procellaWorkloadRepo",
 	workloadRepoId: "procellaWorkloadRepoId",

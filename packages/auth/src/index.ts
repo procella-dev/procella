@@ -336,7 +336,9 @@ export class DescopeAuthService implements AuthService {
 		const workload: WorkloadIdentity | undefined = isWorkload
 			? {
 					provider: String(claims[OidcClaims.workloadProvider] ?? ""),
-					issuer: String(claims[OidcClaims.workloadSub] ?? "").split(":")[0] ?? "",
+					issuer:
+						optionalString(claims[OidcClaims.workloadIssuer]) ??
+						String(claims[OidcClaims.workloadSub] ?? ""),
 					subject: String(claims[OidcClaims.workloadSub] ?? ""),
 					repository: optionalString(claims[OidcClaims.workloadRepo]),
 					repositoryId: optionalString(claims[OidcClaims.workloadRepoId]),

@@ -1,5 +1,4 @@
 import { describe, expect, mock, test } from "bun:test";
-import type { AuthService } from "@procella/auth";
 import {
 	AUDIENCE_PREFIX,
 	DEFAULT_EXCHANGE_EXPIRATION,
@@ -9,6 +8,7 @@ import {
 	SUBJECT_TOKEN_TYPE_ID_TOKEN,
 } from "./claims.js";
 import { OidcExchangeError, OidcExchangeService } from "./exchange.js";
+import { JwksValidationError } from "./jwks.js";
 import type {
 	JwksValidator,
 	OidcTrustPolicy,
@@ -47,14 +47,10 @@ function validRequest(overrides: Partial<TokenExchangeRequest> = {}): TokenExcha
 	};
 }
 
-function makeAuth(createCliAccessKey?: AuthService["createCliAccessKey"]): AuthService {
+type TokenMinter = ConstructorParameters<typeof OidcExchangeService>[2];
+
+function makeAuth(createCliAccessKey?: TokenMinter["createCliAccessKey"]): TokenMinter {
 	return {
-		authenticate: mock(async () => {
-			throw new Error("not implemented in test");
-		}),
-		authenticateUpdateToken: mock(async () => {
-			throw new Error("not implemented in test");
-		}),
 		createCliAccessKey,
 	};
 }
@@ -79,7 +75,9 @@ async function expectExchangeError(
 describe("OidcExchangeService", () => {
 	test("happy path: valid JWT + matching policy returns token exchange response", async () => {
 		const verify = mock(async (_jwt: string, issuer: string) => {
-			if (issuer === "https://issuer.one") throw new Error("issuer mismatch");
+			if (issuer === "https://issuer.one") {
+				throw new JwksValidationError("claim_validation_failed", "issuer mismatch");
+			}
 			return {
 				sub: "repo:acme/procella",
 				repository: "acme/procella",
@@ -155,6 +153,28 @@ describe("OidcExchangeService", () => {
 		);
 	});
 
+	test("unsupported requested_token_type throws invalid_request", async () => {
+		const service = new OidcExchangeService(
+			{ verify: mock(async () => ({})), dispose: mock(() => {}) },
+			{
+				findByOrgSlug: mock(async () => []),
+				create: mock(async () => mockPolicy()),
+				update: mock(async () => mockPolicy()),
+				delete: mock(async () => {}),
+			},
+			makeAuth(mock(async () => "x")),
+		);
+
+		await expectExchangeError(
+			service.exchange(
+				validRequest({
+					requestedTokenType: "urn:ietf:params:oauth:token-type:access_token",
+				}),
+			),
+			{ error: "invalid_request" },
+		);
+	});
+
 	test("invalid audience format throws invalid_target", async () => {
 		const service = new OidcExchangeService(
 			{ verify: mock(async () => ({})), dispose: mock(() => {}) },
@@ -215,7 +235,7 @@ describe("OidcExchangeService", () => {
 		const service = new OidcExchangeService(
 			{
 				verify: mock(async () => {
-					throw new Error("invalid signature");
+					throw new JwksValidationError("signature_invalid", "invalid signature");
 				}),
 				dispose: mock(() => {}),
 			},
@@ -358,6 +378,7 @@ describe("OidcExchangeService", () => {
 		expect(opts?.customClaims).toEqual({
 			[OidcClaims.principalType]: "workload",
 			[OidcClaims.workloadProvider]: "github-actions",
+			[OidcClaims.workloadIssuer]: "https://token.actions.githubusercontent.com",
 			[OidcClaims.workloadSub]: "repo:acme/procella",
 			[OidcClaims.workloadRepo]: "acme/procella",
 			[OidcClaims.workloadRepoId]: "98765",

@@ -27,7 +27,12 @@ beforeAll(async () => {
 		port: 0,
 		fetch(req) {
 			const url = new URL(req.url);
-			if (url.pathname === "/.well-known/jwks.json") {
+			if (url.pathname === "/.well-known/openid-configuration") {
+				return new Response(JSON.stringify({ jwks_uri: `${issuerUrl}/.well-known/jwks` }), {
+					headers: { "Content-Type": "application/json" },
+				});
+			}
+			if (url.pathname === "/.well-known/jwks" || url.pathname === "/.well-known/jwks.json") {
 				return new Response(JSON.stringify({ keys: [publicJwk] }), {
 					headers: { "Content-Type": "application/json" },
 				});
@@ -149,12 +154,18 @@ describe("JwksValidatorImpl", () => {
 			alg: "RS256",
 			use: "sig",
 		};
+		let secondIssuer = "";
 
 		const secondServer = Bun.serve({
 			port: 0,
 			fetch(req) {
 				const url = new URL(req.url);
-				if (url.pathname === "/.well-known/jwks.json") {
+				if (url.pathname === "/.well-known/openid-configuration") {
+					return new Response(JSON.stringify({ jwks_uri: `${secondIssuer}/.well-known/jwks` }), {
+						headers: { "Content-Type": "application/json" },
+					});
+				}
+				if (url.pathname === "/.well-known/jwks" || url.pathname === "/.well-known/jwks.json") {
 					return new Response(JSON.stringify({ keys: [secondPublicJwk] }), {
 						headers: { "Content-Type": "application/json" },
 					});
@@ -164,6 +175,7 @@ describe("JwksValidatorImpl", () => {
 		});
 
 		const issuer2 = `http://localhost:${secondServer.port}`;
+		secondIssuer = issuer2;
 		const token2 = await new SignJWT({ source: "issuer-2" })
 			.setProtectedHeader({ alg: "RS256", kid: "test-kid-2" })
 			.setIssuedAt()
