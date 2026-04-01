@@ -136,24 +136,13 @@ jobs:
             }
 
   integration-tests:
-    name: Integration Tests
+    name: Integration Tests (Deployed Preview)
     runs-on: ubuntu-latest
     needs: [deploy]
     if: needs.deploy.result == 'success' && needs.deploy.outputs.descope_project_id != ''
-    services:
-      postgres:
-        image: postgres:18-alpine
-        env:
-          POSTGRES_USER: procella
-          POSTGRES_PASSWORD: procella
-          POSTGRES_DB: procella
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U procella"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
+    permissions:
+      id-token: write  # Required for GitHub Actions OIDC token
+      contents: read
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
@@ -166,10 +155,9 @@ jobs:
           restore-keys: bun-${{ runner.os }}-
       - uses: pulumi/setup-pulumi@v2
       - run: bun install --frozen-lockfile
-      - name: Run Descope + OIDC integration tests
+      - name: Run integration tests against deployed preview
         env:
-          PROCELLA_DATABASE_URL: postgres://procella:procella@localhost:5432/procella?sslmode=disable
+          PROCELLA_API_URL: ${{ needs.deploy.outputs.api_url }}
           PROCELLA_DESCOPE_PROJECT_ID: ${{ needs.deploy.outputs.descope_project_id }}
           PROCELLA_DESCOPE_MANAGEMENT_KEY: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
-          PROCELLA_ENCRYPTION_KEY: ${{ secrets.PROCELLA_ENCRYPTION_KEY }}
         run: bun run e2e:descope
