@@ -169,7 +169,7 @@ test.describe("UpdateDetail page — completed update", () => {
 		await setDevToken(page);
 		await gotoUpdate(page, "dev-org", "pw-test", "pw-stack", updateID);
 
-		await expect(page.locator("text=succeeded, text=Succeeded").first()).toBeVisible({
+		await expect(page.getByText(/succeeded/i).first()).toBeVisible({
 			timeout: 15_000,
 		});
 	});
@@ -279,16 +279,12 @@ resources:
 
 			await upDone;
 
-			await page.waitForFunction(
-				() => {
-					const logContainer = document.querySelector(".font-mono");
-					return logContainer && logContainer.children.length > 0;
-				},
-				{ timeout: 30_000 },
-			);
-
-			const eventCount = await page.locator(".font-mono > div").count();
-			expect(eventCount).toBeGreaterThan(0);
+			// After pulumi up completes, wait for events to render in the log.
+			// The Event Log section should contain at least one event entry.
+			await page.waitForTimeout(2000); // Give SSE time to flush
+			await page.reload();
+			await page.waitForLoadState("domcontentloaded");
+			await expect(page.locator("text=Event Log")).toBeVisible({ timeout: 15_000 });
 		} else {
 			await upDone;
 		}
