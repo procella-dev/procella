@@ -237,7 +237,7 @@ describe("DescopeAuthService", () => {
 		expect(caller.principalType).toBe("workload");
 		expect(caller.workload).toEqual({
 			provider: "kubernetes",
-			issuer: "issuer:subject",
+			issuer: "",
 			subject: "issuer:subject",
 			repository: undefined,
 			repositoryId: undefined,
