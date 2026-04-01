@@ -25,23 +25,21 @@ test.describe("Stack List Page", () => {
 	});
 
 	test("loads the stack list page", async ({ page }) => {
-		await page.goto(`${UI_URL}/`);
-		await page.waitForLoadState("networkidle");
-		// The page should render without errors
-		await expect(page.locator("body")).toBeVisible();
+		const response = await page.goto(`${UI_URL}/`);
+		await page.waitForLoadState("domcontentloaded");
+		if (response && response.status() >= 500) throw new Error(`Server error: ${response.status()}`);
 	});
 
 	test("displays stacks after creation", async ({ page }) => {
 		const stackName = `pw-list-${Date.now()}`;
 		await createStack("dev-org", "test-project", stackName);
 
-		await page.goto(`${UI_URL}/`);
-		await page.waitForLoadState("networkidle");
+		const response = await page.goto(`${UI_URL}/`);
+		await page.waitForLoadState("domcontentloaded");
+		if (response && response.status() >= 500) throw new Error(`Server error: ${response.status()}`);
 
-		// Wait for stack list to load and show content
-		await page.waitForTimeout(1000);
-		const body = await page.textContent("body");
-		expect(body).toContain(stackName);
+		// Wait for stack name to appear in the page
+		await expect(page.getByText(stackName).first()).toBeVisible({ timeout: 10_000 });
 	});
 
 	test("navigates to stack detail when clicking a stack", async ({ page }) => {
@@ -49,8 +47,7 @@ test.describe("Stack List Page", () => {
 		await createStack("dev-org", "test-project", stackName);
 
 		await page.goto(`${UI_URL}/`);
-		await page.waitForLoadState("networkidle");
-		await page.waitForTimeout(1000);
+		await page.waitForLoadState("domcontentloaded");
 
 		// Wait for and click the stack link
 		const stackLink = page.getByText(stackName).first();
