@@ -30,7 +30,12 @@ function assertOidc(ctx: { oidcPolicies?: unknown }): void {
 const createPolicyInput = z.object({
 	provider: z.literal("github-actions"),
 	displayName: z.string().min(1).max(100),
-	issuer: z.string().url(),
+	issuer: z
+		.string()
+		.url()
+		.refine((u) => u.startsWith("https://"), {
+			message: "Issuer URL must use HTTPS to prevent SSRF",
+		}),
 	maxExpiration: z.number().int().min(60).max(86400).default(7200),
 	claimConditions: z.record(z.string(), z.string()).refine((v) => Object.keys(v).length > 0, {
 		message: "At least one claim condition is required to prevent unrestricted token acceptance",

@@ -7,9 +7,12 @@ export class JwksValidatorImpl implements JwksValidator {
 	private cache = new Map<string, RemoteJWKSet>();
 	private discoveredJwksUris = new Map<string, string>();
 	private readonly maxCacheSize: number;
+	/** Allow HTTP issuers — for testing only, never set in production. */
+	private readonly allowHttp: boolean;
 
-	constructor(opts?: { maxCacheSize?: number }) {
+	constructor(opts?: { maxCacheSize?: number; allowHttp?: boolean }) {
 		this.maxCacheSize = opts?.maxCacheSize ?? 100;
+		this.allowHttp = opts?.allowHttp ?? false;
 	}
 
 	async verify(
@@ -63,6 +66,11 @@ export class JwksValidatorImpl implements JwksValidator {
 	}
 
 	private async discoverJwksUri(issuer: string): Promise<string> {
+		// Guard against SSRF — only allow HTTPS issuers
+		// Guard against SSRF — only allow HTTPS issuers in production
+		if (!this.allowHttp && !issuer.startsWith("https://")) {
+			throw new JwksValidationError("invalid_issuer", `Issuer must use HTTPS, got: ${issuer}`);
+		}
 		const cached = this.discoveredJwksUris.get(issuer);
 		if (cached) {
 			return cached;

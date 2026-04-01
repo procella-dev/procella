@@ -68,7 +68,7 @@ function getCacheSize(validator: JwksValidatorImpl): number {
 
 describe("JwksValidatorImpl", () => {
 	test("valid JWT with correct issuer and audience returns claims", async () => {
-		const validator = new JwksValidatorImpl();
+		const validator = new JwksValidatorImpl({ allowHttp: true });
 		const token = await signJwt({ custom: "value" });
 
 		const claims = await validator.verify(token, issuerUrl, "test-audience");
@@ -78,7 +78,7 @@ describe("JwksValidatorImpl", () => {
 	});
 
 	test("wrong issuer throws claim_validation_failed", async () => {
-		const validator = new JwksValidatorImpl();
+		const validator = new JwksValidatorImpl({ allowHttp: true });
 		const token = await signJwt({ foo: "bar" }, { issuer: `${issuerUrl}/unexpected-issuer` });
 
 		try {
@@ -92,7 +92,7 @@ describe("JwksValidatorImpl", () => {
 	});
 
 	test("wrong audience throws JwksValidationError", async () => {
-		const validator = new JwksValidatorImpl();
+		const validator = new JwksValidatorImpl({ allowHttp: true });
 		const token = await signJwt({ foo: "bar" });
 
 		await expect(validator.verify(token, issuerUrl, "wrong-audience")).rejects.toBeInstanceOf(
@@ -101,7 +101,7 @@ describe("JwksValidatorImpl", () => {
 	});
 
 	test("expired JWT throws token_expired", async () => {
-		const validator = new JwksValidatorImpl();
+		const validator = new JwksValidatorImpl({ allowHttp: true });
 		const token = await signJwt({ foo: "bar" }, { expiresIn: "-1s" });
 
 		try {
@@ -115,7 +115,7 @@ describe("JwksValidatorImpl", () => {
 	});
 
 	test("JWT signed with wrong key throws signature or key error", async () => {
-		const validator = new JwksValidatorImpl();
+		const validator = new JwksValidatorImpl({ allowHttp: true });
 		const wrongPair = await generateKeyPair("RS256");
 		const token = await new SignJWT({ foo: "bar" })
 			.setProtectedHeader({ alg: "RS256", kid: "wrong-kid" })
@@ -137,14 +137,14 @@ describe("JwksValidatorImpl", () => {
 	});
 
 	test("malformed JWT string throws error", async () => {
-		const validator = new JwksValidatorImpl();
+		const validator = new JwksValidatorImpl({ allowHttp: true });
 		await expect(validator.verify("not-a-jwt", issuerUrl, "test-audience")).rejects.toBeInstanceOf(
 			Error,
 		);
 	});
 
 	test("multiple issuers are cached independently", async () => {
-		const validator = new JwksValidatorImpl();
+		const validator = new JwksValidatorImpl({ allowHttp: true });
 		const token1 = await signJwt({ source: "issuer-1" });
 
 		const secondPair = await generateKeyPair("RS256");
@@ -198,7 +198,7 @@ describe("JwksValidatorImpl", () => {
 	});
 
 	test("dispose clears cache", async () => {
-		const validator = new JwksValidatorImpl();
+		const validator = new JwksValidatorImpl({ allowHttp: true });
 		const token = await signJwt({ foo: "bar" });
 
 		await validator.verify(token, issuerUrl, "test-audience");
