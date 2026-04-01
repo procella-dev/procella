@@ -45,6 +45,7 @@
         "@procella/crypto": "workspace:*",
         "@procella/db": "workspace:*",
         "@procella/github": "workspace:*",
+        "@procella/oidc": "workspace:*",
         "@procella/stacks": "workspace:*",
         "@procella/storage": "workspace:*",
         "@procella/telemetry": "workspace:*",
@@ -120,6 +121,7 @@
       "dependencies": {
         "@descope/node-sdk": "^2.0.0",
         "@procella/config": "workspace:*",
+        "@procella/oidc": "workspace:*",
         "@procella/telemetry": "workspace:*",
         "@procella/types": "workspace:*",
       },
@@ -160,6 +162,16 @@
         "@procella/config": "workspace:*",
         "@procella/db": "workspace:*",
         "drizzle-orm": "catalog:",
+      },
+    },
+    "packages/oidc": {
+      "name": "@procella/oidc",
+      "version": "0.0.0",
+      "dependencies": {
+        "@procella/config": "workspace:*",
+        "@procella/db": "workspace:*",
+        "@procella/types": "workspace:*",
+        "jose": "^6.0.0",
       },
     },
     "packages/stacks": {
@@ -714,6 +726,8 @@
     "@procella/docs": ["@procella/docs@workspace:apps/docs"],
 
     "@procella/github": ["@procella/github@workspace:packages/github"],
+
+    "@procella/oidc": ["@procella/oidc@workspace:packages/oidc"],
 
     "@procella/server": ["@procella/server@workspace:apps/server"],
 
@@ -1545,7 +1559,7 @@
 
     "jiti": ["jiti@2.6.1", "", { "bin": { "jiti": "lib/jiti-cli.mjs" } }, "sha512-ekilCSN1jwRvIbgeg/57YFh8qQDNbwDb9xT/qu2DAHbFFZUicIl4ygVaAvzveMhMVr3LnpSKTNnwt8PoOfmKhQ=="],
 
-    "jose": ["jose@5.2.2", "", {}, "sha512-/WByRr4jDcsKlvMd1dRJnPfS1GVO3WuKyaurJ/vvXcOaUQO8rnNObCQMlv/5uCceVQIq5Q4WLF44ohsdiTohdg=="],
+    "jose": ["jose@6.2.2", "", {}, "sha512-d7kPDd34KO/YnzaDOlikGpOurfF0ByC2sEV4cANCtdqLlTfBlw2p14O/5d/zv40gJPbIQxfES3nSx1/oYNyuZQ=="],
 
     "js-cookie": ["js-cookie@3.0.5", "", {}, "sha512-cEiJEAEoIbWfCZYKWhVwFuvPX1gETRYPw6LlaTKoxD3s2AkXzkCjnp6h0V77ozyqj0jakteJ4YqDJT830+lVGw=="],
 
@@ -2310,6 +2324,8 @@
     "@aws-crypto/util/@smithy/util-utf8": ["@smithy/util-utf8@2.3.0", "", { "dependencies": { "@smithy/util-buffer-from": "^2.2.0", "tslib": "^2.6.2" } }, "sha512-R8Rdn8Hy72KKcebgLiv8jQcQkXoLMOGGv5uI1/k0l+snqkOzQ1R0ChUBCxWMlBsFMekWjq0wRudIweFs7sKT5A=="],
 
     "@codecov/bundler-plugin-core/zod": ["zod@3.25.76", "", {}, "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="],
+
+    "@descope/node-sdk/jose": ["jose@5.2.2", "", {}, "sha512-/WByRr4jDcsKlvMd1dRJnPfS1GVO3WuKyaurJ/vvXcOaUQO8rnNObCQMlv/5uCceVQIq5Q4WLF44ohsdiTohdg=="],
 
     "@descope/react-sdk/@descope/core-js-sdk": ["@descope/core-js-sdk@2.57.0", "", { "dependencies": { "jwt-decode": "4.0.0" } }, "sha512-dNvmlyz81VNqmZ699GdhucXQD15kaX3by9086bGR6zWHHVlsenHxW9kDpLoKPoWsKkXxvUq0Ysh9bi+6+A4LyQ=="],
 

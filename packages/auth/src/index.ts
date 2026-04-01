@@ -4,9 +4,10 @@
 // Dev mode uses a static token for local development.
 
 import DescopeSdk from "@descope/node-sdk";
+import { OidcClaims } from "@procella/oidc";
 import { authAuthenticateDuration, authFailureCount, withSpan } from "@procella/telemetry";
 
-import type { Caller, Role } from "@procella/types";
+import type { Caller, Role, WorkloadIdentity } from "@procella/types";
 import { ForbiddenError, UnauthorizedError } from "@procella/types";
 
 // ============================================================================
@@ -19,7 +20,11 @@ export interface AuthService {
 	/** Authenticate an update-token (lease token from StartUpdate). */
 	authenticateUpdateToken(token: string): Promise<{ updateId: string; stackId: string }>;
 	/** Create a long-lived CLI access key for the given caller. Returns the cleartext key. */
-	createCliAccessKey?(caller: Caller, name: string): Promise<string>;
+	createCliAccessKey?(
+		caller: Caller,
+		name: string,
+		opts?: { expireTime?: number; customClaims?: Record<string, unknown> },
+	): Promise<string>;
 	/** Stop background timers (e.g. cache sweep). Called on server shutdown. */
 	dispose?(): void;
 }
@@ -63,6 +68,7 @@ export class DevAuthService implements AuthService {
 					userId: this.config.userLogin,
 					login: this.config.userLogin,
 					roles: ["admin"] as const,
+					principalType: "user" as const,
 				};
 			} catch (error) {
 				authFailureCount().add(1, { "auth.mode": "dev" });
@@ -177,7 +183,11 @@ export class DescopeAuthService implements AuthService {
 		);
 	}
 
-	async createCliAccessKey(caller: Caller, name: string): Promise<string> {
+	async createCliAccessKey(
+		caller: Caller,
+		name: string,
+		opts?: { expireTime?: number; customClaims?: Record<string, unknown> },
+	): Promise<string> {
 		const start = performance.now();
 		return withSpan(
 			"procella.auth",
@@ -193,14 +203,17 @@ export class DescopeAuthService implements AuthService {
 						(u?.givenName && u?.familyName ? `${u.givenName} ${u.familyName}` : undefined) ??
 						u?.loginIds?.[0] ??
 						caller.userId;
+					const expireTime = opts?.expireTime ?? 0;
+					const customClaims = { procellaLogin: loginId, ...opts?.customClaims };
 
 					const resp = await this.sdk.management.accessKey.create(
 						name,
-						0,
+						expireTime,
 						undefined,
 						[{ tenantId: caller.tenantId, roleNames: [...caller.roles] }],
 						caller.userId,
-						{ procellaLogin: loginId },
+						// biome-ignore lint/suspicious/noExplicitAny: Descope SDK types use Record<string, any>
+						customClaims as Record<string, any>,
 					);
 					if (!resp.ok || !resp.data?.cleartext) {
 						throw new Error(
@@ -317,6 +330,27 @@ export class DescopeAuthService implements AuthService {
 					? claims.strataLogin
 					: userId;
 		const roles = extractRoles(claims, tenantId);
+		const principalTypeRaw = claims[OidcClaims.principalType];
+		const isWorkload = principalTypeRaw === "workload";
+
+		const workload: WorkloadIdentity | undefined = isWorkload
+			? {
+					provider: String(claims[OidcClaims.workloadProvider] ?? ""),
+					issuer: String(claims[OidcClaims.workloadSub] ?? "").split(":")[0] ?? "",
+					subject: String(claims[OidcClaims.workloadSub] ?? ""),
+					repository: optionalString(claims[OidcClaims.workloadRepo]),
+					repositoryId: optionalString(claims[OidcClaims.workloadRepoId]),
+					repositoryOwner: optionalString(claims[OidcClaims.workloadRepoOwner]),
+					repositoryOwnerId: optionalString(claims[OidcClaims.workloadRepoOwnerId]),
+					workflowRef: optionalString(claims[OidcClaims.workloadWorkflowRef]),
+					environment: optionalString(claims[OidcClaims.workloadEnvironment]),
+					ref: optionalString(claims[OidcClaims.workloadRef]),
+					runId: optionalString(claims[OidcClaims.workloadRunId]),
+					actor: optionalString(claims[OidcClaims.triggerActor]),
+					actorId: optionalString(claims[OidcClaims.triggerActorId]),
+					jti: optionalString(claims[OidcClaims.workloadJti]),
+				}
+			: undefined;
 
 		return {
 			tenantId,
@@ -324,6 +358,8 @@ export class DescopeAuthService implements AuthService {
 			userId,
 			login,
 			roles,
+			principalType: isWorkload ? "workload" : "user",
+			workload,
 		};
 	}
 
@@ -335,6 +371,10 @@ export class DescopeAuthService implements AuthService {
 			}
 		}
 	}
+}
+
+function optionalString(v: unknown): string | undefined {
+	return typeof v === "string" && v ? v : undefined;
 }
 
 // ============================================================================

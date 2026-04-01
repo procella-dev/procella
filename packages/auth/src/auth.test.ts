@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import DescopeSdk from "@descope/node-sdk";
+import { OidcClaims } from "@procella/oidc";
 import { ForbiddenError, UnauthorizedError } from "@procella/types";
 import {
 	type AuthService,
@@ -153,6 +154,103 @@ describe("DescopeAuthService", () => {
 		const fakeJwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.fake";
 		await expect(svc.authenticate(reqWithAuth(`token ${fakeJwt}`))).rejects.toThrow(/pulumi login/);
 	});
+
+	test("standard human JWT returns principalType user without workload", async () => {
+		const claims = {
+			sub: "user-1",
+			dct: "tenant-1",
+			procellaLogin: "omer",
+			tenant_name: "Omer Corp",
+			tenants: { "tenant-1": { roles: ["admin"] } },
+			exp: Math.floor(Date.now() / 1000) + 3600,
+		};
+		mockValidateJwt.mockResolvedValueOnce({ token: claims });
+
+		const caller = await svc.authenticate(reqWithAuth("Bearer eyJ.fake.jwt"));
+
+		expect(caller.principalType).toBe("user");
+		expect(caller.workload).toBeUndefined();
+	});
+
+	test("workload JWT with full claims returns workload identity", async () => {
+		const claims = {
+			sub: "repo:org/repo:ref:refs/heads/main",
+			dct: "tenant-1",
+			procellaLogin: "ci-bot",
+			tenant_name: "Omer Corp",
+			tenants: { "tenant-1": { roles: ["member"] } },
+			exp: Math.floor(Date.now() / 1000) + 3600,
+			[OidcClaims.principalType]: "workload",
+			[OidcClaims.workloadProvider]: "github",
+			[OidcClaims.workloadSub]: "repo:org/repo:ref:refs/heads/main",
+			[OidcClaims.workloadRepo]: "org/repo",
+			[OidcClaims.workloadRepoId]: "123",
+			[OidcClaims.workloadRepoOwner]: "org",
+			[OidcClaims.workloadRepoOwnerId]: "456",
+			[OidcClaims.workloadWorkflowRef]: "org/repo/.github/workflows/ci.yml@refs/heads/main",
+			[OidcClaims.workloadEnvironment]: "prod",
+			[OidcClaims.workloadRef]: "refs/heads/main",
+			[OidcClaims.workloadRunId]: "789",
+			[OidcClaims.triggerActor]: "octocat",
+			[OidcClaims.triggerActorId]: "987",
+			[OidcClaims.workloadJti]: "jti-123",
+		};
+		mockValidateJwt.mockResolvedValueOnce({ token: claims });
+
+		const caller = await svc.authenticate(reqWithAuth("Bearer eyJ.fake.jwt"));
+
+		expect(caller.principalType).toBe("workload");
+		expect(caller.workload).toEqual({
+			provider: "github",
+			issuer: "repo",
+			subject: "repo:org/repo:ref:refs/heads/main",
+			repository: "org/repo",
+			repositoryId: "123",
+			repositoryOwner: "org",
+			repositoryOwnerId: "456",
+			workflowRef: "org/repo/.github/workflows/ci.yml@refs/heads/main",
+			environment: "prod",
+			ref: "refs/heads/main",
+			runId: "789",
+			actor: "octocat",
+			actorId: "987",
+			jti: "jti-123",
+		});
+	});
+
+	test("workload JWT with minimal claims returns undefined optional fields", async () => {
+		const claims = {
+			sub: "issuer:subject",
+			dct: "tenant-1",
+			tenant_name: "Omer Corp",
+			tenants: { "tenant-1": { roles: ["viewer"] } },
+			exp: Math.floor(Date.now() / 1000) + 3600,
+			[OidcClaims.principalType]: "workload",
+			[OidcClaims.workloadProvider]: "kubernetes",
+			[OidcClaims.workloadSub]: "issuer:subject",
+		};
+		mockValidateJwt.mockResolvedValueOnce({ token: claims });
+
+		const caller = await svc.authenticate(reqWithAuth("Bearer eyJ.fake.jwt"));
+
+		expect(caller.principalType).toBe("workload");
+		expect(caller.workload).toEqual({
+			provider: "kubernetes",
+			issuer: "issuer",
+			subject: "issuer:subject",
+			repository: undefined,
+			repositoryId: undefined,
+			repositoryOwner: undefined,
+			repositoryOwnerId: undefined,
+			workflowRef: undefined,
+			environment: undefined,
+			ref: undefined,
+			runId: undefined,
+			actor: undefined,
+			actorId: undefined,
+			jti: undefined,
+		});
+	});
 });
 
 // ============================================================================
@@ -269,6 +367,7 @@ describe("requireRole", () => {
 			userId: "u1",
 			login: "user",
 			roles: ["member"] as const,
+			principalType: "user" as const,
 		};
 
 		expect(() => requireRole(caller, "member")).not.toThrow();
@@ -281,6 +380,7 @@ describe("requireRole", () => {
 			userId: "u1",
 			login: "admin",
 			roles: ["admin"] as const,
+			principalType: "user" as const,
 		};
 
 		expect(() => requireRole(caller, "viewer")).not.toThrow();
@@ -295,6 +395,7 @@ describe("requireRole", () => {
 			userId: "u1",
 			login: "member",
 			roles: ["member"] as const,
+			principalType: "user" as const,
 		};
 
 		expect(() => requireRole(caller, "viewer")).not.toThrow();
@@ -308,6 +409,7 @@ describe("requireRole", () => {
 			userId: "u1",
 			login: "viewer",
 			roles: ["viewer"] as const,
+			principalType: "user" as const,
 		};
 
 		expect(() => requireRole(caller, "admin")).toThrow(ForbiddenError);
@@ -320,6 +422,7 @@ describe("requireRole", () => {
 			userId: "u1",
 			login: "viewer",
 			roles: ["viewer"] as const,
+			principalType: "user" as const,
 		};
 
 		expect(() => requireRole(caller, "member")).toThrow(ForbiddenError);

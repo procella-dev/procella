@@ -9,6 +9,11 @@ import { loadConfig } from "@procella/config";
 import { AesCryptoService, devMasterKey } from "@procella/crypto";
 import { createDb } from "@procella/db";
 import { buildGitHubAppConfig, OctokitGitHubService } from "@procella/github";
+import {
+	JwksValidatorImpl,
+	OidcExchangeService,
+	PostgresTrustPolicyRepository,
+} from "@procella/oidc";
 import { PostgresStacksService } from "@procella/stacks";
 import { createBlobStorage } from "@procella/storage";
 import { initTelemetry } from "@procella/telemetry";
@@ -40,6 +45,9 @@ async function bootstrapServices() {
 					managementKey: config.descopeManagementKey,
 				};
 	const auth = createAuthService(authConfig);
+	const oidcService = config.oidcEnabled
+		? new OidcExchangeService(new JwksValidatorImpl(), new PostgresTrustPolicyRepository(db), auth)
+		: null;
 
 	const storage = createBlobStorage(
 		config.blobBackend === "local"
@@ -90,6 +98,7 @@ async function bootstrapServices() {
 		webhooks: webhooksService,
 		github: githubService,
 		githubWebhookSecret: githubConfig?.webhookSecret,
+		oidc: oidcService,
 	};
 }
 

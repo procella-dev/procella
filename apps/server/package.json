@@ -12,6 +12,7 @@
 		"@procella/crypto": "workspace:*",
 		"@procella/db": "workspace:*",
 		"@procella/github": "workspace:*",
+		"@procella/oidc": "workspace:*",
 		"@procella/stacks": "workspace:*",
 		"@procella/storage": "workspace:*",
 		"@procella/telemetry": "workspace:*",

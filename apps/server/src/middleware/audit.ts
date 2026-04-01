@@ -28,14 +28,22 @@ export function auditMiddleware(auditService: AuditService): MiddlewareHandler<E
 			return;
 		}
 
+		const metadata = caller.workload ? { workload: caller.workload } : undefined;
+
 		void auditService.log(caller.tenantId, {
 			actorId: caller.userId,
-			actorType: caller.userId.startsWith("token:") ? "token" : "user",
+			actorType:
+				caller.principalType === "workload"
+					? "workload"
+					: caller.userId.startsWith("token:")
+						? "token"
+						: "user",
 			action,
 			resourceType: extractResourceType(c.req.path),
 			resourceId: extractResourceId(c.req.path),
 			ipAddress: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? undefined,
 			userAgent: c.req.header("user-agent") ?? undefined,
+			metadata,
 		});
 	};
 }

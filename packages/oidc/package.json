@@ -1,0 +1,15 @@
+{
+	"name": "@procella/oidc",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"dependencies": {
+		"@procella/types": "workspace:*",
+		"@procella/config": "workspace:*",
+		"@procella/db": "workspace:*",
+		"jose": "^6.0.0"
+	}
+}

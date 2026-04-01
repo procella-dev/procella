@@ -7,6 +7,7 @@ import type { AuditService } from "@procella/audit";
 import type { AuthConfig, AuthService } from "@procella/auth";
 import type { Database } from "@procella/db";
 import { type GitHubService, verifyGitHubWebhookSignature } from "@procella/github";
+import type { OidcService } from "@procella/oidc";
 import type { StacksService } from "@procella/stacks";
 import { tracingMiddleware } from "@procella/telemetry";
 import { PulumiRoutes } from "@procella/types";
@@ -20,6 +21,7 @@ import {
 	eventHandlers,
 	githubHandlers,
 	healthHandlers,
+	oauthHandlers,
 	stackHandlers,
 	stateHandlers,
 	updateHandlers,
@@ -49,6 +51,7 @@ export interface CliAppDeps {
 	webhooks: WebhooksService;
 	github: GitHubService | null;
 	githubWebhookSecret?: string;
+	oidc?: OidcService | null;
 }
 
 export function createCliApp(deps: CliAppDeps): Hono<Env> {
@@ -93,6 +96,9 @@ export function createCliApp(deps: CliAppDeps): Hono<Env> {
 
 	// GitHub webhook (no auth — verified by signature)
 	app.post("/api/webhooks/github", githubH.handleGitHubWebhook);
+
+	const oauth = oauthHandlers(deps.oidc ?? null);
+	app.post("/api/oauth/token", oauth.tokenExchange);
 
 	// Update-token authenticated routes (during active update execution)
 	const R = PulumiRoutes;

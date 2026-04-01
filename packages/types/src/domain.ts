@@ -22,6 +22,28 @@ export interface Caller {
 	readonly userId: string;
 	readonly login: string;
 	readonly roles: readonly Role[];
+	readonly principalType: "user" | "token" | "workload";
+	readonly workload?: WorkloadIdentity;
+}
+
+export interface WorkloadIdentity {
+	provider: string;
+	issuer: string;
+	subject: string;
+	repository?: string;
+	repositoryId?: string;
+	repositoryOwner?: string;
+	repositoryOwnerId?: string;
+	workflowRef?: string;
+	jobWorkflowRef?: string;
+	environment?: string;
+	ref?: string;
+	refProtected?: boolean;
+	runId?: string;
+	runAttempt?: string;
+	actor?: string;
+	actorId?: string;
+	jti?: string;
 }
 
 /** Check if a caller has a specific role. */

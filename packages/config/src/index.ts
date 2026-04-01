@@ -49,6 +49,11 @@ const configSchema = z
 			.default("false")
 			.transform((v) => v === "true" || v === "1"),
 
+		oidcEnabled: z
+			.enum(["true", "false", "1", "0"])
+			.default("false")
+			.transform((v) => v === "true" || v === "1"),
+
 		githubAppId: z.string().optional(),
 		githubAppPrivateKey: z
 			.string()
@@ -89,6 +94,14 @@ const configSchema = z
 				code: z.ZodIssueCode.custom,
 				message: "Required in production (non-dev auth mode). Must be 64 hex chars (32 bytes).",
 				path: ["encryptionKey"],
+			});
+		}
+		if (data.oidcEnabled === true && data.authMode === "dev") {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message:
+					"OIDC requires PROCELLA_AUTH_MODE=descope. Token exchange uses Descope access keys and cannot work in dev mode.",
+				path: ["oidcEnabled"],
 			});
 		}
 
@@ -133,6 +146,7 @@ const envMapping = {
 	blobS3Region: "PROCELLA_BLOB_S3_REGION",
 	encryptionKey: "PROCELLA_ENCRYPTION_KEY",
 	otelEnabled: "PROCELLA_OTEL_ENABLED",
+	oidcEnabled: "PROCELLA_OIDC_ENABLED",
 	githubAppId: "PROCELLA_GITHUB_APP_ID",
 	githubAppPrivateKey: "PROCELLA_GITHUB_APP_PRIVATE_KEY",
 	githubAppWebhookSecret: "PROCELLA_GITHUB_APP_WEBHOOK_SECRET",

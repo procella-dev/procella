@@ -12,6 +12,7 @@
 		{ "path": "packages/audit" },
 		{ "path": "packages/webhooks" },
 		{ "path": "packages/github" },
+		{ "path": "packages/oidc" },
 		{ "path": "packages/updates" },
 		{ "path": "packages/telemetry" },
 		{ "path": "packages/api" },

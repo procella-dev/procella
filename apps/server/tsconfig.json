@@ -12,6 +12,7 @@
 		{ "path": "../../packages/config" },
 		{ "path": "../../packages/db" },
 		{ "path": "../../packages/github" },
+		{ "path": "../../packages/oidc" },
 		{ "path": "../../packages/crypto" },
 		{ "path": "../../packages/storage" },
 		{ "path": "../../packages/auth" },

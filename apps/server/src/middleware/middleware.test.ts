@@ -19,6 +19,7 @@ const validCaller: Caller = {
 	userId: "u-1",
 	login: "test-user",
 	roles: ["admin"],
+	principalType: "user",
 };
 
 function mockAuthService(opts?: { failAuth?: boolean }): AuthService {

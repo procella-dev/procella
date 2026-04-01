@@ -40,7 +40,7 @@ export type AuditActionValue = (typeof AuditAction)[keyof typeof AuditAction];
 export interface AuditLogEntry {
 	id: string;
 	actorId: string;
-	actorType: "user" | "token";
+	actorType: "user" | "token" | "workload";
 	action: AuditActionValue;
 	resourceType: string;
 	resourceId: string;
@@ -169,6 +169,16 @@ function toEpochSeconds(date: Date | undefined): number | undefined {
 	return Math.floor(date.getTime() / 1000);
 }
 
+function inferActorType(
+	actorId: string,
+	metadata: Record<string, unknown>,
+): AuditLogEntry["actorType"] {
+	if (metadata.workload && typeof metadata.workload === "object") {
+		return "workload";
+	}
+	return actorId.startsWith("token:") ? "token" : "user";
+}
+
 function mapDescopeRecordToEntry(record: DescopeAuditRecord): AuditLogEntry {
 	const data = record.data ?? {};
 	const { resourceType, resourceId, ipAddress, userAgent, ...metadata } = data as Record<
@@ -185,7 +195,7 @@ function mapDescopeRecordToEntry(record: DescopeAuditRecord): AuditLogEntry {
 	return {
 		id: record.id ?? `${record.action ?? "audit"}-${createdAt.getTime()}`,
 		actorId,
-		actorType: actorId.startsWith("token:") ? "token" : "user",
+		actorType: inferActorType(actorId, metadata),
 		action: (record.action ?? AuditAction.STACK_UPDATE) as AuditActionValue,
 		resourceType: typeof resourceType === "string" ? resourceType : "unknown",
 		resourceId: typeof resourceId === "string" ? resourceId : "unknown",

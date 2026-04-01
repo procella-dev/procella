@@ -6,6 +6,7 @@ import type { AuditService } from "@procella/audit";
 import type { AuthConfig, AuthService } from "@procella/auth";
 import type { Database } from "@procella/db";
 import { type GitHubService, verifyGitHubWebhookSignature } from "@procella/github";
+import type { OidcService } from "@procella/oidc";
 import type { StacksService } from "@procella/stacks";
 import { tracingMiddleware } from "@procella/telemetry";
 import { PulumiRoutes } from "@procella/types";
@@ -21,6 +22,7 @@ import {
 	eventHandlers,
 	githubHandlers,
 	healthHandlers,
+	oauthHandlers,
 	stackHandlers,
 	stateHandlers,
 	updateHandlers,
@@ -55,6 +57,7 @@ export function createApp(deps: {
 	webhooks: WebhooksService;
 	github: GitHubService | null;
 	githubWebhookSecret?: string;
+	oidc?: OidcService | null;
 }): Hono<Env> {
 	const app = new Hono<Env>();
 
@@ -192,6 +195,9 @@ export function createApp(deps: {
 		const cleartext = await deps.auth.createCliAccessKey(caller, keyName);
 		return c.json({ token: cleartext });
 	});
+
+	const oauth = oauthHandlers(deps.oidc ?? null);
+	app.post("/api/oauth/token", oauth.tokenExchange);
 
 	app.post("/api/webhooks/github", githubH.handleGitHubWebhook);
 
