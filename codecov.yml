@@ -1,0 +1,23 @@
+codecov:
+  require_ci_to_pass: true
+
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        informational: true
+    patch:
+      default:
+        target: 80%
+        threshold: 5%
+        informational: false
+
+ignore:
+  - "e2e/**"
+  - "bench/**"
+  - "apps/docs/**"
+  - "**/*.config.ts"
+  - "**/generated/**"
+  - "**/*.test.ts"
+  - "**/*.spec.ts"

@@ -54,3 +54,4 @@ node-compile-cache/
 .beads-credential-key
 
 sst-env.d.ts
+coverage/
