@@ -14,10 +14,10 @@
 			"correctness": {
 				"noUnusedImports": "error",
 				"noUnusedVariables": "error",
-				"useExhaustiveDependencies": "warn"
+				"useExhaustiveDependencies": "error"
 			},
 			"style": {
-				"noNonNullAssertion": "warn",
+				"noNonNullAssertion": "error",
 				"useConst": "error",
 				"useImportType": "error",
 				"noParameterAssign": "error"
@@ -33,7 +33,7 @@
 			},
 			"complexity": {
 				"noBannedTypes": "error",
-				"noForEach": "warn"
+				"noForEach": "error"
 			},
 			"security": {
 				"noDangerouslySetInnerHtml": "error"

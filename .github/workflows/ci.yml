@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -36,9 +37,10 @@ jobs:
         if: always()
         uses: codecov/codecov-action@v5
         with:
-          file: ./coverage/lcov.info
+          files: ./coverage/lcov.info
           flags: unit
-          fail_ci_if_error: false
+          use_oidc: true
+          fail_ci_if_error: true
 
   integration:
     name: Integration Tests
