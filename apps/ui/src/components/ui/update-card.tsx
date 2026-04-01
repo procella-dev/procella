@@ -10,6 +10,8 @@ interface UpdateCardProps {
 	resourceChanges?: { creates: number; updates: number; deletes: number };
 	startedAt?: string | null;
 	completedAt?: string | null;
+	initiatedByDisplay?: string | null;
+	initiatedByType?: string | null;
 	isFirst?: boolean;
 	isLast?: boolean;
 }
@@ -49,6 +51,8 @@ export function UpdateCard({
 	resourceChanges,
 	startedAt,
 	completedAt,
+	initiatedByDisplay,
+	initiatedByType,
 	isFirst,
 	isLast,
 }: UpdateCardProps) {
@@ -102,6 +106,12 @@ export function UpdateCard({
 								resourceChanges.updates === 0 &&
 								resourceChanges.deletes === 0 &&
 								"no changes"}
+						</span>
+					)}
+					{initiatedByDisplay && (
+						<span style={{ fontSize: "0.7rem", color: "var(--color-cloud)", opacity: 0.75 }}>
+							{initiatedByType === "workload" ? "⚙ " : ""}
+							{initiatedByDisplay}
 						</span>
 					)}
 				</Stack>

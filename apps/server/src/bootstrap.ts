@@ -13,6 +13,7 @@ import {
 	JwksValidatorImpl,
 	OidcExchangeService,
 	PostgresTrustPolicyRepository,
+	type TrustPolicyRepository,
 } from "@procella/oidc";
 import { PostgresStacksService } from "@procella/stacks";
 import { createBlobStorage } from "@procella/storage";
@@ -45,8 +46,11 @@ async function bootstrapServices() {
 					managementKey: config.descopeManagementKey,
 				};
 	const auth = createAuthService(authConfig);
-	const oidcService = config.oidcEnabled
-		? new OidcExchangeService(new JwksValidatorImpl(), new PostgresTrustPolicyRepository(db), auth)
+	const oidcPolicies: TrustPolicyRepository | null = config.oidcEnabled
+		? new PostgresTrustPolicyRepository(db)
+		: null;
+	const oidcService = oidcPolicies
+		? new OidcExchangeService(new JwksValidatorImpl(), oidcPolicies, auth)
 		: null;
 
 	const storage = createBlobStorage(
@@ -99,6 +103,7 @@ async function bootstrapServices() {
 		github: githubService,
 		githubWebhookSecret: githubConfig?.webhookSecret,
 		oidc: oidcService,
+		oidcPolicies,
 	};
 }
 

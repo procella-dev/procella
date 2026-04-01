@@ -4,6 +4,7 @@ import { router } from "../trpc.js";
 import { auditRouter } from "./audit.js";
 import { eventsRouter } from "./events.js";
 import { githubRouter } from "./github.js";
+import { oidcRouter } from "./oidc.js";
 import { stacksRouter } from "./stacks.js";
 import { updatesRouter } from "./updates.js";
 import { webhooksRouter } from "./webhooks.js";
@@ -19,6 +20,7 @@ export const appRouter = router({
 	events: eventsRouter,
 	github: githubRouter,
 	webhooks: webhooksRouter,
+	oidc: oidcRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -109,6 +109,7 @@ describe("updateHandlers", () => {
 			"update",
 			{ key: "val" },
 			undefined,
+			validCaller,
 		);
 	});
 
@@ -130,6 +131,7 @@ describe("updateHandlers", () => {
 			"preview",
 			undefined,
 			undefined,
+			validCaller,
 		);
 	});
 
