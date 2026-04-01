@@ -69,15 +69,15 @@ jobs:
 
 		- name: Get stack outputs
 			id: outputs
-			env:
-				AWS_REGION: us-east-1
 			run: |
 				STAGE="pr-${{ github.event.number }}"
-				SST_OUT=$(npx sst output --stage "$STAGE" --json 2>/dev/null || echo '{}')
+				# sst state export prints Pulumi state JSON; outputs are under the Stack resource
+				SST_STATE=$(npx sst state export --stage "$STAGE" 2>/dev/null || echo '{}')
+				DESCOPE_ID=$(echo "$SST_STATE" | jq -r '(.resources // []) | map(select(.type == "pulumi:pulumi:Stack")) | first | .outputs.descopeProjectId // empty' 2>/dev/null || true)
 				echo "api=https://api.${STAGE}.procella.cloud" >> $GITHUB_OUTPUT
 				echo "app=https://app.${STAGE}.procella.cloud" >> $GITHUB_OUTPUT
 				echo "docs=https://docs.${STAGE}.procella.cloud" >> $GITHUB_OUTPUT
-				echo "descope_project_id=$(echo "$SST_OUT" | jq -r '.descopeProjectId // empty')" >> $GITHUB_OUTPUT
+				echo "descope_project_id=${DESCOPE_ID}" >> $GITHUB_OUTPUT
 
   comment:
     name: PR Comment
