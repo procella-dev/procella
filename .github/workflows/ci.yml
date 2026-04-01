@@ -17,6 +17,8 @@ jobs:
   check:
     name: Lint, Typecheck & Unit Tests
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
@@ -36,9 +38,32 @@ jobs:
         if: always()
         uses: codecov/codecov-action@v5
         with:
-          file: ./coverage/lcov.info
+          files: ./coverage/lcov.info
           flags: unit
-          fail_ci_if_error: false
+          use_oidc: true
+          fail_ci_if_error: true
+
+  bundle-analysis:
+    name: Bundle Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    needs: [check]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: jdx/mise-action@v4
+      - uses: actions/cache@v5
+        with:
+          path: |
+            node_modules
+            ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - name: Build UI
+        run: bun run --cwd apps/ui build
+      - name: Build Docs
+        run: bun run --cwd apps/docs build
 
   integration:
     name: Integration Tests

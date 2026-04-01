@@ -1,5 +1,6 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import codecovAstroPlugin from '@codecov/astro-plugin';
 
 export default defineConfig({
   site: process.env.SITE_URL || 'https://docs.procella.dev',
@@ -94,6 +95,11 @@ export default defineConfig({
           ],
         },
       ],
+    }),
+    codecovAstroPlugin({
+      enableBundleAnalysis: !!process.env.CI,
+      bundleName: 'procella-docs',
+      oidc: { useGitHubOIDC: !!process.env.CI },
     }),
   ],
 });

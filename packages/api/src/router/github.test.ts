@@ -56,7 +56,7 @@ describe("githubRouter", () => {
 
 			const result = await caller.installation();
 			expect(result).toBeDefined();
-			expect(result!.installationId).toBe(12345);
+			expect(result?.installationId).toBe(12345);
 		});
 
 		test("returns null when github not configured", async () => {
@@ -91,7 +91,7 @@ describe("githubRouter", () => {
 
 			const result = await caller.removeInstallation();
 			expect(result.success).toBe(true);
-			expect(ctx.github!.removeInstallation).toHaveBeenCalledWith(12345);
+			expect(ctx.github?.removeInstallation).toHaveBeenCalledWith(12345);
 		});
 
 		test("succeeds when no installation exists", async () => {
@@ -109,7 +109,7 @@ describe("githubRouter", () => {
 
 			const result = await caller.removeInstallation();
 			expect(result.success).toBe(true);
-			expect(ctx.github!.removeInstallation).not.toHaveBeenCalled();
+			expect(ctx.github?.removeInstallation).not.toHaveBeenCalled();
 		});
 
 		test("succeeds when github not configured", async () => {
