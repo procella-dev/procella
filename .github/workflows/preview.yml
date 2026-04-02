@@ -192,6 +192,7 @@ jobs:
           stack-name: ${{ env.ORG_SLUG }}/${{ env.STACK_NAME }}
           work-dir: examples/replace-triggers
           cloud-url: ${{ env.PROCELLA_API_URL }}
+          upsert: true  # create stack if it doesn't exist
 
       - uses: pulumi/actions@v6
         if: always()
