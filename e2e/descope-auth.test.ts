@@ -280,8 +280,10 @@ describe_descope("Descope auth (deployed preview)", () => {
 			const audience = `urn:pulumi:org:${orgSlug}`;
 			const jwt = await getGitHubOidcToken(audience);
 
+			// Unset PULUMI_ACCESS_TOKEN — CLI refuses to do OIDC exchange if it's set
 			const result = await pulumi(["login", "--oidc-token", jwt, "--oidc-org", orgSlug, API_URL], {
 				pulumiHome,
+				env: { PULUMI_ACCESS_TOKEN: "", PULUMI_BACKEND_URL: "" },
 			});
 			if (result.exitCode !== 0) {
 				throw new Error(
