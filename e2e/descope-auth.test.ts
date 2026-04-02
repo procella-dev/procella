@@ -90,9 +90,9 @@ async function getGitHubOidcToken(audience: string): Promise<string> {
 
 /** Call a tRPC mutation on the deployed API. */
 async function trpcMutation(procedure: string, input: unknown, token: string): Promise<unknown> {
-	// tRPC v11 non-batched POST: body is {"json": input}, endpoint is /trpc/procedure?batch=1
+	// tRPC v11 POST mutation without batching: body is {"json": input}
 	const body = JSON.stringify({ json: input });
-	const res = await fetch(`${APP_URL}/trpc/${procedure}?batch=1`, {
+	const res = await fetch(`${APP_URL}/trpc/${procedure}`, {
 		method: "POST",
 		headers: {
 			"Content-Type": "application/json",
