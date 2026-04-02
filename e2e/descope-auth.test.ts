@@ -138,11 +138,14 @@ describe_descope("Descope auth (deployed preview)", () => {
 			tenantId = existing.id;
 		} else {
 			// Create a fresh ephemeral tenant.
-			const created = await sdk.management.tenant.create(tenantName, {
-				selfProvisioningDomains: [],
-			});
-			if (!created.data?.id) throw new Error(`Failed to create Descope tenant '${tenantName}'`);
-			tenantId = created.data.id;
+			// create() signature: (name, selfProvisioningDomains[], ...)
+			const created = await sdk.management.tenant.create(tenantName, []);
+			const createdId = created.data?.id;
+			if (!createdId)
+				throw new Error(
+					`Failed to create Descope tenant '${tenantName}': ${JSON.stringify(created)}`,
+				);
+			tenantId = createdId;
 			createdTenant = true;
 		}
 
