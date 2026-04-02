@@ -190,6 +190,8 @@ jobs:
 
       - name: Create stack + deploy + destroy
         run: |
+          # auth-actions set PULUMI_ACCESS_TOKEN; login explicitly so CLI knows the backend
+          pulumi login --cloud-url "${PULUMI_BACKEND_URL}"
           cd examples/replace-triggers
           pulumi stack init "${ORG_SLUG}/${STACK_NAME}" --non-interactive
           pulumi up --yes --stack "${ORG_SLUG}/${STACK_NAME}" --non-interactive
