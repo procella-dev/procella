@@ -246,11 +246,15 @@ jobs:
       - name: Create stack + deploy + destroy
         run: |
           set -euxo pipefail
-          FULL_STACK="${ORG_SLUG}/replace-triggers/${STACK_NAME}"
           pulumi login --cloud-url "${PULUMI_BACKEND_URL}"
           pulumi whoami -v
+          pulumi org get-default 2>&1 || true
           cd examples/replace-triggers
-          pulumi stack select --create "${FULL_STACK}"
+
+          # Use 1-part stack name — CLI infers org + project from login + Pulumi.yaml
+          pulumi stack init "${STACK_NAME}" 2>&1 || pulumi stack select "${STACK_NAME}" 2>&1
+          pulumi stack --show-name
+
           pulumi up --yes --non-interactive
           pulumi destroy --yes --non-interactive
           pulumi stack rm --yes --non-interactive --force
