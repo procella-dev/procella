@@ -362,7 +362,13 @@ export class DescopeAuthService implements AuthService {
 
 		return {
 			tenantId,
-			orgSlug: extractOrgSlug(claims, tenantId),
+			// Prefer explicit orgSlug from OIDC workload claims over JWT tenant name.
+			// The Descope tenant name (used by extractOrgSlug) may differ from the
+			// trust policy's orgSlug that the CLI uses for stack operations.
+			orgSlug:
+				typeof claims.procellaOrgSlug === "string" && claims.procellaOrgSlug
+					? claims.procellaOrgSlug
+					: extractOrgSlug(claims, tenantId),
 			userId,
 			login,
 			roles,

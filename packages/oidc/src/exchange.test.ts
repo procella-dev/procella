@@ -404,6 +404,7 @@ describe("OidcExchangeService", () => {
 			[OidcClaims.triggerActor]: "octocat",
 			[OidcClaims.triggerActorId]: "42",
 			[OidcClaims.workloadJti]: "jwt-id-1",
+			procellaOrgSlug: "acme",
 		});
 	});
 

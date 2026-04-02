@@ -247,24 +247,10 @@ jobs:
         run: |
           set -euxo pipefail
           FULL_STACK="${ORG_SLUG}/replace-triggers/${STACK_NAME}"
-
-          # Login and verify
           pulumi login --cloud-url "${PULUMI_BACKEND_URL}"
-          pulumi version
-          pulumi whoami -v 2>&1 || true
+          pulumi whoami -v
           cd examples/replace-triggers
-
-          # Verbose stack creation to diagnose the silent-exit-0 issue
-          pulumi --logtostderr -v=9 stack select --create "${FULL_STACK}" 2>&1 || {
-            echo "::warning::stack select --create failed, trying direct API call + stack select"
-            # Fallback: create via API, then select
-            echo '{}' | pulumi --logtostderr -v=9 stack init "${FULL_STACK}" 2>&1 || true
-            pulumi stack ls 2>&1 || true
-            pulumi --logtostderr -v=9 stack select "${FULL_STACK}" 2>&1 || true
-          }
-
-          echo "Active stack: $(pulumi stack --show-name 2>&1 || echo NONE)"
-
+          pulumi stack select --create "${FULL_STACK}"
           pulumi up --yes --non-interactive
           pulumi destroy --yes --non-interactive
           pulumi stack rm --yes --non-interactive --force
