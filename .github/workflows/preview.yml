@@ -246,9 +246,10 @@ jobs:
       - name: Create stack + deploy + destroy
         run: |
           set -x
+          FULL_STACK="${ORG_SLUG}/replace-triggers/${STACK_NAME}"
           pulumi login --cloud-url "${PULUMI_BACKEND_URL}"
           cd examples/replace-triggers
-          pulumi stack init "${ORG_SLUG}/replace-triggers/${STACK_NAME}"
-          pulumi up --yes --non-interactive --stack "${ORG_SLUG}/${STACK_NAME}"
-          pulumi destroy --yes --non-interactive --stack "${ORG_SLUG}/${STACK_NAME}"
-          pulumi stack rm --yes --non-interactive "${ORG_SLUG}/${STACK_NAME}"
+          pulumi stack init "${FULL_STACK}"
+          pulumi up --yes --non-interactive --stack "${FULL_STACK}"
+          pulumi destroy --yes --non-interactive --stack "${FULL_STACK}"
+          pulumi stack rm --yes --non-interactive "${FULL_STACK}"
