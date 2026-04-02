@@ -121,6 +121,29 @@ describe_descope("Descope auth (deployed preview)", () => {
 	let createdTenant = false; // track if we created the tenant (for cleanup)
 
 	beforeAll(async () => {
+		// Verify the preview API is reachable before attempting any tests.
+		// This catches infrastructure drift (e.g. CloudFront destroyed by killed cleanup)
+		// and fails fast with a clear message instead of cryptic ConnectionRefused errors.
+		const healthUrl = `${API_URL}/healthz`;
+		let healthy = false;
+		for (let attempt = 1; attempt <= 10; attempt++) {
+			try {
+				const res = await fetch(healthUrl, { signal: AbortSignal.timeout(5000) });
+				if (res.ok) {
+					healthy = true;
+					break;
+				}
+			} catch {}
+			await Bun.sleep(3000);
+		}
+		if (!healthy) {
+			throw new Error(
+				`Preview API unreachable after 10 attempts (30s): ${healthUrl}\n` +
+					"This usually means the CloudFront router was destroyed by a cancelled cleanup. " +
+					"Re-run the full Preview Environment workflow to trigger drift recovery.",
+			);
+		}
+
 		sdk = DescopeClient({
 			projectId: DESCOPE_PROJECT_ID,
 			managementKey: DESCOPE_MANAGEMENT_KEY,

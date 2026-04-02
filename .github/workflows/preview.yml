@@ -71,6 +71,59 @@ jobs:
           SST_SECRET_ProcellaOtelEndpoint: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
           SST_SECRET_ProcellaOtelHeaders: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
 
+      - name: Verify deployment health
+        id: health_check
+        run: |
+          STAGE="pr-${{ github.event.number }}"
+          API_URL="https://api.${STAGE}.procella.cloud/healthz"
+          echo "Verifying deployment at ${API_URL}..."
+          for i in $(seq 1 6); do
+            if curl -sf --max-time 10 "${API_URL}" >/dev/null 2>&1; then
+              echo "✅ Health check passed (attempt $i/6)"
+              exit 0
+            fi
+            echo "⏳ Attempt $i/6 failed, waiting 10s..."
+            sleep 10
+          done
+          echo "❌ Health check failed — possible infrastructure drift"
+          echo "drift=true" >> $GITHUB_OUTPUT
+
+      - name: Recover from infrastructure drift
+        if: steps.health_check.outputs.drift == 'true'
+        run: |
+          STAGE="pr-${{ github.event.number }}"
+          echo "::warning::Infrastructure drift detected — running full recovery cycle"
+          echo "Unlocking stale state..."
+          npx sst unlock --stage ${STAGE} || true
+          echo "Removing stale resources..."
+          npx sst remove --stage ${STAGE} || true
+          echo "Re-deploying from clean state..."
+          npx sst deploy --stage ${STAGE} | tee /tmp/sst-deploy.log
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SST_SECRET_ProcellaEncryptionKey: ${{ secrets.PROCELLA_ENCRYPTION_KEY }}
+          SST_SECRET_ProcellaDevAuthToken: ${{ secrets.PROCELLA_DEV_AUTH_TOKEN }}
+          SST_SECRET_ProcellaDescopeManagementKey: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
+          SST_SECRET_ProcellaOtelEndpoint: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
+          SST_SECRET_ProcellaOtelHeaders: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
+
+      - name: Verify recovery
+        if: steps.health_check.outputs.drift == 'true'
+        run: |
+          STAGE="pr-${{ github.event.number }}"
+          API_URL="https://api.${STAGE}.procella.cloud/healthz"
+          echo "Verifying recovery at ${API_URL}..."
+          for i in $(seq 1 12); do
+            if curl -sf --max-time 10 "${API_URL}" >/dev/null 2>&1; then
+              echo "✅ Recovery verified (attempt $i/12)"
+              exit 0
+            fi
+            echo "⏳ Waiting for recovery... ($i/12)"
+            sleep 10
+          done
+          echo "::error::Recovery failed — preview environment unreachable"
+          exit 1
+
       - name: Get stack outputs
         id: outputs
         run: |

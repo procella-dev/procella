@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: preview-${{ github.event.number }}
+  group: preview-cleanup-${{ github.event.number }}
 
 jobs:
   cleanup:
