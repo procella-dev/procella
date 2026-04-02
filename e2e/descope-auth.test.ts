@@ -255,12 +255,20 @@ describe_descope("Descope auth (deployed preview)", () => {
 				expiration: "300",
 			});
 
-			const res = await fetch(`${API_URL}/api/oauth/token`, {
+			// Retry once for Lambda cold-start 502s
+			let res = await fetch(`${API_URL}/api/oauth/token`, {
 				method: "POST",
 				headers: { "Content-Type": "application/x-www-form-urlencoded" },
 				body: body.toString(),
 			});
-
+			if (res.status === 502 || res.status === 503) {
+				await Bun.sleep(2000);
+				res = await fetch(`${API_URL}/api/oauth/token`, {
+					method: "POST",
+					headers: { "Content-Type": "application/x-www-form-urlencoded" },
+					body: body.toString(),
+				});
+			}
 			if (!res.ok) {
 				const errBody = await res.text();
 				throw new Error(`Exchange failed (${res.status}): ${errBody}`);
