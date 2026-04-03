@@ -1,5 +1,4 @@
 // @procella/server — Shared bootstrap logic for both Bun.serve and Lambda.
-// Build version: 2026-04-03T13:00Z (force rebuild for OIDC security fix)
 //
 // Creates all services and the Hono app. Called once at module load time
 // in both entry points (index.ts for local dev, vercel.ts for production).
@@ -26,7 +25,6 @@ import { createApp } from "./routes/index.js";
 import { createWebApp } from "./routes/web.js";
 
 async function bootstrapServices() {
-	console.log(`[procella] bootstrap build=${"20260403.2"}`);
 	const config = loadConfig();
 
 	initTelemetry({ enabled: config.otelEnabled, serviceName: "procella" });
