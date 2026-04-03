@@ -246,13 +246,33 @@ jobs:
       - name: Create stack + deploy + destroy
         run: |
           set -euxo pipefail
+          FULL_STACK="${ORG_SLUG}/replace-triggers/${STACK_NAME}"
           pulumi login --cloud-url "${PULUMI_BACKEND_URL}"
           pulumi whoami -v
-          pulumi org get-default 2>&1 || true
-          cd examples/replace-triggers
 
-          # Use 1-part stack name — CLI infers org + project from login + Pulumi.yaml
-          pulumi stack init "${STACK_NAME}" 2>&1 || pulumi stack select "${STACK_NAME}" 2>&1
+          # Diagnostic: test API directly with curl
+          echo "=== API diagnostics ==="
+          curl -sf -H "Authorization: token ${PULUMI_ACCESS_TOKEN}" \
+               -H "Accept: application/vnd.pulumi+8" \
+               "${PULUMI_BACKEND_URL}/api/user" | head -c 200
+          echo
+          curl -sf -H "Authorization: token ${PULUMI_ACCESS_TOKEN}" \
+               -H "Accept: application/vnd.pulumi+8" \
+               "${PULUMI_BACKEND_URL}/api/user/organizations/default" | head -c 200
+          echo
+
+          # Create stack via API directly, then use CLI for operations
+          echo "Creating stack: ${FULL_STACK}"
+          CREATE_RESP=$(curl -sf -X POST \
+               -H "Authorization: token ${PULUMI_ACCESS_TOKEN}" \
+               -H "Accept: application/vnd.pulumi+8" \
+               -H "Content-Type: application/json" \
+               -d '{"stackName":"'"${STACK_NAME}"'"}' \
+               "${PULUMI_BACKEND_URL}/api/stacks/${ORG_SLUG}/replace-triggers/${STACK_NAME}" 2>&1) || true
+          echo "Create response: ${CREATE_RESP}"
+
+          cd examples/replace-triggers
+          pulumi stack select "${FULL_STACK}"
           pulumi stack --show-name
 
           pulumi up --yes --non-interactive
