@@ -112,7 +112,11 @@ export class OidcExchangeService implements OidcService {
 		}
 
 		if (!matchedPolicy || !claims) {
-			throw new OidcExchangeError("access_denied", "Token exchange not available", 403);
+			throw new OidcExchangeError(
+				"access_denied",
+				`No matching policy (v2 org=${orgSlug} iss=${tokenIssuer.slice(0, 40)} candidates=${policies.length})`,
+				403,
+			);
 		}
 
 		const requestedExpiration = req.expiration ?? DEFAULT_EXCHANGE_EXPIRATION;
