@@ -26,6 +26,7 @@ import { createApp } from "./routes/index.js";
 import { createWebApp } from "./routes/web.js";
 
 async function bootstrapServices() {
+	console.log(`[procella] bootstrap build=${"20260403.2"}`);
 	const config = loadConfig();
 
 	initTelemetry({ enabled: config.otelEnabled, serviceName: "procella" });
