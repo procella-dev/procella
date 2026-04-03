@@ -113,7 +113,7 @@ export class OidcExchangeService implements OidcService {
 
 		const accessToken = await this.auth.createCliAccessKey(syntheticCaller, `oidc-${orgSlug}`, {
 			expireTime,
-			customClaims: { ...workloadClaims, procellaOrgSlug: matchedPolicy.orgSlug },
+			customClaims: { ...workloadClaims, [OidcClaims.orgSlug]: matchedPolicy.orgSlug },
 		});
 
 		return {

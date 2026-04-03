@@ -210,8 +210,12 @@ export class DescopeAuthService implements AuthService {
 						u?.loginIds?.[0] ??
 						caller.login; // use pre-computed login for workload callers
 					const expireTime = opts?.expireTime ?? 0;
-					// Ensure procellaLogin is never overridable by caller-provided customClaims
-					const { procellaLogin: _ignored, ...safeCustomClaims } = opts?.customClaims ?? {};
+					// Ensure procellaLogin and procellaOrgSlug are never overridable by caller-provided customClaims
+					const {
+						procellaLogin: _a,
+						procellaOrgSlug: _b,
+						...safeCustomClaims
+					} = opts?.customClaims ?? {};
 					const customClaims = { procellaLogin: loginId, ...safeCustomClaims };
 
 					const resp = await this.sdk.management.accessKey.create(
@@ -362,13 +366,7 @@ export class DescopeAuthService implements AuthService {
 
 		return {
 			tenantId,
-			// Prefer explicit orgSlug from OIDC workload claims over JWT tenant name.
-			// The Descope tenant name (used by extractOrgSlug) may differ from the
-			// trust policy's orgSlug that the CLI uses for stack operations.
-			orgSlug:
-				typeof claims.procellaOrgSlug === "string" && claims.procellaOrgSlug
-					? claims.procellaOrgSlug
-					: extractOrgSlug(claims, tenantId),
+			orgSlug: extractOrgSlug(claims, tenantId),
 			userId,
 			login,
 			roles,
@@ -506,26 +504,32 @@ function extractTenantId(claims: Record<string, unknown>): string | undefined {
 }
 
 /**
- * Derive a URL-safe org slug from the tenant name in JWT claims.
- * Session JWTs carry `tenant_name` at the top level (mapped from `{{tenant.name}}`
- * via Descope JWT Templates). CLI access key JWTs store it in
- * `tenants.<tenantId>.name` instead. Both paths are checked.
- * Falls back to the raw tenantId if no name is available.
+ * Derive a URL-safe org slug from JWT claims.
+ *
+ * Resolution order:
+ *   1. Explicit `procellaOrgSlug` claim (set by OIDC exchange — authoritative)
+ *   2. Top-level `tenant_name` (present in session JWTs via Descope JWT Templates)
+ *   3. Nested `tenants.<tenantId>.name` (present in CLI access key JWTs)
+ *   4. Raw tenantId as last resort
  */
 export function extractOrgSlug(claims: Record<string, unknown>, tenantId: string): string {
-	// 1. Top-level tenant_name (present in session JWTs)
+	// 1. Explicit orgSlug from OIDC workload claims (authoritative, set by trust policy)
+	const explicit = claims[OidcClaims.orgSlug];
+	if (typeof explicit === "string" && explicit) return explicit;
+
+	// 2. Top-level tenant_name (present in session JWTs)
 	const topLevel =
 		typeof claims.tenant_name === "string" && claims.tenant_name ? claims.tenant_name : undefined;
 	if (topLevel) return slugify(topLevel) || tenantId;
 
-	// 2. Nested tenants.<id>.name (present in CLI access key JWTs)
+	// 3. Nested tenants.<id>.name (present in CLI access key JWTs)
 	if (claims.tenants && typeof claims.tenants === "object") {
 		const tenants = claims.tenants as Record<string, Record<string, unknown>>;
 		const name = tenants[tenantId]?.name;
 		if (typeof name === "string" && name) return slugify(name) || tenantId;
 	}
 
-	// 3. Last resort — should not happen if Descope is configured correctly
+	// 4. Last resort — should not happen if Descope is configured correctly
 	return tenantId;
 }
 

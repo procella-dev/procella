@@ -339,6 +339,21 @@ describe("@procella/server handlers", () => {
 			expect(body.defaultTeam).toBeDefined();
 			expect(body.defaultTeam.name).toBe("my-org");
 		});
+
+		test("getOrganization('default') returns caller's orgSlug", async () => {
+			const app = new Hono<Env>();
+			app.use("*", injectCaller(validCaller));
+			const user = userHandlers(mockStacksService());
+			app.get("/user/organizations/:orgName", user.getOrganization);
+
+			const res = await app.request("/user/organizations/default");
+			expect(res.status).toBe(200);
+			const body = await res.json();
+			// Must return caller's org, not the literal string 'default'
+			expect(body.githubLogin).toBe(validCaller.orgSlug);
+			// The default org response only has githubLogin (no name/defaultTeam)
+			expect(body.name).toBeUndefined();
+		});
 	});
 
 	// ========================================================================

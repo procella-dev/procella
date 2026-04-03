@@ -576,4 +576,18 @@ describe("extractOrgSlug", () => {
 	test("falls back to tenantId for empty claims", () => {
 		expect(extractOrgSlug({}, "T3raw")).toBe("T3raw");
 	});
+
+	test("prefers procellaOrgSlug over tenant name (OIDC workload identity)", () => {
+		const claims = {
+			procellaOrgSlug: "procella-pr-102",
+			tenant_name: "tenant-name",
+			tenants: { T3id: { name: "different-name" } },
+		};
+		expect(extractOrgSlug(claims, "T3id")).toBe("procella-pr-102");
+	});
+
+	test("falls through to tenant_name when procellaOrgSlug is absent", () => {
+		const claims = { tenant_name: "My Org" };
+		expect(extractOrgSlug(claims, "T3id")).toBe("my-org");
+	});
 });

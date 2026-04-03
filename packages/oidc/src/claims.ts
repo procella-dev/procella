@@ -14,6 +14,7 @@ export const OidcClaims = {
 	triggerActor: "procellaTriggerActor",
 	triggerActorId: "procellaTriggerActorId",
 	workloadJti: "procellaWorkloadJti",
+	orgSlug: "procellaOrgSlug",
 } as const;
 
 export const GRANT_TYPE_TOKEN_EXCHANGE = "urn:ietf:params:oauth:grant-type:token-exchange";
