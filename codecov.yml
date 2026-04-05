@@ -21,16 +21,6 @@ flags:
       - apps/ui/
       - scripts/
     carryforward: true
-  integration:
-    paths:
-      - packages/
-      - apps/server/
-    carryforward: true
-  e2e:
-    paths:
-      - packages/
-      - apps/server/
-    carryforward: true
 
 component_management:
   individual_components:

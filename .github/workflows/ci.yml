@@ -33,10 +33,11 @@ jobs:
       - run: bunx biome check .
       - run: bun run typecheck
       - name: Run unit tests with coverage
+        shell: bash
         run: |
+          set -eo pipefail
           mkdir -p test-results
-          bun test --coverage --coverage-reporter=lcov packages/ apps/ scripts/
-          bun test --reporter=junit packages/ apps/ scripts/ > test-results/unit.junit.xml 2>/dev/null || true
+          bun test --coverage --coverage-reporter=lcov --reporter=junit packages/ apps/ scripts/ | tee test-results/unit.junit.xml
       - name: Upload coverage to Codecov
         if: always()
         uses: codecov/codecov-action@v6
@@ -107,12 +108,13 @@ jobs:
           restore-keys: bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
       - name: Run integration tests
+        shell: bash
         env:
           TEST_DATABASE_URL: postgres://procella:procella@localhost:5432/procella?sslmode=disable
         run: |
+          set -eo pipefail
           mkdir -p test-results
-          bun run test:integration
-          bun test --reporter=junit --timeout 30000 --preload ./integration/setup.ts integration/ > test-results/integration.junit.xml 2>/dev/null || true
+          bun test --timeout 30000 --preload ./integration/setup.ts --reporter=junit integration/ | tee test-results/integration.junit.xml
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
         uses: codecov/test-results-action@v1
@@ -198,6 +200,7 @@ jobs:
       - uses: pulumi/setup-pulumi@v2
       - run: bun install --frozen-lockfile
       - name: Run E2E tests
+        shell: bash
         env:
           PROCELLA_DATABASE_URL: postgres://procella:procella@localhost:5432/procella?sslmode=disable
           PROCELLA_OTEL_ENABLED: "true"
@@ -205,9 +208,9 @@ jobs:
           OTEL_EXPORTER_OTLP_ENDPOINT: http://localhost:4318
           OTEL_RESOURCE_ATTRIBUTES: deployment.environment=ci,vcs.revision=${{ github.sha }},ci.run_id=${{ github.run_id }}
         run: |
+          set -eo pipefail
           mkdir -p test-results
-          bun run e2e
-          bun test --reporter=junit --timeout 120000 --preload ./e2e/setup.ts e2e/*.test.ts > test-results/e2e.junit.xml 2>/dev/null || true
+          bun test --timeout 120000 --preload ./e2e/setup.ts --reporter=junit e2e/*.test.ts | tee test-results/e2e.junit.xml
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
         uses: codecov/test-results-action@v1
