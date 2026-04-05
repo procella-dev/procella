@@ -36,7 +36,7 @@ jobs:
         run: bun test --coverage --coverage-reporter=lcov packages/ apps/ scripts/
       - name: Upload coverage to Codecov
         if: always()
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           files: ./coverage/lcov.info
           flags: unit
