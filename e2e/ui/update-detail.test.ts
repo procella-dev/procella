@@ -28,10 +28,20 @@ function runCmd(
 	cwd: string,
 ): Promise<void> {
 	return new Promise((resolve, reject) => {
-		const proc = spawn(cmd, args, { env: { ...process.env, ...env }, cwd, stdio: "pipe" });
-		proc.on("close", (code) =>
-			code === 0 ? resolve() : reject(new Error(`${cmd} exited ${code}`)),
-		);
+		const proc = spawn(cmd, args, {
+			env: { ...process.env, ...env },
+			cwd,
+			stdio: ["ignore", "pipe", "pipe"],
+		});
+		const stderrChunks: Buffer[] = [];
+		proc.stdout?.resume(); // drain stdout to prevent pipe-buffer deadlock
+		proc.stderr?.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
+		proc.on("error", reject);
+		proc.on("close", (code) => {
+			if (code === 0) return resolve();
+			const stderr = Buffer.concat(stderrChunks).toString().trim();
+			reject(new Error(`${cmd} exited ${code}${stderr ? `:\n${stderr}` : ""}`));
+		});
 	});
 }
 
@@ -182,7 +192,7 @@ test.describe("UpdateDetail page — completed update", () => {
 		await page.locator("a", { hasText: "pw-test/pw-stack" }).click();
 
 		await expect(page).toHaveURL(/\/stacks\/dev-org\/pw-test\/pw-stack$/);
-		await expect(page.locator("text=Updates")).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByRole("tab", { name: /Updates/ })).toBeVisible({ timeout: 10_000 });
 	});
 
 	test("filter buttons work — Errors and Warnings tabs", async ({ page }) => {
