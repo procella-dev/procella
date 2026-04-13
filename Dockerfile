@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 FROM public.ecr.aws/awsguru/aws-lambda-adapter:1.0.0 AS adapter
-FROM oven/bun:1.3.11 AS base
+FROM oven/bun:1.3.12 AS base
 WORKDIR /usr/src/app
 
 FROM base AS deps
