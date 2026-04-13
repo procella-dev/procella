@@ -66,11 +66,13 @@ jobs:
           go-version-file: packages/types/tygo/go.mod
           cache: false # no Go build cache needed — tygo install is fast
 
+      # renovatebot/github-action runs Renovate inside Docker, which isolates
+      # it from host-installed tools. Run via npx instead so go + bun from
+      # the steps above are on PATH for gomod artifacts and postUpgradeTasks.
       - name: Run Renovate
-        uses: renovatebot/github-action@v46.1.9
-        with:
-          configurationFile: .github/renovate-global.js
-          token: ${{ steps.get_token.outputs.token }}
+        run: npx --yes renovate
         env:
+          RENOVATE_CONFIG_FILE: .github/renovate-global.js
+          RENOVATE_TOKEN: ${{ steps.get_token.outputs.token }}
           LOG_LEVEL: ${{ inputs.log_level || 'info' }}
           RENOVATE_DRY_RUN: ${{ github.event_name == 'pull_request' && 'full' || (inputs.dry_run == true && 'full' || '') }}
