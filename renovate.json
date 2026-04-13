@@ -28,7 +28,7 @@
       "groupName": "vite + plugin-react"
     },
     {
-      "matchPackageNames": ["bun", "oven/bun"],
+      "matchPackageNames": ["/^oven(-sh)?\\/bun$/"],
       "groupName": "bun"
     }
   ]
