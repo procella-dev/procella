@@ -33,7 +33,9 @@ jobs:
       - run: bunx biome check .
       - run: bun run typecheck
       - name: Run unit tests with coverage
-        run: bun test --coverage --coverage-reporter=lcov packages/ apps/ scripts/
+        run: |
+          mkdir -p test-results
+          bun test --coverage --coverage-reporter=lcov --reporter=junit --reporter-outfile=test-results/unit.junit.xml packages/ apps/ scripts/
       - name: Upload coverage to Codecov
         if: always()
         uses: codecov/codecov-action@v6
@@ -42,6 +44,13 @@ jobs:
           flags: unit
           use_oidc: true
           fail_ci_if_error: true
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          files: test-results/unit.junit.xml
+          flags: unit
+          use_oidc: true
 
   bundle-analysis:
     name: Bundle Analysis
@@ -68,6 +77,8 @@ jobs:
   integration:
     name: Integration Tests
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
     needs: [check]
     services:
       postgres:
@@ -97,7 +108,16 @@ jobs:
       - name: Run integration tests
         env:
           TEST_DATABASE_URL: postgres://procella:procella@localhost:5432/procella?sslmode=disable
-        run: bun run test:integration
+        run: |
+          mkdir -p test-results
+          bun test --timeout 30000 --preload ./integration/setup.ts --reporter=junit --reporter-outfile=test-results/integration.junit.xml integration/
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          files: test-results/integration.junit.xml
+          flags: integration
+          use_oidc: true
 
   types-freshness:
     name: Verify Pulumi Types Freshness
@@ -139,6 +159,8 @@ jobs:
   e2e:
     name: E2E Acceptance Tests
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
     needs: [check]
     services:
       postgres:
@@ -180,7 +202,16 @@ jobs:
           OTEL_SERVICE_NAME: procella-ci-e2e
           OTEL_EXPORTER_OTLP_ENDPOINT: http://localhost:4318
           OTEL_RESOURCE_ATTRIBUTES: deployment.environment=ci,vcs.revision=${{ github.sha }},ci.run_id=${{ github.run_id }}
-        run: bun run e2e
+        run: |
+          mkdir -p test-results
+          bun test --timeout 120000 --preload ./e2e/setup.ts --reporter=junit --reporter-outfile=test-results/e2e.junit.xml e2e/*.test.ts
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          files: test-results/e2e.junit.xml
+          flags: e2e
+          use_oidc: true
       - name: Analyze E2E traces
         if: always()
         env:

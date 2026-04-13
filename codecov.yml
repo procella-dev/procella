@@ -13,6 +13,34 @@ coverage:
         threshold: 5%
         informational: false
 
+flags:
+  unit:
+    paths:
+      - packages/
+      - apps/server/
+      - apps/ui/
+      - scripts/
+    carryforward: true
+
+component_management:
+  individual_components:
+    - component_id: packages
+      name: Packages
+      paths:
+        - packages/**
+    - component_id: server
+      name: Server
+      paths:
+        - apps/server/**
+    - component_id: ui
+      name: UI
+      paths:
+        - apps/ui/**
+
+comment:
+  layout: "condensed_header, condensed_files, condensed_footer"
+  require_changes: true
+
 ignore:
   - "e2e/**"
   - "bench/**"
