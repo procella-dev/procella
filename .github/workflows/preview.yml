@@ -143,7 +143,7 @@ jobs:
       pull-requests: write
       issues: write
     steps:
-      - uses: actions/github-script@v8
+      - uses: actions/github-script@v9
         env:
           API_URL: ${{ needs.deploy.outputs.api_url }}
           APP_URL: ${{ needs.deploy.outputs.app_url }}
