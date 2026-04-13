@@ -26,7 +26,10 @@ module.exports = {
   // "global" tells Renovate to use whatever is already on PATH.
   binarySource: "global",
 
-  // Sign commits via GitHub's API so they appear as "verified".
-  // Requires the token to come from a GitHub App (not a PAT).
-  platformCommit: true,
+  // platformCommit signs commits via GitHub's API ("verified" badge).
+  // DISABLED: incompatible with postUpgradeTasks — platformCommit bypasses
+  // the local git-commit flow where post-upgrade commands execute.
+  // Re-enable once postUpgradeTasks are no longer needed, or switch to
+  // GPG-signing in the workflow for verified commits.
+  // platformCommit: true,
 };
