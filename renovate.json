@@ -13,6 +13,10 @@
     {
       "matchPackageNames": ["vite", "@vitejs/plugin-react"],
       "groupName": "vite + plugin-react"
+    },
+    {
+      "matchPackageNames": ["bun", "oven/bun"],
+      "groupName": "bun"
     }
   ]
 }
