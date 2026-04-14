@@ -35,7 +35,9 @@ function exec(args: string[], opts: ExecOptions = {}): Promise<ExecResult> {
 					);
 					return;
 				}
-				const exitCode = err ? 1 : (child.exitCode ?? 1);
+				const exitCode = err
+					? ((err as { status?: number }).status ?? child.exitCode ?? 1)
+					: (child.exitCode ?? 0);
 				resolve({
 					stdout: stdout ?? "",
 					stderr: stderr ?? "",
