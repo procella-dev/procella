@@ -1,6 +1,5 @@
 import * as log from "./log.js";
-import * as procella from "./procella.js";
-import { discoverStacks, filterStacks } from "./procella.js";
+import { discoverStacks, exportState, filterStacks } from "./procella.js";
 import type { ValidateOptions, ValidationResult } from "./types.js";
 
 export async function validate(opts: ValidateOptions): Promise<ValidationResult[]> {
@@ -41,7 +40,7 @@ export async function validate(opts: ValidateOptions): Promise<ValidationResult[
 		try {
 			const [sourceState, targetState] = await Promise.all([
 				exportFromBackend(opts.sourceUrl, opts.sourceToken, source.ref),
-				procella.exportState(
+				exportState(
 					{ url: opts.targetUrl, token: opts.targetToken },
 					target.ref.org,
 					target.ref.project,
@@ -151,7 +150,7 @@ async function exportFromBackend(
 ): Promise<import("./types.js").UntypedDeployment> {
 	if (url.startsWith("http://") || url.startsWith("https://")) {
 		try {
-			return await procella.exportState({ url, token }, ref.org, ref.project, ref.stack);
+			return await exportState({ url, token }, ref.org, ref.project, ref.stack);
 		} catch {
 			// Fall through to CLI
 		}
