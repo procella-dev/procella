@@ -1,0 +1,45 @@
+{
+	"name": "@procella/migrate",
+	"version": "0.1.0",
+	"description": "Migrate Pulumi stacks from any backend to Procella with bulk automation, validation, and audit trails",
+	"type": "module",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/procella-dev/procella",
+		"directory": "packages/migrate"
+	},
+	"keywords": ["pulumi", "migration", "infrastructure", "state", "backend", "procella"],
+	"bin": {
+		"procella-migrate": "src/cli.ts"
+	},
+	"main": "src/index.ts",
+	"types": "src/index.ts",
+	"exports": {
+		".": {
+			"import": "./src/index.ts",
+			"types": "./src/index.ts"
+		}
+	},
+	"publishConfig": {
+		"access": "public",
+		"bin": {
+			"procella-migrate": "cli.js"
+		},
+		"main": "index.js",
+		"types": "index.d.ts",
+		"exports": {
+			".": {
+				"import": "./index.js",
+				"types": "./index.d.ts"
+			}
+		}
+	},
+	"files": ["*.js", "*.d.ts", "*.d.ts.map", "*.md"],
+	"scripts": {
+		"migrate": "bun src/cli.ts"
+	},
+	"engines": {
+		"node": ">=18.0.0"
+	}
+}
