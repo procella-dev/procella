@@ -5,77 +5,20 @@ on:
     branches: [main]
   workflow_dispatch: {}
 
-permissions:
-  id-token: write
-  contents: read
-
 concurrency:
   group: deploy-dev
   cancel-in-progress: true
 
 jobs:
   deploy:
-    name: Deploy to AWS (dev)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    environment: dev
-    steps:
-      - uses: actions/checkout@v6
-      - uses: jdx/mise-action@v4
-      - uses: actions/cache@v5
-        with:
-          path: |
-            node_modules
-            ~/.bun/install/cache
-            ~/.pulumi/plugins
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
-      - run: bun install --frozen-lockfile
-
-      - name: Build Lambda binaries
-        run: |
-          mkdir -p .build/cli-api .build/web-api .build/gc .build/migrate
-          bun build --compile --target=bun-linux-x64 --production --sourcemap --compile-exec-argv="--smol" apps/server/src/lambda-cli.ts --outfile .build/cli-api/bootstrap
-          bun build --compile --target=bun-linux-x64 --production --sourcemap --compile-exec-argv="--smol" apps/server/src/lambda-web.ts --outfile .build/web-api/bootstrap
-          bun build --compile --target=bun-linux-x64 --production --sourcemap --compile-exec-argv="--smol" apps/server/src/gc-bootstrap.ts --outfile .build/gc/bootstrap
-          bun build --compile --target=bun-linux-x64 --production --sourcemap --compile-exec-argv="--smol" apps/server/src/migrate-bootstrap.ts --outfile .build/migrate/bootstrap
-          cp -rf packages/db/drizzle .build/migrate/drizzle
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: us-east-1
-          role-session-name: GitHubActions-DeployDev-${{ github.run_id }}
-
-      - name: Unlock stale state
-        run: npx sst unlock --stage dev
-        continue-on-error: true
-
-      - name: Deploy
-        run: npx sst deploy --stage dev
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          SST_SECRET_ProcellaEncryptionKey: ${{ secrets.PROCELLA_ENCRYPTION_KEY }}
-          SST_SECRET_ProcellaDevAuthToken: ${{ secrets.PROCELLA_DEV_AUTH_TOKEN }}
-          SST_SECRET_ProcellaDescopeManagementKey: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
-          SST_SECRET_ProcellaOtelEndpoint: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
-          SST_SECRET_ProcellaOtelHeaders: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
-
-      - name: Deployment summary
-        if: always()
-        run: |
-          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Stage | \`dev\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Status | \`${{ job.status }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Region | \`us-east-1\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Triggered by | ${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**URLs:**" >> $GITHUB_STEP_SUMMARY
-          echo "- API: https://api.dev.procella.cloud" >> $GITHUB_STEP_SUMMARY
-          echo "- App: https://app.dev.procella.cloud" >> $GITHUB_STEP_SUMMARY
-          echo "- Docs: https://docs.dev.procella.cloud" >> $GITHUB_STEP_SUMMARY
+    uses: ./.github/workflows/deploy-sst.yml
+    with:
+      stage: dev
+      environment: dev
+    secrets:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+      PROCELLA_ENCRYPTION_KEY: ${{ secrets.PROCELLA_ENCRYPTION_KEY }}
+      PROCELLA_DEV_AUTH_TOKEN: ${{ secrets.PROCELLA_DEV_AUTH_TOKEN }}
+      DESCOPE_MANAGEMENT_KEY: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
+      OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
