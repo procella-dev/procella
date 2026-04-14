@@ -20,6 +20,7 @@ jobs:
     permissions:
       id-token: write
     steps:
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-bun
       - run: bunx biome check .
       - run: bun run typecheck
@@ -50,6 +51,7 @@ jobs:
       id-token: write
     needs: [check]
     steps:
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-bun
       - name: Build UI
         run: bun run --cwd apps/ui build
@@ -77,6 +79,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-bun
       - name: Run integration tests
         env:
@@ -98,6 +101,7 @@ jobs:
     # Runs on all PRs as a safety net to catch stale generated types
     if: github.event_name == 'pull_request'
     steps:
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-bun
       - uses: actions/setup-go@v6
         with:
@@ -152,6 +156,7 @@ jobs:
           - 4318:4318
           - 16686:16686
     steps:
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-bun
       - uses: pulumi/setup-pulumi@v2
       - name: Run E2E tests (shard ${{ matrix.shard }}/3)
@@ -196,6 +201,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-bun
       - uses: pulumi/setup-pulumi@v2
       - name: Install Playwright browsers
@@ -247,6 +253,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-bun
       - uses: pulumi/setup-pulumi@v2
       - name: Run benchmark
