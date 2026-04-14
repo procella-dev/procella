@@ -148,7 +148,7 @@ export async function exportState(
 
 /**
  * List stacks matching a filter pattern.
- * Supports simple glob: * matches any segment, ** matches across slashes.
+ * A bare `*` matches everything. Otherwise `*` matches within a segment and `**` matches across slashes.
  */
 export function filterStacks(
 	stacks: DiscoveredStack[],
