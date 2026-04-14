@@ -10,9 +10,6 @@ on:
         required: false
         type: string
         default: ""
-      environment:
-        required: true
-        type: string
 
 permissions:
   id-token: write
@@ -23,7 +20,7 @@ jobs:
     name: Deploy to AWS (${{ inputs.stage }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    environment: ${{ inputs.environment }}
+    environment: ${{ inputs.stage }}
     steps:
       - uses: actions/checkout@v6
         with:

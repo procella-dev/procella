@@ -32,6 +32,5 @@ jobs:
       contents: read
     with:
       stage: ${{ inputs.stage || 'dev' }}
-      environment: ${{ inputs.stage || 'dev' }}
       ref: ${{ inputs.ref || '' }}
     secrets: inherit

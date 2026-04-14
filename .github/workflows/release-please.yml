@@ -42,6 +42,5 @@ jobs:
       contents: read
     with:
       stage: production
-      environment: production
       ref: ${{ needs.release-please.outputs.tag_name }}
     secrets: inherit
