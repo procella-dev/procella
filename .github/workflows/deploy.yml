@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       stage:
-        description: "SST stage to deploy (e.g. production, dev, staging)"
+        description: "SST stage to deploy"
         required: true
         type: choice
         options:
