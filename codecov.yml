@@ -49,3 +49,4 @@ ignore:
   - "**/generated/**"
   - "**/*.test.ts"
   - "**/*.spec.ts"
+  - "packages/migrate/**"  # CLI tool — I/O orchestration tested via integration, not unit coverage
