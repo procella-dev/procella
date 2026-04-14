@@ -20,16 +20,7 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/checkout@v6
-      - uses: jdx/mise-action@v4
-      - uses: actions/cache@v5
-        with:
-          path: |
-            node_modules
-            ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
-      - run: bun install --frozen-lockfile
+      - uses: ./.github/actions/setup-bun
       - run: bunx biome check .
       - run: bun run typecheck
       - name: Run unit tests with coverage
@@ -59,16 +50,7 @@ jobs:
       id-token: write
     needs: [check]
     steps:
-      - uses: actions/checkout@v6
-      - uses: jdx/mise-action@v4
-      - uses: actions/cache@v5
-        with:
-          path: |
-            node_modules
-            ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
-      - run: bun install --frozen-lockfile
+      - uses: ./.github/actions/setup-bun
       - name: Build UI
         run: bun run --cwd apps/ui build
       - name: Build Docs
@@ -95,16 +77,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v6
-      - uses: jdx/mise-action@v4
-      - uses: actions/cache@v5
-        with:
-          path: |
-            node_modules
-            ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
-      - run: bun install --frozen-lockfile
+      - uses: ./.github/actions/setup-bun
       - name: Run integration tests
         env:
           TEST_DATABASE_URL: postgres://procella:procella@localhost:5432/procella?sslmode=disable
@@ -125,20 +98,11 @@ jobs:
     # Runs on all PRs as a safety net to catch stale generated types
     if: github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@v6
-      - uses: jdx/mise-action@v4
+      - uses: ./.github/actions/setup-bun
       - uses: actions/setup-go@v6
         with:
           go-version-file: packages/types/tygo/go.mod
           cache-dependency-path: packages/types/tygo/go.sum
-      - uses: actions/cache@v5
-        with:
-          path: |
-            node_modules
-            ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
-      - run: bun install --frozen-lockfile
       - name: Regenerate types from Pulumi SDK
         run: bun run types:generate
       - name: Check for uncommitted type changes
@@ -184,17 +148,8 @@ jobs:
           - 4318:4318
           - 16686:16686
     steps:
-      - uses: actions/checkout@v6
-      - uses: jdx/mise-action@v4
-      - uses: actions/cache@v5
-        with:
-          path: |
-            node_modules
-            ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
+      - uses: ./.github/actions/setup-bun
       - uses: pulumi/setup-pulumi@v2
-      - run: bun install --frozen-lockfile
       - name: Run E2E tests
         env:
           PROCELLA_DATABASE_URL: postgres://procella:procella@localhost:5432/procella?sslmode=disable
@@ -237,17 +192,8 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v6
-      - uses: jdx/mise-action@v4
-      - uses: actions/cache@v5
-        with:
-          path: |
-            node_modules
-            ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
+      - uses: ./.github/actions/setup-bun
       - uses: pulumi/setup-pulumi@v2
-      - run: bun install --frozen-lockfile
       - name: Install Playwright browsers
         run: bunx playwright install chromium --with-deps
       - name: Run Playwright UI tests
@@ -297,17 +243,8 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v6
-      - uses: jdx/mise-action@v4
-      - uses: actions/cache@v5
-        with:
-          path: |
-            node_modules
-            ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
+      - uses: ./.github/actions/setup-bun
       - uses: pulumi/setup-pulumi@v2
-      - run: bun install --frozen-lockfile
       - name: Run benchmark
         env:
           PROCELLA_DATABASE_URL: postgres://procella:procella@localhost:5432/procella?sslmode=disable
