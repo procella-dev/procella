@@ -1,6 +1,7 @@
 {
 	"name": "procella",
 	"private": true,
+	"version": "0.1.0",
 	"workspaces": ["packages/*", "apps/*"],
 	"catalog": {
 		"@trpc/server": "^11.1.0",

@@ -1,0 +1,46 @@
+name: Release Please
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  release-please:
+    concurrency:
+      group: release-please-${{ github.ref }}
+      cancel-in-progress: true
+    name: Create Release PR
+    runs-on: ubuntu-latest
+    outputs:
+      releases_created: ${{ steps.release.outputs['.--release_created'] }}
+      tag_name: ${{ steps.release.outputs['.--tag_name'] }}
+    steps:
+      - name: Get GitHub App token
+        id: get_token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.RENOVATE_APP_ID }}
+          private-key: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
+
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          token: ${{ steps.get_token.outputs.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  deploy-production:
+    name: Deploy Production
+    needs: release-please
+    if: needs.release-please.outputs.releases_created == 'true'
+    uses: ./.github/workflows/deploy-sst.yml
+    permissions:
+      id-token: write
+      contents: read
+    with:
+      stage: production
+      ref: ${{ needs.release-please.outputs.tag_name }}
+    secrets: inherit
