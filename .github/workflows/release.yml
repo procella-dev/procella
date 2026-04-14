@@ -52,6 +52,7 @@ jobs:
       contents: read
       id-token: write
     steps:
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-bun
 
       - name: Verify quality gates
@@ -69,6 +70,11 @@ jobs:
         working-directory: packages/migrate
         run: |
           bunx tsc --outDir dist
+          # Ensure shebang is preserved and cli.js is executable
+          if [ -f dist/cli.js ] && ! head -n 1 dist/cli.js | grep -qx '#!/usr/bin/env node'; then
+            { printf '%s\n' '#!/usr/bin/env node'; cat dist/cli.js; } > dist/cli.js.tmp && mv -f dist/cli.js.tmp dist/cli.js
+          fi
+          chmod +x dist/cli.js
           # Generate a publish-ready package.json with compiled paths
           bun -e '
             const pkg = require("./package.json");

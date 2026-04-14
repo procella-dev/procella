@@ -41,9 +41,7 @@ export async function preflight(opts: PreflightOptions): Promise<boolean> {
 		detail: targetReachable ? opts.targetUrl : `Cannot reach ${opts.targetUrl}`,
 	});
 
-	// 4. Target auth (always Procella)
-
-	// 5. Target auth
+	// 4. Target auth
 	const targetAuthed = await procella.checkAuth({ url: opts.targetUrl, token: opts.targetToken });
 	checks.push({
 		name: "Target auth",
