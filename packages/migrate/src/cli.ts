@@ -62,13 +62,15 @@ Examples:
 function resolveToken(
 	explicit: string | boolean | undefined,
 	envKey: string,
-	fallbackEnv: string,
+	fallbackEnv?: string,
 ): string {
 	if (typeof explicit === "string" && explicit) return explicit;
 	const fromEnv = process.env[envKey];
 	if (fromEnv) return fromEnv;
-	const fallback = process.env[fallbackEnv];
-	if (fallback) return fallback;
+	if (fallbackEnv) {
+		const fallback = process.env[fallbackEnv];
+		if (fallback) return fallback;
+	}
 	return "";
 }
 
