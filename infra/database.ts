@@ -1,5 +1,6 @@
 const stage = $app.stage;
 const isProd = stage === "production";
+const isDev = stage === "dev";
 
 export const vpc = !isProd
 	? await aws.ec2
@@ -7,18 +8,8 @@ export const vpc = !isProd
 			.then((existing) => sst.aws.Vpc.get("ProcellaVpc", existing.id))
 	: new sst.aws.Vpc("ProcellaVpc", { nat: "ec2" });
 
-export const database = !isProd
-	? await aws.rds
-			.getClusters({})
-			.then(
-				(clusters) =>
-					clusters.clusterIdentifiers.find((id) => id.startsWith("procella-production")) ||
-					(() => {
-						throw new Error("Production database not found");
-					})(),
-			)
-			.then((existing) => sst.aws.Aurora.get("ProcellaDatabase", existing))
-	: new sst.aws.Aurora("ProcellaDatabase", {
+export const database = isProd
+	? new sst.aws.Aurora("ProcellaDatabase", {
 			engine: "postgres",
 			dataApi: true,
 			scaling: { min: "0 ACU", max: "16 ACU", pauseAfter: "5 minutes" },
@@ -28,14 +19,31 @@ export const database = !isProd
 					storageType: "aurora-iopt1",
 				},
 			},
-			dev: {
-				username: "procella",
-				password: "procella",
-				database: "procella",
-				host: "localhost",
-				port: 5432,
-			},
-		});
+		})
+	: isDev
+		? new sst.aws.Aurora("ProcellaDevDatabase", {
+				engine: "postgres",
+				dataApi: true,
+				scaling: { min: "0 ACU", max: "4 ACU", pauseAfter: "5 minutes" },
+				vpc,
+				dev: {
+					username: "procella",
+					password: "procella",
+					database: "procella",
+					host: "localhost",
+					port: 5432,
+				},
+			})
+		: await aws.rds
+				.getClusters({})
+				.then(
+					(clusters) =>
+						clusters.clusterIdentifiers.find((id) => id.startsWith("procella-dev-")) ||
+						(() => {
+							throw new Error("Dev database not found \u2014 deploy the 'dev' stage first");
+						})(),
+				)
+				.then((existing) => sst.aws.Aurora.get("ProcellaDevDatabase", existing));
 
 export const databaseName = $dev
 	? "procella"
