@@ -5,17 +5,30 @@
   ],
   "schedule": ["at any time"],
   "prConcurrentLimit": 5,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 4am on monday"]
+  },
   "packageRules": [
+    {
+      "description": "Regenerate bun.lock after any dependency update",
+      "matchManagers": ["bun"],
+      "postUpgradeTasks": {
+        "commands": ["bun install"],
+        "fileFilters": ["bun.lock"],
+        "executionMode": "branch"
+      }
+    },
     {
       "description": "Regenerate TypeScript types after Pulumi Go SDK bumps",
       "matchManagers": ["gomod"],
       "matchPackageNames": ["github.com/pulumi/pulumi/sdk/v3"],
       "postUpgradeTasks": {
         "commands": [
-          "bun install --frozen-lockfile",
+          "bun install",
           "bun run types:generate"
         ],
-        "fileFilters": ["packages/types/**"],
+        "fileFilters": ["packages/types/**", "bun.lock"],
         "executionMode": "branch"
       }
     },

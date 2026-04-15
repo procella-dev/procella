@@ -18,7 +18,7 @@ module.exports = {
   // Each entry is a regex matched against the resolved command string.
   // Keep this list minimal — every entry is arbitrary code execution.
   allowedCommands: [
-    "^bun install --frozen-lockfile$",
+    "^bun install$",
     "^bun run types:generate$",
   ],
 
