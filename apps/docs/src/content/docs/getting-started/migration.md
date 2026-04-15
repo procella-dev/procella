@@ -49,19 +49,11 @@ pulumi stack import --file production.json
 # 5. Verify — should show zero changes
 pulumi preview
 
-# 6. Lock the project to Procella (commit this change)
 ```
 
-After a successful migration, update your `Pulumi.yaml` so every developer on the team automatically uses Procella:
-
-```yaml
-name: myproject
-runtime: typescript
-backend:
-  url: https://procella.example.com
-```
-
-Commit this change. Anyone who pulls the repo will use Procella without setting environment variables.
+:::note
+Repeat steps 1–5 for each stack in the project. Once all stacks are imported and verified, update `Pulumi.yaml` to lock the project to Procella — see [Migrating Individual Stacks vs Whole Projects](#migrating-individual-stacks-vs-whole-projects) below.
+:::
 
 ### From S3 / GCS / Azure Blob (DIY Backends)
 
@@ -88,7 +80,7 @@ pulumi stack import --file production.json
 pulumi preview
 ```
 
-Then update `Pulumi.yaml` with `backend.url: https://procella.example.com` and commit.
+Repeat for each stack in the project. See [Migrating Individual Stacks vs Whole Projects](#migrating-individual-stacks-vs-whole-projects) for when to update `Pulumi.yaml`.
 
 ### From Local Filesystem
 
@@ -113,37 +105,56 @@ pulumi stack import --file production.json
 pulumi preview
 ```
 
-Then update `Pulumi.yaml` with `backend.url: https://procella.example.com` and commit.
+Repeat for each stack in the project. See [Migrating Individual Stacks vs Whole Projects](#migrating-individual-stacks-vs-whole-projects) for when to update `Pulumi.yaml`.
 
-## Can I Migrate Individual Stacks?
+## Migrating Individual Stacks vs Whole Projects
 
-**Yes.** Migration is always per-stack. You are not required to migrate an entire project at once.
+The `pulumi stack export` and `pulumi stack import` commands work **per-stack** — you export and import one stack at a time. However, Pulumi's `backend.url` in `Pulumi.yaml` is **project-scoped**: it applies to every stack in the project. There is no built-in way to point one stack at Procella and another at Pulumi Cloud within the same project without environment variables.
 
-This enables a gradual adoption strategy:
+In practice, this means the migration workflow is:
 
-1. **Start with non-production** — migrate `dev` or `staging` stacks first
-2. **Run side-by-side** — keep production on Pulumi Cloud while testing Procella with lower environments
-3. **Migrate production last** — once you've built confidence through lower environments
-4. **Keep a fallback** — don't delete source stacks until you've validated Procella in production
+1. **Export each stack** you want to migrate (one at a time, or all at once)
+2. **Switch the project** to Procella by updating `Pulumi.yaml`
+3. **Import each stack** into Procella
+4. **Verify each stack** with `pulumi preview`
 
-You can even run different stacks of the same project on different backends simultaneously. The Pulumi CLI tracks which backend each stack lives on independently.
+The backend switch (`Pulumi.yaml` change) is the atomic cutover — once you commit it, all stacks in that project use Procella.
 
-### Lock Your Project to Procella
+### Recommended Approach: Migrate All, Verify Gradually
 
-After migrating, set the backend URL in your `Pulumi.yaml` and commit it. This is the **recommended approach** — every developer who clones or pulls the repo automatically uses Procella without any local setup:
+Since the source backend is never modified (export is read-only), the safest approach is:
+
+1. **Export all stacks** in the project before changing anything
+2. **Update `Pulumi.yaml`** to point at Procella and commit
+3. **Import stacks one at a time**, starting with dev/staging
+4. **Verify each stack** with `pulumi preview` — should show zero changes
+5. **Import production last** once you're confident
+6. **Keep the source backend** as a fallback — if anything goes wrong, revert the `Pulumi.yaml` change
 
 ```yaml
+# Pulumi.yaml — this switches ALL stacks in the project to Procella
 name: my-project
 runtime: typescript
 backend:
   url: https://procella.example.com
 ```
 
-Developers only need a Procella access token (via `PULUMI_ACCESS_TOKEN` or `pulumi login`). The backend is already configured.
+Commit this change. Every developer who pulls the repo automatically uses Procella.
 
-:::tip[Why Pulumi.yaml over environment variables?]
-Setting `backend.url` in `Pulumi.yaml` is self-documenting and version-controlled. New team members don't need to know which backend URL to use — they just clone and go. Environment variables like `PULUMI_BACKEND_URL` are better suited for CI/CD overrides, not day-to-day development.
+:::tip[Rollback is one git revert away]
+If Procella isn't working as expected, `git revert` the `Pulumi.yaml` change. All stacks instantly point back to the original backend. Your source state was never modified.
 :::
+
+### If You Need Per-Stack Backends
+
+If you genuinely need different stacks on different backends (e.g., production stays on Pulumi Cloud while dev uses Procella), the only option is the `PULUMI_BACKEND_URL` environment variable:
+
+```bash
+# Override backend for a single command
+PULUMI_BACKEND_URL=https://procella.example.com pulumi up --stack dev
+```
+
+This is useful for CI/CD pipelines where different environments deploy to different backends, but it's not recommended for day-to-day development since it requires every developer to remember the env var.
 
 ## Secrets Handling
 
