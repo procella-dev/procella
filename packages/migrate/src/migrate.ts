@@ -230,7 +230,7 @@ async function migrateStack(
 		return {
 			fqn: stack.fqn,
 			status: "failed",
-			sourceResourceCount: 0,
+			sourceResourceCount,
 			targetResourceCount: null,
 			duration,
 			error: message,
