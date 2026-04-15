@@ -59,11 +59,10 @@ jobs:
           app-id: ${{ secrets.RENOVATE_APP_ID }}
           private-key: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
 
-      # Go + Bun must be on PATH for postUpgradeTasks (bun run types:generate).
+      # Go + Bun must be on PATH for postUpgradeTasks (bun install, types:generate).
       # mise-action and setup-go install them on the HOST runner, but the
-      # renovatebot/github-action runs Renovate inside Docker. We resolve the
-      # host tool paths, volume-mount them into the container, and use a custom
-      # entrypoint script to symlink them into the container's PATH.
+      # renovatebot/github-action runs Renovate inside Docker. We volume-mount
+      # the Go tree and the resolved bun binary directly into the container.
       - uses: jdx/mise-action@v4
       - uses: actions/setup-go@v6
         with:
@@ -74,7 +73,9 @@ jobs:
         id: tools
         run: |
           echo "go_root=$(go env GOROOT)" >> "$GITHUB_OUTPUT"
-          echo "bun_bin=$(dirname $(readlink -f $(which bun)))" >> "$GITHUB_OUTPUT"
+          BUN_REAL=$(readlink -f $(which bun))
+          echo "Resolved bun binary: $BUN_REAL"
+          echo "bun_path=$BUN_REAL" >> "$GITHUB_OUTPUT"
 
       - name: Run Renovate
         uses: renovatebot/github-action@v46.1.9
@@ -86,7 +87,7 @@ jobs:
           docker-volumes: |
             /tmp:/tmp ;
             ${{ steps.tools.outputs.go_root }}:/usr/local/go ;
-            ${{ steps.tools.outputs.bun_bin }}:/mise-bun
+            ${{ steps.tools.outputs.bun_path }}:/usr/local/bin/bun
         env:
           LOG_LEVEL: ${{ inputs.log_level || 'info' }}
           RENOVATE_DRY_RUN: ${{ github.event_name == 'pull_request' && 'full' || (inputs.dry_run == true && 'full' || '') }}

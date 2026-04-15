@@ -1,10 +1,14 @@
 #!/bin/bash
 set -euo pipefail
 
-# Make host-installed go and bun available in the container's PATH.
-# These directories are volume-mounted from the GitHub Actions runner
-# by the workflow (see .github/workflows/renovate.yml).
-ln -sf /mise-bun/bun /usr/local/bin/bun
+# Go is volume-mounted as a directory tree at /usr/local/go.
+# Bun is volume-mounted as a single binary directly at /usr/local/bin/bun.
+# (see .github/workflows/renovate.yml for the volume mounts)
+#
+# Verify tools are accessible before handing off to Renovate.
+echo "bun: $(bun --version 2>&1 || echo 'NOT FOUND')"
+echo "go:  $(go version 2>&1 || echo 'NOT FOUND')"
+
 export GOROOT=/usr/local/go
 export PATH="/usr/local/go/bin:$PATH"
 
