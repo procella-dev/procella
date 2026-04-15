@@ -1,4 +1,4 @@
-import { parseStackFqn } from "./pulumi.js";
+import { listStacks as cliListStacks, parseStackFqn } from "./pulumi.js";
 import type { DiscoveredStack, UntypedDeployment } from "./types.js";
 
 const PULUMI_ACCEPT = "application/vnd.pulumi+8";
@@ -187,7 +187,6 @@ export async function discoverStacks(url: string, token: string): Promise<Discov
 		}
 	}
 
-	const { listStacks: cliListStacks } = await import("./pulumi.js");
 	return cliListStacks({ backendUrl: url, token });
 }
 
