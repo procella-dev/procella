@@ -167,7 +167,7 @@ export function filterStacks(
 function globToRegex(pattern: string): RegExp {
 	if (pattern === "*") return /^.*$/;
 	const escaped = pattern
-		.replace(/[.+^${}()|[\]\\]/g, "\\$&")
+		.replace(/[.+?^${}()|[\]\\]/g, "\\$&")
 		.replace(/\*\*/g, "{{GLOBSTAR}}")
 		.replace(/\*/g, "[^/]*")
 		.replace(/{{GLOBSTAR}}/g, ".*");
