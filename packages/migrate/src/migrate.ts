@@ -34,7 +34,8 @@ export async function run(opts: RunOptions): Promise<AuditLog> {
 
 	log.success(`Found ${filtered.length} stacks to migrate`);
 
-	// Always validate target is reachable — even in dry-run, to avoid false green light
+	// Warn but don't abort — target may come online during a long migration,
+	// and each stack import fails individually with a clear error in the audit log.
 	const targetOk = await procella.healthCheck(opts.targetUrl);
 	if (!targetOk) {
 		log.warn(
@@ -129,6 +130,7 @@ async function migrateStack(
 
 	log.info(`  [${index}/${total}] ${stack.fqn}`);
 
+	let sourceResourceCount = 0;
 	try {
 		// Phase 1: Export from source
 		log.dim(`           Exporting from source...`);
@@ -140,7 +142,7 @@ async function migrateStack(
 		// Parse and validate the export
 		const raw = await readFile(exportFile, "utf-8");
 		const deployment: UntypedDeployment = JSON.parse(raw);
-		const sourceResourceCount = deployment.deployment.resources?.length ?? 0;
+		sourceResourceCount = deployment.deployment.resources?.length ?? 0;
 
 		log.dim(`           Exported ${sourceResourceCount} resources`);
 
