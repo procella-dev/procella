@@ -165,6 +165,13 @@
         "drizzle-orm": "catalog:",
       },
     },
+    "packages/migrate": {
+      "name": "@procella/migrate",
+      "version": "0.1.0",
+      "bin": {
+        "procella-migrate": "src/cli.ts",
+      },
+    },
     "packages/oidc": {
       "name": "@procella/oidc",
       "version": "0.0.0",
@@ -727,6 +734,8 @@
     "@procella/docs": ["@procella/docs@workspace:apps/docs"],
 
     "@procella/github": ["@procella/github@workspace:packages/github"],
+
+    "@procella/migrate": ["@procella/migrate@workspace:packages/migrate"],
 
     "@procella/oidc": ["@procella/oidc@workspace:packages/oidc"],
 
