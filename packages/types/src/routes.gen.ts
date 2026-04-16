@@ -1,5 +1,5 @@
 // Auto-generated from pulumi/pulumi pkg/backend/httpstate/client/api_endpoints.go
-// Pulumi SDK v3.230.0 — do not edit manually.
+// Pulumi SDK v3.231.0 — do not edit manually.
 // Regenerate: bun run packages/types/tygo/generate-routes.ts
 
 type Method = "GET" | "POST" | "PATCH" | "DELETE";
@@ -52,8 +52,8 @@ export const PulumiRoutes = {
   completePolicyPackPublish: { method: "POST" as Method, path: "/api/orgs/:org/policypacks/:policyPackName/:versionTag/complete" },
   getSearchResources: { method: "GET" as Method, path: "/api/orgs/:org/search/resources" },
   getSearchResourcesParse: { method: "GET" as Method, path: "/api/orgs/:org/search/resources/parse" },
-  publishPackage: { method: "POST" as Method, path: "/api/preview/registry/packages/:source/:publisher/:name/versions" },
-  completePackagePublish: { method: "POST" as Method, path: "/api/preview/registry/packages/:source/:publisher/:name/versions/:version/complete" },
+  publishPackage: { method: "POST" as Method, path: "/api/registry/packages/:source/:publisher/:name/versions" },
+  completePackagePublish: { method: "POST" as Method, path: "/api/registry/packages/:source/:publisher/:name/versions/:version/complete" },
   deletePackageVersion: { method: "DELETE" as Method, path: "/api/registry/packages/:source/:publisher/:name/versions/:version" },
   publishTemplate: { method: "POST" as Method, path: "/api/registry/templates/:source/:publisher/:name/versions" },
   completeTemplatePublish: { method: "POST" as Method, path: "/api/registry/templates/:source/:publisher/:name/versions/:version/complete" },
