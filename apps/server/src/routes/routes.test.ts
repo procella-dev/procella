@@ -45,7 +45,7 @@ function mockAuthService(): AuthService {
 	return {
 		authenticate: async (request: Request) => {
 			const header = request.headers.get("Authorization");
-			if (!header || !header.startsWith("token ")) {
+			if (!header?.startsWith("token ")) {
 				throw new UnauthorizedError("Missing or invalid Authorization header");
 			}
 			const token = header.slice("token ".length);

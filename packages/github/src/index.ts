@@ -66,7 +66,7 @@ export async function verifyGitHubWebhookSignature(
 	signature: string,
 	secret: string,
 ): Promise<boolean> {
-	if (!signature || !signature.startsWith("sha256=")) {
+	if (!signature?.startsWith("sha256=")) {
 		return false;
 	}
 

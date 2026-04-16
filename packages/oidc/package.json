@@ -10,6 +10,7 @@
 		"@procella/types": "workspace:*",
 		"@procella/config": "workspace:*",
 		"@procella/db": "workspace:*",
-		"jose": "^6.0.0"
+		"jose": "^6.0.0",
+		"drizzle-orm": "catalog:"
 	}
 }

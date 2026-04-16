@@ -137,4 +137,5 @@ const project = new descope.Project(
 
 // ── Outputs ─────────────────────────────────────────────────────────────────
 const projectId = project.id;
+
 export { project, projectId };

@@ -33,7 +33,7 @@
 		"load-test": "bun run bench/load-test.ts"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.4.6",
+		"@biomejs/biome": "^2.4.12",
 		"@descope/node-sdk": "^2.2.1",
 		"@descope/pulumi-descope": "^0.3.4",
 		"@playwright/test": "^1.58.2",
@@ -41,6 +41,7 @@
 		"@pulumi/pulumi": "^3.228.0",
 		"@types/aws-lambda": "^8.10.161",
 		"@types/bun": "^1.3.10",
+		"bun-types": "^1.3.10",
 		"@types/pg": "^8.20.0",
 		"drizzle-kit": "catalog:",
 		"husky": "^9.1.7",

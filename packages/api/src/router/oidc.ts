@@ -73,7 +73,6 @@ export const oidcRouter = router({
 		assertAdmin(ctx.caller.roles);
 		assertOidc(ctx);
 		// biome-ignore lint/style/noNonNullAssertion: assertOidc guards above
-		// biome-ignore lint/style/noNonNullAssertion: assertOidc guards above
 		return ctx.oidcPolicies!.listByOrgSlug(ctx.caller.orgSlug, ctx.caller.tenantId);
 	}),
 

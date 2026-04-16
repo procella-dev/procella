@@ -71,7 +71,7 @@ export function updateAuth(
 	return async (c, next) => {
 		try {
 			const header = c.req.header("Authorization");
-			if (!header || !header.startsWith("update-token ")) {
+			if (!header?.startsWith("update-token ")) {
 				return c.json({ code: 401, message: "Missing update-token Authorization" }, 401);
 			}
 			const token = header.slice("update-token ".length).trim();
