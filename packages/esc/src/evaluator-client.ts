@@ -34,14 +34,14 @@ export interface EvaluatorClient {
 }
 
 /**
- * Placeholder — throws on invocation. Replaced in .13 with an AWS Lambda
- * invoke (`@aws-sdk/client-lambda`) for production and an in-process
- * transport for tests.
+ * Placeholder — throws on invocation. Replaced in procella-yj7.13 with an
+ * AWS Lambda invoke (`@aws-sdk/client-lambda`) for production and an
+ * in-process transport for tests.
  */
 export class UnimplementedEvaluatorClient implements EvaluatorClient {
 	async evaluate(_: EvaluatePayload): Promise<EvaluateResult> {
 		throw new Error(
-			"EvaluatorClient not implemented — see procella-yj7.13. Path A (direct Go library) chosen per .sisyphus/analysis/esc-evaluator-decision.md.",
+			"EvaluatorClient not implemented — see procella-yj7.13 for the planned Lambda invoke implementation.",
 		);
 	}
 }

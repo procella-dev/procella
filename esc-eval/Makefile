@@ -6,12 +6,13 @@
 
 BUILD_DIR := ../.build/esc-eval
 BOOTSTRAP := $(BUILD_DIR)/bootstrap
+GO_SOURCES := $(shell find . -name '*.go' -not -path '*/vendor/*')
 
 .PHONY: build clean tidy test
 
 build: $(BOOTSTRAP)
 
-$(BOOTSTRAP): cmd/lambda/main.go go.mod
+$(BOOTSTRAP): $(GO_SOURCES) go.mod go.sum
 	mkdir -p $(BUILD_DIR)
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 		go build -ldflags="-s -w" -tags lambda.norpc \

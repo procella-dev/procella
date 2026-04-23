@@ -8,6 +8,5 @@
 // P0.2 scaffold: interfaces, types, and PostgresEscService skeleton. CRUD
 // implementation lands in procella-yj7.6 (P1); evaluator wiring in .14 (P2).
 
-export * from "./evaluator-client.js";
 export * from "./service.js";
 export * from "./types.js";

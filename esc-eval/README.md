@@ -1,10 +1,12 @@
 # esc-eval — Procella ESC evaluator Lambda
 
-Embeds [`github.com/pulumi/esc`](https://github.com/pulumi/esc) (Apache-2.0, v0.23.0) as a Go library to evaluate ESC YAML environments. Part of the `procella-yj7` epic (Pulumi ESC equivalent).
+Will embed [`github.com/pulumi/esc`](https://github.com/pulumi/esc) (Apache-2.0) as a Go library to evaluate ESC YAML environments, once the handler is implemented in procella-yj7.11. Part of the `procella-yj7` epic (Pulumi ESC equivalent).
+
+This scaffold only pins the dependency in `go.mod` via a blank import; the real `eval.EvalEnvironment` wiring lands in procella-yj7.11.
 
 ## Architecture decision
 
-See [`.sisyphus/analysis/esc-evaluator-decision.md`](../.sisyphus/analysis/esc-evaluator-decision.md). **Path A** — direct library import — confirmed by local spike.
+**Path A** — direct library import — chosen per the procella-yj7.34 decision after a local spike confirmed public importability. See the epic `procella-yj7` for the full decision matrix (Paths A/B1/B2/B3).
 
 ## Invocation contract
 
@@ -28,7 +30,7 @@ make tidy
 make test
 ```
 
-SST infra lives in `infra/esc.ts` (procella-yj7.12) and points at `.build/esc-eval` with `handler: bootstrap`, `runtime: provided.al2023`, matching the existing `api`/`gc`/`migrate` Lambda pattern.
+SST infra will live in `infra/esc.ts` (procella-yj7.12 — not yet implemented) and will point at `.build/esc-eval` with `handler: bootstrap`, `runtime: provided.al2023`, matching the existing `api`/`gc`/`migrate` Lambda pattern.
 
 ## Status
 
