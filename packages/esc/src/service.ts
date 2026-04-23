@@ -722,7 +722,7 @@ export class PostgresEscService implements EscService {
 // ============================================================================
 
 /** Advisory lock ID for ESC session GC (ASCII "ESCG_ESC"). Distinct from updates GC lock. */
-const ESC_GC_ADVISORY_LOCK_ID = 0x455343475f455343n;
+const ESC_GC_ADVISORY_LOCK_ID: bigint = BigInt("0x455343475f455343");
 
 /**
  * Sweep expired ESC sessions. Uses pg_try_advisory_lock for cluster safety.

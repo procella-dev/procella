@@ -159,26 +159,26 @@ func TestRunStdioMalformedYAML(t *testing.T) {
 		t.Fatalf("runStdio returned error: %v", err)
 	}
 
-	var resp EvaluateResponse
-	if err := json.Unmarshal(out.Bytes(), &resp); err == nil {
-		var hasError bool
-		for _, d := range resp.Diagnostics {
-			if d.Severity == "error" {
-				hasError = true
-			}
-		}
-		if !hasError {
-			t.Fatalf("expected error diagnostic in response: %+v", resp.Diagnostics)
-		}
+	// Check for {"error":"..."} shape FIRST — Go's json.Unmarshal would
+	// lenient-accept that input into EvaluateResponse (all fields zero),
+	// masking the real outcome.
+	var errResp struct{ Error string }
+	if err := json.Unmarshal(out.Bytes(), &errResp); err == nil && errResp.Error != "" {
 		return
 	}
 
-	var errResp struct{ Error string }
-	if err := json.Unmarshal(out.Bytes(), &errResp); err != nil {
-		t.Fatalf("stdout was not valid JSON response or error shape: %v (raw: %s)", err, out.String())
+	var resp EvaluateResponse
+	if err := json.Unmarshal(out.Bytes(), &resp); err != nil {
+		t.Fatalf("stdout was not valid JSON response or error shape (raw: %s)", out.String())
 	}
-	if errResp.Error == "" {
-		t.Fatal("expected non-empty error field for malformed YAML")
+	var hasError bool
+	for _, d := range resp.Diagnostics {
+		if d.Severity == "error" {
+			hasError = true
+		}
+	}
+	if !hasError {
+		t.Fatalf("expected error diagnostic in response: %+v", resp.Diagnostics)
 	}
 }
 
