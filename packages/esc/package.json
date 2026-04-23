@@ -5,6 +5,7 @@
 	"main": "src/index.ts",
 	"types": "src/index.ts",
 	"dependencies": {
+		"@aws-sdk/client-lambda": "^3.883.0",
 		"@procella/db": "workspace:*",
 		"@procella/types": "workspace:*",
 		"drizzle-orm": "catalog:"

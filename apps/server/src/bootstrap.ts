@@ -8,7 +8,11 @@ import { createAuthService, DescopeAuthService } from "@procella/auth";
 import { loadConfig } from "@procella/config";
 import { AesCryptoService, devMasterKey } from "@procella/crypto";
 import { createDb } from "@procella/db";
-import { PostgresEscService, UnimplementedEvaluatorClient } from "@procella/esc";
+import {
+	LambdaEvaluatorClient,
+	PostgresEscService,
+	UnimplementedEvaluatorClient,
+} from "@procella/esc";
 import { buildGitHubAppConfig, OctokitGitHubService } from "@procella/github";
 import {
 	JwksValidatorImpl,
@@ -88,9 +92,15 @@ async function bootstrapServices() {
 	const githubService = githubConfig
 		? new OctokitGitHubService({ db, config: githubConfig })
 		: null;
+	const evaluatorClient = config.escEvaluatorFnName
+		? new LambdaEvaluatorClient({
+				functionName: config.escEvaluatorFnName,
+				region: process.env.AWS_REGION ?? "us-east-1",
+			})
+		: new UnimplementedEvaluatorClient();
 	const escService = new PostgresEscService({
 		db,
-		evaluator: new UnimplementedEvaluatorClient(),
+		evaluator: evaluatorClient,
 		encryptionKeyHex: encryptionKey,
 	});
 

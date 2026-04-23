@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 )
+
+var validKey = strings.Repeat("00", 32)
 
 func TestHandleRejectsEmptyEncryptionKey(t *testing.T) {
 	_, err := handle(context.Background(), EvaluateRequest{
@@ -49,7 +52,7 @@ func TestHandleRejectsInvalidHex(t *testing.T) {
 func TestHandleRejectsEmptyDefinition(t *testing.T) {
 	_, err := handle(context.Background(), EvaluateRequest{
 		Definition:       "",
-		EncryptionKeyHex: strings.Repeat("00", 32),
+		EncryptionKeyHex: validKey,
 	})
 	if err == nil {
 		t.Fatal("expected error for empty definition, got nil")
@@ -60,14 +63,104 @@ func TestHandleRejectsEmptyDefinition(t *testing.T) {
 }
 
 func TestHandleAcceptsValidInputs(t *testing.T) {
-	_, err := handle(context.Background(), EvaluateRequest{
+	resp, err := handle(context.Background(), EvaluateRequest{
 		Definition:       "values:\n  foo: bar\n",
-		EncryptionKeyHex: strings.Repeat("00", 32),
+		EncryptionKeyHex: validKey,
 	})
-	if err == nil {
-		t.Fatal("expected 'not implemented' error, got nil")
+	if err != nil {
+		t.Fatalf("expected success, got error: %v", err)
 	}
-	if !strings.Contains(err.Error(), "procella-yj7.11") {
-		t.Fatalf("expected not-implemented marker referencing the follow-up bead, got: %v", err)
+	if resp.Values["foo"] != "bar" {
+		t.Errorf("Values.foo = %v, want bar", resp.Values["foo"])
+	}
+}
+
+func TestHandleEvaluatesStaticValues(t *testing.T) {
+	resp, err := handle(context.Background(), EvaluateRequest{
+		Definition:       "values:\n  foo: bar\n  baz: 42\n",
+		EncryptionKeyHex: validKey,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Values["foo"] != "bar" {
+		t.Errorf("Values.foo = %v (%T), want string bar", resp.Values["foo"], resp.Values["foo"])
+	}
+	bazJSON, _ := json.Marshal(resp.Values["baz"])
+	if string(bazJSON) != "42" {
+		t.Errorf("Values.baz JSON = %s, want 42", bazJSON)
+	}
+	if len(resp.Secrets) != 0 {
+		t.Errorf("Secrets = %v, want empty", resp.Secrets)
+	}
+	if len(resp.Diagnostics) != 0 {
+		t.Errorf("Diagnostics = %v, want empty", resp.Diagnostics)
+	}
+}
+
+func TestHandleEvaluatesInterpolation(t *testing.T) {
+	resp, err := handle(context.Background(), EvaluateRequest{
+		Definition:       "values:\n  a: 1\n  b: \"${a}-x\"\n",
+		EncryptionKeyHex: validKey,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	bJSON, _ := json.Marshal(resp.Values["b"])
+	if string(bJSON) != `"1-x"` {
+		t.Errorf("Values.b JSON = %s, want \"1-x\"", bJSON)
+	}
+}
+
+func TestHandleResolvesImports(t *testing.T) {
+	resp, err := handle(context.Background(), EvaluateRequest{
+		Definition:       "imports:\n  - shared\nvalues:\n  inherited: ${key}\n",
+		Imports:          map[string]string{"shared": "values:\n  key: hello\n"},
+		EncryptionKeyHex: validKey,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	inheritedJSON, _ := json.Marshal(resp.Values["inherited"])
+	if string(inheritedJSON) != `"hello"` {
+		t.Errorf("Values.inherited JSON = %s, want \"hello\"", inheritedJSON)
+	}
+}
+
+func TestHandleDiagnosticsForUnknownProvider(t *testing.T) {
+	resp, _ := handle(context.Background(), EvaluateRequest{
+		Definition:       "values:\n  creds:\n    fn::open::aws-login:\n      region: us-east-1\n",
+		EncryptionKeyHex: validKey,
+	})
+	if len(resp.Diagnostics) == 0 {
+		t.Fatal("expected at least one diagnostic for unknown provider")
+	}
+	var hasError bool
+	for _, d := range resp.Diagnostics {
+		if d.Severity == "error" {
+			hasError = true
+		}
+	}
+	if !hasError {
+		t.Fatalf("expected error-severity diagnostic, got: %+v", resp.Diagnostics)
+	}
+}
+
+func TestHandleRejectsMalformedYAML(t *testing.T) {
+	resp, err := handle(context.Background(), EvaluateRequest{
+		Definition:       "values: [unclosed",
+		EncryptionKeyHex: validKey,
+	})
+	if err != nil {
+		return
+	}
+	var hasError bool
+	for _, d := range resp.Diagnostics {
+		if d.Severity == "error" {
+			hasError = true
+		}
+	}
+	if !hasError {
+		t.Fatal("expected error or error-severity diagnostic for malformed YAML")
 	}
 }

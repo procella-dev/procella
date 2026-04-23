@@ -1,8 +1,8 @@
 # esc-eval — Procella ESC evaluator Lambda
 
-Will embed [`github.com/pulumi/esc`](https://github.com/pulumi/esc) (Apache-2.0) as a Go library to evaluate ESC YAML environments, once the handler is implemented in procella-yj7.11. Part of the `procella-yj7` epic (Pulumi ESC equivalent).
+Embeds [`github.com/pulumi/esc`](https://github.com/pulumi/esc) (Apache-2.0, v0.23.0) as a Go library to evaluate ESC YAML environments. Part of the `procella-yj7` epic (Pulumi ESC equivalent).
 
-This scaffold only pins the dependency in `go.mod` via a blank import; the real `eval.EvalEnvironment` wiring lands in procella-yj7.11.
+The handler (`cmd/lambda/main.go` + `loaders.go`) invokes `eval.LoadYAMLBytes` + `eval.EvalEnvironment` with a `payloadEnvironmentLoader` (reads imports from the invoke payload, never touches DB/network) and a `stubProviderLoader` (real `fn::open::*` providers land in procella-yj7.17-21).
 
 ## Architecture decision
 
@@ -30,14 +30,16 @@ make tidy
 make test
 ```
 
-SST infra will live in `infra/esc.ts` (procella-yj7.12 — not yet implemented) and will point at `.build/esc-eval` with `handler: bootstrap`, `runtime: provided.al2023`, matching the existing `api`/`gc`/`migrate` Lambda pattern.
+SST infra lives in `infra/esc.ts`. The `ProcellaCliApi` function links this Lambda and exposes the name as `PROCELLA_ESC_EVALUATOR_FN_NAME` — the TS `LambdaEvaluatorClient` reads that and invokes via `@aws-sdk/client-lambda`.
 
 ## Status
 
 | Task | Status |
 |---|---|
 | procella-yj7.1 — validate Go library import | ✅ done |
-| procella-yj7.3 — scaffold Go module + Lambda skeleton | 🟡 in progress (this PR) |
-| procella-yj7.11 — implement handler with `eval.EvalEnvironment` | open |
-| procella-yj7.12 — SST infra (`infra/esc.ts`) | open |
+| procella-yj7.3 — scaffold Go module + Lambda skeleton | ✅ done |
+| procella-yj7.11 — real handler with `eval.EvalEnvironment` | ✅ done |
+| procella-yj7.12 — SST infra (`infra/esc.ts`) | ✅ done |
+| procella-yj7.13 — `LambdaEvaluatorClient` TS → Lambda invoke | ✅ done |
 | procella-yj7.15 — CI Go build step | open |
+| procella-yj7.14 — wire `open`/`session` endpoint through evaluator | open |
