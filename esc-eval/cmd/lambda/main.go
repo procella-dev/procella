@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/procella-dev/procella/esc-eval/providers"
 	"github.com/pulumi/esc"
 	"github.com/pulumi/esc/eval"
 	"github.com/pulumi/esc/syntax"
@@ -71,7 +72,7 @@ func handle(ctx context.Context, req EvaluateRequest) (EvaluateResponse, error) 
 		return EvaluateResponse{}, fmt.Errorf("exec context: %w", err)
 	}
 
-	result, evalDiags := eval.EvalEnvironment(ctx, "env", envDecl, dec, stubProviderLoader{}, loader, execCtx)
+	result, evalDiags := eval.EvalEnvironment(ctx, "env", envDecl, dec, providers.NewRegistry(), loader, execCtx)
 
 	allDiags := make(syntax.Diagnostics, 0, len(parseDiags)+len(evalDiags))
 	allDiags = append(allDiags, parseDiags...)

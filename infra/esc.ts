@@ -16,4 +16,18 @@ export const escEvaluator = new sst.aws.Function("ProcellaEscEvaluator", {
 	timeout: "60 seconds",
 	memory: "512 MB",
 	vpc,
+	permissions: [
+		{
+			actions: ["sts:AssumeRoleWithWebIdentity"],
+			resources: ["*"],
+		},
+		{
+			actions: ["secretsmanager:GetSecretValue"],
+			resources: ["arn:aws:secretsmanager:*:*:secret:procella/*"],
+		},
+		{
+			actions: ["ssm:GetParameter"],
+			resources: ["arn:aws:ssm:*:*:parameter/procella/*"],
+		},
+	],
 });
