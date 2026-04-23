@@ -31,7 +31,7 @@ CREATE TABLE "esc_sessions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"environment_id" uuid NOT NULL,
 	"revision_id" uuid NOT NULL,
-	"resolved_values_ciphertext" jsonb NOT NULL,
+	"resolved_values_ciphertext" text NOT NULL,
 	"secret_paths" text[] DEFAULT '{}'::text[] NOT NULL,
 	"opened_at" timestamp DEFAULT now() NOT NULL,
 	"expires_at" timestamp NOT NULL,

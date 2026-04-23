@@ -150,6 +150,43 @@ describe.skipIf(!(await hasDb()))("PostgresEscService", () => {
 		).rejects.toMatchObject({ code: "BAD_REQUEST" });
 	});
 
+	test("concurrent updateEnvironment serializes via SELECT FOR UPDATE (no duplicate revision)", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "race", name: "env", yamlBody: "values: {n: 0}" },
+			user,
+		);
+		const results = await Promise.allSettled([
+			service.updateEnvironment(tenant, "race", "env", { yamlBody: "values: {n: 1}" }, user),
+			service.updateEnvironment(tenant, "race", "env", { yamlBody: "values: {n: 2}" }, user),
+		]);
+		const fulfilled = results.filter((r) => r.status === "fulfilled");
+		expect(fulfilled).toHaveLength(2);
+
+		const revs = await service.listRevisions(tenant, "race", "env");
+		const nums = revs.map((r) => r.revisionNumber).sort((a, b) => a - b);
+		expect(nums).toEqual([1, 2, 3]);
+	});
+
+	test("concurrent deleteEnvironment is idempotent-safe (transaction + isNull guard)", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "delrace", name: "env", yamlBody: "values: {}" },
+			user,
+		);
+		const results = await Promise.allSettled([
+			service.deleteEnvironment(tenant, "delrace", "env"),
+			service.deleteEnvironment(tenant, "delrace", "env"),
+		]);
+		const fulfilled = results.filter((r) => r.status === "fulfilled").length;
+		const rejected = results.filter((r) => r.status === "rejected").length;
+		expect(fulfilled).toBeGreaterThanOrEqual(1);
+		expect(fulfilled + rejected).toBe(2);
+
+		const fetch = await service.getEnvironment(tenant, "delrace", "env");
+		expect(fetch).toBeNull();
+	});
+
 	test("tenant isolation — other tenant cannot see envs", async () => {
 		await service.createEnvironment(
 			tenant,

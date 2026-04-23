@@ -326,7 +326,7 @@ export const escSessions = pgTable(
 		revisionId: uuid("revision_id")
 			.notNull()
 			.references(() => escEnvironmentRevisions.id, { onDelete: "cascade" }),
-		resolvedValuesCiphertext: jsonb("resolved_values_ciphertext").notNull(),
+		resolvedValuesCiphertext: text("resolved_values_ciphertext").notNull(),
 		secretPaths: text("secret_paths").array().notNull().default(sql`'{}'::text[]`),
 		openedAt: timestamp("opened_at").notNull().defaultNow(),
 		expiresAt: timestamp("expires_at").notNull(),

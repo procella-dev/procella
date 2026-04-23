@@ -1,69 +1,69 @@
 {
-  "version": "7",
-  "dialect": "postgresql",
-  "entries": [
-    {
-      "idx": 0,
-      "version": "7",
-      "when": 1772914464231,
-      "tag": "0000_medical_fabian_cortez",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1772914500000,
-      "tag": "0001_add_journal_entries",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1772914600000,
-      "tag": "0002_extend_journal_entries",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1774364000000,
-      "tag": "0005_stack_search",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1774365531575,
-      "tag": "0007_parallel_celestials",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1774366930942,
-      "tag": "0008_worried_malcolm_colcord",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1775040114552,
-      "tag": "0006_living_phil_sheldon",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1775049472593,
-      "tag": "0009_oidc_ci_auth",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "7",
-      "when": 1776950222823,
-      "tag": "0008_nostalgic_avengers",
-      "breakpoints": true
-    }
-  ]
+	"version": "7",
+	"dialect": "postgresql",
+	"entries": [
+		{
+			"idx": 0,
+			"version": "7",
+			"when": 1772914464231,
+			"tag": "0000_medical_fabian_cortez",
+			"breakpoints": true
+		},
+		{
+			"idx": 1,
+			"version": "7",
+			"when": 1772914500000,
+			"tag": "0001_add_journal_entries",
+			"breakpoints": true
+		},
+		{
+			"idx": 2,
+			"version": "7",
+			"when": 1772914600000,
+			"tag": "0002_extend_journal_entries",
+			"breakpoints": true
+		},
+		{
+			"idx": 3,
+			"version": "7",
+			"when": 1774364000000,
+			"tag": "0005_stack_search",
+			"breakpoints": true
+		},
+		{
+			"idx": 4,
+			"version": "7",
+			"when": 1774365531575,
+			"tag": "0007_parallel_celestials",
+			"breakpoints": true
+		},
+		{
+			"idx": 5,
+			"version": "7",
+			"when": 1774366930942,
+			"tag": "0008_worried_malcolm_colcord",
+			"breakpoints": true
+		},
+		{
+			"idx": 6,
+			"version": "7",
+			"when": 1775040114552,
+			"tag": "0006_living_phil_sheldon",
+			"breakpoints": true
+		},
+		{
+			"idx": 7,
+			"version": "7",
+			"when": 1775049472593,
+			"tag": "0009_oidc_ci_auth",
+			"breakpoints": true
+		},
+		{
+			"idx": 8,
+			"version": "7",
+			"when": 1776951547541,
+			"tag": "0010_glamorous_phil_sheldon",
+			"breakpoints": true
+		}
+	]
 }

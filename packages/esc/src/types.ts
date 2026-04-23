@@ -36,8 +36,8 @@ export interface EscSession {
 	id: string;
 	environmentId: string;
 	revisionId: string;
-	/** Encrypted JSON blob of resolved values (AES-256-GCM). */
-	resolvedValuesCiphertext: Buffer | Uint8Array;
+	/** Base64-encoded AES-256-GCM ciphertext of resolved values JSON. */
+	resolvedValuesCiphertext: string;
 	openedAt: Date;
 	expiresAt: Date;
 	closedAt: Date | null;

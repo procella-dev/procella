@@ -281,10 +281,25 @@ export class PostgresEscService implements EscService {
 		}
 
 		return await this.db.transaction(async (tx) => {
-			const row = await findEnvRow(tx, tenantId, projectName, envName);
-			if (!row) {
+			const [locked] = await tx
+				.select({ env: escEnvironments })
+				.from(escEnvironments)
+				.innerJoin(escProjects, eq(escEnvironments.projectId, escProjects.id))
+				.where(
+					and(
+						eq(escProjects.tenantId, tenantId),
+						eq(escProjects.name, projectName),
+						eq(escEnvironments.name, envName),
+						isNull(escEnvironments.deletedAt),
+					),
+				)
+				.limit(1)
+				.for("update");
+
+			if (!locked) {
 				throw new NotFoundError("Environment", `${projectName}/${envName}`);
 			}
+			const row = locked.env;
 
 			const nextRevision = row.currentRevisionNumber + 1;
 			const now = new Date();
@@ -311,14 +326,19 @@ export class PostgresEscService implements EscService {
 	}
 
 	async deleteEnvironment(tenantId: string, projectName: string, envName: string): Promise<void> {
-		const row = await findEnvRow(this.db, tenantId, projectName, envName);
-		if (!row) {
-			throw new NotFoundError("Environment", `${projectName}/${envName}`);
-		}
-		await this.db
-			.update(escEnvironments)
-			.set({ deletedAt: new Date() })
-			.where(eq(escEnvironments.id, row.id));
+		await this.db.transaction(async (tx) => {
+			const row = await findEnvRow(tx, tenantId, projectName, envName);
+			if (!row) {
+				throw new NotFoundError("Environment", `${projectName}/${envName}`);
+			}
+			const result = await tx
+				.update(escEnvironments)
+				.set({ deletedAt: new Date() })
+				.where(and(eq(escEnvironments.id, row.id), isNull(escEnvironments.deletedAt)));
+			if (result.rowCount === 0) {
+				throw new NotFoundError("Environment", `${projectName}/${envName}`);
+			}
+		});
 	}
 
 	async listRevisions(

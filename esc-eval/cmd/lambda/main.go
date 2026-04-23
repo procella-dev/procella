@@ -45,7 +45,6 @@ type EvaluateResponse struct {
 
 // encryptionKeyHexLen is 32 bytes AES-256 key as hex (2 chars per byte).
 const encryptionKeyHexLen = 64
-const encryptionKeyByteLen = 32
 
 func handle(ctx context.Context, req EvaluateRequest) (EvaluateResponse, error) {
 	if req.Definition == "" {
@@ -56,14 +55,8 @@ func handle(ctx context.Context, req EvaluateRequest) (EvaluateResponse, error) 
 			"encryptionKeyHex must be exactly %d hex characters", encryptionKeyHexLen,
 		)
 	}
-	key, err := hex.DecodeString(req.EncryptionKeyHex)
-	if err != nil {
+	if _, err := hex.DecodeString(req.EncryptionKeyHex); err != nil {
 		return EvaluateResponse{}, fmt.Errorf("encryptionKeyHex: %w", err)
-	}
-	if len(key) != encryptionKeyByteLen {
-		return EvaluateResponse{}, fmt.Errorf(
-			"encryptionKeyHex must decode to exactly %d bytes", encryptionKeyByteLen,
-		)
 	}
 
 	return EvaluateResponse{}, errors.New("not implemented — see procella-yj7.11")
