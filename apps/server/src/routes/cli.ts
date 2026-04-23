@@ -6,6 +6,7 @@
 import type { AuditService } from "@procella/audit";
 import type { AuthConfig, AuthService } from "@procella/auth";
 import type { Database } from "@procella/db";
+import type { EscService } from "@procella/esc";
 import { type GitHubService, verifyGitHubWebhookSignature } from "@procella/github";
 import type { OidcService } from "@procella/oidc";
 import type { StacksService } from "@procella/stacks";
@@ -18,6 +19,7 @@ import {
 	auditHandlers,
 	checkpointHandlers,
 	cryptoHandlers,
+	escHandlers,
 	eventHandlers,
 	githubHandlers,
 	healthHandlers,
@@ -49,6 +51,7 @@ export interface CliAppDeps {
 	stacks: StacksService;
 	updates: UpdatesService;
 	webhooks: WebhooksService;
+	esc: EscService;
 	github: GitHubService | null;
 	githubWebhookSecret?: string;
 	oidc?: OidcService | null;
@@ -80,6 +83,7 @@ export function createCliApp(deps: CliAppDeps): Hono<Env> {
 	const eventH = eventHandlers(deps.updates, deps.stacks);
 	const cryptoH = cryptoHandlers(deps.updates);
 	const stateH = stateHandlers(deps.updates, deps.stacks);
+	const escH = escHandlers({ esc: deps.esc });
 
 	// Middleware instances
 	const withApiAuth = apiAuth(deps.auth);
@@ -174,6 +178,17 @@ export function createCliApp(deps: CliAppDeps): Hono<Env> {
 	api.get("/stacks/:org/:project/:stack", stackH.getStack);
 	api.delete("/stacks/:org/:project/:stack", stackH.deleteStack);
 	api.post("/stacks/:org/:project", stackH.createStack);
+
+	// ESC (Environments, Secrets & Config)
+	api.post("/esc/environments/:org/:project", escH.createEnvironment);
+	api.get("/esc/environments/:org/:project", escH.listEnvironments);
+	api.get("/esc/environments/:org/:project/:envName", escH.getEnvironment);
+	api.patch("/esc/environments/:org/:project/:envName", escH.updateEnvironment);
+	api.delete("/esc/environments/:org/:project/:envName", escH.deleteEnvironment);
+	api.get("/esc/environments/:org/:project/:envName/versions", escH.listRevisions);
+	api.get("/esc/environments/:org/:project/:envName/versions/:version", escH.getRevision);
+	api.post("/esc/environments/:org/:project/:envName/open", escH.openSession);
+	api.get("/esc/environments/:org/:project/:envName/open/:sessionId", escH.getSession);
 
 	app.route("/api", api);
 	return app;

@@ -33,6 +33,7 @@ function mockContext(overrides?: Partial<TRPCContext>): TRPCContext {
 		audit: {} as never,
 		updates: {} as never,
 		webhooks: {} as never,
+		esc: {} as never,
 		github: {
 			handleWebhookEvent: mock(async () => {}),
 			postPRComment: mock(async () => {}),

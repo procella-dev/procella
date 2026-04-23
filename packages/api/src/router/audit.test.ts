@@ -26,6 +26,7 @@ function mockContext(overrides?: Partial<TRPCContext>): TRPCContext {
 		},
 		updates: {} as never,
 		webhooks: {} as never,
+		esc: {} as never,
 		github: null,
 		...overrides,
 	};

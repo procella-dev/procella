@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { AuditService } from "@procella/audit";
 import type { AuthService } from "@procella/auth";
 import type { Database } from "@procella/db";
+import type { EscService } from "@procella/esc";
 import type { StackInfo, StacksService } from "@procella/stacks";
 import type { Caller } from "@procella/types";
 import { UnauthorizedError } from "@procella/types";
@@ -197,6 +198,7 @@ describe("@procella/server routes", () => {
 			stacks: mockStacksService(),
 			updates: mockUpdatesService(),
 			webhooks: mockWebhooksService(),
+			esc: {} as unknown as EscService,
 		});
 	}
 

@@ -2,6 +2,7 @@
 
 import { router } from "../trpc.js";
 import { auditRouter } from "./audit.js";
+import { escRouter } from "./esc.js";
 import { eventsRouter } from "./events.js";
 import { githubRouter } from "./github.js";
 import { oidcRouter } from "./oidc.js";
@@ -18,6 +19,7 @@ export const appRouter = router({
 	audit: auditRouter,
 	updates: updatesRouter,
 	events: eventsRouter,
+	esc: escRouter,
 	github: githubRouter,
 	webhooks: webhooksRouter,
 	oidc: oidcRouter,
