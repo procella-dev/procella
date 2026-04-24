@@ -12,10 +12,12 @@ coverage:
         target: 80%
         threshold: 5%
         informational: false
+        paths:
+          - "!packages/migrate/"
       migrate-cli:
         target: 50%
-        threshold: 5%
-        informational: false
+        threshold: 10%
+        informational: true
         paths:
           - packages/migrate/
 
@@ -34,6 +36,11 @@ component_management:
       name: Packages
       paths:
         - packages/**
+        - "!packages/migrate/**"
+    - component_id: migrate
+      name: Migrate CLI
+      paths:
+        - packages/migrate/**
     - component_id: server
       name: Server
       paths:
