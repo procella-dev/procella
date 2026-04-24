@@ -2,8 +2,14 @@ import { mkdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { createAuditLog, finalizeAuditLog, recordResult, writeAuditLog } from "./audit.js";
 import * as log from "./log.js";
-import * as procella from "./procella.js";
-import { discoverStacks, filterStacks } from "./procella.js";
+import {
+	createStack,
+	discoverStacks,
+	exportState,
+	filterStacks,
+	healthCheck,
+	importState,
+} from "./procella.js";
 import * as pulumi from "./pulumi.js";
 import type {
 	AuditLog,
@@ -36,7 +42,7 @@ export async function run(opts: RunOptions): Promise<AuditLog> {
 
 	// Warn but don't abort — target may come online during a long migration,
 	// and each stack import fails individually with a clear error in the audit log.
-	const targetOk = await procella.healthCheck(opts.targetUrl);
+	const targetOk = await healthCheck(opts.targetUrl);
 	if (!targetOk) {
 		log.warn(
 			`Target ${opts.targetUrl} is not reachable. ${opts.dryRun ? "Real migration will fail." : "Migration may fail."}`,
@@ -49,6 +55,7 @@ export async function run(opts: RunOptions): Promise<AuditLog> {
 	// 3. Migrate stacks (sequential or concurrent)
 	log.step(2, 4, "Migrating stacks...\n");
 
+	let lastProcessed = filtered.length;
 	if (opts.concurrency <= 1) {
 		for (let i = 0; i < filtered.length; i++) {
 			const result = await migrateStack(filtered[i], i + 1, filtered.length, opts);
@@ -56,6 +63,7 @@ export async function run(opts: RunOptions): Promise<AuditLog> {
 
 			if (result.status === "failed" && !opts.continueOnError) {
 				log.error("Migration stopped due to error. Use --continue-on-error to skip failures.");
+				lastProcessed = i + 1;
 				break;
 			}
 		}
@@ -63,6 +71,7 @@ export async function run(opts: RunOptions): Promise<AuditLog> {
 		const inflight: Promise<void>[] = [];
 		let cursor = 0;
 		let aborted = false;
+		const processedIndices = new Set<number>();
 
 		const processNext = async (): Promise<void> => {
 			while (!aborted) {
@@ -71,6 +80,7 @@ export async function run(opts: RunOptions): Promise<AuditLog> {
 				const stack = filtered[index];
 				const result = await migrateStack(stack, index + 1, filtered.length, opts);
 				recordResult(audit, result);
+				processedIndices.add(index);
 
 				if (result.status === "failed" && !opts.continueOnError) {
 					aborted = true;
@@ -83,6 +93,27 @@ export async function run(opts: RunOptions): Promise<AuditLog> {
 			inflight.push(processNext());
 		}
 		await Promise.all(inflight);
+
+		if (aborted) {
+			lastProcessed = processedIndices.size;
+		}
+	}
+
+	// Record skipped stacks so audit.summary.total always matches filtered.length
+	if (lastProcessed < filtered.length) {
+		for (const stack of filtered.slice(lastProcessed)) {
+			if (!audit.stacks.some((s) => s.fqn === stack.fqn)) {
+				recordResult(audit, {
+					fqn: stack.fqn,
+					status: "skipped",
+					sourceResourceCount: 0,
+					targetResourceCount: null,
+					duration: 0,
+					error:
+						"Migration aborted before reaching this stack (previous failure, --continue-on-error=false)",
+				});
+			}
+		}
 	}
 
 	// 4. Write audit log
@@ -163,7 +194,7 @@ async function migrateStack(
 		// org, project, stackName already computed above with DIY fallbacks
 
 		log.dim("           Creating stack on target...");
-		const { created } = await procella.createStack(
+		const { created } = await createStack(
 			{ url: opts.targetUrl, token: opts.targetToken },
 			org,
 			project,
@@ -173,7 +204,7 @@ async function migrateStack(
 
 		// Phase 3: Import state
 		log.dim("           Importing state...");
-		const { updateId } = await procella.importState(
+		const { updateId } = await importState(
 			{ url: opts.targetUrl, token: opts.targetToken },
 			org,
 			project,
@@ -184,7 +215,7 @@ async function migrateStack(
 
 		// Phase 4: Verify resource count
 		log.dim("           Verifying...");
-		const targetState = await procella.exportState(
+		const targetState = await exportState(
 			{ url: opts.targetUrl, token: opts.targetToken },
 			org,
 			project,

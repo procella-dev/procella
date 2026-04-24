@@ -62,6 +62,29 @@ describe("recordResult", () => {
 		});
 		expect(log.summary.skipped).toBe(1);
 	});
+
+	test("abort path: total matches filtered count when skipping remaining stacks", () => {
+		const log = createAuditLog("src", "tgt");
+		const filtered = [
+			{ fqn: "org/proj/dev", status: "succeeded" as const },
+			{ fqn: "org/proj/staging", status: "failed" as const },
+			{ fqn: "org/proj/prod", status: "skipped" as const },
+		];
+		for (const { fqn, status } of filtered) {
+			recordResult(log, {
+				fqn,
+				status,
+				sourceResourceCount: 0,
+				targetResourceCount: null,
+				duration: 0,
+			});
+		}
+		expect(log.summary.total).toBe(3);
+		expect(log.summary.succeeded).toBe(1);
+		expect(log.summary.failed).toBe(1);
+		expect(log.summary.skipped).toBe(1);
+		expect(log.stacks).toHaveLength(3);
+	});
 });
 
 describe("finalizeAuditLog", () => {
