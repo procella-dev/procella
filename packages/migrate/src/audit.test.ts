@@ -101,4 +101,18 @@ describe("writeAuditLog", () => {
 			await rm(dir, { recursive: true, force: true });
 		}
 	});
+
+	test("uses platform path separator (not hardcoded /)", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "audit-sep-"));
+		try {
+			const log = createAuditLog("src", "tgt");
+			finalizeAuditLog(log);
+			const dirWithTrailing = `${dir}${dir.endsWith("/") ? "" : "/"}`;
+			const filepath = await writeAuditLog(log, dirWithTrailing);
+			expect(filepath).not.toMatch(/\/\//);
+			expect(filepath).toContain(log.runId);
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
 });

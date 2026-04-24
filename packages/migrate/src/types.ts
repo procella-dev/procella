@@ -1,7 +1,15 @@
-/** Parsed fully-qualified stack name: org/project/stack */
+/**
+ * Parsed stack name reference. Canonical form is `org/project/stack` (Procella/Pulumi Cloud),
+ * but DIY backends (local, S3, etc.) may return 2-part (`project/stack`) or 1-part (`stack`)
+ * names — in those cases, `org` and/or `project` will be empty strings. Migration fills in
+ * defaults (`imported` org, project = stack name) before calling Procella.
+ */
 export interface StackRef {
+	/** Organization slug. Empty string for DIY backends that lack an org concept. */
 	org: string;
+	/** Project name. Empty string for 1-part DIY stack names. */
 	project: string;
+	/** Stack name. Always present. */
 	stack: string;
 }
 

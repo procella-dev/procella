@@ -81,6 +81,17 @@ describe("filterStacks", () => {
 	test("no matches returns empty", () => {
 		expect(filterStacks(stacks, "nonexistent/*")).toHaveLength(0);
 	});
+
+	test("? is treated as a literal character, not a regex quantifier", () => {
+		const withQuestion = [
+			makeStack("myorg/api-v2?/dev"),
+			makeStack("myorg/api-v/dev"),
+			makeStack("myorg/api-v2/dev"),
+		];
+		const result = filterStacks(withQuestion, "myorg/api-v2?/dev");
+		expect(result).toHaveLength(1);
+		expect(result[0].fqn).toBe("myorg/api-v2?/dev");
+	});
 });
 
 function mockFetch(impl: (...args: Parameters<typeof fetch>) => Promise<Response>): void {

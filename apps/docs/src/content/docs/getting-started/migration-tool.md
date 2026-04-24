@@ -113,7 +113,7 @@ procella-migrate validate \
   --filter "myorg/myproject/*"
 ```
 
-Checks:
+Checks (the `validate` command goes deeper than `run`'s post-import verification — it compares resource URNs across both backends, while `run` only compares counts):
 
 - Resource count matches between source and target
 - All resource URNs are present on both sides
@@ -145,7 +145,7 @@ The tool follows this sequence for each stack:
 2. Validate   → Parse JSON, check resource count, verify no corruption
 3. Create     → Stack creation on Procella via API (idempotent)
 4. Import     → State import via Procella API (atomic, single-shot)
-5. Verify     → Compare resource URNs + count between source and target
+5. Verify     → Compare resource count between source export and target re-export
 6. Report     → Log result to audit trail
 7. Cleanup    → Delete temp export file (unless --keep-exports)
 ```

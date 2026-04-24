@@ -12,6 +12,12 @@ coverage:
         target: 80%
         threshold: 5%
         informational: false
+      migrate-cli:
+        target: 50%
+        threshold: 5%
+        informational: false
+        paths:
+          - packages/migrate/
 
 flags:
   unit:
@@ -49,4 +55,9 @@ ignore:
   - "**/generated/**"
   - "**/*.test.ts"
   - "**/*.spec.ts"
-  - "packages/migrate/**"  # CLI tool — I/O orchestration tested via integration, not unit coverage
+  - "packages/migrate/src/cli.ts"
+  - "packages/migrate/src/log.ts"
+  - "packages/migrate/src/discover.ts"
+  - "packages/migrate/src/migrate.ts"
+  - "packages/migrate/src/preflight.ts"
+  - "packages/migrate/src/validate.ts"

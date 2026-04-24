@@ -41,13 +41,21 @@ export async function preflight(opts: PreflightOptions): Promise<boolean> {
 		detail: targetReachable ? opts.targetUrl : `Cannot reach ${opts.targetUrl}`,
 	});
 
-	// 4. Target auth
-	const targetAuthed = await procella.checkAuth({ url: opts.targetUrl, token: opts.targetToken });
-	checks.push({
-		name: "Target auth",
-		passed: targetAuthed,
-		detail: targetAuthed ? "Token valid" : "Authentication failed",
-	});
+	// 4. Target auth — skip with explicit message when no token, otherwise call API
+	if (!opts.targetToken) {
+		checks.push({
+			name: "Target auth",
+			passed: false,
+			detail: "Token missing (--target-token or PROCELLA_MIGRATE_TARGET_TOKEN)",
+		});
+	} else {
+		const targetAuthed = await procella.checkAuth({ url: opts.targetUrl, token: opts.targetToken });
+		checks.push({
+			name: "Target auth",
+			passed: targetAuthed,
+			detail: targetAuthed ? "Token valid" : "Authentication failed",
+		});
+	}
 
 	// Report
 	let allPassed = true;
