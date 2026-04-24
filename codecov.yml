@@ -36,6 +36,11 @@ component_management:
       name: Packages
       paths:
         - packages/**
+        - "!packages/migrate/**"
+    - component_id: migrate
+      name: Migrate CLI
+      paths:
+        - packages/migrate/**
     - component_id: server
       name: Server
       paths:
