@@ -1,4 +1,5 @@
 import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import type { AuditLog, MigrationResult } from "./types.js";
 
 export function createAuditLog(source: string, target: string): AuditLog {
@@ -25,7 +26,7 @@ export function finalizeAuditLog(log: AuditLog): void {
 
 export async function writeAuditLog(log: AuditLog, dir: string): Promise<string> {
 	const filename = `${log.runId}.json`;
-	const filepath = `${dir}/${filename}`;
+	const filepath = join(dir, filename);
 	await writeFile(filepath, JSON.stringify(log, null, 2), "utf-8");
 	return filepath;
 }

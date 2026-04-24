@@ -60,23 +60,20 @@ export async function run(opts: RunOptions): Promise<AuditLog> {
 			}
 		}
 	} else {
-		// Concurrent migration with limited parallelism
-		const queue = [...filtered];
 		const inflight: Promise<void>[] = [];
-		let index = 0;
+		let cursor = 0;
 		let aborted = false;
 
 		const processNext = async (): Promise<void> => {
-			while (queue.length > 0 && !aborted) {
-				const stack = queue.shift();
-				if (!stack) break;
-				index++;
-				const result = await migrateStack(stack, index, filtered.length, opts);
+			while (!aborted) {
+				const index = cursor++;
+				if (index >= filtered.length) break;
+				const stack = filtered[index];
+				const result = await migrateStack(stack, index + 1, filtered.length, opts);
 				recordResult(audit, result);
 
 				if (result.status === "failed" && !opts.continueOnError) {
 					aborted = true;
-					queue.length = 0;
 					break;
 				}
 			}
