@@ -214,26 +214,29 @@ STACKS=("myorg/myproject/dev" "myorg/myproject/staging" "myorg/myproject/product
 EXPORT_DIR=$(mktemp -d)
 trap 'rm -rf "$EXPORT_DIR"' EXIT
 
+# Phase 1: Export everything from source first (source is read-only, never modified)
 for stack in "${STACKS[@]}"; do
-  echo "=== Migrating $stack ==="
+  echo "=== Exporting $stack from source ==="
   safe_name=$(echo "$stack" | tr '/' '-')
-
-  # Export from source
-  PULUMI_ACCESS_TOKEN="$SOURCE_TOKEN" \
+  PULUMI_BACKEND_URL="$SOURCE_BACKEND" \
+    PULUMI_ACCESS_TOKEN="$SOURCE_TOKEN" \
     pulumi stack export \
     --stack "$stack" \
     --show-secrets \
     --file "$EXPORT_DIR/$safe_name.json"
+done
 
-  # Switch to Procella and import
-  pulumi logout --all 2>/dev/null || true
-  PULUMI_ACCESS_TOKEN="$PROCELLA_TOKEN" pulumi login "$TARGET_BACKEND"
+# Phase 2: Import all into Procella
+for stack in "${STACKS[@]}"; do
+  echo "=== Importing $stack into Procella ==="
+  safe_name=$(echo "$stack" | tr '/' '-')
 
-  # Create stack (may already exist)
-  PULUMI_ACCESS_TOKEN="$PROCELLA_TOKEN" pulumi stack init "$stack" 2>/dev/null || true
+  PULUMI_BACKEND_URL="$TARGET_BACKEND" \
+    PULUMI_ACCESS_TOKEN="$PROCELLA_TOKEN" \
+    pulumi stack init "$stack" 2>/dev/null || true
 
-  # Import
-  PULUMI_ACCESS_TOKEN="$PROCELLA_TOKEN" \
+  PULUMI_BACKEND_URL="$TARGET_BACKEND" \
+    PULUMI_ACCESS_TOKEN="$PROCELLA_TOKEN" \
     pulumi stack import \
     --stack "$stack" \
     --file "$EXPORT_DIR/$safe_name.json"
