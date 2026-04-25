@@ -12,18 +12,11 @@ export async function validate(opts: ValidateOptions): Promise<ValidationResult[
 	]);
 
 	const filteredSource = filterStacks(sourceStacks, opts.filter, opts.exclude || undefined);
-	const targetByFqn = new Map(targetStacks.map((s) => [s.fqn, s]));
-	const targetByProjectStack = buildProjectStackLookup(targetStacks);
 
 	const results: ValidationResult[] = [];
 
 	for (const source of filteredSource) {
-		const normalizedRef = normalizeStackRef(source.ref);
-		const normalizedFqn = stackFqn(normalizedRef);
-		const target =
-			targetByFqn.get(source.fqn) ??
-			targetByFqn.get(normalizedFqn) ??
-			getUniqueProjectStackMatch(targetByProjectStack, source.ref);
+		const target = findMatchingTargetStack(source, targetStacks);
 
 		if (!target) {
 			results.push({
@@ -79,16 +72,9 @@ export async function validate(opts: ValidateOptions): Promise<ValidationResult[
 	}
 
 	// Check for stacks that exist on target but not on source
-	const sourceByFqn = new Set(filteredSource.map((s) => s.fqn));
-	const normalizedSourceFqns = new Set(filteredSource.map((s) => stackFqn(normalizeStackRef(s.ref))));
-	const sourceByProjectStack = new Set(filteredSource.map((s) => projectStackKey(s.ref)));
 	const filteredTarget = filterStacks(targetStacks, opts.filter, opts.exclude || undefined);
 	for (const target of filteredTarget) {
-		if (
-			!sourceByFqn.has(target.fqn) &&
-			!normalizedSourceFqns.has(target.fqn) &&
-			!sourceByProjectStack.has(projectStackKey(target.ref))
-		) {
+		if (!hasMatchingSourceStack(target, filteredSource)) {
 			results.push({
 				fqn: target.fqn,
 				status: "missing-source",
@@ -125,6 +111,37 @@ export async function validate(opts: ValidateOptions): Promise<ValidationResult[
 	}
 
 	return results;
+}
+
+export function findMatchingTargetStack(
+	source: DiscoveredStack,
+	targetStacks: DiscoveredStack[],
+): DiscoveredStack | undefined {
+	const targetByFqn = new Map(targetStacks.map((stack) => [stack.fqn, stack]));
+	const targetByProjectStack = buildProjectStackLookup(targetStacks);
+	const normalizedRef = normalizeStackRef(source.ref);
+	const normalizedFqn = stackFqn(normalizedRef);
+	return (
+		targetByFqn.get(source.fqn) ??
+		targetByFqn.get(normalizedFqn) ??
+		getUniqueProjectStackMatch(targetByProjectStack, source.ref)
+	);
+}
+
+export function hasMatchingSourceStack(
+	target: DiscoveredStack,
+	sourceStacks: DiscoveredStack[],
+): boolean {
+	const sourceByFqn = new Set(sourceStacks.map((source) => source.fqn));
+	const normalizedSourceFqns = new Set(
+		sourceStacks.map((source) => stackFqn(normalizeStackRef(source.ref))),
+	);
+	const sourceByProjectStack = new Set(sourceStacks.map((source) => projectStackKey(source.ref)));
+	return (
+		sourceByFqn.has(target.fqn) ||
+		normalizedSourceFqns.has(target.fqn) ||
+		sourceByProjectStack.has(projectStackKey(target.ref))
+	);
 }
 
 function normalizeStackRef(ref: StackRef): StackRef {

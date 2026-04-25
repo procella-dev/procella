@@ -1,31 +1,8 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
-import type { DiscoveredStack, UntypedDeployment } from "./types.js";
+import { describe, expect, test } from "bun:test";
+import type { DiscoveredStack } from "./types.js";
+import { findMatchingTargetStack, hasMatchingSourceStack } from "./validate.js";
 
-const mockDiscoverStacks = mock(async (_url: string, _token: string): Promise<DiscoveredStack[]> => []);
-const mockExportState = mock(
-	async (_opts: { url: string; token: string }, _org: string, _project: string, _stack: string) =>
-		({ version: 3, deployment: { resources: [] } }) as UntypedDeployment,
-);
-const mockFilterStacks = mock(
-	(stacks: DiscoveredStack[], _pattern: string, _exclude?: string) => stacks,
-);
-
-mock.module("./procella.js", () => ({
-	discoverStacks: mockDiscoverStacks,
-	exportState: mockExportState,
-	filterStacks: mockFilterStacks,
-}));
-
-mock.module("./log.js", () => ({
-	heading: mock(() => {}),
-	info: mock(() => {}),
-	warn: mock(() => {}),
-	table: mock(() => {}),
-}));
-
-const { validate } = await import("./validate.js");
-
-function makeStack(fqn: string, resourceCount: number): DiscoveredStack {
+function makeStack(fqn: string, resourceCount: number = 1): DiscoveredStack {
 	const [org = "", project = "", stack = ""] = fqn.split("/");
 	return {
 		fqn,
@@ -35,82 +12,34 @@ function makeStack(fqn: string, resourceCount: number): DiscoveredStack {
 	};
 }
 
-function makeDeployment(...urns: string[]): UntypedDeployment {
-	return {
-		version: 3,
-		deployment: {
-			resources: urns.map((urn) => ({ urn, type: "test:index:Resource" })),
-		},
-	};
-}
+describe("findMatchingTargetStack", () => {
+	test("falls back to project/stack when Procella reports a different org slug", () => {
+		const source = makeStack("legacy/payments/dev");
+		const target = makeStack("tenant-a/payments/dev");
 
-describe("validate", () => {
-	beforeEach(() => {
-		mockDiscoverStacks.mockReset();
-		mockExportState.mockReset();
-		mockFilterStacks.mockReset();
-		mockFilterStacks.mockImplementation((stacks) => stacks);
+		expect(findMatchingTargetStack(source, [target])).toEqual(target);
 	});
 
-	test("matches source and target stacks by project/stack when org slugs differ", async () => {
-		const source = makeStack("legacy/payments/dev", 1);
-		const target = makeStack("tenant-a/payments/dev", 1);
-		const deployment = makeDeployment("urn:pulumi:dev::payments::pkg:index:Thing::main");
+	test("does not use an ambiguous project/stack fallback", () => {
+		const source = makeStack("legacy/payments/dev");
+		const targetStacks = [makeStack("tenant-a/payments/dev"), makeStack("tenant-b/payments/dev")];
 
-		mockDiscoverStacks.mockImplementation(async (url) =>
-			url === "https://source.example" ? [source] : [target],
-		);
-		mockExportState.mockImplementation(async (_opts, org, project, stack) => {
-			expect(`${project}/${stack}`).toBe("payments/dev");
-			return deployment;
-		});
+		expect(findMatchingTargetStack(source, targetStacks)).toBeUndefined();
+	});
+});
 
-		const results = await validate({
-			sourceUrl: "https://source.example",
-			sourceToken: "source-token",
-			targetUrl: "https://target.example",
-			targetToken: "target-token",
-			filter: "*",
-			exclude: "",
-		});
+describe("hasMatchingSourceStack", () => {
+	test("treats a target stack as matched when only the org differs", () => {
+		const sourceStacks = [makeStack("legacy/payments/dev")];
+		const target = makeStack("tenant-a/payments/dev");
 
-		expect(results).toEqual([
-			{
-				fqn: "legacy/payments/dev",
-				status: "match",
-				sourceResourceCount: 1,
-				targetResourceCount: 1,
-				missingOnTarget: [],
-				missingOnSource: [],
-			},
-		]);
-		expect(mockExportState).toHaveBeenCalledWith(
-			{ url: "https://target.example", token: "target-token" },
-			"tenant-a",
-			"payments",
-			"dev",
-		);
+		expect(hasMatchingSourceStack(target, sourceStacks)).toBe(true);
 	});
 
-	test("does not report target stacks as missing-source when only the org differs", async () => {
-		const source = makeStack("legacy/payments/dev", 1);
-		const target = makeStack("tenant-a/payments/dev", 1);
+	test("still reports a target-only stack when project/stack is missing on the source", () => {
+		const sourceStacks = [makeStack("legacy/payments/dev")];
+		const target = makeStack("tenant-a/billing/dev");
 
-		mockDiscoverStacks.mockImplementation(async (url) =>
-			url === "https://source.example" ? [source] : [target],
-		);
-		mockExportState.mockResolvedValue(makeDeployment("urn:pulumi:dev::payments::pkg:index:Thing::main"));
-
-		const results = await validate({
-			sourceUrl: "https://source.example",
-			sourceToken: "source-token",
-			targetUrl: "https://target.example",
-			targetToken: "target-token",
-			filter: "*",
-			exclude: "",
-		});
-
-		expect(results.some((result) => result.status === "missing-source")).toBe(false);
-		expect(results).toHaveLength(1);
+		expect(hasMatchingSourceStack(target, sourceStacks)).toBe(false);
 	});
 });
