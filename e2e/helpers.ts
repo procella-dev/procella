@@ -17,6 +17,7 @@ export const TEST_DB_URL =
 	"postgres://procella:procella@localhost:5432/procella?sslmode=disable";
 export const BACKEND_URL = `http://127.0.0.1:${TEST_PORT}`;
 export const PROJECT_ROOT = path.resolve(import.meta.dir, "..");
+const ESC_EVAL_BOOTSTRAP = path.join(PROJECT_ROOT, ".build/esc-eval/bootstrap");
 
 // ============================================================================
 // Database Setup
@@ -148,6 +149,7 @@ function cleanEnv(): Record<string, string> {
 }
 
 export async function startServer(): Promise<Subprocess> {
+	const escEvaluatorBinary = await ensureEscEvaluatorBinary();
 	const proc = Bun.spawn(["bun", "run", "apps/server/src/index.ts"], {
 		env: {
 			...cleanEnv(),
@@ -157,6 +159,7 @@ export async function startServer(): Promise<Subprocess> {
 			PROCELLA_DEV_AUTH_TOKEN: TEST_TOKEN,
 			PROCELLA_BLOB_BACKEND: "local",
 			PROCELLA_BLOB_LOCAL_PATH: "./data/e2e-blobs",
+			...(escEvaluatorBinary ? { PROCELLA_ESC_EVALUATOR_BINARY: escEvaluatorBinary } : {}),
 			...(process.env.PROCELLA_OTEL_ENABLED
 				? { PROCELLA_OTEL_ENABLED: process.env.PROCELLA_OTEL_ENABLED }
 				: {}),
@@ -186,6 +189,23 @@ async function waitForHealth(url: string, timeoutMs: number): Promise<void> {
 		await Bun.sleep(200);
 	}
 	throw new Error(`Server did not become healthy within ${timeoutMs}ms`);
+}
+
+async function ensureEscEvaluatorBinary(): Promise<string | undefined> {
+	if (await Bun.file(ESC_EVAL_BOOTSTRAP).exists()) {
+		return ESC_EVAL_BOOTSTRAP;
+	}
+
+	const proc = Bun.spawn(["make", "-C", "esc-eval", "build"], {
+		cwd: PROJECT_ROOT,
+		stdout: "pipe",
+		stderr: "pipe",
+	});
+	const exitCode = await proc.exited;
+	if (exitCode === 0 && (await Bun.file(ESC_EVAL_BOOTSTRAP).exists())) {
+		return ESC_EVAL_BOOTSTRAP;
+	}
+	return undefined;
 }
 
 // ============================================================================

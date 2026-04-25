@@ -88,6 +88,57 @@ describe.skipIf(!(await hasDb()))("PostgresEscService", () => {
 		).rejects.toBeInstanceOf(ConflictError);
 	});
 
+	test("createEnvironment defaults empty yamlBody to values block", async () => {
+		const env = await service.createEnvironment(
+			tenant,
+			{ projectName: "demo", name: "empty", yamlBody: "" },
+			user,
+		);
+		expect(env.yamlBody).toBe("values: {}\n");
+	});
+
+	test("listAllEnvironments returns org/project/name summaries", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "proj-a", name: "alpha", yamlBody: "values: {}" },
+			user,
+		);
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "proj-b", name: "beta", yamlBody: "values: {}" },
+			user,
+		);
+
+		const result = await service.listAllEnvironments(tenant, {
+			orgFilter: "dev-org",
+			projectFilter: "proj-a",
+		});
+		expect(result.nextToken).toBe("");
+		expect(result.environments).toEqual([
+			{ organization: "dev-org", project: "proj-a", name: "alpha" },
+		]);
+	});
+
+	test("cloneEnvironment copies source yaml into destination", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "src", name: "base", yamlBody: "values:\n  greeting: hello\n" },
+			user,
+		);
+
+		const cloned = await service.cloneEnvironment(
+			tenant,
+			"src",
+			"base",
+			{ project: "dest", name: "copy" },
+			user,
+		);
+		expect(cloned.yamlBody).toBe("values:\n  greeting: hello\n");
+
+		const fetched = await service.getEnvironment(tenant, "dest", "copy");
+		expect(fetched?.yamlBody).toBe("values:\n  greeting: hello\n");
+	});
+
 	test("updateEnvironment creates new revision and bumps number", async () => {
 		await service.createEnvironment(
 			tenant,
@@ -204,6 +255,26 @@ describe.skipIf(!(await hasDb()))("PostgresEscService", () => {
 		expect(list).toEqual([]);
 		const fetch = await service.getEnvironment(otherTenant, "iso", "dev");
 		expect(fetch).toBeNull();
+	});
+});
+
+describe("PostgresEscService.validateYaml", () => {
+	const service = new PostgresEscService({
+		db: {} as Database,
+		evaluator: new UnimplementedEvaluatorClient(),
+		encryptionKeyHex: "00".repeat(32),
+	});
+
+	test("extracts top-level values from valid yaml", async () => {
+		const result = await service.validateYaml("values:\n  greeting: hello\n  count: 42\n");
+		expect(result.diagnostics).toEqual([]);
+		expect(result.values).toEqual({ greeting: "hello", count: 42 });
+	});
+
+	test("surfaces yaml parser diagnostics", async () => {
+		const result = await service.validateYaml("values: [oops\n");
+		expect(result.values).toEqual({});
+		expect(result.diagnostics.length).toBeGreaterThan(0);
 	});
 });
 
@@ -442,6 +513,31 @@ describe.skipIf(!(await hasDb()))("PostgresEscService — drafts", () => {
 		const fetched = await service.getDraft(tenant, "demo", "dev", draft.id);
 		expect(fetched).not.toBeNull();
 		expect(fetched?.id).toBe(draft.id);
+	});
+
+	test("updateDraft changes yamlBody for open drafts", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "demo", name: "editable", yamlBody: "values: {a: 1}" },
+			user,
+		);
+		const draft = await service.createDraft(
+			tenant,
+			"demo",
+			"editable",
+			"values: {a: 2}",
+			"edit me",
+			user,
+		);
+
+		const updated = await service.updateDraft(
+			tenant,
+			"demo",
+			"editable",
+			draft.id,
+			"values: {a: 3}",
+		);
+		expect(updated.yamlBody).toBe("values: {a: 3}");
 	});
 
 	test("listDrafts returns all drafts, filterable by status", async () => {

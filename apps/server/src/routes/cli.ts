@@ -180,33 +180,87 @@ export function createCliApp(deps: CliAppDeps): Hono<Env> {
 	api.post("/stacks/:org/:project", stackH.createStack);
 
 	// ESC (Environments, Secrets & Config)
-	api.post("/esc/environments/:org/:project", escH.createEnvironment);
-	api.get("/esc/environments/:org/:project", escH.listEnvironments);
+	api.get("/esc/environments", escH.listAllEnvironments);
+	api.get("/esc/environments/:org", escH.listOrgEnvironments);
+	api.post("/esc/environments/:org", escH.createEnvironment);
+	api.post("/esc/environments/:org/:project/:envName/clone", escH.cloneEnvironment);
 	api.get("/esc/environments/:org/:project/:envName", escH.getEnvironment);
+	api.get("/esc/environments/:org/:project/:envName/versions/:version", escH.getEnvironment);
 	api.patch("/esc/environments/:org/:project/:envName", escH.updateEnvironment);
 	api.delete("/esc/environments/:org/:project/:envName", escH.deleteEnvironment);
 	api.get("/esc/environments/:org/:project/:envName/versions", escH.listRevisions);
 	api.get("/esc/environments/:org/:project/:envName/versions/tags", escH.listRevisionTags);
-	api.delete("/esc/environments/:org/:project/:envName/versions/tags/:tagName", escH.untagRevision);
-	api.put(
-		"/esc/environments/:org/:project/:envName/versions/:version/tags/:tagName",
-		escH.tagRevision,
+	api.post("/esc/environments/:org/:project/:envName/versions/tags", escH.createRevisionTag);
+	api.get("/esc/environments/:org/:project/:envName/versions/tags/:tagName", escH.getRevisionTag);
+	api.patch(
+		"/esc/environments/:org/:project/:envName/versions/tags/:tagName",
+		escH.updateRevisionTag,
 	);
-	api.get("/esc/environments/:org/:project/:envName/versions/:version", escH.getRevision);
+	api.delete(
+		"/esc/environments/:org/:project/:envName/versions/tags/:tagName",
+		escH.deleteRevisionTag,
+	);
+	api.post("/esc/environments/:org/yaml/check", escH.validateYaml);
 	api.post("/esc/environments/:org/:project/:envName/open", escH.openSession);
 	api.get("/esc/environments/:org/:project/:envName/open/:sessionId", escH.getSession);
-
-	// ESC environment tags
-	api.get("/esc/environments/:org/:project/:envName/tags", escH.getEnvironmentTags);
-	api.put("/esc/environments/:org/:project/:envName/tags", escH.setEnvironmentTags);
-	api.patch("/esc/environments/:org/:project/:envName/tags", escH.updateEnvironmentTags);
-
-	// ESC drafts
 	api.post("/esc/environments/:org/:project/:envName/drafts", escH.createDraft);
-	api.get("/esc/environments/:org/:project/:envName/drafts", escH.listDrafts);
 	api.get("/esc/environments/:org/:project/:envName/drafts/:draftId", escH.getDraft);
-	api.post("/esc/environments/:org/:project/:envName/drafts/:draftId/apply", escH.applyDraft);
-	api.post("/esc/environments/:org/:project/:envName/drafts/:draftId/discard", escH.discardDraft);
+	api.patch("/esc/environments/:org/:project/:envName/drafts/:draftId", escH.updateDraft);
+
+	// ESC internal dashboard routes
+	api.post("/esc/v1-internal/environments/:org/:project", escH.internalCreateEnvironment);
+	api.get("/esc/v1-internal/environments/:org/:project", escH.internalListEnvironments);
+	api.get("/esc/v1-internal/environments/:org/:project/:envName", escH.internalGetEnvironment);
+	api.patch("/esc/v1-internal/environments/:org/:project/:envName", escH.internalUpdateEnvironment);
+	api.delete(
+		"/esc/v1-internal/environments/:org/:project/:envName",
+		escH.internalDeleteEnvironment,
+	);
+	api.get(
+		"/esc/v1-internal/environments/:org/:project/:envName/versions",
+		escH.internalListRevisions,
+	);
+	api.get(
+		"/esc/v1-internal/environments/:org/:project/:envName/versions/tags",
+		escH.internalListRevisionTags,
+	);
+	api.delete(
+		"/esc/v1-internal/environments/:org/:project/:envName/versions/tags/:tagName",
+		escH.internalUntagRevision,
+	);
+	api.put(
+		"/esc/v1-internal/environments/:org/:project/:envName/versions/:version/tags/:tagName",
+		escH.internalTagRevision,
+	);
+	api.get(
+		"/esc/v1-internal/environments/:org/:project/:envName/versions/:version",
+		escH.internalGetRevision,
+	);
+	api.post("/esc/v1-internal/environments/:org/:project/:envName/open", escH.internalOpenSession);
+	api.get(
+		"/esc/v1-internal/environments/:org/:project/:envName/open/:sessionId",
+		escH.internalGetSession,
+	);
+	api.get("/esc/v1-internal/environments/:org/:project/:envName/tags", escH.getEnvironmentTags);
+	api.put("/esc/v1-internal/environments/:org/:project/:envName/tags", escH.setEnvironmentTags);
+	api.patch(
+		"/esc/v1-internal/environments/:org/:project/:envName/tags",
+		escH.updateEnvironmentTags,
+	);
+	api.post("/esc/v1-internal/environments/:org/:project/:envName/drafts", escH.internalCreateDraft);
+	api.get("/esc/v1-internal/environments/:org/:project/:envName/drafts", escH.internalListDrafts);
+	api.get(
+		"/esc/v1-internal/environments/:org/:project/:envName/drafts/:draftId",
+		escH.internalGetDraft,
+	);
+	api.post(
+		"/esc/v1-internal/environments/:org/:project/:envName/drafts/:draftId/apply",
+		escH.applyDraft,
+	);
+	api.post(
+		"/esc/v1-internal/environments/:org/:project/:envName/drafts/:draftId/discard",
+		escH.discardDraft,
+	);
 
 	app.route("/api", api);
 	return app;

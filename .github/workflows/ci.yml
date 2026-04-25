@@ -119,6 +119,44 @@ jobs:
           flags: integration
           use_oidc: true
 
+  esc-cli-e2e:
+    name: ESC CLI E2E
+    runs-on: ubuntu-latest
+    needs: [check]
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: procella
+          POSTGRES_PASSWORD: procella
+          POSTGRES_DB: procella
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U procella"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: jdx/mise-action@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: esc-eval/go.mod
+          cache-dependency-path: esc-eval/go.sum
+      - uses: actions/cache@v5
+        with:
+          path: |
+            node_modules
+            ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - name: Run ESC CLI E2E test
+        env:
+          PROCELLA_DATABASE_URL: postgres://procella:procella@localhost:5432/procella?sslmode=disable
+        run: bun test --timeout 60000 --preload ./e2e/setup.ts e2e/esc-cli.test.ts
+
   types-freshness:
     name: Verify Pulumi Types Freshness
     runs-on: ubuntu-latest

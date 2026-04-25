@@ -95,7 +95,7 @@ export function EscEnvironmentDetail() {
 		try {
 			const authHeaders = getAuthHeaders();
 			const res = await fetch(
-				`${apiBase}/api/esc/environments/${encodeURIComponent(org)}/${encodeURIComponent(project ?? "")}/${encodeURIComponent(envName ?? "")}`,
+				`${apiBase}/api/esc/v1-internal/environments/${encodeURIComponent(org)}/${encodeURIComponent(project ?? "")}/${encodeURIComponent(envName ?? "")}`,
 				{
 					method: "PATCH",
 					headers: {

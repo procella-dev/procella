@@ -10,6 +10,7 @@
 		"@procella/db": "workspace:*",
 		"@procella/telemetry": "workspace:*",
 		"@procella/types": "workspace:*",
-		"drizzle-orm": "catalog:"
+		"drizzle-orm": "catalog:",
+		"yaml": "^2.8.0"
 	}
 }

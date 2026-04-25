@@ -11,25 +11,43 @@ import {
 import { withSpan } from "@procella/telemetry";
 import { BadRequestError, ConflictError, NotFoundError, ProcellaError } from "@procella/types";
 import { and, desc, eq, gt, inArray, isNull, lt, sql } from "drizzle-orm";
+import { parseDocument } from "yaml";
 import type { EvaluateDiagnostic, EvaluatorClient } from "./evaluator-client.js";
 import type {
+	CloneEnvironmentInput,
 	CreateEnvironmentInput,
 	DraftStatus,
+	EscCliDiagnostic,
 	EscDraft,
 	EscEnvironment,
 	EscEnvironmentRevision,
 	EscProject,
 	EscRevisionTag,
+	ListAllEnvironmentsOptions,
+	ListAllEnvironmentsResult,
 	OpenSessionResult,
+	OrgEnvironmentSummary,
 	UpdateEnvironmentInput,
+	ValidateYamlResult,
 } from "./types.js";
 
 export interface EscService {
 	listProjects(tenantId: string): Promise<EscProject[]>;
+	listAllEnvironments(
+		tenantId: string,
+		options?: ListAllEnvironmentsOptions,
+	): Promise<ListAllEnvironmentsResult>;
 
 	createEnvironment(
 		tenantId: string,
 		input: CreateEnvironmentInput,
+		createdBy: string,
+	): Promise<EscEnvironment>;
+	cloneEnvironment(
+		tenantId: string,
+		srcProjectName: string,
+		srcEnvName: string,
+		dest: CloneEnvironmentInput,
 		createdBy: string,
 	): Promise<EscEnvironment>;
 	listEnvironments(tenantId: string, projectName: string): Promise<EscEnvironment[]>;
@@ -122,6 +140,13 @@ export interface EscService {
 		envName: string,
 		status?: DraftStatus,
 	): Promise<EscDraft[]>;
+	updateDraft(
+		tenantId: string,
+		projectName: string,
+		envName: string,
+		draftId: string,
+		yamlBody: string,
+	): Promise<EscDraft>;
 	getDraft(
 		tenantId: string,
 		projectName: string,
@@ -141,6 +166,8 @@ export interface EscService {
 		envName: string,
 		draftId: string,
 	): Promise<void>;
+
+	validateYaml(yamlBody: string): Promise<ValidateYamlResult>;
 
 	gcSweep(): Promise<{ closedCount: number }>;
 }
@@ -316,6 +343,31 @@ function validateEnvTags(tags: Record<string, string>): void {
 	}
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function toYamlDiagnostics(error: string | Error): EscCliDiagnostic[] {
+	const summary = error instanceof Error ? error.message : error;
+	return [{ summary }];
+}
+
+function extractYamlValues(value: unknown): Record<string, unknown> {
+	if (!isRecord(value)) {
+		return {};
+	}
+	const values = value.values;
+	return isRecord(values) ? values : {};
+}
+
+function compareEnvironmentSummary(a: OrgEnvironmentSummary, b: OrgEnvironmentSummary): number {
+	return (
+		a.organization.localeCompare(b.organization) ||
+		a.project.localeCompare(b.project) ||
+		a.name.localeCompare(b.name)
+	);
+}
+
 type EscEnvRow = typeof escEnvironments.$inferSelect;
 type EscProjectRow = typeof escProjects.$inferSelect;
 type EscRevisionRow = typeof escEnvironmentRevisions.$inferSelect;
@@ -415,6 +467,38 @@ export class PostgresEscService implements EscService {
 		return rows.map(toProjectInfo);
 	}
 
+	async listAllEnvironments(
+		tenantId: string,
+		options: ListAllEnvironmentsOptions = {},
+	): Promise<ListAllEnvironmentsResult> {
+		const rows = await this.db
+			.select({
+				projectName: escProjects.name,
+				envName: escEnvironments.name,
+			})
+			.from(escEnvironments)
+			.innerJoin(escProjects, eq(escEnvironments.projectId, escProjects.id))
+			.where(
+				and(
+					eq(escProjects.tenantId, tenantId),
+					isNull(escEnvironments.deletedAt),
+					options.projectFilter ? eq(escProjects.name, options.projectFilter) : undefined,
+				),
+			)
+			.orderBy(escProjects.name, escEnvironments.name);
+
+		const environments = rows
+			.map(({ projectName, envName }) => ({
+				organization: options.orgFilter ?? "",
+				project: projectName,
+				name: envName,
+			}))
+			.filter((env) => !options.after || `${env.project}/${env.name}` > options.after)
+			.sort(compareEnvironmentSummary);
+
+		return { environments, nextToken: "" };
+	}
+
 	async createEnvironment(
 		tenantId: string,
 		input: CreateEnvironmentInput,
@@ -422,9 +506,11 @@ export class PostgresEscService implements EscService {
 	): Promise<EscEnvironment> {
 		validateName("project", input.projectName);
 		validateName("environment", input.name);
-		if (typeof input.yamlBody !== "string") {
+		if (input.yamlBody !== undefined && typeof input.yamlBody !== "string") {
 			throw new BadRequestError("yamlBody must be a string");
 		}
+		const yamlBody =
+			input.yamlBody === "" || input.yamlBody === undefined ? "values: {}\n" : input.yamlBody;
 
 		return withSpan(
 			"procella.esc",
@@ -456,7 +542,7 @@ export class PostgresEscService implements EscService {
 							.values({
 								projectId: proj.id,
 								name: input.name,
-								yamlBody: input.yamlBody,
+								yamlBody,
 								currentRevisionNumber: 1,
 								createdBy,
 							})
@@ -465,7 +551,7 @@ export class PostgresEscService implements EscService {
 						await tx.insert(escEnvironmentRevisions).values({
 							environmentId: env.id,
 							revisionNumber: 1,
-							yamlBody: input.yamlBody,
+							yamlBody,
 							createdBy,
 						});
 
@@ -480,6 +566,33 @@ export class PostgresEscService implements EscService {
 					throw err;
 				}
 			},
+		);
+	}
+
+	async cloneEnvironment(
+		tenantId: string,
+		srcProjectName: string,
+		srcEnvName: string,
+		dest: CloneEnvironmentInput,
+		createdBy: string,
+	): Promise<EscEnvironment> {
+		validateName("project", srcProjectName);
+		validateName("environment", srcEnvName);
+		validateName("project", dest.project);
+		validateName("environment", dest.name);
+
+		const sourceRevision =
+			typeof dest.version === "number"
+				? await this.getRevision(tenantId, srcProjectName, srcEnvName, dest.version)
+				: await this.getEnvironment(tenantId, srcProjectName, srcEnvName);
+		if (!sourceRevision) {
+			throw new NotFoundError("Environment", `${srcProjectName}/${srcEnvName}`);
+		}
+
+		return this.createEnvironment(
+			tenantId,
+			{ projectName: dest.project, name: dest.name, yamlBody: sourceRevision.yamlBody },
+			createdBy,
 		);
 	}
 
@@ -1016,6 +1129,48 @@ export class PostgresEscService implements EscService {
 		return rows.map(toDraftInfo);
 	}
 
+	async updateDraft(
+		tenantId: string,
+		projectName: string,
+		envName: string,
+		draftId: string,
+		yamlBody: string,
+	): Promise<EscDraft> {
+		if (typeof yamlBody !== "string") {
+			throw new BadRequestError("yamlBody must be a string");
+		}
+
+		return withSpan(
+			"procella.esc",
+			"esc.updateDraft",
+			{ "draft.id": draftId, "env.name": envName },
+			async () => {
+				const env = await findEnvRow(this.db, tenantId, projectName, envName);
+				if (!env) {
+					throw new NotFoundError("Environment", `${projectName}/${envName}`);
+				}
+				const [draft] = await this.db
+					.select()
+					.from(escDrafts)
+					.where(and(eq(escDrafts.id, draftId), eq(escDrafts.environmentId, env.id)))
+					.limit(1);
+				if (!draft) {
+					throw new NotFoundError("Draft", draftId);
+				}
+				if (draft.status !== "open") {
+					throw new BadRequestError(`Draft is already ${draft.status}`);
+				}
+
+				const [updated] = await this.db
+					.update(escDrafts)
+					.set({ yamlBody, updatedAt: new Date() })
+					.where(eq(escDrafts.id, draftId))
+					.returning();
+				return toDraftInfo(updated);
+			},
+		);
+	}
+
 	async getDraft(
 		tenantId: string,
 		projectName: string,
@@ -1150,6 +1305,26 @@ export class PostgresEscService implements EscService {
 					.where(eq(escDrafts.id, draftId));
 			},
 		);
+	}
+
+	async validateYaml(yamlBody: string): Promise<ValidateYamlResult> {
+		if (typeof yamlBody !== "string") {
+			throw new BadRequestError("yamlBody must be a string");
+		}
+
+		const doc = parseDocument(yamlBody, { prettyErrors: false, uniqueKeys: false });
+		if (doc.errors.length > 0) {
+			return {
+				values: {},
+				diagnostics: doc.errors.flatMap((error) => toYamlDiagnostics(error)),
+			};
+		}
+
+		const parsed = doc.toJS();
+		return {
+			values: extractYamlValues(parsed),
+			diagnostics: [],
+		};
 	}
 
 	async gcSweep(): Promise<{ closedCount: number }> {

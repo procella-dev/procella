@@ -185,7 +185,7 @@ export function EscResolvedValues({
 		setDiagnostics([]);
 		try {
 			const res = await fetch(
-				`${apiBase}/api/esc/environments/${encodeURIComponent(org)}/${encodeURIComponent(project)}/${encodeURIComponent(environment)}/open`,
+				`${apiBase}/api/esc/v1-internal/environments/${encodeURIComponent(org)}/${encodeURIComponent(project)}/${encodeURIComponent(environment)}/open`,
 				{
 					method: "POST",
 					headers: { ...getAuthHeaders(), Accept: "application/vnd.pulumi+8" },

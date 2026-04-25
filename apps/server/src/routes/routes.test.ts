@@ -200,7 +200,9 @@ describe("@procella/server routes", () => {
 			webhooks: mockWebhooksService(),
 			esc: {
 				listProjects: async () => [],
+				listAllEnvironments: async () => ({ environments: [], nextToken: "" }),
 				createEnvironment: async () => ({}),
+				cloneEnvironment: async () => ({}),
 				listEnvironments: async () => [],
 				getEnvironment: async () => null,
 				updateEnvironment: async () => ({}),
@@ -218,9 +220,11 @@ describe("@procella/server routes", () => {
 				updateEnvironmentTags: async () => {},
 				createDraft: async () => ({}),
 				listDrafts: async () => [],
+				updateDraft: async () => ({}),
 				getDraft: async () => null,
 				applyDraft: async () => ({}),
 				discardDraft: async () => {},
+				validateYaml: async () => ({ values: {}, diagnostics: [] }),
 			} as unknown as EscService,
 		});
 	}
@@ -381,6 +385,13 @@ describe("@procella/server routes", () => {
 	// ========================================================================
 
 	describe("authenticated API routes", () => {
+		test("GET /api/esc/environments returns CLI environment list shape", async () => {
+			const app = makeApp();
+			const res = await app.request("/api/esc/environments", { headers: authHeaders });
+			expect(res.status).toBe(200);
+			expect(await res.json()).toEqual({ environments: [], nextToken: "" });
+		});
+
 		test("GET /api/user returns user info with valid auth", async () => {
 			const app = makeApp();
 			const res = await app.request("/api/user", { headers: authHeaders });

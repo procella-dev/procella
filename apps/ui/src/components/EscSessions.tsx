@@ -88,7 +88,7 @@ export function EscSessions({ project, environment, envId }: EscSessionsProps) {
 			setFetchResult(null);
 			try {
 				const res = await fetch(
-					`${apiBase}/api/esc/environments/${encodeURIComponent(org)}/${encodeURIComponent(project)}/${encodeURIComponent(environment)}/open/${encodeURIComponent(sessionId)}`,
+					`${apiBase}/api/esc/v1-internal/environments/${encodeURIComponent(org)}/${encodeURIComponent(project)}/${encodeURIComponent(environment)}/open/${encodeURIComponent(sessionId)}`,
 					{
 						headers: { ...getAuthHeaders(), Accept: "application/vnd.pulumi+8" },
 					},

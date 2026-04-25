@@ -49,8 +49,45 @@ export interface CreateEnvironmentInput {
 	yamlBody: string;
 }
 
+export interface CloneEnvironmentInput {
+	project: string;
+	name: string;
+	version?: number;
+	preserveHistory?: boolean;
+	preserveAccess?: boolean;
+	preserveEnvironmentTags?: boolean;
+	preserveRevisionTags?: boolean;
+}
+
 export interface UpdateEnvironmentInput {
 	yamlBody: string;
+}
+
+export interface OrgEnvironmentSummary {
+	organization: string;
+	project: string;
+	name: string;
+}
+
+export interface ListAllEnvironmentsOptions {
+	orgFilter?: string;
+	projectFilter?: string;
+	after?: string;
+}
+
+export interface ListAllEnvironmentsResult {
+	environments: OrgEnvironmentSummary[];
+	nextToken: string;
+}
+
+export interface EscCliDiagnostic {
+	summary: string;
+	detail?: string;
+}
+
+export interface ValidateYamlResult {
+	values: Record<string, unknown>;
+	diagnostics: EscCliDiagnostic[];
 }
 
 export interface EscRevisionTag {
