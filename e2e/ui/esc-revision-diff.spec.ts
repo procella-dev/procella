@@ -66,11 +66,11 @@ test.describe("ESC Revision Diff", () => {
 		await page.waitForLoadState("networkidle");
 		await expect(page.getByText("rev #3")).toBeVisible({ timeout: 15_000 });
 
-		const compareBtn = page.getByRole("button", { name: "Compare" });
+		const compareBtn = page.getByRole("button", { name: "Compare" }).first();
 		await expect(compareBtn).toBeVisible({ timeout: 5_000 });
-		await compareBtn.first().click();
+		await compareBtn.click();
 
-		await expect(page.getByText("Revision #1")).toBeVisible({ timeout: 5_000 });
+		await expect(page.getByText("Revision #2")).toBeVisible({ timeout: 5_000 });
 		await expect(page.getByText("Current")).toBeVisible();
 	});
 
@@ -80,9 +80,9 @@ test.describe("ESC Revision Diff", () => {
 		await expect(page.getByText("rev #3")).toBeVisible({ timeout: 15_000 });
 
 		await page.getByRole("button", { name: "Compare" }).first().click();
-		await expect(page.getByText("Revision #1")).toBeVisible({ timeout: 5_000 });
+		await expect(page.getByText("Revision #2")).toBeVisible({ timeout: 5_000 });
 
 		await page.getByRole("button", { name: /Close/ }).click();
-		await expect(page.getByText("Revision #1")).not.toBeVisible();
+		await expect(page.getByText("Revision #2")).not.toBeVisible();
 	});
 });
