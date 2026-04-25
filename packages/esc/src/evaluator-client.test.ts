@@ -194,4 +194,21 @@ describe("StdioEvaluatorClient", () => {
 			await rm(dir, { recursive: true, force: true });
 		}
 	});
+
+	test("wraps non-JSON stdout as EvaluatorInvokeError, not raw SyntaxError", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "procella-esc-stdio-"));
+		const script = join(dir, "garbage.sh");
+		await writeFile(script, "#!/bin/sh\nprintf 'not valid json at all <<<>>>'\n");
+		await chmod(script, 0o755);
+
+		try {
+			const client = new StdioEvaluatorClient({ binaryPath: script });
+			await expect(client.evaluate(samplePayload)).rejects.toMatchObject({
+				name: "EvaluatorInvokeError",
+				message: expect.stringContaining("non-JSON stdout"),
+			});
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
 });

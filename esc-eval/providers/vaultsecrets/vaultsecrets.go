@@ -1,6 +1,7 @@
 package vaultsecrets
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -99,7 +100,7 @@ func (p *provider) Open(ctx context.Context, inputs map[string]esc.Value, _ esc.
 		return esc.Value{}, fmt.Errorf("read vault response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return esc.Value{}, fmt.Errorf("vault request failed: %s", strings.TrimSpace(string(body)))
+		return esc.Value{}, fmt.Errorf("vault request failed: %s", bytes.TrimSpace(body))
 	}
 
 	var payload struct {
@@ -107,7 +108,7 @@ func (p *provider) Open(ctx context.Context, inputs map[string]esc.Value, _ esc.
 			Data map[string]any `json:"data"`
 		} `json:"data"`
 	}
-	decoder := json.NewDecoder(strings.NewReader(string(body)))
+	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.UseNumber()
 	if err := decoder.Decode(&payload); err != nil {
 		return esc.Value{}, fmt.Errorf("decode vault response: %w", err)

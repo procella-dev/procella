@@ -91,7 +91,15 @@ export class StdioEvaluatorClient implements EvaluatorClient {
 			throw new EvaluatorInvokeError(`esc-eval exited ${exitCode}: ${stderr || stdout}`);
 		}
 
-		const parsed = JSON.parse(stdout) as EvaluateResult & { error?: string };
+		let parsed: EvaluateResult & { error?: string };
+		try {
+			parsed = JSON.parse(stdout) as EvaluateResult & { error?: string };
+		} catch (cause) {
+			throw new EvaluatorInvokeError(
+				`esc-eval produced non-JSON stdout: ${cause instanceof Error ? cause.message : String(cause)}`,
+				{ cause },
+			);
+		}
 
 		if (parsed.error) {
 			throw new EvaluatorInvokeError(`Evaluator error: ${parsed.error}`);
