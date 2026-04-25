@@ -95,10 +95,31 @@ function App() {
 						</Suspense>
 					),
 				},
-				{ path: "/cli-login", element: <CliLogin /> },
+				{
+					path: "/cli-login",
+					element: (
+						<Suspense fallback={SpinnerFallback}>
+							<CliLogin />
+						</Suspense>
+					),
+				},
 				{ path: "/account/tokens", element: <Navigate to="/tokens" replace /> },
-				{ path: "/welcome/cli", element: <WelcomeCli /> },
-				{ path: "/design", element: <Design /> },
+				{
+					path: "/welcome/cli",
+					element: (
+						<Suspense fallback={SpinnerFallback}>
+							<WelcomeCli />
+						</Suspense>
+					),
+				},
+				{
+					path: "/design",
+					element: (
+						<Suspense fallback={SpinnerFallback}>
+							<Design />
+						</Suspense>
+					),
+				},
 				{ path: "/", element: <HomePage /> },
 				{
 					element: <ProtectedRoute />,

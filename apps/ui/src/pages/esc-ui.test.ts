@@ -377,6 +377,48 @@ describe("ESC UI coverage", () => {
 		await view.findByText("Failed to open session (500)");
 	});
 
+	test("EscResolvedValues Copy button surfaces failure when clipboard rejects", async () => {
+		const fetchMock = mock<FetchFn>(
+			async () =>
+				new Response(
+					JSON.stringify({
+						sessionId: "session-clip",
+						values: { secret_val: "s3cret" },
+						secrets: ["secret_val"],
+						expiresAt: new Date(Date.now() + 60_000).toISOString(),
+					}),
+					{ status: 200, headers: { "Content-Type": "application/json" } },
+				),
+		);
+		setMockFetch(fetchMock);
+
+		const writeTextMock = mock<(value: string) => Promise<void>>(async () => {
+			throw new Error("clipboard blocked: insecure context");
+		});
+		Object.defineProperty(globalThis.navigator, "clipboard", {
+			configurable: true,
+			value: { writeText: writeTextMock },
+		});
+
+		const view = render(
+			createElement(
+				MemoryRouter,
+				undefined,
+				createElement(EscResolvedValues, { project: "acme", environment: "dev" }),
+			),
+		);
+
+		fireEvent.click(view.getByRole("button", { name: "Open Session" }));
+		await view.findByText(/Session/);
+		fireEvent.click(view.getByRole("button", { name: "Reveal" }));
+		fireEvent.click(view.getByRole("button", { name: "Confirm" }));
+		await view.findByText('"s3cret"');
+
+		fireEvent.click(view.getByRole("button", { name: "Copy" }));
+		await view.findByText("Copy failed");
+		expect(writeTextMock).toHaveBeenCalledWith("s3cret");
+	});
+
 	test("EscSessions loads tracked sessions, fetches one, and clears it", async () => {
 		localStorage.setItem(
 			"esc-sessions-env-1",

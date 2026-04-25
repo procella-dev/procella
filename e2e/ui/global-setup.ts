@@ -58,6 +58,9 @@ async function resetDb(): Promise<void> {
 				stdio: "pipe",
 			},
 		);
+		proc.on("error", (err) => {
+			reject(new Error(`drizzle-kit migrate failed to spawn: ${err.message}`));
+		});
 		proc.on("close", (code) => {
 			if (code === 0) resolve();
 			else reject(new Error(`drizzle-kit migrate failed (exit ${code})`));
@@ -75,9 +78,16 @@ async function ensureEscEvaluatorBinary(): Promise<string> {
 				cwd: path.join(PROJECT_ROOT, "esc-eval"),
 				stdio: "pipe",
 			});
+			let stderr = "";
+			proc.stderr?.on("data", (chunk) => {
+				stderr += chunk.toString();
+			});
+			proc.on("error", (err) => {
+				reject(new Error(`esc-eval make build failed to spawn: ${err.message}`));
+			});
 			proc.on("close", (code) => {
 				if (code === 0) resolve();
-				else reject(new Error(`esc-eval make build failed (exit ${code})`));
+				else reject(new Error(`esc-eval make build failed (exit ${code}): ${stderr}`));
 			});
 		});
 		return ESC_EVAL_BOOTSTRAP;

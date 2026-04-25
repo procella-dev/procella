@@ -120,7 +120,14 @@ export interface EscDraft {
 export interface OpenSessionResult {
 	sessionId: string;
 	values: Record<string, unknown>;
-	/** JSON paths (dot-delimited) of values flagged secret by the evaluator. */
+	/**
+	 * JSON paths of values flagged secret by the evaluator. Object keys are
+	 * dot-delimited; array elements use bracket notation. Example shapes:
+	 *   "foo"          (top-level key)
+	 *   "foo.bar"      (nested key)
+	 *   "list[0]"      (array element)
+	 *   "list[0].name" (nested key inside array element)
+	 */
 	secrets: string[];
 	expiresAt: Date;
 }

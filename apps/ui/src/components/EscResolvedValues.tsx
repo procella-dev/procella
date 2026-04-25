@@ -150,18 +150,23 @@ function ValueNode({
 }
 
 function CopyButton({ value }: { value: string }) {
-	const [copied, setCopied] = useState(false);
+	const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+	const handleCopy = async () => {
+		try {
+			await navigator.clipboard.writeText(value);
+			setState("copied");
+		} catch {
+			setState("failed");
+		}
+		setTimeout(() => setState("idle"), 1500);
+	};
 	return (
 		<button
 			type="button"
-			onClick={() => {
-				navigator.clipboard.writeText(value);
-				setCopied(true);
-				setTimeout(() => setCopied(false), 1500);
-			}}
+			onClick={handleCopy}
 			className="text-[10px] text-cloud/40 hover:text-cloud transition-colors"
 		>
-			{copied ? "✓" : "Copy"}
+			{state === "copied" ? "✓" : state === "failed" ? "Copy failed" : "Copy"}
 		</button>
 	);
 }
