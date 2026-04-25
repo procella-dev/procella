@@ -6,6 +6,7 @@ import type { Subprocess } from "bun";
 import { SQL } from "bun";
 import { getCheckpointBytes, getJournalEntryCount, getLatestUpdateId, getStackId } from "./db-metrics";
 import { generateProgram, generateSecretsProgram } from "./generate-programs";
+import { preparePulumiHome } from "./pulumi-home";
 import { missingPulumiPlugins, pulumiPluginInstallArgs } from "./pulumi-plugins";
 import type { BenchmarkResults, Mode, TrialResult, Variant } from "./types";
 
@@ -577,8 +578,11 @@ async function main(): Promise<void> {
   if (!IS_REMOTE) {
     await resetDb();
 	}
-	const pulumiHome = await createPulumiHome();
-	await ensurePulumiPlugins(PULUMI_BIN, pulumiHome);
+	const pulumiHome = await preparePulumiHome({
+		createPulumiHome,
+		ensurePulumiPlugins: (home) => ensurePulumiPlugins(PULUMI_BIN, home),
+		cleanupPulumiHome: (home) => rm(home, { recursive: true, force: true }),
+	});
 
 	if (IS_REMOTE) {
     if (resolved.source === "login") {
