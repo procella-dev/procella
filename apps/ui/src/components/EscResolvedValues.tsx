@@ -13,7 +13,7 @@ interface OpenSessionResponse {
 interface Diagnostic {
 	severity: string;
 	summary: string;
-	path?: string;
+	path?: string[];
 }
 
 interface EscResolvedValuesProps {
@@ -236,7 +236,9 @@ export function EscResolvedValues({
 									{d.severity}
 								</span>
 								<span>
-									{d.path && <span className="text-red-400/60 font-mono">{d.path}: </span>}
+									{d.path && d.path.length > 0 && (
+										<span className="text-red-400/60 font-mono">{d.path.join(".")}: </span>
+									)}
 									{d.summary}
 								</span>
 							</div>

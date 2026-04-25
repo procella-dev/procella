@@ -73,3 +73,41 @@ func TestOpenPropagatesHTTPError(t *testing.T) {
 		t.Fatalf("expected http error, got %v", err)
 	}
 }
+
+func TestBuildURLRejectsPathTraversal(t *testing.T) {
+	cases := []struct {
+		name       string
+		mountPath  string
+		secretPath string
+		wantErr    string
+	}{
+		{"mount with parent traversal", "../sys", "app/config", "mountPath must not contain '..'"},
+		{"path with parent traversal", "secret", "../../sys/keys", "path must not contain '..'"},
+		{"absolute mount", "/secret", "app/config", "mountPath must be relative"},
+		{"absolute path", "secret", "/sys/keys", "path must be relative"},
+		{"empty mount", "", "app/config", "mountPath must not be empty"},
+		{"empty path", "secret", "", "path must not be empty"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := buildURL("https://vault.example.com", tc.mountPath, tc.secretPath)
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("error %q does not contain %q", err.Error(), tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestBuildURLAcceptsValidPaths(t *testing.T) {
+	got, err := buildURL("https://vault.example.com", "secret", "app/config")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "https://vault.example.com/v1/secret/data/app/config"
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}

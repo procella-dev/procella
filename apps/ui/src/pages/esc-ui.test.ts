@@ -338,7 +338,7 @@ describe("ESC UI coverage", () => {
 			async () =>
 				new Response(
 					JSON.stringify({
-						diagnostics: [{ severity: "error", summary: "bad yaml", path: "values" }],
+						diagnostics: [{ severity: "error", summary: "bad yaml", path: ["values"] }],
 					}),
 					{ status: 422, headers: { "Content-Type": "application/json" } },
 				),

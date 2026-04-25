@@ -123,6 +123,21 @@ func (p *provider) Open(ctx context.Context, inputs map[string]esc.Value, _ esc.
 	return value.MakeSecret(), nil
 }
 
+func validateVaultPathSegment(name, value string) error {
+	if value == "" {
+		return fmt.Errorf("%s must not be empty", name)
+	}
+	if strings.HasPrefix(value, "/") {
+		return fmt.Errorf("%s must be relative (no leading '/')", name)
+	}
+	for _, seg := range strings.Split(value, "/") {
+		if seg == ".." {
+			return fmt.Errorf("%s must not contain '..' segments (path traversal)", name)
+		}
+	}
+	return nil
+}
+
 func buildURL(address, mountPath, secretPath string) (string, error) {
 	parsed, err := url.Parse(address)
 	if err != nil {
@@ -130,6 +145,12 @@ func buildURL(address, mountPath, secretPath string) (string, error) {
 	}
 	if parsed.Scheme == "" || parsed.Host == "" {
 		return "", fmt.Errorf("address must include scheme and host")
+	}
+	if err := validateVaultPathSegment("mountPath", mountPath); err != nil {
+		return "", err
+	}
+	if err := validateVaultPathSegment("path", secretPath); err != nil {
+		return "", err
 	}
 	parsed.Path = path.Join(parsed.Path, "/v1", mountPath, "data", secretPath)
 	return parsed.String(), nil
