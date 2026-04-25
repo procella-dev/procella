@@ -16,6 +16,18 @@ function DescopeSessionTokenBridge() {
 export function ProcellaAuthProvider({ children }: { children: ReactNode }) {
 	const { config, isLoading } = useAuthConfig();
 
+	// Side effects (localStorage / module-level token store) MUST run after
+	// commit, not during render — React StrictMode + concurrent rendering
+	// will run render multiple times and discard results.
+	useEffect(() => {
+		if (!config) return;
+		if (config.mode === "descope") {
+			localStorage.removeItem("procella-token");
+		} else {
+			setStoredDescopeSessionToken(null);
+		}
+	}, [config]);
+
 	if (isLoading || !config) {
 		return (
 			<div className="min-h-screen bg-deep-sky flex items-center justify-center">
@@ -25,7 +37,6 @@ export function ProcellaAuthProvider({ children }: { children: ReactNode }) {
 	}
 
 	if (config.mode === "descope") {
-		localStorage.removeItem("procella-token");
 		return (
 			<AuthProvider projectId={config.projectId}>
 				<DescopeSessionTokenBridge />
@@ -34,6 +45,5 @@ export function ProcellaAuthProvider({ children }: { children: ReactNode }) {
 		);
 	}
 
-	setStoredDescopeSessionToken(null);
 	return <>{children}</>;
 }

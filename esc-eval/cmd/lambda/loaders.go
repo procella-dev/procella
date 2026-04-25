@@ -24,15 +24,16 @@ func (l *payloadEnvironmentLoader) LoadEnvironment(_ context.Context, name strin
 }
 
 // stubProviderLoader — LoadProvider/LoadRotator return descriptive errors.
-// Real providers (fn::open::aws-login etc.) land in procella-yj7.17-21.
+// Retained for tests that want explicit unknown-provider behavior. The
+// runtime handler in main.go uses providers.NewRegistry() instead.
 type stubProviderLoader struct{}
 
 func (stubProviderLoader) LoadProvider(_ context.Context, name string) (esc.Provider, error) {
-	return nil, fmt.Errorf("provider %q: unknown (real providers land in procella-yj7.17-21)", name)
+	return nil, fmt.Errorf("provider %q: unknown", name)
 }
 
 func (stubProviderLoader) LoadRotator(_ context.Context, name string) (esc.Rotator, error) {
-	return nil, fmt.Errorf("rotator %q: unknown (real providers land in procella-yj7.17-21)", name)
+	return nil, fmt.Errorf("rotator %q: unknown", name)
 }
 
 // noopDecrypter returns ciphertext unchanged. P2 doesn't decrypt user secrets

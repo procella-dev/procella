@@ -75,7 +75,11 @@ export interface EscDraft {
 	updatedAt: Date;
 }
 
-/** Output the CLI and dashboard receive from /open. Secrets are masked. */
+/**
+ * Output the CLI and dashboard receive from /open. Values include resolved
+ * plaintext for everything (including secrets); the `secrets` array lists
+ * the JSON paths flagged sensitive so clients can mask them at render time.
+ */
 export interface OpenSessionResult {
 	sessionId: string;
 	values: Record<string, unknown>;
