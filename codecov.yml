@@ -12,6 +12,14 @@ coverage:
         target: 80%
         threshold: 5%
         informational: false
+        paths:
+          - "!packages/migrate/**"
+      migrate-cli:
+        target: 50%
+        threshold: 10%
+        informational: true
+        paths:
+          - packages/migrate/**
 
 flags:
   unit:
@@ -28,6 +36,11 @@ component_management:
       name: Packages
       paths:
         - packages/**
+        - "!packages/migrate/**"
+    - component_id: migrate
+      name: Migrate CLI
+      paths:
+        - packages/migrate/**
     - component_id: server
       name: Server
       paths:
@@ -49,3 +62,9 @@ ignore:
   - "**/generated/**"
   - "**/*.test.ts"
   - "**/*.spec.ts"
+  - "packages/migrate/src/cli.ts"
+  - "packages/migrate/src/log.ts"
+  - "packages/migrate/src/discover.ts"
+  - "packages/migrate/src/migrate.ts"
+  - "packages/migrate/src/preflight.ts"
+  - "packages/migrate/src/validate.ts"

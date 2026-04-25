@@ -6,6 +6,8 @@ import type { Subprocess } from "bun";
 import { SQL } from "bun";
 import { getCheckpointBytes, getJournalEntryCount, getLatestUpdateId, getStackId } from "./db-metrics";
 import { generateProgram, generateSecretsProgram } from "./generate-programs";
+import { preparePulumiHome } from "./pulumi-home";
+import { missingPulumiPlugins, pulumiPluginInstallArgs } from "./pulumi-plugins";
 import type { BenchmarkResults, Mode, TrialResult, Variant } from "./types";
 
 const BENCH_PORT = 18_081;
@@ -213,6 +215,32 @@ async function findPulumi(): Promise<string> {
   if (fbExit === 0 && fbOut.trim()) return fbOut.trim();
 
   throw new Error("pulumi not found. Install via mise or set PULUMI_PATH.");
+}
+
+async function ensurePulumiPlugins(pulumiBin: string, pulumiHome: string): Promise<void> {
+	const missing = missingPulumiPlugins(pulumiHome);
+	for (const plugin of missing) {
+		const proc = Bun.spawn([pulumiBin, ...pulumiPluginInstallArgs(plugin), "--non-interactive"], {
+			cwd: PROJECT_ROOT,
+			env: {
+				...cleanEnv(),
+				PULUMI_HOME: pulumiHome,
+				PULUMI_SKIP_UPDATE_CHECK: "true",
+			},
+			stdout: "pipe",
+			stderr: "pipe",
+		});
+		const [exitCode, stdout, stderr] = await Promise.all([
+			proc.exited,
+			new Response(proc.stdout).text(),
+			new Response(proc.stderr).text(),
+		]);
+		if (exitCode !== 0) {
+			throw new Error(
+				`Failed to install Pulumi plugin ${plugin.kind}/${plugin.name}@${plugin.version} (exit ${exitCode}): ${stderr || stdout}`,
+			);
+		}
+	}
 }
 
 let PULUMI_BIN = "";
@@ -549,10 +577,14 @@ async function main(): Promise<void> {
 
   if (!IS_REMOTE) {
     await resetDb();
-  }
-  const pulumiHome = await createPulumiHome();
+	}
+	const pulumiHome = await preparePulumiHome({
+		createPulumiHome,
+		ensurePulumiPlugins: (home) => ensurePulumiPlugins(PULUMI_BIN, home),
+		cleanupPulumiHome: (home) => rm(home, { recursive: true, force: true }),
+	});
 
-  if (IS_REMOTE) {
+	if (IS_REMOTE) {
     if (resolved.source === "login") {
       // Use `pulumi whoami` to get the org the CLI actually uses (matches backend)
       const whoami = await runPulumi(["whoami", "--json"], PROJECT_ROOT, pulumiHome);

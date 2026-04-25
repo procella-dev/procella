@@ -56,3 +56,4 @@ node-compile-cache/
 
 sst-env.d.ts
 coverage/
+/issues.jsonl

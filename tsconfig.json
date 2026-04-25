@@ -16,7 +16,8 @@
 		{ "path": "packages/updates" },
 		{ "path": "packages/telemetry" },
 		{ "path": "packages/api" },
-		{ "path": "apps/server" }
+		{ "path": "apps/server" },
+		{ "path": "packages/migrate" }
 	],
 	"files": []
 }
