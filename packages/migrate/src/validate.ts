@@ -1,6 +1,6 @@
 import * as log from "./log.js";
 import { discoverStacks, exportState, filterStacks } from "./procella.js";
-import type { ValidateOptions, ValidationResult } from "./types.js";
+import type { DiscoveredStack, StackRef, ValidateOptions, ValidationResult } from "./types.js";
 
 export async function validate(opts: ValidateOptions): Promise<ValidationResult[]> {
 	log.heading("Validating migration");
@@ -13,16 +13,17 @@ export async function validate(opts: ValidateOptions): Promise<ValidationResult[
 
 	const filteredSource = filterStacks(sourceStacks, opts.filter, opts.exclude || undefined);
 	const targetByFqn = new Map(targetStacks.map((s) => [s.fqn, s]));
+	const targetByProjectStack = buildProjectStackLookup(targetStacks);
 
 	const results: ValidationResult[] = [];
 
 	for (const source of filteredSource) {
-		// Normalize source FQN the same way migration does:
-		// DIY stacks (no org) become imported/<project>/<stack> on Procella
-		const normalizedOrg = source.ref.org || "imported";
-		const normalizedProject = source.ref.project || source.ref.stack || "default";
-		const normalizedFqn = `${normalizedOrg}/${normalizedProject}/${source.ref.stack}`;
-		const target = targetByFqn.get(source.fqn) ?? targetByFqn.get(normalizedFqn);
+		const normalizedRef = normalizeStackRef(source.ref);
+		const normalizedFqn = stackFqn(normalizedRef);
+		const target =
+			targetByFqn.get(source.fqn) ??
+			targetByFqn.get(normalizedFqn) ??
+			getUniqueProjectStackMatch(targetByProjectStack, source.ref);
 
 		if (!target) {
 			results.push({
@@ -79,16 +80,15 @@ export async function validate(opts: ValidateOptions): Promise<ValidationResult[
 
 	// Check for stacks that exist on target but not on source
 	const sourceByFqn = new Set(filteredSource.map((s) => s.fqn));
-	const normalizedSourceFqns = new Set(
-		filteredSource.map((s) => {
-			const o = s.ref.org || "imported";
-			const p = s.ref.project || s.ref.stack || "default";
-			return `${o}/${p}/${s.ref.stack}`;
-		}),
-	);
+	const normalizedSourceFqns = new Set(filteredSource.map((s) => stackFqn(normalizeStackRef(s.ref))));
+	const sourceByProjectStack = new Set(filteredSource.map((s) => projectStackKey(s.ref)));
 	const filteredTarget = filterStacks(targetStacks, opts.filter, opts.exclude || undefined);
 	for (const target of filteredTarget) {
-		if (!sourceByFqn.has(target.fqn) && !normalizedSourceFqns.has(target.fqn)) {
+		if (
+			!sourceByFqn.has(target.fqn) &&
+			!normalizedSourceFqns.has(target.fqn) &&
+			!sourceByProjectStack.has(projectStackKey(target.ref))
+		) {
 			results.push({
 				fqn: target.fqn,
 				status: "missing-source",
@@ -125,6 +125,42 @@ export async function validate(opts: ValidateOptions): Promise<ValidationResult[
 	}
 
 	return results;
+}
+
+function normalizeStackRef(ref: StackRef): StackRef {
+	return {
+		org: ref.org || "imported",
+		project: ref.project || ref.stack || "default",
+		stack: ref.stack,
+	};
+}
+
+function stackFqn(ref: StackRef): string {
+	return `${ref.org}/${ref.project}/${ref.stack}`;
+}
+
+function projectStackKey(ref: StackRef): string {
+	return `${ref.project || ref.stack || "default"}/${ref.stack}`;
+}
+
+function buildProjectStackLookup(stacks: DiscoveredStack[]): Map<string, DiscoveredStack | null> {
+	const lookup = new Map<string, DiscoveredStack | null>();
+	for (const stack of stacks) {
+		const key = projectStackKey(stack.ref);
+		if (lookup.has(key)) {
+			lookup.set(key, null);
+			continue;
+		}
+		lookup.set(key, stack);
+	}
+	return lookup;
+}
+
+function getUniqueProjectStackMatch(
+	lookup: Map<string, DiscoveredStack | null>,
+	ref: StackRef,
+): DiscoveredStack | undefined {
+	return lookup.get(projectStackKey(ref)) ?? undefined;
 }
 
 function statusLabel(status: ValidationResult["status"]): string {
