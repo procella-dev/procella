@@ -1,8 +1,9 @@
 import { getCurrentTenant, getJwtRoles, useDescope, useSession, useUser } from "@descope/react-sdk";
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router";
 import { useAuthConfig } from "../hooks/useAuthConfig";
 import { CommandBar, openCommandBar } from "./CommandBar";
+import { PageSkeleton } from "./PageSkeleton";
 import { ProcellaLogo } from "./ProcellaLogo";
 
 /** Descope-only nav items — only rendered inside AuthProvider. */
@@ -75,7 +76,9 @@ export function Layout() {
 				</div>
 			</header>
 			<main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-				<Outlet />
+				<Suspense fallback={<PageSkeleton />}>
+					<Outlet />
+				</Suspense>
 			</main>
 			<CommandBar />
 		</div>
