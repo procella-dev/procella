@@ -10,7 +10,14 @@ export async function preparePulumiHome(options: PreparePulumiHomeOptions): Prom
 		await options.ensurePulumiPlugins(pulumiHome);
 		return pulumiHome;
 	} catch (error) {
-		await options.cleanupPulumiHome(pulumiHome);
+		try {
+			await options.cleanupPulumiHome(pulumiHome);
+		} catch (cleanupError) {
+			throw new AggregateError(
+				[error, cleanupError],
+				`Failed to prepare Pulumi home ${pulumiHome} and clean it up`,
+			);
+		}
 		throw error;
 	}
 }
