@@ -13,13 +13,13 @@ coverage:
         threshold: 5%
         informational: false
         paths:
-          - "!packages/migrate/"
+          - "!packages/migrate/**"
       migrate-cli:
         target: 50%
         threshold: 10%
         informational: true
         paths:
-          - packages/migrate/
+          - packages/migrate/**
 
 flags:
   unit:
