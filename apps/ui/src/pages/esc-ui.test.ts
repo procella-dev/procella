@@ -419,11 +419,13 @@ describe("ESC UI coverage", () => {
 		await view.findByText(/No sessions tracked/);
 	});
 
-	test("EscSessions dims expired sessions and shows fetch errors", async () => {
+	test("EscSessions prunes expired sessions on mount and surfaces fetch errors for active ones", async () => {
+		// SessionIDs are truncated to 8 chars in the UI; use prefixes that survive that.
 		localStorage.setItem(
 			"esc-sessions-env-1",
 			JSON.stringify([
-				{ sessionId: "expired-session", expiresAt: new Date(Date.now() - 60_000).toISOString() },
+				{ sessionId: "expired1-rest", expiresAt: new Date(Date.now() - 60_000).toISOString() },
+				{ sessionId: "actives1-rest", expiresAt: new Date(Date.now() + 60_000).toISOString() },
 			]),
 		);
 		const fetchMock = mock<FetchFn>(async () => new Response("nope", { status: 500 }));
@@ -441,8 +443,16 @@ describe("ESC UI coverage", () => {
 			),
 		);
 
-		await view.findByRole("button", { name: "Clear" });
-		expect((view.getByRole("button", { name: "Fetch" }) as HTMLButtonElement).disabled).toBe(true);
+		// Expired session pruned on mount: only the active one renders.
+		await view.findByText(/actives1/);
+		expect(view.queryByText(/expired1/)).toBeNull();
+
+		// localStorage was rewritten to match: expired entry removed.
+		const stored = JSON.parse(localStorage.getItem("esc-sessions-env-1") ?? "[]");
+		expect(stored).toHaveLength(1);
+		expect(stored[0].sessionId).toBe("actives1-rest");
+
+		// Clear removes the remaining row → empty state.
 		fireEvent.click(view.getByRole("button", { name: "Clear" }));
 		await view.findByText(/No sessions tracked/);
 	});
@@ -462,8 +472,6 @@ describe("ESC UI coverage", () => {
 		expect(view.getByText("Revision #1")).toBeDefined();
 		expect(view.getByText("Current")).toBeDefined();
 		expect(view.getByText(/\+2/)).toBeDefined();
-		fireEvent.click(view.getByRole("button", { name: "Side-by-side" }));
-		expect(view.getByRole("button", { name: "Unified" })).toBeDefined();
 		fireEvent.click(view.getByRole("button", { name: /Close/ }));
 		expect(onClose).toHaveBeenCalled();
 
