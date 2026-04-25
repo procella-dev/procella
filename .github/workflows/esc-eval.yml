@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: esc-eval-${{ github.workflow }}-${{ github.ref }}
@@ -34,7 +35,16 @@ jobs:
         run: cd esc-eval && go vet ./...
 
       - name: Test Go code
-        run: cd esc-eval && go test ./... -race -count=1
+        run: cd esc-eval && go test ./... -race -count=1 -covermode=atomic -coverprofile=coverage.out
+
+      - name: Upload Go coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v6
+        with:
+          files: ./esc-eval/coverage.out
+          flags: esc-eval
+          use_oidc: true
+          fail_ci_if_error: true
 
       - name: Build ESC eval bootstrap
         run: cd esc-eval && make build
