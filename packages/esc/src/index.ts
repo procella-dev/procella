@@ -12,6 +12,7 @@
 export {
 	EvaluatorInvokeError,
 	LambdaEvaluatorClient,
+	StdioEvaluatorClient,
 	UnimplementedEvaluatorClient,
 } from "./evaluator-client.js";
 export * from "./service.js";

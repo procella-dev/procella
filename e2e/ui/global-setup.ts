@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdtemp } from "node:fs/promises";
+import { access, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { FullConfig } from "@playwright/test";
@@ -12,6 +12,7 @@ const TEST_DB_URL =
 	process.env.PROCELLA_DATABASE_URL ??
 	"postgres://procella:procella@localhost:5432/procella?sslmode=disable";
 const TEST_TOKEN = process.env.PROCELLA_DEV_AUTH_TOKEN ?? "devtoken123";
+const ESC_EVAL_BOOTSTRAP = path.join(PROJECT_ROOT, ".build", "esc-eval", "bootstrap");
 
 function sleep(ms: number) {
 	return new Promise<void>((r) => setTimeout(r, ms));
@@ -64,8 +65,28 @@ async function resetDb(): Promise<void> {
 	});
 }
 
+async function ensureEscEvaluatorBinary(): Promise<string> {
+	try {
+		await access(ESC_EVAL_BOOTSTRAP);
+		return ESC_EVAL_BOOTSTRAP;
+	} catch {
+		await new Promise<void>((resolve, reject) => {
+			const proc = spawn("make", ["build"], {
+				cwd: path.join(PROJECT_ROOT, "esc-eval"),
+				stdio: "pipe",
+			});
+			proc.on("close", (code) => {
+				if (code === 0) resolve();
+				else reject(new Error(`esc-eval make build failed (exit ${code})`));
+			});
+		});
+		return ESC_EVAL_BOOTSTRAP;
+	}
+}
+
 export default async function globalSetup(_config: FullConfig) {
 	const blobDir = await mkdtemp(path.join(tmpdir(), "procella-pw-blobs-"));
+	const escEvaluatorBinary = await ensureEscEvaluatorBinary();
 
 	const apiAlreadyUp = await isListening(TEST_PORT);
 	if (!apiAlreadyUp) {
@@ -79,6 +100,7 @@ export default async function globalSetup(_config: FullConfig) {
 				PROCELLA_DEV_AUTH_TOKEN: TEST_TOKEN,
 				PROCELLA_BLOB_BACKEND: "local",
 				PROCELLA_BLOB_LOCAL_PATH: blobDir,
+				PROCELLA_ESC_EVALUATOR_BINARY: escEvaluatorBinary,
 			},
 			cwd: PROJECT_ROOT,
 			stdio: "ignore",

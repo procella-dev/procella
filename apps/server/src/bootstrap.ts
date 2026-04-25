@@ -11,6 +11,7 @@ import { createDb } from "@procella/db";
 import {
 	LambdaEvaluatorClient,
 	PostgresEscService,
+	StdioEvaluatorClient,
 	UnimplementedEvaluatorClient,
 } from "@procella/esc";
 import { buildGitHubAppConfig, OctokitGitHubService } from "@procella/github";
@@ -92,11 +93,14 @@ async function bootstrapServices() {
 	const githubService = githubConfig
 		? new OctokitGitHubService({ db, config: githubConfig })
 		: null;
+	const localEscEvaluatorBinary = process.env.PROCELLA_ESC_EVALUATOR_BINARY;
 	const evaluatorClient = config.escEvaluatorFnName
 		? new LambdaEvaluatorClient({
 				functionName: config.escEvaluatorFnName,
 			})
-		: new UnimplementedEvaluatorClient();
+		: localEscEvaluatorBinary
+			? new StdioEvaluatorClient({ binaryPath: localEscEvaluatorBinary })
+			: new UnimplementedEvaluatorClient();
 	const escService = new PostgresEscService({
 		db,
 		evaluator: evaluatorClient,

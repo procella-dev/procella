@@ -57,6 +57,55 @@ export class UnimplementedEvaluatorClient implements EvaluatorClient {
 }
 
 /**
+ * Local/dev evaluator client — executes the compiled esc-eval bootstrap in
+ * stdio mode. Useful for E2E tests and local development without Lambda.
+ */
+export class StdioEvaluatorClient implements EvaluatorClient {
+	private readonly binaryPath: string;
+
+	constructor(opts: { binaryPath: string }) {
+		this.binaryPath = opts.binaryPath;
+	}
+
+	async evaluate(payload: EvaluatePayload): Promise<EvaluateResult> {
+		const proc = Bun.spawn([this.binaryPath], {
+			env: { ...process.env, PROCELLA_ESC_STDIO: "1" },
+			stdin: "pipe",
+			stdout: "pipe",
+			stderr: "pipe",
+		});
+
+		await proc.stdin.write(new TextEncoder().encode(JSON.stringify(payload)));
+		proc.stdin.end();
+
+		const [exitCode, stdoutBuf, stderrBuf] = await Promise.all([
+			proc.exited,
+			new Response(proc.stdout).arrayBuffer(),
+			new Response(proc.stderr).arrayBuffer(),
+		]);
+
+		const stdout = new TextDecoder().decode(stdoutBuf);
+		const stderr = new TextDecoder().decode(stderrBuf);
+
+		if (exitCode !== 0) {
+			throw new EvaluatorInvokeError(`esc-eval exited ${exitCode}: ${stderr || stdout}`);
+		}
+
+		const parsed = JSON.parse(stdout) as EvaluateResult & { error?: string };
+
+		if (parsed.error) {
+			throw new EvaluatorInvokeError(`Evaluator error: ${parsed.error}`);
+		}
+
+		return {
+			values: parsed.values ?? {},
+			secrets: parsed.secrets ?? [],
+			diagnostics: parsed.diagnostics ?? [],
+		};
+	}
+}
+
+/**
  * Production evaluator client — invokes the Go Lambda via AWS SDK.
  *
  * Uses synchronous invoke (RequestResponse) with an AbortController timeout

@@ -1,9 +1,13 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { InvokeCommand, LambdaClient } from "@aws-sdk/client-lambda";
 import {
 	type EvaluatePayload,
 	EvaluatorInvokeError,
 	LambdaEvaluatorClient,
+	StdioEvaluatorClient,
 	UnimplementedEvaluatorClient,
 } from "./evaluator-client.js";
 
@@ -126,5 +130,50 @@ describe("LambdaEvaluatorClient", () => {
 		const result = await client.evaluate(samplePayload);
 
 		expect(result).toEqual(expectedResult);
+	});
+});
+
+describe("StdioEvaluatorClient", () => {
+	test("parses successful stdio responses", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "procella-esc-stdio-"));
+		const script = join(dir, "ok.py");
+		await writeFile(
+			script,
+			"#!/usr/bin/env python3\nimport sys, json\npayload = json.load(sys.stdin)\nprint(json.dumps({'values': {'echo': payload['definition']}, 'secrets': ['secret'], 'diagnostics': []}))\n",
+		);
+		await chmod(script, 0o755);
+
+		try {
+			const client = new StdioEvaluatorClient({ binaryPath: script });
+			const result = await client.evaluate(samplePayload);
+
+			expect(result).toEqual({
+				values: { echo: samplePayload.definition },
+				secrets: ["secret"],
+				diagnostics: [],
+			});
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("wraps evaluator-side stdio errors", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "procella-esc-stdio-"));
+		const script = join(dir, "err.py");
+		await writeFile(
+			script,
+			"#!/usr/bin/env python3\nimport json\nprint(json.dumps({'error': 'boom'}))\n",
+		);
+		await chmod(script, 0o755);
+
+		try {
+			const client = new StdioEvaluatorClient({ binaryPath: script });
+			await expect(client.evaluate(samplePayload)).rejects.toMatchObject({
+				name: "EvaluatorInvokeError",
+				message: expect.stringContaining("boom"),
+			});
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
 	});
 });
