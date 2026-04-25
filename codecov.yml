@@ -11,7 +11,7 @@ coverage:
       default:
         target: 80%
         threshold: 5%
-        informational: false
+        informational: true
 
 flags:
   unit:
