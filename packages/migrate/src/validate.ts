@@ -95,9 +95,7 @@ export async function validate(opts: ValidateOptions): Promise<ValidationResult[
 			statusLabel(r.status),
 			String(r.sourceResourceCount),
 			String(r.targetResourceCount),
-			r.missingOnTarget.length + r.missingOnSource.length > 0
-				? `${r.missingOnTarget.length} missing on target, ${r.missingOnSource.length} extra`
-				: (r.error ?? "—"),
+			formatDiffSummary(r),
 		]),
 	);
 
@@ -111,6 +109,23 @@ export async function validate(opts: ValidateOptions): Promise<ValidationResult[
 	}
 
 	return results;
+}
+
+export function formatDiffSummary(result: ValidationResult): string {
+	if (result.missingOnTarget.length + result.missingOnSource.length > 0) {
+		return `${result.missingOnTarget.length} missing on target, ${result.missingOnSource.length} extra`;
+	}
+
+	switch (result.status) {
+		case "missing-target":
+			return "stack missing on target";
+		case "missing-source":
+			return "stack missing on source";
+		case "error":
+			return result.error ?? "validation error";
+		default:
+			return result.error ?? "—";
+	}
 }
 
 export function findMatchingTargetStack(

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { DiscoveredStack } from "./types.js";
-import { findMatchingTargetStack, hasMatchingSourceStack } from "./validate.js";
+import { findMatchingTargetStack, formatDiffSummary, hasMatchingSourceStack } from "./validate.js";
 
 function makeStack(fqn: string, resourceCount: number = 1): DiscoveredStack {
 	const [org = "", project = "", stack = ""] = fqn.split("/");
@@ -41,5 +41,33 @@ describe("hasMatchingSourceStack", () => {
 		const target = makeStack("tenant-a/billing/dev");
 
 		expect(hasMatchingSourceStack(target, sourceStacks)).toBe(false);
+	});
+});
+
+describe("formatDiffSummary", () => {
+	test("describes stacks that are missing on the target", () => {
+		expect(
+			formatDiffSummary({
+				fqn: "legacy/payments/dev",
+				status: "missing-target",
+				sourceResourceCount: 3,
+				targetResourceCount: 0,
+				missingOnTarget: [],
+				missingOnSource: [],
+			}),
+		).toBe("stack missing on target");
+	});
+
+	test("describes stacks that are missing on the source", () => {
+		expect(
+			formatDiffSummary({
+				fqn: "tenant-a/payments/dev",
+				status: "missing-source",
+				sourceResourceCount: 0,
+				targetResourceCount: 3,
+				missingOnTarget: [],
+				missingOnSource: [],
+			}),
+		).toBe("stack missing on source");
 	});
 });
