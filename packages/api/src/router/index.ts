@@ -7,6 +7,7 @@ import { eventsRouter } from "./events.js";
 import { githubRouter } from "./github.js";
 import { oidcRouter } from "./oidc.js";
 import { stacksRouter } from "./stacks.js";
+import { subscriptionsRouter } from "./subscriptions.js";
 import { updatesRouter } from "./updates.js";
 import { webhooksRouter } from "./webhooks.js";
 
@@ -23,6 +24,7 @@ export const appRouter = router({
 	github: githubRouter,
 	webhooks: webhooksRouter,
 	oidc: oidcRouter,
+	subscriptions: subscriptionsRouter,
 });
 
 export type AppRouter = typeof appRouter;

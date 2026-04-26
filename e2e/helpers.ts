@@ -17,6 +17,7 @@ export const TEST_TOKEN_USER_B = "token-user-b";
 export const TEST_DEV_USERS =
 	'[{"token":"token-user-b","login":"user-b","org":"org-b","role":"admin"},{"token":"token-viewer","login":"viewer-user","org":"dev-org","role":"viewer"}]';
 export const TEST_ENCRYPTION_KEY = randomBytes(32).toString("hex");
+export const TEST_TICKET_SIGNING_KEY = "ticket-signing-key-ticket-signing-key";
 export const TEST_CRON_SECRET = "test-cron-secret";
 export const TEST_DB_URL =
 	process.env.PROCELLA_DATABASE_URL ||
@@ -165,6 +166,7 @@ export async function startServer(): Promise<Subprocess> {
 			PROCELLA_DEV_AUTH_TOKEN: TEST_TOKEN,
 			PROCELLA_DEV_USERS: TEST_DEV_USERS,
 			PROCELLA_ENCRYPTION_KEY: TEST_ENCRYPTION_KEY,
+			PROCELLA_TICKET_SIGNING_KEY: TEST_TICKET_SIGNING_KEY,
 			PROCELLA_CRON_SECRET: TEST_CRON_SECRET,
 			PROCELLA_BLOB_BACKEND: "local",
 			PROCELLA_BLOB_LOCAL_PATH: "./data/e2e-blobs",

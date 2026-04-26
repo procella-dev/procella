@@ -2,11 +2,18 @@
 
 import { afterAll, beforeAll, setDefaultTimeout } from "bun:test";
 import type { Subprocess } from "bun";
-import { ensureDeps, resetDatabase, startServer, stopServer } from "./helpers.js";
+import {
+	ensureDeps,
+	resetDatabase,
+	startServer,
+	stopServer,
+	TEST_TICKET_SIGNING_KEY,
+} from "./helpers.js";
 import { warmupServer } from "./warmup.js";
 
 process.env.PROCELLA_AUTH_MODE ??= "dev";
 process.env.PROCELLA_ENCRYPTION_KEY ??= "c".repeat(64);
+process.env.PROCELLA_TICKET_SIGNING_KEY ??= TEST_TICKET_SIGNING_KEY;
 process.env.PROCELLA_CRON_SECRET ??= "e2e-cron-secret";
 
 setDefaultTimeout(120_000);
