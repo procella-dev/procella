@@ -4,7 +4,12 @@ import type { Database } from "@procella/db";
 import { stacks, updates } from "@procella/db";
 import { activeUpdatesGauge, gcCycleCount, gcOrphansCleanedCount } from "@procella/telemetry";
 import { and, eq, inArray, lt, sql } from "drizzle-orm";
-import { GC_ADVISORY_LOCK_ID, GC_INTERVAL_MS, GC_STALE_THRESHOLD_MS } from "./types.js";
+import {
+	GC_ADVISORY_LOCK_ID,
+	GC_INTERVAL_MS,
+	GC_LEASE_GRACE_MS,
+	GC_STALE_THRESHOLD_MS,
+} from "./types.js";
 
 // ============================================================================
 // GCWorker
@@ -62,11 +67,12 @@ export class GCWorker {
 			try {
 				const now = new Date();
 
-				// Find updates with expired leases
+				// Find updates with expired leases (with 30s grace window for transient renewal delays)
+				const graceThreshold = new Date(now.getTime() - GC_LEASE_GRACE_MS);
 				const expiredLeaseUpdates = await this.db
 					.select({ id: updates.id, stackId: updates.stackId })
 					.from(updates)
-					.where(and(eq(updates.status, "running"), lt(updates.leaseExpiresAt, now)));
+					.where(and(eq(updates.status, "running"), lt(updates.leaseExpiresAt, graceThreshold)));
 
 				// Find stale not-started/requested updates (older than threshold)
 				const staleThreshold = new Date(now.getTime() - GC_STALE_THRESHOLD_MS);
