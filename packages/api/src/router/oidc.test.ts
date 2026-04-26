@@ -1,5 +1,9 @@
 import { describe, expect, mock, test } from "bun:test";
-import type { OidcTrustPolicy, TrustPolicyRepository } from "@procella/oidc";
+import {
+	OidcPolicyConflictError,
+	type OidcTrustPolicy,
+	type TrustPolicyRepository,
+} from "@procella/oidc";
 import type { TRPCContext } from "../trpc.js";
 import { oidcRouter } from "./oidc.js";
 
@@ -17,7 +21,10 @@ const mockPolicy: OidcTrustPolicy = {
 	displayName: "CI Deploy Policy",
 	issuer: "https://token.actions.githubusercontent.com",
 	maxExpiration: 7200,
-	claimConditions: { repository_owner_id: "12345" },
+	claimConditions: {
+		iss: "https://token.actions.githubusercontent.com",
+		repository_owner: "my-org",
+	},
 	grantedRole: "member",
 	active: true,
 	createdAt: new Date("2025-01-01"),
@@ -92,14 +99,14 @@ describe("oidcRouter", () => {
 			expect(result[0]?.id).toBe(VALID_UUID);
 		});
 
-		test("non-admin is rejected", async () => {
+		test("non-admin is rejected", () => {
 			const caller = oidcRouter.createCaller(viewerCtx());
-			await expect(caller.listPolicies()).rejects.toThrow("Admin role required");
+			return expect(caller.listPolicies()).rejects.toThrow("Admin role required");
 		});
 
-		test("returns PRECONDITION_FAILED when OIDC disabled", async () => {
+		test("returns PRECONDITION_FAILED when OIDC disabled", () => {
 			const caller = oidcRouter.createCaller(noOidcCtx());
-			await expect(caller.listPolicies()).rejects.toThrow("OIDC is not enabled");
+			return expect(caller.listPolicies()).rejects.toThrow("OIDC is not enabled");
 		});
 	});
 
@@ -108,7 +115,10 @@ describe("oidcRouter", () => {
 			provider: "github-actions" as const,
 			displayName: "CI Policy",
 			issuer: "https://token.actions.githubusercontent.com",
-			claimConditions: { repository_owner_id: "12345" },
+			claimConditions: {
+				iss: "https://token.actions.githubusercontent.com",
+				repository_owner: "my-org",
+			},
 			grantedRole: "member" as const,
 		};
 
@@ -120,15 +130,52 @@ describe("oidcRouter", () => {
 			expect(ctx.oidcPolicies?.create).toHaveBeenCalledTimes(1);
 		});
 
-		test("non-admin is rejected", async () => {
+		test("non-admin is rejected", () => {
 			const caller = oidcRouter.createCaller(viewerCtx());
-			await expect(caller.createPolicy(validInput)).rejects.toThrow("Admin role required");
+			return expect(caller.createPolicy(validInput)).rejects.toThrow("Admin role required");
 		});
 
-		test("invalid URL in issuer is rejected", async () => {
+		test("invalid URL in issuer is rejected", () => {
 			const ctx = mockContext();
 			const caller = oidcRouter.createCaller(ctx);
-			await expect(caller.createPolicy({ ...validInput, issuer: "not-a-url" })).rejects.toThrow();
+			return expect(caller.createPolicy({ ...validInput, issuer: "not-a-url" })).rejects.toThrow();
+		});
+
+		test("rejects issuer-only claim conditions at create", () => {
+			const caller = oidcRouter.createCaller(mockContext());
+
+			return expect(
+				caller.createPolicy({
+					...validInput,
+					claimConditions: { iss: "https://token.actions.githubusercontent.com" },
+				}),
+			).rejects.toThrow("at least two claim conditions");
+		});
+
+		test("rejects wildcard sub-only claim conditions at create", () => {
+			const caller = oidcRouter.createCaller(mockContext());
+
+			return expect(
+				caller.createPolicy({
+					...validInput,
+					claimConditions: { sub: "*" },
+				}),
+			).rejects.toThrow("at least two claim conditions");
+		});
+
+		test("surfaces policy_conflict as conflict error", () => {
+			const ctx = mockContext({
+				oidcPolicies: mockPolicies({
+					create: mock(async () => {
+						throw new OidcPolicyConflictError();
+					}),
+				}),
+			});
+			const caller = oidcRouter.createCaller(ctx);
+
+			return expect(caller.createPolicy(validInput)).rejects.toThrow(
+				"OIDC trust policy with this org/issuer already exists in another tenant",
+			);
 		});
 	});
 
@@ -143,9 +190,9 @@ describe("oidcRouter", () => {
 			});
 		});
 
-		test("non-admin is rejected", async () => {
+		test("non-admin is rejected", () => {
 			const caller = oidcRouter.createCaller(viewerCtx());
-			await expect(caller.updatePolicy({ id: VALID_UUID, displayName: "x" })).rejects.toThrow(
+			return expect(caller.updatePolicy({ id: VALID_UUID, displayName: "x" })).rejects.toThrow(
 				"Admin role required",
 			);
 		});
@@ -160,15 +207,15 @@ describe("oidcRouter", () => {
 			expect(ctx.oidcPolicies?.delete).toHaveBeenCalledWith(VALID_UUID, "t-1");
 		});
 
-		test("non-admin is rejected", async () => {
+		test("non-admin is rejected", () => {
 			const caller = oidcRouter.createCaller(viewerCtx());
-			await expect(caller.deletePolicy({ id: VALID_UUID })).rejects.toThrow("Admin role required");
+			return expect(caller.deletePolicy({ id: VALID_UUID })).rejects.toThrow("Admin role required");
 		});
 
-		test("invalid UUID is rejected", async () => {
+		test("invalid UUID is rejected", () => {
 			const ctx = mockContext();
 			const caller = oidcRouter.createCaller(ctx);
-			await expect(caller.deletePolicy({ id: "not-a-uuid" })).rejects.toThrow();
+			return expect(caller.deletePolicy({ id: "not-a-uuid" })).rejects.toThrow();
 		});
 	});
 });

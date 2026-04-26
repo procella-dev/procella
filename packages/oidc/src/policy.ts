@@ -1,7 +1,30 @@
 import type { Database } from "@procella/db";
 import { oidcTrustPolicies } from "@procella/db/src/schema.js";
-import { and, eq, ne } from "drizzle-orm";
+import { ProcellaError } from "@procella/types";
+import { and, eq } from "drizzle-orm";
 import type { OidcTrustPolicy, TrustPolicyRepository } from "./types.js";
+
+const GITHUB_ACTIONS_PROVIDER = "github-actions";
+
+type PolicyClaimValidationInput = Pick<OidcTrustPolicy, "provider" | "issuer" | "claimConditions">;
+
+export class OidcPolicyConflictError extends ProcellaError {
+	constructor() {
+		super(
+			"OIDC trust policy with this org/issuer already exists in another tenant",
+			"policy_conflict",
+			409,
+		);
+		this.name = "OidcPolicyConflictError";
+	}
+}
+
+export class OidcPolicyClaimConditionsError extends ProcellaError {
+	constructor(message: string) {
+		super(message, "policy_claim_conditions_invalid", 400);
+		this.name = "OidcPolicyClaimConditionsError";
+	}
+}
 
 export class PostgresTrustPolicyRepository implements TrustPolicyRepository {
 	constructor(private readonly db: Database) {}
@@ -49,33 +72,30 @@ export class PostgresTrustPolicyRepository implements TrustPolicyRepository {
 	async create(
 		policy: Omit<OidcTrustPolicy, "id" | "createdAt" | "updatedAt">,
 	): Promise<OidcTrustPolicy> {
-		// Clean up stale policies from OTHER tenants for this (orgSlug, issuer).
-		// This handles the case where a Descope project is recreated (e.g. sst remove → deploy)
-		// and old policies with defunct tenantIds remain in the DB.
-		await this.db
-			.delete(oidcTrustPolicies)
-			.where(
-				and(
-					eq(oidcTrustPolicies.orgSlug, policy.orgSlug),
-					eq(oidcTrustPolicies.issuer, policy.issuer),
-					ne(oidcTrustPolicies.tenantId, policy.tenantId),
-				),
-			);
+		validateTrustPolicyClaimConditions(policy);
 
-		const [row] = await this.db
-			.insert(oidcTrustPolicies)
-			.values({
-				tenantId: policy.tenantId,
-				orgSlug: policy.orgSlug,
-				provider: policy.provider,
-				displayName: policy.displayName,
-				issuer: policy.issuer,
-				maxExpiration: policy.maxExpiration,
-				claimConditions: policy.claimConditions,
-				grantedRole: policy.grantedRole,
-				active: policy.active,
-			})
-			.returning();
+		let row: typeof oidcTrustPolicies.$inferSelect | undefined;
+		try {
+			[row] = await this.db
+				.insert(oidcTrustPolicies)
+				.values({
+					tenantId: policy.tenantId,
+					orgSlug: policy.orgSlug,
+					provider: policy.provider,
+					displayName: policy.displayName,
+					issuer: policy.issuer,
+					maxExpiration: policy.maxExpiration,
+					claimConditions: policy.claimConditions,
+					grantedRole: policy.grantedRole,
+					active: policy.active,
+				})
+				.returning();
+		} catch (error) {
+			if (pgErrorCode(error) === "23505") {
+				throw new OidcPolicyConflictError();
+			}
+			throw error;
+		}
 
 		if (!row) throw new Error("Failed to create trust policy");
 		return mapRow(row);
@@ -91,6 +111,21 @@ export class PostgresTrustPolicyRepository implements TrustPolicyRepository {
 			>
 		>,
 	): Promise<OidcTrustPolicy> {
+		if (patch.claimConditions) {
+			const [existing] = await this.db
+				.select({ provider: oidcTrustPolicies.provider, issuer: oidcTrustPolicies.issuer })
+				.from(oidcTrustPolicies)
+				.where(and(eq(oidcTrustPolicies.id, id), eq(oidcTrustPolicies.tenantId, tenantId)));
+
+			if (!existing) throw new Error(`Trust policy ${id} not found`);
+
+			validateTrustPolicyClaimConditions({
+				provider: existing.provider,
+				issuer: existing.issuer,
+				claimConditions: patch.claimConditions,
+			});
+		}
+
 		const [row] = await this.db
 			.update(oidcTrustPolicies)
 			.set({ ...patch, updatedAt: new Date() })
@@ -106,6 +141,82 @@ export class PostgresTrustPolicyRepository implements TrustPolicyRepository {
 			.delete(oidcTrustPolicies)
 			.where(and(eq(oidcTrustPolicies.id, id), eq(oidcTrustPolicies.tenantId, tenantId)));
 	}
+}
+
+export function validateTrustPolicyClaimConditions(policy: PolicyClaimValidationInput): void {
+	const error = getTrustPolicyClaimConditionsError(policy);
+	if (error) {
+		throw new OidcPolicyClaimConditionsError(error);
+	}
+}
+
+function getTrustPolicyClaimConditionsError(policy: PolicyClaimValidationInput): string | null {
+	const claimKeys = Object.keys(policy.claimConditions);
+	if (claimKeys.length < 2) {
+		return "OIDC trust policy must require at least two claim conditions";
+	}
+
+	if (!hasNarrowingClaim(policy)) {
+		return "OIDC trust policy must include a narrowing claim (repository_owner, repository, non-wildcard sub, non-default aud, email, email_verified=true, or tid)";
+	}
+
+	return null;
+}
+
+function hasNarrowingClaim(policy: PolicyClaimValidationInput): boolean {
+	const { claimConditions, issuer, provider } = policy;
+	if (hasNonEmptyClaim(claimConditions.repository_owner)) return true;
+	if (hasNonEmptyClaim(claimConditions.repository)) return true;
+	if (isNarrowingSub(claimConditions.sub)) return true;
+	if (isNarrowingAudience(claimConditions.aud, issuer)) return true;
+
+	if (provider !== GITHUB_ACTIONS_PROVIDER) {
+		if (hasNonEmptyClaim(claimConditions.email)) return true;
+		if (claimConditions.email_verified === "true") return true;
+		if (hasNonEmptyClaim(claimConditions.tid)) return true;
+	}
+
+	return false;
+}
+
+function hasNonEmptyClaim(value: string | undefined): boolean {
+	return typeof value === "string" && value.trim().length > 0;
+}
+
+function isNarrowingSub(value: string | undefined): boolean {
+	return hasNonEmptyClaim(value) && value !== "*";
+}
+
+function isNarrowingAudience(value: string | undefined, issuer: string): boolean {
+	return hasNonEmptyClaim(value) && value !== issuer;
+}
+
+function pgErrorCode(err: unknown): string | undefined {
+	let current: unknown = err;
+	for (let i = 0; i < 10 && current != null; i++) {
+		if (typeof current === "object") {
+			const record = current as Record<string, unknown>;
+			for (const key of ["code", "errno"] as const) {
+				const raw = record[key];
+				const normalized = typeof raw === "number" ? String(raw) : raw;
+				if (typeof normalized === "string" && /^[0-9A-Z]{5}$/i.test(normalized)) {
+					return normalized;
+				}
+			}
+			if (Array.isArray(record.errors)) {
+				for (const inner of record.errors) {
+					const code = pgErrorCode(inner);
+					if (code) return code;
+				}
+			}
+			if ("cause" in record) {
+				current = record.cause;
+				continue;
+			}
+		}
+		current = undefined;
+	}
+	return undefined;
 }
 
 function mapRow(row: typeof oidcTrustPolicies.$inferSelect): OidcTrustPolicy {
@@ -126,7 +237,7 @@ function mapRow(row: typeof oidcTrustPolicies.$inferSelect): OidcTrustPolicy {
 }
 
 export function matchPolicy(policy: OidcTrustPolicy, jwtClaims: Record<string, unknown>): boolean {
-	if (Object.keys(policy.claimConditions).length === 0) return false;
+	if (getTrustPolicyClaimConditionsError(policy) !== null) return false;
 	for (const [key, expectedValue] of Object.entries(policy.claimConditions)) {
 		const actualValue = jwtClaims[key];
 		// Strict: claim must exist and be a string or number. Reject undefined/null/object.

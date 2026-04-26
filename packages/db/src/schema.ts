@@ -238,10 +238,9 @@ export const oidcTrustPolicies = pgTable(
 	},
 	(table) => [
 		index("idx_oidc_trust_tenant").on(table.tenantId),
-		// Include tenantId in unique constraint to prevent cross-tenant orgSlug collisions.
 		uniqueIndex("idx_oidc_trust_org_name").on(table.tenantId, table.orgSlug, table.displayName),
-		// Composite index for exchange service: find policies by (orgSlug, issuer).
-		index("idx_oidc_trust_org_issuer").on(table.orgSlug, table.issuer),
+		// Global uniqueness prevents cross-tenant collisions on the same orgSlug+issuer pair.
+		uniqueIndex("idx_oidc_trust_org_issuer").on(table.orgSlug, table.issuer),
 	],
 );
 

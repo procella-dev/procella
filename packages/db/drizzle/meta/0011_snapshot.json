@@ -1,6 +1,6 @@
 {
-  "id": "896de4b0-347f-4105-860a-22d102b9c747",
-  "prevId": "7555e980-6ee9-478e-ba1c-a0c78cca4b56",
+  "id": "ccf24b90-1d6b-4631-a216-6db6e31d9aaa",
+  "prevId": "896de4b0-347f-4105-860a-22d102b9c747",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1138,7 +1138,7 @@
               "nulls": "last"
             }
           ],
-          "isUnique": false,
+          "isUnique": true,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -1560,7 +1560,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "chk_updates_kind": {
+          "name": "chk_updates_kind",
+          "value": "\"updates\".\"kind\" IN ('update', 'preview', 'refresh', 'destroy')"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.webhook_deliveries": {

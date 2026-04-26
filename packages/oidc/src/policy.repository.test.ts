@@ -28,7 +28,10 @@ function makeRow(overrides: Partial<PolicyRow> = {}): PolicyRow {
 		displayName: "Test Policy",
 		issuer: "https://token.actions.githubusercontent.com",
 		maxExpiration: 3600,
-		claimConditions: { repository: "acme/procella" },
+		claimConditions: {
+			iss: "https://token.actions.githubusercontent.com",
+			repository: "acme/procella",
+		},
 		grantedRole: Role.Member,
 		active: true,
 		createdAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -40,6 +43,7 @@ function makeRow(overrides: Partial<PolicyRow> = {}): PolicyRow {
 function createMockDb(options?: {
 	selectRows?: PolicyRow[];
 	insertRows?: PolicyRow[];
+	insertError?: unknown;
 	updateRows?: PolicyRow[];
 }) {
 	const calls: { method: string; args?: unknown }[] = [];
@@ -59,6 +63,9 @@ function createMockDb(options?: {
 
 	const mockInsertReturning = mock(() => {
 		calls.push({ method: "insert.returning" });
+		if (options?.insertError) {
+			return Promise.reject(options.insertError);
+		}
 		return Promise.resolve(options?.insertRows ?? []);
 	});
 	const mockInsertValues = mock((values: unknown) => {
@@ -138,7 +145,10 @@ describe("PostgresTrustPolicyRepository", () => {
 				displayName: "Test Policy",
 				issuer: "https://token.actions.githubusercontent.com",
 				maxExpiration: 3600,
-				claimConditions: { repository: "acme/procella" },
+				claimConditions: {
+					iss: "https://token.actions.githubusercontent.com",
+					repository: "acme/procella",
+				},
 				grantedRole: Role.Member,
 				active: true,
 				createdAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -185,7 +195,7 @@ describe("PostgresTrustPolicyRepository", () => {
 		expect(withoutTenant.mockSelectWhere).toHaveBeenCalledTimes(1);
 	});
 
-	test("create returns mapped row and runs stale cleanup before insert", async () => {
+	test("create returns mapped row without cross-tenant cleanup delete", async () => {
 		const { db, calls } = createMockDb({ insertRows: [mockRow] });
 		const repo = new PostgresTrustPolicyRepository(db);
 
@@ -196,16 +206,46 @@ describe("PostgresTrustPolicyRepository", () => {
 			displayName: "Test Policy",
 			issuer: "https://token.actions.githubusercontent.com",
 			maxExpiration: 3600,
-			claimConditions: { repository: "acme/procella" },
+			claimConditions: {
+				iss: "https://token.actions.githubusercontent.com",
+				repository: "acme/procella",
+			},
 			grantedRole: Role.Member,
 			active: true,
 		});
 
 		expect(result.id).toBe("policy-1");
-		const deleteWhereIndex = calls.findIndex((call) => call.method === "delete.where");
-		const insertReturningIndex = calls.findIndex((call) => call.method === "insert.returning");
-		expect(deleteWhereIndex).toBeGreaterThanOrEqual(0);
-		expect(insertReturningIndex).toBeGreaterThan(deleteWhereIndex);
+		expect(calls.some((call) => call.method === "delete.where")).toBe(false);
+		expect(calls.some((call) => call.method === "insert.returning")).toBe(true);
+	});
+
+	test("create surfaces policy_conflict on unique constraint violation", () => {
+		const { db } = createMockDb({
+			insertError: Object.assign(new Error("duplicate key value violates unique constraint"), {
+				code: "23505",
+			}),
+		});
+		const repo = new PostgresTrustPolicyRepository(db);
+
+		return expect(
+			repo.create({
+				tenantId: "tenant-2",
+				orgSlug: "acme",
+				provider: "github-actions",
+				displayName: "Conflicting Policy",
+				issuer: "https://token.actions.githubusercontent.com",
+				maxExpiration: 3600,
+				claimConditions: {
+					iss: "https://token.actions.githubusercontent.com",
+					repository_owner: "myorg",
+				},
+				grantedRole: Role.Member,
+				active: true,
+			}),
+		).rejects.toMatchObject({
+			code: "policy_conflict",
+			message: "OIDC trust policy with this org/issuer already exists in another tenant",
+		});
 	});
 
 	test("create throws when insert returns empty array", async () => {
@@ -220,7 +260,10 @@ describe("PostgresTrustPolicyRepository", () => {
 				displayName: "Test Policy",
 				issuer: "https://token.actions.githubusercontent.com",
 				maxExpiration: 3600,
-				claimConditions: { repository: "acme/procella" },
+				claimConditions: {
+					iss: "https://token.actions.githubusercontent.com",
+					repository: "acme/procella",
+				},
 				grantedRole: Role.Member,
 				active: true,
 			}),
@@ -250,11 +293,12 @@ describe("PostgresTrustPolicyRepository", () => {
 		);
 	});
 
-	test("delete does not throw", async () => {
+	test("delete does not throw", () => {
 		const { db, mockDeleteWhere } = createMockDb();
 		const repo = new PostgresTrustPolicyRepository(db);
 
-		await expect(repo.delete("policy-1", "tenant-1")).resolves.toBeUndefined();
+		const deletion = repo.delete("policy-1", "tenant-1");
 		expect(mockDeleteWhere).toHaveBeenCalledTimes(1);
+		return expect(deletion).resolves.toBeUndefined();
 	});
 });
