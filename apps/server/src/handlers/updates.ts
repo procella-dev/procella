@@ -81,6 +81,8 @@ export function updateHandlers(
 			const project = c.req.param("project");
 			const stack = c.req.param("stack");
 
+			// Safe: updateAuth already verified that this URL tuple resolves to the
+			// same stackId that the lease token is bound to before any side effects run.
 			if (
 				caller &&
 				org &&

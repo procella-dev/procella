@@ -89,8 +89,10 @@ export function createCliApp(deps: CliAppDeps): Hono<Env> {
 	const withApiAuth = apiAuth(deps.auth);
 	const withAudit = auditMiddleware(deps.audit);
 	const withPulumiAccept = pulumiAccept();
-	const withUpdateAuth = updateAuth(deps.auth, (updateId, token) =>
-		deps.updates.verifyLeaseToken(updateId, token),
+	const withUpdateAuth = updateAuth(
+		deps.auth,
+		(updateId, token) => deps.updates.verifyLeaseToken(updateId, token),
+		deps.stacks,
 	);
 
 	// Public routes

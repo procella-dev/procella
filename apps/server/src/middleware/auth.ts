@@ -2,6 +2,7 @@
 
 import type { AuthService } from "@procella/auth";
 import { requireRole } from "@procella/auth";
+import type { StacksService } from "@procella/stacks";
 import type { Caller, Role } from "@procella/types";
 import { ProcellaError, UnauthorizedError } from "@procella/types";
 import type { MiddlewareHandler } from "hono";
@@ -67,6 +68,7 @@ export type LeaseTokenVerifier = (updateId: string, token: string) => Promise<vo
 export function updateAuth(
 	authService: AuthService,
 	verifyLeaseToken: LeaseTokenVerifier,
+	stacks: Pick<StacksService, "getStackByNames">,
 ): MiddlewareHandler<Env> {
 	return async (c, next) => {
 		try {
@@ -80,6 +82,22 @@ export function updateAuth(
 			}
 			const ctx = await authService.authenticateUpdateToken(token);
 			await verifyLeaseToken(ctx.updateId, token);
+
+			const org = c.req.param("org");
+			const project = c.req.param("project");
+			const stack = c.req.param("stack");
+			if (org && project && stack) {
+				const stackInfo = await stacks.getStackByNames(org, project, stack);
+				if (stackInfo.id !== ctx.stackId) {
+					return c.json(
+						{
+							code: "lease_url_mismatch",
+							message: "Lease token does not match URL stack",
+						},
+						403,
+					);
+				}
+			}
 
 			c.set("updateContext", ctx);
 			await next();
