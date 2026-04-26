@@ -30,6 +30,7 @@ import { PostgresWebhooksService } from "@procella/webhooks";
 import { createCliApp } from "./routes/cli.js";
 import { createApp } from "./routes/index.js";
 import { createWebApp } from "./routes/web.js";
+import { createSubscriptionTicketService } from "./subscription-tickets.js";
 
 const KNOWN_DEV_ENCRYPTION_KEY = createHash("sha256")
 	.update("procella-dev-encryption-key")
@@ -69,6 +70,7 @@ async function bootstrapServices() {
 					managementKey: config.descopeManagementKey,
 				};
 	const auth = createAuthService(authConfig);
+	const subscriptionTickets = createSubscriptionTicketService(config.ticketSigningKey);
 	const oidcPolicies: TrustPolicyRepository | null = config.oidcEnabled
 		? new PostgresTrustPolicyRepository(db)
 		: null;
@@ -133,8 +135,11 @@ async function bootstrapServices() {
 		esc: escService,
 		github: githubService,
 		githubWebhookSecret: githubConfig?.webhookSecret,
+		issueSubscriptionTicket: (caller: import("@procella/types").Caller) =>
+			subscriptionTickets.issueTicket(caller),
 		oidc: oidcService,
 		oidcPolicies,
+		verifySubscriptionTicket: (ticket: string) => subscriptionTickets.verifyTicket(ticket),
 	};
 }
 

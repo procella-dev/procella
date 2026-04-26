@@ -55,6 +55,7 @@ const configSchema = z
 			}),
 		descopeProjectId: z.string().optional(),
 		descopeManagementKey: z.string().optional(),
+		ticketSigningKey: z.string().min(32, "Must be at least 32 characters"),
 
 		// Blob storage
 		blobBackend: blobBackendSchema.default("local"),
@@ -161,6 +162,7 @@ const envMapping = {
 	devUsers: "PROCELLA_DEV_USERS",
 	descopeProjectId: "PROCELLA_DESCOPE_PROJECT_ID",
 	descopeManagementKey: "PROCELLA_DESCOPE_MANAGEMENT_KEY",
+	ticketSigningKey: "PROCELLA_TICKET_SIGNING_KEY",
 	blobBackend: "PROCELLA_BLOB_BACKEND",
 	blobLocalPath: "PROCELLA_BLOB_LOCAL_PATH",
 	blobS3Bucket: "PROCELLA_BLOB_S3_BUCKET",
