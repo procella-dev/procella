@@ -12,6 +12,9 @@ import { SQL } from "bun";
 
 export const TEST_PORT = 18_080;
 export const TEST_TOKEN = "devtoken123";
+export const TEST_TOKEN_USER_B = "token-user-b";
+export const TEST_DEV_USERS =
+	'[{"token":"token-user-b","login":"user-b","org":"org-b","role":"admin"},{"token":"token-viewer","login":"viewer-user","org":"dev-org","role":"viewer"}]';
 export const TEST_DB_URL =
 	process.env.PROCELLA_DATABASE_URL ||
 	"postgres://procella:procella@localhost:5432/procella?sslmode=disable";
@@ -157,6 +160,7 @@ export async function startServer(): Promise<Subprocess> {
 			PROCELLA_DATABASE_URL: TEST_DB_URL,
 			PROCELLA_AUTH_MODE: "dev",
 			PROCELLA_DEV_AUTH_TOKEN: TEST_TOKEN,
+			PROCELLA_DEV_USERS: TEST_DEV_USERS,
 			PROCELLA_BLOB_BACKEND: "local",
 			PROCELLA_BLOB_LOCAL_PATH: "./data/e2e-blobs",
 			...(escEvaluatorBinary ? { PROCELLA_ESC_EVALUATOR_BINARY: escEvaluatorBinary } : {}),
@@ -269,12 +273,12 @@ export async function pulumi(args: string[], opts?: PulumiOpts): Promise<PulumiR
 
 export async function apiRequest(
 	path: string,
-	opts?: { method?: string; body?: unknown },
+	opts?: { method?: string; body?: unknown; token?: string },
 ): Promise<Response> {
 	return fetch(`${BACKEND_URL}/api${path}`, {
 		method: opts?.method ?? "GET",
 		headers: {
-			Authorization: `token ${TEST_TOKEN}`,
+			Authorization: `token ${opts?.token ?? TEST_TOKEN}`,
 			Accept: "application/vnd.pulumi+8",
 			...(opts?.body ? { "Content-Type": "application/json" } : {}),
 		},

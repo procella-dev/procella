@@ -6,6 +6,14 @@
 
 import { z } from "zod";
 
+const roleSchema = z.enum(["admin", "member", "viewer"]);
+const devUserSchema = z.object({
+	token: z.string().min(1),
+	login: z.string().min(1),
+	org: z.string().min(1),
+	role: roleSchema.default("admin"),
+});
+
 // ============================================================================
 // Schema
 // ============================================================================
@@ -27,6 +35,24 @@ const configSchema = z
 		devAuthToken: z.string().optional(),
 		devUserLogin: z.string().default("dev-user"),
 		devOrgLogin: z.string().default("dev-org"),
+		devUsers: z
+			.string()
+			.optional()
+			.transform((value, ctx) => {
+				if (!value) return [];
+				try {
+					return z.array(devUserSchema).parse(JSON.parse(value));
+				} catch (error) {
+					ctx.addIssue({
+						code: z.ZodIssueCode.custom,
+						message:
+							error instanceof Error
+								? `Invalid PROCELLA_DEV_USERS: ${error.message}`
+								: "Invalid PROCELLA_DEV_USERS",
+					});
+					return z.NEVER;
+				}
+			}),
 		descopeProjectId: z.string().optional(),
 		descopeManagementKey: z.string().optional(),
 
@@ -133,6 +159,7 @@ const envMapping = {
 	devAuthToken: "PROCELLA_DEV_AUTH_TOKEN",
 	devUserLogin: "PROCELLA_DEV_USER_LOGIN",
 	devOrgLogin: "PROCELLA_DEV_ORG_LOGIN",
+	devUsers: "PROCELLA_DEV_USERS",
 	descopeProjectId: "PROCELLA_DESCOPE_PROJECT_ID",
 	descopeManagementKey: "PROCELLA_DESCOPE_MANAGEMENT_KEY",
 	blobBackend: "PROCELLA_BLOB_BACKEND",

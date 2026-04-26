@@ -1,5 +1,7 @@
 // @procella/updates — Service interface, types, and constants.
 
+import type { StackCryptoInput } from "@procella/crypto";
+
 import type {
 	CompleteUpdateRequest,
 	EngineEventBatch,
@@ -63,13 +65,13 @@ export interface UpdatesService {
 
 	importStack(stackId: string, deployment: UntypedDeployment): Promise<ImportStackResponse>;
 
-	encryptValue(stackFQN: string, plaintext: Uint8Array): Promise<Uint8Array>;
+	encryptValue(stack: StackCryptoInput, plaintext: Uint8Array): Promise<Uint8Array>;
 
-	decryptValue(stackFQN: string, ciphertext: Uint8Array): Promise<Uint8Array>;
+	decryptValue(stack: StackCryptoInput, ciphertext: Uint8Array): Promise<Uint8Array>;
 
-	batchEncrypt(stackFQN: string, plaintexts: Uint8Array[]): Promise<Uint8Array[]>;
+	batchEncrypt(stack: StackCryptoInput, plaintexts: Uint8Array[]): Promise<Uint8Array[]>;
 
-	batchDecrypt(stackFQN: string, ciphertexts: Uint8Array[]): Promise<Uint8Array[]>;
+	batchDecrypt(stack: StackCryptoInput, ciphertexts: Uint8Array[]): Promise<Uint8Array[]>;
 
 	verifyLeaseToken(updateId: string, token: string): Promise<void>;
 

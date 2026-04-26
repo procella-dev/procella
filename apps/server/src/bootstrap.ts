@@ -45,6 +45,7 @@ async function bootstrapServices() {
 					token: config.devAuthToken as string,
 					userLogin: config.devUserLogin,
 					orgLogin: config.devOrgLogin,
+					users: config.devUsers,
 				}
 			: {
 					mode: "descope" as const,

@@ -81,7 +81,7 @@ export function createCliApp(deps: CliAppDeps): Hono<Env> {
 	});
 	const checkpointH = checkpointHandlers(deps.updates);
 	const eventH = eventHandlers(deps.updates, deps.stacks);
-	const cryptoH = cryptoHandlers(deps.updates);
+	const cryptoH = cryptoHandlers(deps.updates, deps.stacks);
 	const stateH = stateHandlers(deps.updates, deps.stacks);
 	const escH = escHandlers({ esc: deps.esc });
 

@@ -34,24 +34,49 @@ export interface AuthService {
 // ============================================================================
 
 export type AuthConfig =
-	| { mode: "dev"; token: string; userLogin: string; orgLogin: string }
+	| {
+			mode: "dev";
+			token: string;
+			userLogin: string;
+			orgLogin: string;
+			users?: readonly DevAuthUser[];
+	  }
 	| { mode: "descope"; projectId: string; managementKey?: string };
 
 // ============================================================================
 // Dev Auth Service
 // ============================================================================
 
+export interface DevAuthUser {
+	token: string;
+	login: string;
+	org: string;
+	role: Role;
+}
+
 export interface DevAuthConfig {
 	token: string;
 	userLogin: string;
 	orgLogin: string;
+	users?: readonly DevAuthUser[];
 }
 
 export class DevAuthService implements AuthService {
-	private readonly config: DevAuthConfig;
+	private readonly usersByToken: Map<string, DevAuthUser>;
 
 	constructor(config: DevAuthConfig) {
-		this.config = config;
+		this.usersByToken = new Map([
+			[
+				config.token,
+				{
+					token: config.token,
+					login: config.userLogin,
+					org: config.orgLogin,
+					role: "admin",
+				},
+			],
+			...(config.users ?? []).map((user) => [user.token, user] as const),
+		]);
 	}
 
 	async authenticate(request: Request): Promise<Caller> {
@@ -59,15 +84,16 @@ export class DevAuthService implements AuthService {
 			const start = performance.now();
 			try {
 				const { token } = extractToken(request);
-				if (token !== this.config.token) {
+				const user = this.usersByToken.get(token);
+				if (!user) {
 					throw new UnauthorizedError("Invalid authentication token");
 				}
 				return {
-					tenantId: this.config.orgLogin,
-					orgSlug: this.config.orgLogin,
-					userId: this.config.userLogin,
-					login: this.config.userLogin,
-					roles: ["admin"] as const,
+					tenantId: user.org,
+					orgSlug: user.org,
+					userId: user.login,
+					login: user.login,
+					roles: [user.role],
 					principalType: "user" as const,
 				};
 			} catch (error) {
@@ -405,6 +431,7 @@ export function createAuthService(config: AuthConfig): AuthService {
 				token: config.token,
 				userLogin: config.userLogin,
 				orgLogin: config.orgLogin,
+				users: config.users,
 			});
 		case "descope": {
 			const sdk = DescopeSdk({

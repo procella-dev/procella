@@ -760,7 +760,13 @@ describe.skipIf(!(await hasDb()))("PostgresEscService — sessions", () => {
 			const cryptoSvc = new AesCryptoService(encryptionKeyHex);
 			const envFQN = `${tenant}/proj/dev`;
 			const cipherBytes = Buffer.from(row.resolvedValuesCiphertext, "base64");
-			const plainBytes = await cryptoSvc.decrypt(new Uint8Array(cipherBytes), envFQN);
+			const plainBytes = await cryptoSvc.decrypt(
+				{
+					stackId: row.environmentId,
+					stackFQN: envFQN,
+				},
+				new Uint8Array(cipherBytes),
+			);
 			const decrypted = JSON.parse(new TextDecoder().decode(plainBytes));
 			expect(decrypted).toEqual({ foo: "bar" });
 		} finally {

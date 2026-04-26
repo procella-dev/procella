@@ -222,27 +222,29 @@ describe("PostgresUpdatesService — integration", () => {
 		test("roundtrips plaintext through encrypt+decrypt", async () => {
 			const stack = await seedStack();
 			const fqn = `tenant-1/test-project/${stack.stackName}`;
+			const stackRef = { stackId: stack.id, stackFQN: fqn };
 			const plaintext = new TextEncoder().encode("my-secret-value");
 
-			const ciphertext = await updatesService.encryptValue(fqn, plaintext);
+			const ciphertext = await updatesService.encryptValue(stackRef, plaintext);
 			expect(ciphertext).not.toEqual(plaintext);
 
-			const decrypted = await updatesService.decryptValue(fqn, ciphertext);
+			const decrypted = await updatesService.decryptValue(stackRef, ciphertext);
 			expect(new TextDecoder().decode(decrypted)).toBe("my-secret-value");
 		});
 
 		test("batch encrypt/decrypt roundtrip", async () => {
 			const stack = await seedStack();
 			const fqn = `tenant-1/test-project/${stack.stackName}`;
+			const stackRef = { stackId: stack.id, stackFQN: fqn };
 			const values = [
 				new TextEncoder().encode("secret-1"),
 				new TextEncoder().encode("secret-2"),
 			];
 
-			const encrypted = await updatesService.batchEncrypt(fqn, values);
+			const encrypted = await updatesService.batchEncrypt(stackRef, values);
 			expect(encrypted).toHaveLength(2);
 
-			const decrypted = await updatesService.batchDecrypt(fqn, encrypted);
+			const decrypted = await updatesService.batchDecrypt(stackRef, encrypted);
 			expect(new TextDecoder().decode(decrypted[0])).toBe("secret-1");
 			expect(new TextDecoder().decode(decrypted[1])).toBe("secret-2");
 		});

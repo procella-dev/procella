@@ -1,6 +1,6 @@
 // @procella/updates — PostgreSQL implementation of UpdatesService.
 
-import type { CryptoService } from "@procella/crypto";
+import type { CryptoService, StackCryptoInput } from "@procella/crypto";
 import type { Database } from "@procella/db";
 import { checkpoints, journalEntries, stacks, updateEvents, updates } from "@procella/db";
 import type { BlobStorage } from "@procella/storage";
@@ -704,20 +704,20 @@ export class PostgresUpdatesService implements UpdatesService {
 		});
 	}
 
-	async encryptValue(stackFQN: string, plaintext: Uint8Array): Promise<Uint8Array> {
-		return this.crypto.encrypt(plaintext, stackFQN);
+	async encryptValue(stack: StackCryptoInput, plaintext: Uint8Array): Promise<Uint8Array> {
+		return this.crypto.encrypt(stack, plaintext);
 	}
 
-	async decryptValue(stackFQN: string, ciphertext: Uint8Array): Promise<Uint8Array> {
-		return this.crypto.decrypt(ciphertext, stackFQN);
+	async decryptValue(stack: StackCryptoInput, ciphertext: Uint8Array): Promise<Uint8Array> {
+		return this.crypto.decrypt(stack, ciphertext);
 	}
 
-	async batchEncrypt(stackFQN: string, plaintexts: Uint8Array[]): Promise<Uint8Array[]> {
-		return Promise.all(plaintexts.map((p) => this.crypto.encrypt(p, stackFQN)));
+	async batchEncrypt(stack: StackCryptoInput, plaintexts: Uint8Array[]): Promise<Uint8Array[]> {
+		return Promise.all(plaintexts.map((p) => this.crypto.encrypt(stack, p)));
 	}
 
-	async batchDecrypt(stackFQN: string, ciphertexts: Uint8Array[]): Promise<Uint8Array[]> {
-		return Promise.all(ciphertexts.map((c) => this.crypto.decrypt(c, stackFQN)));
+	async batchDecrypt(stack: StackCryptoInput, ciphertexts: Uint8Array[]): Promise<Uint8Array[]> {
+		return Promise.all(ciphertexts.map((c) => this.crypto.decrypt(stack, c)));
 	}
 
 	// ========================================================================
