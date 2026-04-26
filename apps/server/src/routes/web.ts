@@ -9,6 +9,7 @@ import type { TRPCContext } from "@procella/api/src/trpc.js";
 import type { AuditService } from "@procella/audit";
 import type { AuthConfig, AuthService } from "@procella/auth";
 import type { Database } from "@procella/db";
+import type { EscService } from "@procella/esc";
 import type { GitHubService } from "@procella/github";
 import type { OidcService, TrustPolicyRepository } from "@procella/oidc";
 import type { StacksService } from "@procella/stacks";
@@ -30,6 +31,7 @@ export interface WebAppDeps {
 	stacks: StacksService;
 	updates: UpdatesService;
 	webhooks: WebhooksService;
+	esc: EscService;
 	github: GitHubService | null;
 	oidc?: OidcService | null;
 	oidcPolicies?: TrustPolicyRepository | null;
@@ -107,6 +109,7 @@ export function createWebApp(deps: WebAppDeps): Hono<Env> {
 			audit: deps.audit,
 			updates: deps.updates,
 			webhooks: deps.webhooks,
+			esc: deps.esc,
 			github: deps.github,
 			oidcPolicies: deps.oidcPolicies ?? null,
 		};

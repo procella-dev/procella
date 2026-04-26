@@ -41,6 +41,12 @@ jobs:
           restore-keys: bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
 
+      - name: Download ESC eval bootstrap artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: esc-eval-bootstrap
+          path: .build/esc-eval
+
       - name: Build Lambda binaries
         run: |
           mkdir -p .build/cli-api .build/web-api .build/gc .build/migrate

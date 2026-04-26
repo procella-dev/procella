@@ -8,6 +8,7 @@
 		"@procella/audit": "workspace:*",
 		"@procella/oidc": "workspace:*",
 		"@procella/db": "workspace:*",
+		"@procella/esc": "workspace:*",
 		"@procella/github": "workspace:*",
 		"@procella/stacks": "workspace:*",
 		"@procella/telemetry": "workspace:*",

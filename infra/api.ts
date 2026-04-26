@@ -1,4 +1,5 @@
 import { database, databaseUrl, vpc } from "./database";
+import { escEvaluator } from "./esc";
 import { router } from "./router";
 import {
 	allSecrets,
@@ -44,13 +45,14 @@ export const api = new sst.aws.Function("ProcellaCliApi", {
 		},
 	},
 	vpc,
-	link: [database, bucket, ...allSecrets],
+	link: [database, bucket, escEvaluator, ...allSecrets],
 	environment: {
 		PROCELLA_DATABASE_URL: databaseUrl,
 		PROCELLA_BLOB_BACKEND: "s3",
 		PROCELLA_BLOB_S3_BUCKET: bucket.name,
 		PROCELLA_AUTH_MODE: $dev ? "dev" : "descope",
 		PROCELLA_ENCRYPTION_KEY: encryptionKey.value,
+		PROCELLA_ESC_EVALUATOR_FN_NAME: escEvaluator.name,
 		PROCELLA_CORS_ORIGINS: `${appOrigin},${rootOrigin}`,
 		PROCELLA_OTEL_ENABLED: "true",
 		OTEL_SERVICE_NAME: `procella-cli-${stage}`,

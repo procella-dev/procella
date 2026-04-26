@@ -11,6 +11,7 @@
 		{ "path": "packages/stacks" },
 		{ "path": "packages/audit" },
 		{ "path": "packages/webhooks" },
+		{ "path": "packages/esc" },
 		{ "path": "packages/github" },
 		{ "path": "packages/oidc" },
 		{ "path": "packages/updates" },

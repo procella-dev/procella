@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { AuditService } from "@procella/audit";
 import type { AuthService } from "@procella/auth";
 import type { Database } from "@procella/db";
+import type { EscService } from "@procella/esc";
 import type { StackInfo, StacksService } from "@procella/stacks";
 import type { Caller } from "@procella/types";
 import { UnauthorizedError } from "@procella/types";
@@ -197,6 +198,34 @@ describe("@procella/server routes", () => {
 			stacks: mockStacksService(),
 			updates: mockUpdatesService(),
 			webhooks: mockWebhooksService(),
+			esc: {
+				listProjects: async () => [],
+				listAllEnvironments: async () => ({ environments: [], nextToken: "" }),
+				createEnvironment: async () => ({}),
+				cloneEnvironment: async () => ({}),
+				listEnvironments: async () => [],
+				getEnvironment: async () => null,
+				updateEnvironment: async () => ({}),
+				deleteEnvironment: async () => {},
+				listRevisions: async () => [],
+				getRevision: async () => null,
+				openSession: async () => ({}),
+				getSession: async () => null,
+				gcSweep: async () => ({ closedCount: 0 }),
+				listRevisionTags: async () => [],
+				tagRevision: async () => {},
+				untagRevision: async () => {},
+				getEnvironmentTags: async () => ({}),
+				setEnvironmentTags: async () => {},
+				updateEnvironmentTags: async () => {},
+				createDraft: async () => ({}),
+				listDrafts: async () => [],
+				updateDraft: async () => ({}),
+				getDraft: async () => null,
+				applyDraft: async () => ({}),
+				discardDraft: async () => {},
+				validateYaml: async () => ({ values: {}, diagnostics: [] }),
+			} as unknown as EscService,
 		});
 	}
 
@@ -356,6 +385,13 @@ describe("@procella/server routes", () => {
 	// ========================================================================
 
 	describe("authenticated API routes", () => {
+		test("GET /api/esc/environments returns CLI environment list shape", async () => {
+			const app = makeApp();
+			const res = await app.request("/api/esc/environments", { headers: authHeaders });
+			expect(res.status).toBe(200);
+			expect(await res.json()).toEqual({ environments: [], nextToken: "" });
+		});
+
 		test("GET /api/user returns user info with valid auth", async () => {
 			const app = makeApp();
 			const res = await app.request("/api/user", { headers: authHeaders });

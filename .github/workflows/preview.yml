@@ -15,8 +15,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  build-esc-eval:
+    name: Build ESC eval bootstrap
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: esc-eval/go.mod
+          cache: true
+          cache-dependency-path: esc-eval/go.sum
+
+      - name: Build ESC eval bootstrap
+        run: cd esc-eval && make build
+
+      - name: Upload bootstrap artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: esc-eval-bootstrap
+          path: .build/esc-eval/bootstrap
+          if-no-files-found: error
+
   deploy:
     name: Deploy Preview
+    needs: [build-esc-eval]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: preview
@@ -37,6 +60,12 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
+
+      - name: Download ESC eval bootstrap artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: esc-eval-bootstrap
+          path: .build/esc-eval
 
       - name: Build Lambda binaries
         run: |

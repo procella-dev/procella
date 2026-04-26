@@ -1,0 +1,14 @@
+{
+	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		"outDir": "dist",
+		"rootDir": "src"
+	},
+	"include": ["src/**/*.ts"],
+	"references": [
+		{ "path": "../crypto" },
+		{ "path": "../db" },
+		{ "path": "../telemetry" },
+		{ "path": "../types" }
+	]
+}

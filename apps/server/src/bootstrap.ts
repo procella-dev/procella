@@ -8,6 +8,12 @@ import { createAuthService, DescopeAuthService } from "@procella/auth";
 import { loadConfig } from "@procella/config";
 import { AesCryptoService, devMasterKey } from "@procella/crypto";
 import { createDb } from "@procella/db";
+import {
+	LambdaEvaluatorClient,
+	PostgresEscService,
+	StdioEvaluatorClient,
+	UnimplementedEvaluatorClient,
+} from "@procella/esc";
 import { buildGitHubAppConfig, OctokitGitHubService } from "@procella/github";
 import {
 	JwksValidatorImpl,
@@ -87,6 +93,19 @@ async function bootstrapServices() {
 	const githubService = githubConfig
 		? new OctokitGitHubService({ db, config: githubConfig })
 		: null;
+	const localEscEvaluatorBinary = process.env.PROCELLA_ESC_EVALUATOR_BINARY;
+	const evaluatorClient = config.escEvaluatorFnName
+		? new LambdaEvaluatorClient({
+				functionName: config.escEvaluatorFnName,
+			})
+		: localEscEvaluatorBinary
+			? new StdioEvaluatorClient({ binaryPath: localEscEvaluatorBinary })
+			: new UnimplementedEvaluatorClient();
+	const escService = new PostgresEscService({
+		db,
+		evaluator: evaluatorClient,
+		encryptionKeyHex: encryptionKey,
+	});
 
 	return {
 		auth,
@@ -100,6 +119,7 @@ async function bootstrapServices() {
 		stacks: stacksService,
 		updates: updatesService,
 		webhooks: webhooksService,
+		esc: escService,
 		github: githubService,
 		githubWebhookSecret: githubConfig?.webhookSecret,
 		oidc: oidcService,

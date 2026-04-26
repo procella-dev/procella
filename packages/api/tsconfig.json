@@ -10,6 +10,7 @@
 		{ "path": "../oidc" },
 		{ "path": "../types" },
 		{ "path": "../db" },
+		{ "path": "../esc" },
 		{ "path": "../github" },
 		{ "path": "../stacks" },
 		{ "path": "../telemetry" },

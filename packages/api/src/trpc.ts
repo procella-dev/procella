@@ -2,6 +2,7 @@
 
 import type { AuditService } from "@procella/audit";
 import type { Database } from "@procella/db";
+import type { EscService } from "@procella/esc";
 import type { GitHubService } from "@procella/github";
 import type { TrustPolicyRepository } from "@procella/oidc";
 import type { StacksService } from "@procella/stacks";
@@ -24,6 +25,7 @@ export interface TRPCContext {
 	audit: AuditService;
 	updates: UpdatesService;
 	webhooks: WebhooksService;
+	esc: EscService;
 	github: GitHubService | null;
 	oidcPolicies?: TrustPolicyRepository | null;
 }

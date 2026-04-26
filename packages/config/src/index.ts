@@ -61,6 +61,9 @@ const configSchema = z
 			.optional(),
 		githubAppWebhookSecret: z.string().optional(),
 
+		// ESC
+		escEvaluatorFnName: z.string().optional(),
+
 		// CORS
 		corsOrigins: z
 			.string()
@@ -143,6 +146,7 @@ const envMapping = {
 	githubAppId: "PROCELLA_GITHUB_APP_ID",
 	githubAppPrivateKey: "PROCELLA_GITHUB_APP_PRIVATE_KEY",
 	githubAppWebhookSecret: "PROCELLA_GITHUB_APP_WEBHOOK_SECRET",
+	escEvaluatorFnName: "PROCELLA_ESC_EVALUATOR_FN_NAME",
 	corsOrigins: "PROCELLA_CORS_ORIGINS",
 } as const;
 

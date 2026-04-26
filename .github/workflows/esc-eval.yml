@@ -1,0 +1,57 @@
+name: ESC Eval
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    paths:
+      - esc-eval/**
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: esc-eval-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  esc-eval-go:
+    name: Go vet, test & build ESC eval
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: esc-eval/go.mod
+          cache: true
+          cache-dependency-path: esc-eval/go.sum
+
+      - name: Download Go modules
+        run: cd esc-eval && go mod download
+
+      - name: Vet Go code
+        run: cd esc-eval && go vet ./...
+
+      - name: Test Go code
+        run: cd esc-eval && go test ./... -race -count=1 -covermode=atomic -coverprofile=coverage.out
+
+      - name: Upload Go coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v6
+        with:
+          files: ./esc-eval/coverage.out
+          flags: esc-eval
+          use_oidc: true
+          fail_ci_if_error: true
+
+      - name: Build ESC eval bootstrap
+        run: cd esc-eval && make build
+
+      - name: Upload bootstrap artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: esc-eval-bootstrap
+          path: .build/esc-eval/bootstrap
+          if-no-files-found: error

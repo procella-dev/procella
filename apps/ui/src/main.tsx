@@ -2,7 +2,7 @@ import { QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-qu
 import { TRPCClientError } from "@trpc/client";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router";
+import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 import "./index.css";
 
 import { ProcellaAuthProvider } from "./components/AuthProvider";
@@ -34,6 +34,12 @@ const UpdateDetail = lazy(() =>
 const Settings = lazy(() => import("./pages/Settings").then((m) => ({ default: m.Settings })));
 const Tokens = lazy(() => import("./pages/Tokens").then((m) => ({ default: m.Tokens })));
 const Webhooks = lazy(() => import("./pages/Webhooks").then((m) => ({ default: m.Webhooks })));
+const EscEnvironments = lazy(() =>
+	import("./pages/EscEnvironments").then((m) => ({ default: m.EscEnvironments })),
+);
+const EscEnvironmentDetail = lazy(() =>
+	import("./pages/EscEnvironmentDetail").then((m) => ({ default: m.EscEnvironmentDetail })),
+);
 
 const SpinnerFallback = <FullPageSpinner />;
 
@@ -78,52 +84,85 @@ function TRPCProvider({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
+	const router = useMemo(
+		() =>
+			createBrowserRouter([
+				{
+					path: "/login",
+					element: (
+						<Suspense fallback={SpinnerFallback}>
+							<LoginPage />
+						</Suspense>
+					),
+				},
+				{
+					path: "/cli-login",
+					element: (
+						<Suspense fallback={SpinnerFallback}>
+							<CliLogin />
+						</Suspense>
+					),
+				},
+				{ path: "/account/tokens", element: <Navigate to="/tokens" replace /> },
+				{
+					path: "/welcome/cli",
+					element: (
+						<Suspense fallback={SpinnerFallback}>
+							<WelcomeCli />
+						</Suspense>
+					),
+				},
+				{
+					path: "/design",
+					element: (
+						<Suspense fallback={SpinnerFallback}>
+							<Design />
+						</Suspense>
+					),
+				},
+				{ path: "/", element: <HomePage /> },
+				{
+					element: <ProtectedRoute />,
+					children: [
+						{
+							element: <Layout />,
+							children: [
+								{ path: "home", element: <StackList /> },
+								{ path: "tokens", element: <Tokens /> },
+								{ path: "settings", element: <Settings /> },
+								{ path: "webhooks", element: <Webhooks /> },
+								{ path: "esc", element: <EscEnvironments /> },
+								{ path: "esc/:project/:envName", element: <EscEnvironmentDetail /> },
+								{ path: "stacks/:org/:project/:stack", element: <StackDetail /> },
+								{
+									path: "stacks/:org/:project/:stack/resources",
+									element: <ResourceDetail />,
+								},
+								{
+									path: "stacks/:org/:project/:stack/updates/:updateID",
+									element: <UpdateDetail />,
+								},
+								{
+									path: "stacks/:org/:project/:stack/previews/:updateID",
+									element: <UpdateDetail />,
+								},
+								{ path: ":org/:project/:stack", element: <StackDetail /> },
+								{ path: ":org/:project/:stack/resources", element: <ResourceDetail /> },
+								{ path: ":org/:project/:stack/updates/:updateID", element: <UpdateDetail /> },
+								{ path: ":org/:project/:stack/previews/:updateID", element: <UpdateDetail /> },
+								{ path: ":org/:project/:stack/settings/options", element: <StackDetail /> },
+							],
+						},
+					],
+				},
+			]),
+		[],
+	);
+
 	return (
 		<ProcellaAuthProvider>
 			<TRPCProvider>
-				<BrowserRouter>
-					<Suspense fallback={SpinnerFallback}>
-						<Routes>
-							<Route path="/login" element={<LoginPage />} />
-							<Route path="/cli-login" element={<CliLogin />} />
-							<Route path="/account/tokens" element={<Navigate to="/tokens" replace />} />
-							<Route path="/welcome/cli" element={<WelcomeCli />} />
-							<Route path="/design" element={<Design />} />
-							<Route path="/" element={<HomePage />} />
-							<Route element={<ProtectedRoute />}>
-								<Route element={<Layout />}>
-									<Route path="home" element={<StackList />} />
-									<Route path="tokens" element={<Tokens />} />
-									<Route path="settings" element={<Settings />} />
-									<Route path="webhooks" element={<Webhooks />} />
-									<Route path="stacks/:org/:project/:stack" element={<StackDetail />} />
-									<Route
-										path="stacks/:org/:project/:stack/resources"
-										element={<ResourceDetail />}
-									/>
-									<Route
-										path="stacks/:org/:project/:stack/updates/:updateID"
-										element={<UpdateDetail />}
-									/>
-									<Route
-										path="stacks/:org/:project/:stack/previews/:updateID"
-										element={<UpdateDetail />}
-									/>
-									{/* CLI-generated "View in Browser" URLs omit /stacks/ prefix */}
-									<Route path=":org/:project/:stack" element={<StackDetail />} />
-									<Route path=":org/:project/:stack/resources" element={<ResourceDetail />} />
-									<Route path=":org/:project/:stack/updates/:updateID" element={<UpdateDetail />} />
-									<Route
-										path=":org/:project/:stack/previews/:updateID"
-										element={<UpdateDetail />}
-									/>
-									{/* CLI shows /{org}/{project}/{stack}/settings/options on cross-org rename errors */}
-									<Route path=":org/:project/:stack/settings/options" element={<StackDetail />} />
-								</Route>
-							</Route>
-						</Routes>
-					</Suspense>
-				</BrowserRouter>
+				<RouterProvider router={router} />
 			</TRPCProvider>
 		</ProcellaAuthProvider>
 	);

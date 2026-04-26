@@ -57,6 +57,20 @@
       "when": 1775049472593,
       "tag": "0009_oidc_ci_auth",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1776952388790,
+      "tag": "0010_magical_maverick",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1776958697042,
+      "tag": "0011_esc_tags_and_drafts",
+      "breakpoints": true
     }
   ]
 }

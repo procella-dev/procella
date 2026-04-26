@@ -6,6 +6,7 @@ import type { ScheduledEvent } from "aws-lambda";
 
 	const { loadConfig } = await import("@procella/config");
 	const { createDb } = await import("@procella/db");
+	const { escGcSweep } = await import("@procella/esc");
 	const { GCWorker } = await import("@procella/updates");
 
 	const config = loadConfig();
@@ -19,6 +20,7 @@ import type { ScheduledEvent } from "aws-lambda";
 
 		try {
 			await gcWorker.runOnce();
+			await escGcSweep(db);
 			await fetch(`${BASE_URL}/invocation/${requestId}/response`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },

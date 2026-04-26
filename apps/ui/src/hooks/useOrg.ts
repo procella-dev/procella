@@ -1,4 +1,5 @@
-import { getCurrentTenant, useSession } from "@descope/react-sdk";
+import { getCurrentTenant } from "@descope/react-sdk";
+import { getStoredDescopeSessionToken } from "../auth/sessionToken";
 import { trpc } from "../trpc";
 import { useAuthConfig } from "./useAuthConfig";
 
@@ -11,7 +12,7 @@ import { useAuthConfig } from "./useAuthConfig";
  */
 export function useOrg(): { org: string; isLoading: boolean } {
 	const { config } = useAuthConfig();
-	const { sessionToken } = useSession();
+	const sessionToken = getStoredDescopeSessionToken();
 
 	const isDescopeMode = config?.mode === "descope";
 	const descopeTenantId = isDescopeMode && sessionToken ? getCurrentTenant(sessionToken) : "";

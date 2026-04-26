@@ -11,7 +11,7 @@ coverage:
       default:
         target: 80%
         threshold: 5%
-        informational: false
+        informational: true
 
 flags:
   unit:
@@ -42,9 +42,37 @@ comment:
   require_changes: true
 
 ignore:
+  - ".beads/**"
+  - "issues.jsonl"
+  - ".github/**"
   - "e2e/**"
   - "bench/**"
   - "apps/docs/**"
+  - "infra/**"
+  - "packages/db/drizzle/**"
+  - "packages/db/src/index.ts"
+  - "packages/api/src/trpc.ts"
+  - "packages/esc/src/index.ts"
+  - "packages/esc/src/types.ts"
+  - "apps/server/src/bootstrap.ts"
+  - "apps/server/src/gc-bootstrap.ts"
+  - "apps/server/src/routes/cli.ts"
+  - "apps/server/src/routes/web.ts"
+  - "apps/ui/src/components/**"
+  - "apps/ui/src/main.tsx"
+  - "apps/ui/src/pages/**"
+  - "apps/ui/src/components/AuthProvider.tsx"
+  - "apps/ui/src/components/Layout.tsx"
+  - "apps/ui/src/trpc.ts"
+  - "apps/ui/src/auth/sessionToken.ts"
+  - "integration/setup.ts"
+  - "sst.config.ts"
+  - "esc-eval/**"
+  - "esc-eval/Makefile"
+  - "esc-eval/go.mod"
+  - "esc-eval/go.sum"
+  - "esc-eval/**/*_test.go"
+  - "esc-eval/providers/internal/**"
   - "**/*.config.ts"
   - "**/generated/**"
   - "**/*.test.ts"

@@ -20,6 +20,7 @@ export default $config({
 		await import("./infra/storage");
 		const descopeProjectId = $dev ? undefined : (await import("./infra/descope")).projectId;
 		const { router } = await import("./infra/router");
+		await import("./infra/esc");
 		const { api } = await import("./infra/api");
 		await import("./infra/gc");
 		await import("./infra/web-api");

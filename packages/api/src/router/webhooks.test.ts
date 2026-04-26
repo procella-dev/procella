@@ -51,6 +51,7 @@ function mockContext(overrides?: Partial<TRPCContext>): TRPCContext {
 		stacks: {} as never,
 		audit: {} as never,
 		updates: {} as never,
+		esc: {} as never,
 		webhooks: {
 			createWebhook: mock(async () => ({ ...mockWebhook, secret: "whsec_abc" })),
 			listWebhooks: mock(async () => [mockWebhook]),

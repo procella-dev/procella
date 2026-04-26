@@ -6,6 +6,7 @@
 import type { AuditService } from "@procella/audit";
 import type { AuthConfig, AuthService } from "@procella/auth";
 import type { Database } from "@procella/db";
+import type { EscService } from "@procella/esc";
 import { type GitHubService, verifyGitHubWebhookSignature } from "@procella/github";
 import type { OidcService } from "@procella/oidc";
 import type { StacksService } from "@procella/stacks";
@@ -18,6 +19,7 @@ import {
 	auditHandlers,
 	checkpointHandlers,
 	cryptoHandlers,
+	escHandlers,
 	eventHandlers,
 	githubHandlers,
 	healthHandlers,
@@ -49,6 +51,7 @@ export interface CliAppDeps {
 	stacks: StacksService;
 	updates: UpdatesService;
 	webhooks: WebhooksService;
+	esc: EscService;
 	github: GitHubService | null;
 	githubWebhookSecret?: string;
 	oidc?: OidcService | null;
@@ -80,6 +83,7 @@ export function createCliApp(deps: CliAppDeps): Hono<Env> {
 	const eventH = eventHandlers(deps.updates, deps.stacks);
 	const cryptoH = cryptoHandlers(deps.updates);
 	const stateH = stateHandlers(deps.updates, deps.stacks);
+	const escH = escHandlers({ esc: deps.esc });
 
 	// Middleware instances
 	const withApiAuth = apiAuth(deps.auth);
@@ -174,6 +178,89 @@ export function createCliApp(deps: CliAppDeps): Hono<Env> {
 	api.get("/stacks/:org/:project/:stack", stackH.getStack);
 	api.delete("/stacks/:org/:project/:stack", stackH.deleteStack);
 	api.post("/stacks/:org/:project", stackH.createStack);
+
+	// ESC (Environments, Secrets & Config)
+	api.get("/esc/environments", escH.listAllEnvironments);
+	api.get("/esc/environments/:org", escH.listOrgEnvironments);
+	api.post("/esc/environments/:org", escH.createEnvironment);
+	api.post("/esc/environments/:org/:project/:envName/clone", escH.cloneEnvironment);
+	api.get("/esc/environments/:org/:project/:envName", escH.getEnvironment);
+	api.get("/esc/environments/:org/:project/:envName/versions/:version", escH.getEnvironment);
+	api.patch("/esc/environments/:org/:project/:envName", escH.updateEnvironment);
+	api.delete("/esc/environments/:org/:project/:envName", escH.deleteEnvironment);
+	api.get("/esc/environments/:org/:project/:envName/versions", escH.listRevisions);
+	api.get("/esc/environments/:org/:project/:envName/versions/tags", escH.listRevisionTags);
+	api.post("/esc/environments/:org/:project/:envName/versions/tags", escH.createRevisionTag);
+	api.get("/esc/environments/:org/:project/:envName/versions/tags/:tagName", escH.getRevisionTag);
+	api.patch(
+		"/esc/environments/:org/:project/:envName/versions/tags/:tagName",
+		escH.updateRevisionTag,
+	);
+	api.delete(
+		"/esc/environments/:org/:project/:envName/versions/tags/:tagName",
+		escH.deleteRevisionTag,
+	);
+	api.post("/esc/environments/:org/yaml/check", escH.validateYaml);
+	api.post("/esc/environments/:org/:project/:envName/open", escH.openSession);
+	api.get("/esc/environments/:org/:project/:envName/open/:sessionId", escH.getSession);
+	api.post("/esc/environments/:org/:project/:envName/drafts", escH.createDraft);
+	api.get("/esc/environments/:org/:project/:envName/drafts/:draftId", escH.getDraft);
+	api.patch("/esc/environments/:org/:project/:envName/drafts/:draftId", escH.updateDraft);
+
+	// ESC internal dashboard routes
+	api.post("/esc/v1-internal/environments/:org/:project", escH.internalCreateEnvironment);
+	api.get("/esc/v1-internal/environments/:org/:project", escH.internalListEnvironments);
+	api.get("/esc/v1-internal/environments/:org/:project/:envName", escH.internalGetEnvironment);
+	api.patch("/esc/v1-internal/environments/:org/:project/:envName", escH.internalUpdateEnvironment);
+	api.delete(
+		"/esc/v1-internal/environments/:org/:project/:envName",
+		escH.internalDeleteEnvironment,
+	);
+	api.get(
+		"/esc/v1-internal/environments/:org/:project/:envName/versions",
+		escH.internalListRevisions,
+	);
+	api.get(
+		"/esc/v1-internal/environments/:org/:project/:envName/versions/tags",
+		escH.internalListRevisionTags,
+	);
+	api.delete(
+		"/esc/v1-internal/environments/:org/:project/:envName/versions/tags/:tagName",
+		escH.internalUntagRevision,
+	);
+	api.put(
+		"/esc/v1-internal/environments/:org/:project/:envName/versions/:version/tags/:tagName",
+		escH.internalTagRevision,
+	);
+	api.get(
+		"/esc/v1-internal/environments/:org/:project/:envName/versions/:version",
+		escH.internalGetRevision,
+	);
+	api.post("/esc/v1-internal/environments/:org/:project/:envName/open", escH.internalOpenSession);
+	api.get(
+		"/esc/v1-internal/environments/:org/:project/:envName/open/:sessionId",
+		escH.internalGetSession,
+	);
+	api.get("/esc/v1-internal/environments/:org/:project/:envName/tags", escH.getEnvironmentTags);
+	api.put("/esc/v1-internal/environments/:org/:project/:envName/tags", escH.setEnvironmentTags);
+	api.patch(
+		"/esc/v1-internal/environments/:org/:project/:envName/tags",
+		escH.updateEnvironmentTags,
+	);
+	api.post("/esc/v1-internal/environments/:org/:project/:envName/drafts", escH.internalCreateDraft);
+	api.get("/esc/v1-internal/environments/:org/:project/:envName/drafts", escH.internalListDrafts);
+	api.get(
+		"/esc/v1-internal/environments/:org/:project/:envName/drafts/:draftId",
+		escH.internalGetDraft,
+	);
+	api.post(
+		"/esc/v1-internal/environments/:org/:project/:envName/drafts/:draftId/apply",
+		escH.applyDraft,
+	);
+	api.post(
+		"/esc/v1-internal/environments/:org/:project/:envName/drafts/:draftId/discard",
+		escH.discardDraft,
+	);
 
 	app.route("/api", api);
 	return app;

@@ -60,6 +60,9 @@ export function Layout() {
 							<NavLink to="/webhooks" className={navLinkClass}>
 								Webhooks
 							</NavLink>
+							<NavLink to="/esc" className={navLinkClass}>
+								Environments
+							</NavLink>
 						</nav>
 					</div>
 					<div className="flex items-center gap-3">
