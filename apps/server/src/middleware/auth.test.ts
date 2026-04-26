@@ -18,9 +18,9 @@ function mockAuthService(): AuthService {
 	};
 }
 
-function mockStacksService(): Pick<StacksService, "getStackByNames"> {
+function mockStacksService(): Pick<StacksService, "getStackByNames_systemOnly"> {
 	return {
-		getStackByNames: async () => ({
+		getStackByNames_systemOnly: async () => ({
 			id: "stack-b-id",
 			projectId: "proj-1",
 			tenantId: "tenant-b",

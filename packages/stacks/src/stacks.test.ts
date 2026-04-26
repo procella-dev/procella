@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { parseStackFQN } from "@procella/types";
+import { InvalidNameError, parseStackFQN } from "@procella/types";
 import type { StackInfo, StacksService } from "./index.js";
-import { buildStackTags, mergeTags, pgErrorCode } from "./index.js";
+import { buildStackTags, mergeTags, pgErrorCode, validateName } from "./index.js";
 
 describe("@procella/stacks", () => {
 	// ========================================================================
@@ -158,7 +158,7 @@ describe("@procella/stacks", () => {
 				updateStackTags: async () => {},
 				replaceStackTags: async () => {},
 				getStackByFQN: async () => mockInfo,
-				getStackByNames: async () => mockInfo,
+				getStackByNames_systemOnly: async () => mockInfo,
 			};
 
 			// Type-level check: all methods exist and are callable
@@ -182,7 +182,7 @@ describe("@procella/stacks", () => {
 				updateStackTags: async () => {},
 				replaceStackTags: async () => {},
 				getStackByFQN: async () => ({}) as StackInfo,
-				getStackByNames: async () => ({}) as StackInfo,
+				getStackByNames_systemOnly: async () => ({}) as StackInfo,
 			};
 
 			// No filters
@@ -269,6 +269,108 @@ describe("@procella/stacks", () => {
 			const drizzleErr = new Error("Failed query: INSERT INTO...");
 			drizzleErr.cause = pgErr;
 			expect(pgErrorCode(drizzleErr)).toBe("23505");
+		});
+	});
+
+	describe("validateName (M1)", () => {
+		test("accepts lowercase alphanumeric", () => {
+			expect(() => validateName("mystack", "stack")).not.toThrow();
+		});
+
+		test("accepts dots, dashes, underscores", () => {
+			expect(() => validateName("my-stack_v1.0", "stack")).not.toThrow();
+		});
+
+		test("accepts uppercase letters", () => {
+			expect(() => validateName("MyProject", "project")).not.toThrow();
+		});
+
+		test("accepts single character", () => {
+			expect(() => validateName("a", "org")).not.toThrow();
+		});
+
+		test("accepts max-length name (64 chars)", () => {
+			expect(() => validateName("a".repeat(64), "stack")).not.toThrow();
+		});
+
+		test("rejects name with slash", () => {
+			expect(() => validateName("org/proj", "org")).toThrow(InvalidNameError);
+		});
+
+		test("rejects name with spaces", () => {
+			expect(() => validateName("my stack", "stack")).toThrow(InvalidNameError);
+		});
+
+		test("rejects name with control chars", () => {
+			expect(() => validateName("stack\x00name", "stack")).toThrow(InvalidNameError);
+		});
+
+		test("rejects unicode characters", () => {
+			expect(() => validateName("стек", "stack")).toThrow(InvalidNameError);
+		});
+
+		test("rejects empty string", () => {
+			expect(() => validateName("", "stack")).toThrow(InvalidNameError);
+		});
+
+		test("rejects name exceeding 64 characters", () => {
+			expect(() => validateName("a".repeat(65), "stack")).toThrow(InvalidNameError);
+		});
+
+		test("rejects name with @ symbol", () => {
+			expect(() => validateName("user@org", "org")).toThrow(InvalidNameError);
+		});
+
+		test("error message includes kind", () => {
+			try {
+				validateName("bad/name", "project");
+				throw new Error("should have thrown");
+			} catch (e) {
+				expect(e).toBeInstanceOf(InvalidNameError);
+				expect((e as InvalidNameError).message).toContain("project");
+			}
+		});
+
+		test("error has statusCode 400", () => {
+			try {
+				validateName("", "stack");
+				throw new Error("should have thrown");
+			} catch (e) {
+				expect((e as InvalidNameError).statusCode).toBe(400);
+			}
+		});
+	});
+
+	describe("StacksService.getStackByNames_systemOnly (M6)", () => {
+		test("interface exposes system-only variant", () => {
+			const mockInfo: StackInfo = {
+				id: "id",
+				projectId: "pid",
+				tenantId: "tid",
+				orgName: "tid",
+				projectName: "p",
+				stackName: "s",
+				tags: {},
+				activeUpdateId: null,
+				lastUpdate: null,
+				resourceCount: null,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			};
+
+			const mock: StacksService = {
+				createStack: async () => mockInfo,
+				getStack: async () => mockInfo,
+				listStacks: async () => [mockInfo],
+				deleteStack: async () => {},
+				renameStack: async () => {},
+				updateStackTags: async () => {},
+				replaceStackTags: async () => {},
+				getStackByFQN: async () => mockInfo,
+				getStackByNames_systemOnly: async () => mockInfo,
+			};
+
+			expect(typeof mock.getStackByNames_systemOnly).toBe("function");
 		});
 	});
 });

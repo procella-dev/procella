@@ -68,7 +68,7 @@ export type LeaseTokenVerifier = (updateId: string, token: string) => Promise<vo
 export function updateAuth(
 	authService: AuthService,
 	verifyLeaseToken: LeaseTokenVerifier,
-	stacks: Pick<StacksService, "getStackByNames">,
+	stacks: Pick<StacksService, "getStackByNames_systemOnly">,
 ): MiddlewareHandler<Env> {
 	return async (c, next) => {
 		try {
@@ -87,7 +87,7 @@ export function updateAuth(
 			const project = c.req.param("project");
 			const stack = c.req.param("stack");
 			if (org && project && stack) {
-				const stackInfo = await stacks.getStackByNames(org, project, stack);
+				const stackInfo = await stacks.getStackByNames_systemOnly(org, project, stack);
 				if (stackInfo.id !== ctx.stackId) {
 					return c.json(
 						{

@@ -41,9 +41,9 @@ function mockAuthService(opts?: { failAuth?: boolean }): AuthService {
 	};
 }
 
-function mockStacksService(stackId = "sid-1"): Pick<StacksService, "getStackByNames"> {
+function mockStacksService(stackId = "sid-1"): Pick<StacksService, "getStackByNames_systemOnly"> {
 	return {
-		getStackByNames: async () => ({
+		getStackByNames_systemOnly: async () => ({
 			id: stackId,
 			projectId: "p-1",
 			tenantId: "t-1",

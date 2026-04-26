@@ -151,6 +151,7 @@ export function updateHandlers(
 			}
 
 			if (
+				caller &&
 				org &&
 				project &&
 				stack &&
@@ -159,7 +160,7 @@ export function updateHandlers(
 			) {
 				let tenantId = org;
 				try {
-					const stackInfo = await stacks.getStackByNames(org, project, stack);
+					const stackInfo = await stacks.getStack(caller.tenantId, org, project, stack);
 					tenantId = stackInfo.tenantId;
 				} catch (_) {}
 				await webhooks

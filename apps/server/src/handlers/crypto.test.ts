@@ -81,7 +81,7 @@ function mockStacksService(overrides?: Partial<StacksService>): StacksService {
 		updateStackTags: mock(async () => {}),
 		replaceStackTags: mock(async () => {}),
 		getStackByFQN: mock(async () => testStack()),
-		getStackByNames: mock(async () => testStack()),
+		getStackByNames_systemOnly: mock(async () => testStack()),
 		...overrides,
 	};
 }

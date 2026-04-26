@@ -75,7 +75,7 @@ function mockStacksService(): StacksService {
 		updateStackTags: async () => {},
 		replaceStackTags: async () => {},
 		getStackByFQN: async () => mockStackInfo,
-		getStackByNames: async () => mockStackInfo,
+		getStackByNames_systemOnly: async () => mockStackInfo,
 	};
 }
 
@@ -186,6 +186,7 @@ describe("@procella/server routes", () => {
 			userLogin: "test-user",
 			orgLogin: "test-org",
 		},
+		opts?: { corsOrigins?: string[]; cronSecret?: string },
 	) {
 		return createApp({
 			auth: mockAuthService(),
@@ -193,6 +194,8 @@ describe("@procella/server routes", () => {
 			audit: mockAuditService(),
 			db: { execute: async () => ({ rows: [{ acquired: false }] }) } as unknown as Database,
 			dbUrl: "postgres://test:test@localhost:5432/test",
+			cronSecret: opts?.cronSecret,
+			corsOrigins: opts?.corsOrigins,
 			github: null,
 			githubWebhookSecret: undefined,
 			stacks: mockStacksService(),
@@ -285,62 +288,45 @@ describe("@procella/server routes", () => {
 	// ========================================================================
 
 	describe("GET /cron/gc", () => {
-		test("returns 500 when CRON_SECRET missing in production", async () => {
-			const prev = { secret: process.env.CRON_SECRET, env: process.env.NODE_ENV };
-			delete process.env.CRON_SECRET;
-			process.env.NODE_ENV = "production";
-			try {
-				const app = makeApp();
-				const res = await app.request("/cron/gc");
-				expect(res.status).toBe(500);
-				const body = await res.json();
-				expect(body.error).toContain("CRON_SECRET");
-			} finally {
-				process.env.CRON_SECRET = prev.secret;
-				process.env.NODE_ENV = prev.env;
-			}
-		});
-
-		test("returns 200 when CRON_SECRET missing in test env", async () => {
-			const prev = { secret: process.env.CRON_SECRET, env: process.env.NODE_ENV };
-			delete process.env.CRON_SECRET;
-			process.env.NODE_ENV = "test";
-			try {
-				const app = makeApp();
-				const res = await app.request("/cron/gc");
-				expect(res.status).toBe(200);
-			} finally {
-				process.env.CRON_SECRET = prev.secret;
-				process.env.NODE_ENV = prev.env;
-			}
-		});
-
-		test("returns 401 with wrong Bearer token", async () => {
-			const prev = process.env.CRON_SECRET;
-			process.env.CRON_SECRET = "correct-secret";
-			try {
-				const app = makeApp();
-				const res = await app.request("/cron/gc", {
-					headers: { Authorization: "Bearer wrong-secret" },
-				});
-				expect(res.status).toBe(401);
-			} finally {
-				process.env.CRON_SECRET = prev;
-			}
+		test("returns 401 when cron secret is missing", async () => {
+			const app = makeApp(undefined, { cronSecret: undefined });
+			const res = await app.request("/cron/gc");
+			expect(res.status).toBe(401);
 		});
 
 		test("returns 200 with correct Bearer token", async () => {
-			const prev = process.env.CRON_SECRET;
-			process.env.CRON_SECRET = "correct-secret";
-			try {
-				const app = makeApp();
-				const res = await app.request("/cron/gc", {
-					headers: { Authorization: "Bearer correct-secret" },
-				});
-				expect(res.status).toBe(200);
-			} finally {
-				process.env.CRON_SECRET = prev;
-			}
+			const app = makeApp(undefined, { cronSecret: "correct-secret" });
+			const res = await app.request("/cron/gc", {
+				headers: { Authorization: "Bearer correct-secret" },
+			});
+			expect(res.status).toBe(200);
+		});
+
+		test("returns 401 with wrong Bearer token", async () => {
+			const app = makeApp(undefined, { cronSecret: "correct-secret" });
+			const res = await app.request("/cron/gc", {
+				headers: { Authorization: "Bearer wrong-secret" },
+			});
+			expect(res.status).toBe(401);
+		});
+
+		test("returns 200 with correct Bearer token", async () => {
+			const app = makeApp(undefined, { cronSecret: "correct-secret" });
+			const res = await app.request("/cron/gc", {
+				headers: { Authorization: "Bearer correct-secret" },
+			});
+			expect(res.status).toBe(200);
+		});
+	});
+
+	describe("CORS middleware", () => {
+		test("is not mounted when no origins configured", async () => {
+			const app = makeApp(undefined, { corsOrigins: [] });
+			const res = await app.request("/healthz", {
+				headers: { Origin: "https://evil.example" },
+			});
+			expect(res.status).toBe(200);
+			expect(res.headers.get("access-control-allow-origin")).toBeNull();
 		});
 	});
 

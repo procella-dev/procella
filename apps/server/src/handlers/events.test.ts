@@ -41,7 +41,7 @@ function mockStacksService(): StacksService {
 		updateStackTags: mock(async () => {}),
 		replaceStackTags: mock(async () => {}),
 		getStackByFQN: mock(async () => mockStackInfo),
-		getStackByNames: mock(async () => mockStackInfo),
+		getStackByNames_systemOnly: mock(async () => mockStackInfo),
 	};
 }
 
