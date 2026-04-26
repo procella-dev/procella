@@ -136,6 +136,8 @@ export interface DescopeAuthConfig {
 
 type DescopeClient = ReturnType<typeof DescopeSdk>;
 
+const CLI_ACCESS_KEY_CUSTOM_CLAIM_ALLOWLIST = new Set<string>(Object.values(OidcClaims));
+
 /** Cached access-key → Caller mapping with TTL from JWT exp claim. */
 interface CachedAuth {
 	caller: Caller;
@@ -236,13 +238,7 @@ export class DescopeAuthService implements AuthService {
 						u?.loginIds?.[0] ??
 						caller.login; // use pre-computed login for workload callers
 					const expireTime = opts?.expireTime ?? 0;
-					// Strip procellaLogin and procellaOrgSlug from caller-provided claims,
-					// then re-add them with authoritative server-side values.
-					const {
-						procellaLogin: _a,
-						procellaOrgSlug: _b,
-						...safeCustomClaims
-					} = opts?.customClaims ?? {};
+					const safeCustomClaims = sanitizeCliAccessKeyCustomClaims(opts?.customClaims);
 					const customClaims = {
 						procellaLogin: loginId,
 						procellaOrgSlug: caller.orgSlug,
@@ -255,8 +251,7 @@ export class DescopeAuthService implements AuthService {
 						undefined,
 						[{ tenantId: caller.tenantId, roleNames: [...caller.roles] }],
 						caller.userId || undefined, // pass undefined for workload (empty string) to avoid Descope 33-char limit
-						// biome-ignore lint/suspicious/noExplicitAny: Descope SDK types use Record<string, any>
-						customClaims as Record<string, any>,
+						customClaims,
 					);
 					if (!resp.ok || !resp.data?.cleartext) {
 						throw new Error(
@@ -577,7 +572,7 @@ export function slugify(value: string): string {
 }
 
 /** Extract roles from Descope JWT claims for a specific tenant. */
-function extractRoles(claims: Record<string, unknown>, tenantId: string): Role[] {
+export function extractRoles(claims: Record<string, unknown>, tenantId: string): Role[] {
 	const validRoles = new Set<string>(["admin", "member", "viewer"]);
 	const roles: Role[] = [];
 
@@ -594,19 +589,38 @@ function extractRoles(claims: Record<string, unknown>, tenantId: string): Role[]
 		}
 	}
 
-	// Fallback: top-level roles claim (for non-tenant-scoped JWTs)
-	if (roles.length === 0 && Array.isArray(claims.roles)) {
-		for (const role of claims.roles) {
-			if (typeof role === "string" && validRoles.has(role)) {
-				roles.push(role as Role);
-			}
-		}
-	}
-
-	// Default to viewer if no recognized roles found
-	if (roles.length === 0) {
-		roles.push("viewer");
-	}
-
 	return roles;
+}
+
+function sanitizeCliAccessKeyCustomClaims(
+	customClaims: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+	if (!customClaims) {
+		return {};
+	}
+
+	const safeClaims: Record<string, unknown> = {};
+	const strippedClaims: string[] = [];
+
+	for (const [claim, value] of Object.entries(customClaims)) {
+		if (claim === "procellaLogin" || claim === "procellaOrgSlug") {
+			strippedClaims.push(claim);
+			continue;
+		}
+
+		if (CLI_ACCESS_KEY_CUSTOM_CLAIM_ALLOWLIST.has(claim)) {
+			safeClaims[claim] = value;
+			continue;
+		}
+
+		strippedClaims.push(claim);
+	}
+
+	if (strippedClaims.length > 0) {
+		console.warn(
+			`[auth] stripping unsupported CLI access-key custom claims: ${strippedClaims.join(", ")}`,
+		);
+	}
+
+	return safeClaims;
 }

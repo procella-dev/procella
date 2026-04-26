@@ -8,6 +8,7 @@ import {
 	DescopeAuthService,
 	DevAuthService,
 	extractOrgSlug,
+	extractRoles,
 	METHOD_ROLE_MAP,
 	requireRole,
 	slugify,
@@ -601,6 +602,8 @@ describe("extractOrgSlug", () => {
 
 describe("DescopeAuthService — createCliAccessKey", () => {
 	let svc: DescopeAuthService;
+	const mockConsoleWarn = mock();
+	const originalConsoleWarn = console.warn;
 
 	const userCaller = {
 		tenantId: "tenant-1",
@@ -628,6 +631,8 @@ describe("DescopeAuthService — createCliAccessKey", () => {
 	beforeEach(() => {
 		mockLoadByUserId.mockReset();
 		mockAccessKeyCreate.mockReset();
+		mockConsoleWarn.mockReset();
+		console.warn = mockConsoleWarn;
 		svc = new DescopeAuthService({
 			sdk: DescopeSdk({ projectId: "test-key-create" }),
 			config: { projectId: "test-key-create" },
@@ -635,6 +640,7 @@ describe("DescopeAuthService — createCliAccessKey", () => {
 	});
 
 	afterEach(() => {
+		console.warn = originalConsoleWarn;
 		svc.dispose();
 	});
 
@@ -694,7 +700,7 @@ describe("DescopeAuthService — createCliAccessKey", () => {
 		expect(createCall[4]).toBeUndefined();
 	});
 
-	test("passes expireTime and strips caller-provided procellaLogin", async () => {
+	test("H4: strips malicious custom claims before minting access key", async () => {
 		mockLoadByUserId.mockResolvedValueOnce({
 			ok: true,
 			data: { email: "omer@acme.com" },
@@ -707,9 +713,11 @@ describe("DescopeAuthService — createCliAccessKey", () => {
 		await createKey(userCaller, "key", {
 			expireTime: 86400,
 			customClaims: {
+				dct: "tenant-2",
+				tenants: { "tenant-2": { roles: ["admin"] } },
+				roles: ["admin"],
 				procellaLogin: "attacker-override",
 				procellaOrgSlug: "attacker-org",
-				customField: "preserved",
 			},
 		});
 
@@ -717,11 +725,41 @@ describe("DescopeAuthService — createCliAccessKey", () => {
 		// expireTime is 2nd arg
 		expect(createCall[1]).toBe(86400);
 		const customClaims = createCall[5];
-		// Server-side values override caller-provided
 		expect(customClaims.procellaLogin).toBe("omer@acme.com");
 		expect(customClaims.procellaOrgSlug).toBe("my-org");
-		// Non-restricted claims preserved
-		expect(customClaims.customField).toBe("preserved");
+		expect(customClaims.dct).toBeUndefined();
+		expect(customClaims.tenants).toBeUndefined();
+		expect(customClaims.roles).toBeUndefined();
+		expect(mockConsoleWarn).toHaveBeenCalledWith(
+			expect.stringContaining(
+				"stripping unsupported CLI access-key custom claims: dct, tenants, roles, procellaLogin, procellaOrgSlug",
+			),
+		);
+	});
+
+	test("H4: documented OIDC workload claims pass through", async () => {
+		mockAccessKeyCreate.mockResolvedValueOnce({
+			ok: true,
+			data: { cleartext: "ak_oidc_token" },
+		});
+
+		await createKey(workloadCaller, "ci-key", {
+			expireTime: 3600,
+			customClaims: {
+				[OidcClaims.principalType]: "workload",
+				[OidcClaims.workloadProvider]: "github",
+				[OidcClaims.workloadRepo]: "acme/procella",
+				[OidcClaims.workloadRunId]: "123",
+			},
+		});
+
+		const customClaims = mockAccessKeyCreate.mock.calls[0][5];
+		expect(customClaims[OidcClaims.principalType]).toBe("workload");
+		expect(customClaims[OidcClaims.workloadProvider]).toBe("github");
+		expect(customClaims[OidcClaims.workloadRepo]).toBe("acme/procella");
+		expect(customClaims[OidcClaims.workloadRunId]).toBe("123");
+		expect(customClaims.procellaOrgSlug).toBe("my-org");
+		expect(mockConsoleWarn).not.toHaveBeenCalled();
 	});
 
 	test("throws when access key creation fails", async () => {
@@ -787,5 +825,34 @@ describe("DescopeAuthService — createCliAccessKey", () => {
 
 		await createKey(userCaller, "key");
 		expect(mockAccessKeyCreate.mock.calls[0][5].procellaLogin).toBe("omer");
+	});
+});
+
+// ============================================================================
+// extractRoles
+// ============================================================================
+
+describe("extractRoles", () => {
+	test("H5: top-level roles do not grant tenant access", () => {
+		const claims = {
+			dct: "tenant-1",
+			roles: ["admin"],
+			tenants: {
+				"tenant-2": { roles: ["viewer"] },
+			},
+		};
+
+		expect(extractRoles(claims, "tenant-1")).toEqual([]);
+	});
+
+	test("H5: tenant-scoped roles are returned when present", () => {
+		const claims = {
+			tenants: {
+				"tenant-1": { roles: ["admin"] },
+			},
+			roles: ["viewer"],
+		};
+
+		expect(extractRoles(claims, "tenant-1")).toEqual(["admin"]);
 	});
 });
