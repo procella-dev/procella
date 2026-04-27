@@ -555,16 +555,21 @@ export class PostgresUpdatesService implements UpdatesService {
 					fields: event as unknown,
 				}));
 
-				await this.db.transaction(async (tx) => {
-					await this.lockUpdateForWrite(tx, updateId);
-					await tx
-						.insert(updateEvents)
-						.values(rows)
-						.onConflictDoUpdate({
-							target: [updateEvents.updateId, updateEvents.sequence],
-							set: { kind: sql`excluded.kind`, fields: sql`excluded.fields` },
-						});
-				});
+				// Events are append-only with onConflictDoUpdate; we deliberately do NOT
+				// take an update-row lock here — under high concurrency (Pulumi CLI fans
+				// out 20+ parallel event batches per `pulumi up`) a SELECT FOR UPDATE on
+				// the shared row serializes every writer and degrades into 5xx. The
+				// status/lease-after-cancel guard is enforced on the checkpoint write
+				// path (where stale state is dangerous); for engine events any late
+				// arrival is harmless and the unique (updateId, sequence) index handles
+				// duplicates.
+				await this.db
+					.insert(updateEvents)
+					.values(rows)
+					.onConflictDoUpdate({
+						target: [updateEvents.updateId, updateEvents.sequence],
+						set: { kind: sql`excluded.kind`, fields: sql`excluded.fields` },
+					});
 
 				this.db.execute(sql`SELECT pg_notify('update_events', ${updateId})`).catch(() => {});
 			},
