@@ -689,7 +689,7 @@ export class PostgresStacksService implements StacksService {
 			})
 			.from(stacks)
 			.innerJoin(projects, eq(stacks.projectId, projects.id))
-			.where(and(eq(projects.name, project), eq(stacks.name, stack)));
+			.where(and(eq(projects.tenantId, org), eq(projects.name, project), eq(stacks.name, stack)));
 
 		if (rows.length === 0) {
 			throw new StackNotFoundError(org, project, stack);

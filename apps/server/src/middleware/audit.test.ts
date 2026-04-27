@@ -169,7 +169,7 @@ describe("auditMiddleware", () => {
 		}
 	});
 
-	test("uses X-Forwarded-For when PROCELLA_TRUST_PROXY is true", async () => {
+	test("uses rightmost X-Forwarded-For value when PROCELLA_TRUST_PROXY is true (PR #149 review — leftmost is client-spoofable)", async () => {
 		const previousTrustProxy = process.env.PROCELLA_TRUST_PROXY;
 		process.env.PROCELLA_TRUST_PROXY = "true";
 
@@ -185,13 +185,13 @@ describe("auditMiddleware", () => {
 				headers: {
 					"Content-Type": "application/json",
 					[INTERNAL_CLIENT_IP_HEADER]: "10.0.0.7",
-					"X-Forwarded-For": "1.2.3.4, 5.6.7.8",
+					"X-Forwarded-For": "9.9.9.9, 5.6.7.8",
 				},
 				body: JSON.stringify({}),
 			});
 
 			expect(audit.log).toHaveBeenCalledTimes(1);
-			expect(audit.log.mock.calls[0][1].ipAddress).toBe("1.2.3.4");
+			expect(audit.log.mock.calls[0][1].ipAddress).toBe("5.6.7.8");
 		} finally {
 			if (previousTrustProxy === undefined) {
 				delete process.env.PROCELLA_TRUST_PROXY;

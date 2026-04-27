@@ -19,7 +19,8 @@ x-procella: &procella
     PROCELLA_DEV_USER_LOGIN: dev-user
     PROCELLA_DEV_ORG_LOGIN: dev-org
     PROCELLA_DEV_USERS: '[{"token":"token-user-b","login":"user-b","org":"org-b","role":"admin"},{"token":"token-viewer","login":"viewer-user","org":"dev-org","role":"viewer"}]'
-    PROCELLA_ENCRYPTION_KEY: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    # Generate via: openssl rand -hex 32 ; do not reuse across deployments.
+    PROCELLA_ENCRYPTION_KEY: ${PROCELLA_ENCRYPTION_KEY:-CHANGE_ME_RANDOM_64_HEX_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
     # Placeholder only; generate a unique secret when enabling /cron/gc.
     PROCELLA_CRON_SECRET: CHANGE_ME_GENERATE_RANDOM_32_HEX
     PROCELLA_BLOB_BACKEND: s3

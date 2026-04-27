@@ -69,9 +69,9 @@ function getHeaderIp(headers: Headers, name: string): string | undefined {
 	if (!value) {
 		return undefined;
 	}
-	const first = value
+	const parts = value
 		.split(",")
 		.map((part) => part.trim())
-		.find(Boolean);
-	return first || undefined;
+		.filter(Boolean);
+	return parts.at(-1);
 }

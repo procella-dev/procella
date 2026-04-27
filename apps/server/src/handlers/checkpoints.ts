@@ -25,7 +25,12 @@ export function checkpointHandlers(updates: UpdatesService) {
 	return {
 		patchCheckpoint: async (c: Context<Env>) => {
 			const updateCtx = updateContext(c);
-			const raw = await c.req.json();
+			let raw: unknown;
+			try {
+				raw = await c.req.json();
+			} catch (_err) {
+				return c.json({ code: "invalid_request", message: "Body is not valid JSON" }, 400);
+			}
 			const parseResult = PatchUpdateCheckpointRequestSchema.safeParse(raw);
 			if (!parseResult.success) {
 				return c.json({ code: "invalid_request", message: parseResult.error.message }, 400);
@@ -37,7 +42,12 @@ export function checkpointHandlers(updates: UpdatesService) {
 
 		patchCheckpointVerbatim: async (c: Context<Env>) => {
 			const updateCtx = updateContext(c);
-			const raw = await c.req.json();
+			let raw: unknown;
+			try {
+				raw = await c.req.json();
+			} catch (_err) {
+				return c.json({ code: "invalid_request", message: "Body is not valid JSON" }, 400);
+			}
 			const parseResult = PatchUpdateVerbatimCheckpointRequestSchema.safeParse(raw);
 			if (!parseResult.success) {
 				return c.json({ code: "invalid_request", message: parseResult.error.message }, 400);

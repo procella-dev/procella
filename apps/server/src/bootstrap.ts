@@ -40,7 +40,7 @@ export function requireExplicitEncryptionKey(encryptionKey: string | undefined):
 	if (!encryptionKey) {
 		throw new Error("PROCELLA_ENCRYPTION_KEY is required");
 	}
-	if (encryptionKey === KNOWN_DEV_ENCRYPTION_KEY) {
+	if (encryptionKey.toLowerCase() === KNOWN_DEV_ENCRYPTION_KEY.toLowerCase()) {
 		throw new Error("PROCELLA_ENCRYPTION_KEY must not use the well-known dev value");
 	}
 	return encryptionKey;

@@ -120,22 +120,24 @@ export function createCliApp(deps: CliAppDeps): Hono<Env> {
 	app.post("/api/oauth/token", withOauthTokenRateLimit, oauth.tokenExchange);
 
 	// Update-token authenticated routes (during active update execution)
+	// Auth runs before decompress so unauthenticated requests are rejected before
+	// expensive gzip/JSON processing (defense-in-depth against decompression bombs).
 	app.patch(
 		R.patchCheckpoint.path,
-		withCheckpointDecompress,
 		withUpdateAuth,
+		withCheckpointDecompress,
 		checkpointH.patchCheckpoint,
 	);
 	app.patch(
 		R.patchCheckpointVerbatim.path,
-		withCheckpointDecompress,
 		withUpdateAuth,
+		withCheckpointDecompress,
 		checkpointH.patchCheckpointVerbatim,
 	);
 	app.patch(
 		R.patchCheckpointDelta.path,
-		withCheckpointDecompress,
 		withUpdateAuth,
+		withCheckpointDecompress,
 		checkpointH.patchCheckpointDelta,
 	);
 	app.patch(R.patchJournalEntries.path, withUpdateAuth, checkpointH.appendJournalEntries);

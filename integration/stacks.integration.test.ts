@@ -262,4 +262,31 @@ describe("PostgresStacksService — integration", () => {
 			expect(fetched.id).toBe(created.id);
 		});
 	});
+
+	describe("getStackByNames_systemOnly", () => {
+		test("regression: two tenants with same project+stack name resolve to distinct stacks (PR #149 follow-up — Copilot caught the org param being ignored in the WHERE clause, which made the C2 lease-binding check non-deterministic across tenants)", async () => {
+			const stackA = await stacks.createStack("tenant-a", "org-a", "shared-proj", "shared-stack");
+			const stackB = await stacks.createStack("tenant-b", "org-b", "shared-proj", "shared-stack");
+			expect(stackA.id).not.toBe(stackB.id);
+
+			const fetchedA = await stacks.getStackByNames_systemOnly(
+				"tenant-a",
+				"shared-proj",
+				"shared-stack",
+			);
+			const fetchedB = await stacks.getStackByNames_systemOnly(
+				"tenant-b",
+				"shared-proj",
+				"shared-stack",
+			);
+
+			expect(fetchedA.id).toBe(stackA.id);
+			expect(fetchedB.id).toBe(stackB.id);
+			expect(fetchedA.id).not.toBe(fetchedB.id);
+
+			await expect(
+				stacks.getStackByNames_systemOnly("tenant-c", "shared-proj", "shared-stack"),
+			).rejects.toThrow(StackNotFoundError);
+		});
+	});
 });
