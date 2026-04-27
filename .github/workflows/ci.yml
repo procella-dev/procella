@@ -296,7 +296,11 @@ jobs:
         env:
           CI: "true"
           PROCELLA_DATABASE_URL: postgres://procella:procella@localhost:5432/procella?sslmode=disable
+          PROCELLA_AUTH_MODE: dev
           PROCELLA_DEV_AUTH_TOKEN: devtoken123
+          PROCELLA_ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000001
+          PROCELLA_TICKET_SIGNING_KEY: ci-playwright-ticket-signing-key-must-be-32plus-chars
+          PROCELLA_CRON_SECRET: ci-playwright-cron-secret
           PLAYWRIGHT_API_URL: http://localhost:18080
           PLAYWRIGHT_BASE_URL: http://localhost:5173
           VITE_API_PORT: "18080"
@@ -353,6 +357,11 @@ jobs:
       - name: Run benchmark
         env:
           PROCELLA_DATABASE_URL: postgres://procella:procella@localhost:5432/procella?sslmode=disable
+          PROCELLA_AUTH_MODE: dev
+          PROCELLA_DEV_AUTH_TOKEN: devtoken123
+          PROCELLA_ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000001
+          PROCELLA_TICKET_SIGNING_KEY: ci-bench-ticket-signing-key-must-be-32plus-chars
+          PROCELLA_CRON_SECRET: ci-bench-cron-secret
           PROCELLA_OTEL_ENABLED: "true"
           OTEL_SERVICE_NAME: procella-ci-bench
           OTEL_EXPORTER_OTLP_ENDPOINT: http://localhost:4318
