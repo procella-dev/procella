@@ -174,7 +174,7 @@ describe("oidcRouter", () => {
 			const caller = oidcRouter.createCaller(ctx);
 
 			return expect(caller.createPolicy(validInput)).rejects.toThrow(
-				"OIDC trust policy with this org/issuer already exists in another tenant",
+				"OIDC trust policy with this org/issuer pair already exists",
 			);
 		});
 	});
