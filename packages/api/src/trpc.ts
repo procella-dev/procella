@@ -10,7 +10,7 @@ import { trpcProcedureDuration, withSpan } from "@procella/telemetry";
 import type { Caller } from "@procella/types";
 import type { UpdatesService } from "@procella/updates";
 import type { WebhooksService } from "@procella/webhooks";
-import { initTRPC } from "@trpc/server";
+import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 
 // ============================================================================
@@ -18,7 +18,8 @@ import superjson from "superjson";
 // ============================================================================
 
 export interface TRPCContext {
-	caller: Caller;
+	caller: Caller | null;
+	issueSubscriptionTicket?: (caller: Caller) => Promise<string>;
 	db: Database;
 	dbUrl: string;
 	stacks: StacksService;
@@ -58,7 +59,40 @@ const tracingMiddleware = t.middleware(async (ctx) => {
 	);
 });
 
+const protectedMiddleware = t.middleware(async ({ ctx, next }) => {
+	if (!ctx.caller) {
+		throw new TRPCError({ code: "UNAUTHORIZED", message: "Authentication required" });
+	}
+
+	return next({
+		ctx: {
+			...ctx,
+			caller: ctx.caller,
+		},
+	});
+});
+
+const adminMiddleware = t.middleware(async ({ ctx, next }) => {
+	if (!ctx.caller) {
+		throw new TRPCError({ code: "UNAUTHORIZED", message: "Authentication required" });
+	}
+
+	if (!ctx.caller.roles.includes("admin")) {
+		throw new TRPCError({ code: "FORBIDDEN", message: "Admin role required" });
+	}
+
+	return next({
+		ctx: {
+			...ctx,
+			caller: ctx.caller,
+		},
+	});
+});
+
+// Keep bare t.procedure usage confined to this file.
 const instrumentedProcedure = t.procedure.use(tracingMiddleware);
 
 export const router = t.router;
 export const publicProcedure = instrumentedProcedure;
+export const protectedProcedure = instrumentedProcedure.use(protectedMiddleware);
+export const adminProcedure = instrumentedProcedure.use(adminMiddleware);

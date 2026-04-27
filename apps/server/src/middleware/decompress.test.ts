@@ -4,14 +4,29 @@ import { Hono } from "hono";
 import { decompress } from "./decompress.js";
 
 describe("decompress middleware", () => {
-	function createApp() {
+	function createApp(maxDecompressedBytes?: number) {
 		const app = new Hono();
-		app.use("*", decompress());
+		app.use("*", decompress(maxDecompressedBytes ? { maxDecompressedBytes } : undefined));
 		app.post("/test", async (c) => {
 			const body = await c.req.json();
 			return c.json(body);
 		});
 		return app;
+	}
+
+	function createSizedPayload(bytes: number): string {
+		const chunkSize = 256 * 1024;
+		const chunks: string[] = [];
+		let payload = JSON.stringify({ data: chunks });
+
+		while (Buffer.byteLength(payload) < bytes) {
+			const remaining = bytes - Buffer.byteLength(payload);
+			const nextChunkSize = Math.min(chunkSize, Math.max(1, remaining));
+			chunks.push("x".repeat(nextChunkSize));
+			payload = JSON.stringify({ data: chunks });
+		}
+
+		return payload;
 	}
 
 	test("passes through non-gzip requests unchanged", async () => {
@@ -99,5 +114,53 @@ describe("decompress middleware", () => {
 		const body = await res.json();
 		expect(body.resources).toBeArray();
 		expect(body.resources[0].urn).toBe("urn:test:Resource");
+	});
+
+	test("accepts 30 MiB decompressed payload with default cap", async () => {
+		const app = createApp();
+		const compressed = gzipSync(Buffer.from(createSizedPayload(30 * 1024 * 1024)));
+
+		const res = await app.request("/test", {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				"Content-Encoding": "gzip",
+			},
+			body: compressed,
+		});
+
+		expect(res.status).toBe(200);
+	});
+
+	test("rejects 33 MiB decompressed payload with default cap", async () => {
+		const app = createApp();
+		const compressed = gzipSync(Buffer.from(createSizedPayload(33 * 1024 * 1024)));
+
+		const res = await app.request("/test", {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				"Content-Encoding": "gzip",
+			},
+			body: compressed,
+		});
+
+		expect(res.status).toBe(413);
+	});
+
+	test("accepts 50 MiB decompressed payload with override cap", async () => {
+		const app = createApp(100 * 1024 * 1024);
+		const compressed = gzipSync(Buffer.from(createSizedPayload(50 * 1024 * 1024)));
+
+		const res = await app.request("/test", {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				"Content-Encoding": "gzip",
+			},
+			body: compressed,
+		});
+
+		expect(res.status).toBe(200);
 	});
 });

@@ -24,6 +24,7 @@ All Procella configuration is via environment variables. Variables prefixed with
 | `PROCELLA_BLOB_S3_REGION` | `us-east-1` | No | S3 region |
 | `PROCELLA_ENCRYPTION_KEY` | *(auto in dev)* | If non-dev | 64 hex chars (32 bytes) |
 | `PROCELLA_CORS_ORIGINS` | *(unrestricted)* | No | Comma-separated allowed origins |
+| `PROCELLA_TRUST_PROXY` | `false` | No | Trust `X-Forwarded-For` / `X-Real-IP` only when running behind a trusted reverse proxy |
 | `AWS_ACCESS_KEY_ID` | — | If custom endpoint | S3 access key |
 | `AWS_SECRET_ACCESS_KEY` | — | If custom endpoint | S3 secret key |
 
@@ -140,9 +141,19 @@ PROCELLA_CORS_ORIGINS=https://dashboard.example.com,https://admin.example.com
 
 When not set, all origins are permitted. For production deployments, restrict this to the origins that host your dashboard UI.
 
+## Reverse Proxy Awareness
+
+### PROCELLA_TRUST_PROXY
+
+Set this to `true` only when Procella is deployed behind a trusted reverse proxy (such as Caddy, CloudFront, or another load balancer) that strips client-supplied forwarding headers and sets its own trusted values.
+
+- `true` — audit logging and rate limiting may use `X-Forwarded-For` / `X-Real-IP`
+- unset / `false` — Procella ignores forwarded IP headers and uses the direct peer address when available
+
+The bundled `apps/ui/Caddyfile` is configured with trusted proxies and keeps `auto_https off` because it assumes TLS is terminated upstream. For self-hosted deployments without an upstream TLS terminator, remove `auto_https off` (or set `auto_https on`) so Caddy can manage HTTPS directly.
+
 ## AWS Credentials
 
 ### AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
 
 Standard AWS credentials. Required when `PROCELLA_BLOB_S3_ENDPOINT` is set (custom S3 endpoint). For standard AWS S3, you can also use IAM roles, instance profiles, or any method supported by the AWS SDK default credential chain.
-

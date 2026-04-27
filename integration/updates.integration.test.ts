@@ -1,10 +1,17 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { AesCryptoService } from "@procella/crypto";
-import type { Database } from "@procella/db";
+import { checkpoints, type Database } from "@procella/db";
 import { PostgresStacksService, type StackInfo } from "@procella/stacks";
 import { LocalBlobStorage } from "@procella/storage";
-import { UpdateConflictError, UpdateNotFoundError } from "@procella/types";
-import { PostgresUpdatesService } from "@procella/updates";
+import {
+	BadRequestError,
+	JournalEntryBegin,
+	LeaseExpiredError,
+	UpdateConflictError,
+	UpdateNotFoundError,
+} from "@procella/types";
+import { ImportConflictError, PostgresUpdatesService } from "@procella/updates";
+import { asc, eq } from "drizzle-orm";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -22,7 +29,7 @@ beforeAll(async () => {
 	const storage = new LocalBlobStorage(blobDir);
 	// Use deterministic dev key for tests
 	const keyHex = "a".repeat(64);
-	const crypto = new AesCryptoService(Buffer.from(keyHex, "hex"));
+	const crypto = new AesCryptoService(keyHex);
 	updatesService = new PostgresUpdatesService({ db, storage, crypto });
 });
 
@@ -153,6 +160,21 @@ describe("PostgresUpdatesService — integration", () => {
 			const second = await updatesService.createUpdate(stack.id, "update");
 			expect(second.updateID).toBeTruthy();
 		});
+
+		test("rejects checkpoint writes after cancel", async () => {
+			const stack = await seedStack();
+			const created = await updatesService.createUpdate(stack.id, "update");
+			await updatesService.startUpdate(created.updateID, {});
+			await updatesService.cancelUpdate(created.updateID);
+
+			await expect(
+				updatesService.patchCheckpoint(created.updateID, {
+					isInvalid: false,
+					version: 3,
+					deployment: { resources: [] },
+				}),
+			).rejects.toBeInstanceOf(LeaseExpiredError);
+		});
 	});
 
 	// ========================================================================
@@ -175,6 +197,20 @@ describe("PostgresUpdatesService — integration", () => {
 			const events = await updatesService.getUpdateEvents(created.updateID);
 			expect(events.events).toBeArray();
 			expect(events.events.length).toBeGreaterThanOrEqual(2);
+		});
+
+		test("rejects oversized event batches", async () => {
+			const stack = await seedStack();
+			const created = await updatesService.createUpdate(stack.id, "update");
+			await updatesService.startUpdate(created.updateID, {});
+
+			await expect(
+				updatesService.postEvents(created.updateID, {
+					events: Array.from({ length: 1001 }, (_, index) =>
+						({ sequence: index + 1, timestamp: index, preludeEvent: { config: {} } }) as never,
+					),
+				}),
+			).rejects.toBeInstanceOf(BadRequestError);
 		});
 	});
 
@@ -212,6 +248,19 @@ describe("PostgresUpdatesService — integration", () => {
 			expect(deployment.version).toBe(3);
 			expect(deployment.deployment).toBeDefined();
 		});
+
+		test("rejects import while stack has active update", async () => {
+			const stack = await seedStack();
+			const created = await updatesService.createUpdate(stack.id, "update");
+			await updatesService.startUpdate(created.updateID, {});
+
+			await expect(
+				updatesService.importStack(stack.id, {
+					version: 3,
+					deployment: { resources: [] },
+				}),
+			).rejects.toBeInstanceOf(ImportConflictError);
+		});
 	});
 
 	// ========================================================================
@@ -222,27 +271,29 @@ describe("PostgresUpdatesService — integration", () => {
 		test("roundtrips plaintext through encrypt+decrypt", async () => {
 			const stack = await seedStack();
 			const fqn = `tenant-1/test-project/${stack.stackName}`;
+			const stackRef = { stackId: stack.id, stackFQN: fqn };
 			const plaintext = new TextEncoder().encode("my-secret-value");
 
-			const ciphertext = await updatesService.encryptValue(fqn, plaintext);
+			const ciphertext = await updatesService.encryptValue(stackRef, plaintext);
 			expect(ciphertext).not.toEqual(plaintext);
 
-			const decrypted = await updatesService.decryptValue(fqn, ciphertext);
+			const decrypted = await updatesService.decryptValue(stackRef, ciphertext);
 			expect(new TextDecoder().decode(decrypted)).toBe("my-secret-value");
 		});
 
 		test("batch encrypt/decrypt roundtrip", async () => {
 			const stack = await seedStack();
 			const fqn = `tenant-1/test-project/${stack.stackName}`;
+			const stackRef = { stackId: stack.id, stackFQN: fqn };
 			const values = [
 				new TextEncoder().encode("secret-1"),
 				new TextEncoder().encode("secret-2"),
 			];
 
-			const encrypted = await updatesService.batchEncrypt(fqn, values);
+			const encrypted = await updatesService.batchEncrypt(stackRef, values);
 			expect(encrypted).toHaveLength(2);
 
-			const decrypted = await updatesService.batchDecrypt(fqn, encrypted);
+			const decrypted = await updatesService.batchDecrypt(stackRef, encrypted);
 			expect(new TextDecoder().decode(decrypted[0])).toBe("secret-1");
 			expect(new TextDecoder().decode(decrypted[1])).toBe("secret-2");
 		});
@@ -257,9 +308,13 @@ describe("PostgresUpdatesService — integration", () => {
 			const stack = await seedStack();
 			const created = await updatesService.createUpdate(stack.id, "update");
 			const started = await updatesService.startUpdate(created.updateID, {});
+			if (!started.token) {
+				throw new Error("lease token missing from startUpdate response");
+			}
+			const token = started.token;
 
 			// Should not throw
-			await updatesService.verifyLeaseToken(created.updateID, started.token);
+			await updatesService.verifyLeaseToken(created.updateID, token);
 		});
 
 		test("verifyLeaseToken rejects invalid token", async () => {
@@ -276,11 +331,93 @@ describe("PostgresUpdatesService — integration", () => {
 			const stack = await seedStack();
 			const created = await updatesService.createUpdate(stack.id, "update");
 			const started = await updatesService.startUpdate(created.updateID, {});
+			if (!started.token) {
+				throw new Error("lease token missing from startUpdate response");
+			}
+			const token = started.token;
 
 			const renewed = await updatesService.renewLease(created.updateID, {
-				token: started.token,
+				token,
+				duration: 300,
 			});
-			expect(renewed.token).toBe(started.token);
+			expect(renewed.token).toBe(token);
+		});
+
+		test("caps renewLease duration at 300 seconds", async () => {
+			const stack = await seedStack();
+			const created = await updatesService.createUpdate(stack.id, "update");
+			const started = await updatesService.startUpdate(created.updateID, {});
+			if (!started.token) {
+				throw new Error("lease token missing from startUpdate response");
+			}
+			const token = started.token;
+
+			const before = Math.floor(Date.now() / 1000);
+			const renewed = await updatesService.renewLease(created.updateID, {
+				token,
+				duration: 99_999,
+			});
+
+			expect(renewed.token).toBe(token);
+			expect(renewed.tokenExpiration).toBeLessThanOrEqual(before + 301);
+			expect(renewed.tokenExpiration).toBeGreaterThanOrEqual(before + 299);
+		});
+	});
+
+	describe("journal + checkpoints", () => {
+		test("rejects oversized journal entry batches", async () => {
+			const stack = await seedStack();
+			const created = await updatesService.createUpdate(stack.id, "update");
+			await updatesService.startUpdate(created.updateID, {});
+
+			await expect(
+				updatesService.appendJournalEntries(created.updateID, {
+					entries: Array.from({ length: 10_001 }, (_, index) => ({
+						version: 1,
+						kind: JournalEntryBegin,
+						operationID: index + 1,
+						sequenceID: index + 1,
+					})),
+				}),
+			).rejects.toBeInstanceOf(BadRequestError);
+		});
+
+		test("concurrent checkpoint writes use sequential versions without conflicts", async () => {
+			const stack = await seedStack();
+			const created = await updatesService.createUpdate(stack.id, "update");
+			await updatesService.startUpdate(created.updateID, {});
+
+			const firstDeployment = {
+				manifest: { time: new Date().toISOString(), magic: "", version: "" },
+				resources: [{ urn: "urn:pulumi:stack::proj::test:index:Thing::one", custom: true }],
+			};
+			const secondDeployment = {
+				manifest: { time: new Date().toISOString(), magic: "", version: "" },
+				resources: [{ urn: "urn:pulumi:stack::proj::test:index:Thing::two", custom: true }],
+			};
+
+			const results = await Promise.allSettled([
+				updatesService.patchCheckpoint(created.updateID, {
+					isInvalid: false,
+					version: 3,
+					deployment: firstDeployment,
+				}),
+				updatesService.patchCheckpoint(created.updateID, {
+					isInvalid: false,
+					version: 3,
+					deployment: secondDeployment,
+				}),
+			]);
+
+			expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(2);
+
+			const persisted = await db
+				.select({ version: checkpoints.version })
+				.from(checkpoints)
+				.where(eq(checkpoints.updateId, created.updateID))
+				.orderBy(asc(checkpoints.version));
+
+			expect(persisted.map((row) => row.version)).toEqual([1, 2]);
 		});
 	});
 });

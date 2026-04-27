@@ -32,7 +32,7 @@ async function resolveEscCommand(): Promise<string[] | null> {
 	if (exitCode !== 0) {
 		return null;
 	}
-	const resolved = (await new Response(proc.stdout).text()).trim();
+	const resolved = (await new Response(proc.stdout as ReadableStream<Uint8Array>).text()).trim();
 	return resolved ? [resolved] : null;
 }
 
@@ -51,18 +51,20 @@ async function esc(args: string[], opts: EscOpts = {}): Promise<EscResult> {
 			PULUMI_SKIP_UPDATE_CHECK: "true",
 		},
 		cwd: opts.cwd,
-		stdin: opts.stdin ? new Response(opts.stdin).body : undefined,
+		stdin: opts.stdin ? (new Response(opts.stdin).body ?? undefined) : undefined,
 		stdout: "pipe",
 		stderr: "pipe",
 	});
 
 	const stdoutChunks: Uint8Array[] = [];
 	const stderrChunks: Uint8Array[] = [];
+	const stdoutStream = proc.stdout as AsyncIterable<Uint8Array>;
+	const stderrStream = proc.stderr as AsyncIterable<Uint8Array>;
 	const stdoutDone = (async () => {
-		for await (const chunk of proc.stdout) stdoutChunks.push(chunk);
+		for await (const chunk of stdoutStream) stdoutChunks.push(chunk);
 	})();
 	const stderrDone = (async () => {
-		for await (const chunk of proc.stderr) stderrChunks.push(chunk);
+		for await (const chunk of stderrStream) stderrChunks.push(chunk);
 	})();
 	const [exitCode] = await Promise.all([proc.exited, stdoutDone, stderrDone]);
 	const decoder = new TextDecoder();

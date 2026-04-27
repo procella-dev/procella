@@ -1,23 +1,14 @@
-import { TRPCError } from "@trpc/server";
-import { publicProcedure, router } from "../trpc.js";
-
-function assertAdmin(roles: readonly string[]): void {
-	if (!roles.includes("admin")) {
-		throw new TRPCError({ code: "FORBIDDEN", message: "Admin role required" });
-	}
-}
+import { adminProcedure, protectedProcedure, router } from "../trpc.js";
 
 export const githubRouter = router({
-	installation: publicProcedure.query(async ({ ctx }) => {
+	installation: protectedProcedure.query(async ({ ctx }) => {
 		if (!ctx.github) {
 			return null;
 		}
 		return ctx.github.getInstallation(ctx.caller.tenantId);
 	}),
 
-	removeInstallation: publicProcedure.mutation(async ({ ctx }) => {
-		assertAdmin(ctx.caller.roles);
-
+	removeInstallation: adminProcedure.mutation(async ({ ctx }) => {
 		if (!ctx.github) {
 			return { success: true };
 		}

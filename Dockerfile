@@ -32,6 +32,8 @@ COPY --from=deps /usr/src/app/node_modules ./node_modules
 COPY packages/ packages/
 COPY apps/server/ apps/server/
 COPY tsconfig.json tsconfig.base.json ./
+# Keep AWS_LWA_PASS_THROUGH_PATH unset so the adapter never bypasses Bun routes
+# and cannot collide with the Pulumi /api/stacks/*/events/batch endpoint.
 ENV PORT=8080
 ENV READINESS_CHECK_PATH=/healthz
 CMD ["bun", "run", "apps/server/src/lambda-bootstrap.ts"]

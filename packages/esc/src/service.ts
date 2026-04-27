@@ -822,7 +822,11 @@ export class PostgresEscService implements EscService {
 						const cryptoSvc = new AesCryptoService(this.encryptionKeyHex);
 						const envFQN = `${tenantId}/${projectName}/${envName}`;
 						const plaintext = new TextEncoder().encode(JSON.stringify(result.values));
-						const cipherBytes = await cryptoSvc.encrypt(plaintext, envFQN);
+						const stackInput = {
+							stackId: envRow.id,
+							stackFQN: envFQN,
+						};
+						const cipherBytes = await cryptoSvc.encrypt(stackInput, plaintext);
 						const ciphertextBase64 = Buffer.from(cipherBytes).toString("base64");
 
 						const expiresAt = new Date(Date.now() + this.sessionTtlSeconds * 1000);
@@ -882,7 +886,13 @@ export class PostgresEscService implements EscService {
 			const cryptoSvc = new AesCryptoService(this.encryptionKeyHex);
 			const envFQN = `${tenantId}/${projectName}/${envName}`;
 			const cipherBytes = Buffer.from(row.resolvedValuesCiphertext, "base64");
-			const plainBytes = await cryptoSvc.decrypt(new Uint8Array(cipherBytes), envFQN);
+			const plainBytes = await cryptoSvc.decrypt(
+				{
+					stackId: envRow.id,
+					stackFQN: envFQN,
+				},
+				new Uint8Array(cipherBytes),
+			);
 			const values = JSON.parse(new TextDecoder().decode(plainBytes)) as Record<string, unknown>;
 
 			return {

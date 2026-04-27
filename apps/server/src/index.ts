@@ -35,6 +35,7 @@ if (process.argv.includes("--healthz")) {
 } else {
 	try {
 		const { existsSync } = await import("node:fs");
+		const { withInternalClientIp } = await import("./middleware/security.js");
 		const { shutdownTelemetry } = await import("@procella/telemetry");
 		const { GCWorker } = await import("@procella/updates");
 		const { bootstrap } = await import("./bootstrap.js");
@@ -55,7 +56,8 @@ if (process.argv.includes("--healthz")) {
 		const port = Number.parseInt(portStr || "9090", 10);
 
 		const server = Bun.serve({
-			fetch: app.fetch,
+			fetch: (request, server) =>
+				app.fetch(withInternalClientIp(request, server.requestIP(request)?.address)),
 			port,
 			hostname: "0.0.0.0",
 		});

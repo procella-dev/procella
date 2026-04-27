@@ -33,6 +33,8 @@ import {
 import {
 	apiAuth,
 	auditMiddleware,
+	createIpRateLimiter,
+	createSecurityHeadersMiddleware,
 	decompress,
 	errorHandler,
 	pulumiAccept,
@@ -59,13 +61,22 @@ export interface CliAppDeps {
 
 export function createCliApp(deps: CliAppDeps): Hono<Env> {
 	const app = new Hono<Env>();
+	const R = PulumiRoutes;
+	const withApiDecompress = decompress();
+	const withCheckpointDecompress = decompress({ maxDecompressedBytes: 100 * 1024 * 1024 });
 
 	app.onError(errorHandler());
 
 	// Global middleware — no CORS (CLI traffic only)
+	app.use("*", createSecurityHeadersMiddleware());
 	app.use("*", tracingMiddleware());
 	app.use("*", requestLogger());
-	app.use("*", decompress());
+	app.use("/api/*", (c, next) => {
+		if (isCheckpointPath(c.req.path)) {
+			return next();
+		}
+		return withApiDecompress(c, next);
+	});
 
 	// Handler instances
 	const health = healthHandlers({ db: deps.db });
@@ -81,7 +92,7 @@ export function createCliApp(deps: CliAppDeps): Hono<Env> {
 	});
 	const checkpointH = checkpointHandlers(deps.updates);
 	const eventH = eventHandlers(deps.updates, deps.stacks);
-	const cryptoH = cryptoHandlers(deps.updates);
+	const cryptoH = cryptoHandlers(deps.updates, deps.stacks);
 	const stateH = stateHandlers(deps.updates, deps.stacks);
 	const escH = escHandlers({ esc: deps.esc });
 
@@ -89,8 +100,12 @@ export function createCliApp(deps: CliAppDeps): Hono<Env> {
 	const withApiAuth = apiAuth(deps.auth);
 	const withAudit = auditMiddleware(deps.audit);
 	const withPulumiAccept = pulumiAccept();
-	const withUpdateAuth = updateAuth(deps.auth, (updateId, token) =>
-		deps.updates.verifyLeaseToken(updateId, token),
+	const withOauthTokenRateLimit = createIpRateLimiter({ limit: 30 });
+	const withCryptoRateLimit = createIpRateLimiter({ limit: 1000 });
+	const withUpdateAuth = updateAuth(
+		deps.auth,
+		(updateId, token) => deps.updates.verifyLeaseToken(updateId, token),
+		deps.stacks,
 	);
 
 	// Public routes
@@ -102,13 +117,29 @@ export function createCliApp(deps: CliAppDeps): Hono<Env> {
 	app.post("/api/webhooks/github", githubH.handleGitHubWebhook);
 
 	const oauth = oauthHandlers(deps.oidc ?? null);
-	app.post("/api/oauth/token", oauth.tokenExchange);
+	app.post("/api/oauth/token", withOauthTokenRateLimit, oauth.tokenExchange);
 
 	// Update-token authenticated routes (during active update execution)
-	const R = PulumiRoutes;
-	app.patch(R.patchCheckpoint.path, withUpdateAuth, checkpointH.patchCheckpoint);
-	app.patch(R.patchCheckpointVerbatim.path, withUpdateAuth, checkpointH.patchCheckpointVerbatim);
-	app.patch(R.patchCheckpointDelta.path, withUpdateAuth, checkpointH.patchCheckpointDelta);
+	// Auth runs before decompress so unauthenticated requests are rejected before
+	// expensive gzip/JSON processing (defense-in-depth against decompression bombs).
+	app.patch(
+		R.patchCheckpoint.path,
+		withUpdateAuth,
+		withCheckpointDecompress,
+		checkpointH.patchCheckpoint,
+	);
+	app.patch(
+		R.patchCheckpointVerbatim.path,
+		withUpdateAuth,
+		withCheckpointDecompress,
+		checkpointH.patchCheckpointVerbatim,
+	);
+	app.patch(
+		R.patchCheckpointDelta.path,
+		withUpdateAuth,
+		withCheckpointDecompress,
+		checkpointH.patchCheckpointDelta,
+	);
 	app.patch(R.patchJournalEntries.path, withUpdateAuth, checkpointH.appendJournalEntries);
 	app.post(R.postEngineEventBatch.path, withUpdateAuth, eventH.postEvents);
 	app.post(R.renewLease.path, withUpdateAuth, eventH.renewLease);
@@ -166,10 +197,10 @@ export function createCliApp(deps: CliAppDeps): Hono<Env> {
 	api.post("/stacks/:org/:project/:stack/import", stateH.importStack);
 
 	// Crypto (API token)
-	api.post("/stacks/:org/:project/:stack/encrypt", cryptoH.encryptValue);
-	api.post("/stacks/:org/:project/:stack/decrypt", cryptoH.decryptValue);
-	api.post("/stacks/:org/:project/:stack/batch-encrypt", cryptoH.batchEncrypt);
-	api.post("/stacks/:org/:project/:stack/batch-decrypt", cryptoH.batchDecrypt);
+	api.post("/stacks/:org/:project/:stack/encrypt", withCryptoRateLimit, cryptoH.encryptValue);
+	api.post("/stacks/:org/:project/:stack/decrypt", withCryptoRateLimit, cryptoH.decryptValue);
+	api.post("/stacks/:org/:project/:stack/batch-encrypt", withCryptoRateLimit, cryptoH.batchEncrypt);
+	api.post("/stacks/:org/:project/:stack/batch-decrypt", withCryptoRateLimit, cryptoH.batchDecrypt);
 	api.post("/stacks/:org/:project/:stack/log-decryption", cryptoH.logDecryption);
 
 	// Stack CRUD + createUpdate (:kind catch-all LAST)
@@ -264,4 +295,10 @@ export function createCliApp(deps: CliAppDeps): Hono<Env> {
 
 	app.route("/api", api);
 	return app;
+}
+
+function isCheckpointPath(path: string): boolean {
+	return /\/api\/stacks\/[^/]+\/[^/]+\/[^/]+\/[^/]+\/[^/]+\/(checkpoint|checkpointverbatim|checkpointdelta)$/.test(
+		path,
+	);
 }

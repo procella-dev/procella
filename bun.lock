@@ -61,7 +61,8 @@
         "@procella/webhooks": "workspace:*",
         "@trpc/server": "catalog:",
         "drizzle-orm": "catalog:",
-        "hono": "^4.7.0",
+        "hono": "^4.12.14",
+        "hono-rate-limiter": "^0.5.3",
         "pino": "^10.3.1",
         "zod": "catalog:",
       },
@@ -135,6 +136,7 @@
         "@procella/oidc": "workspace:*",
         "@procella/telemetry": "workspace:*",
         "@procella/types": "workspace:*",
+        "jose": "^6.0.0",
       },
     },
     "packages/config": {
@@ -194,6 +196,7 @@
         "@procella/config": "workspace:*",
         "@procella/db": "workspace:*",
         "@procella/types": "workspace:*",
+        "@procella/webhooks": "workspace:*",
         "drizzle-orm": "catalog:",
         "jose": "^6.0.0",
       },
@@ -226,7 +229,7 @@
         "@opentelemetry/sdk-trace-base": "^2.0.0",
         "@opentelemetry/sdk-trace-node": "^2.0.0",
         "@opentelemetry/semantic-conventions": "^1.30.1",
-        "hono": "^4.7.0",
+        "hono": "^4.12.14",
       },
     },
     "packages/types": {
@@ -257,7 +260,7 @@
     "@trpc/react-query": "~11.12.0",
     "@trpc/server": "~11.12.0",
     "drizzle-kit": "^0.31.9",
-    "drizzle-orm": "^0.45.1",
+    "drizzle-orm": "^0.45.2",
     "superjson": "^2.2.2",
     "typescript": "~5.9.3",
     "zod": "^4.3.6",
@@ -1544,6 +1547,8 @@
     "hastscript": ["hastscript@9.0.1", "", { "dependencies": { "@types/hast": "^3.0.0", "comma-separated-tokens": "^2.0.0", "hast-util-parse-selector": "^4.0.0", "property-information": "^7.0.0", "space-separated-tokens": "^2.0.0" } }, "sha512-g7df9rMFX/SPi34tyGCyUBREQoKkapwdY/T04Qn9TDWfHhAYt4/I0gMVirzK5wEzeUqIjEB+LXC/ypb7Aqno5w=="],
 
     "hono": ["hono@4.12.15", "", {}, "sha512-qM0jDhFEaCBb4TxoW7f53Qrpv9RBiayUHo0S52JudprkhvpjIrGoU1mnnr29Fvd1U335ZFPZQY1wlkqgfGXyLg=="],
+
+    "hono-rate-limiter": ["hono-rate-limiter@0.5.3", "", { "peerDependencies": { "hono": "^4.10.8", "unstorage": "^1.17.3" }, "optionalPeers": ["unstorage"] }, "sha512-M0DxbVMpPELEzLi0AJg1XyBHLGJXz7GySjsPoK+gc5YeeBsdGDGe+2RvVuCAv8ydINiwlbxqYMNxUEyYfRji/A=="],
 
     "hosted-git-info": ["hosted-git-info@9.0.2", "", { "dependencies": { "lru-cache": "^11.1.0" } }, "sha512-M422h7o/BR3rmCQ8UHi7cyyMqKltdP9Uo+J2fXK+RSAY+wTcKOIRyhTuKv4qn+DJf3g+PL890AzId5KZpX+CBg=="],
 

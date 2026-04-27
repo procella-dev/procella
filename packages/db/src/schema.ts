@@ -8,6 +8,7 @@ import { sql } from "drizzle-orm";
 import {
 	bigint,
 	boolean,
+	check,
 	index,
 	integer,
 	jsonb,
@@ -84,6 +85,10 @@ export const updates = pgTable(
 		initiatedByMeta: jsonb("initiated_by_meta").$type<Record<string, unknown>>(),
 	},
 	(table) => [
+		check(
+			"chk_updates_kind",
+			sql`${table.kind} IN ('update', 'preview', 'refresh', 'destroy', 'import')`,
+		),
 		uniqueIndex("idx_updates_active")
 			.on(table.stackId)
 			.where(sql`status IN ('not started', 'requested', 'running')`),
@@ -236,10 +241,9 @@ export const oidcTrustPolicies = pgTable(
 	},
 	(table) => [
 		index("idx_oidc_trust_tenant").on(table.tenantId),
-		// Include tenantId in unique constraint to prevent cross-tenant orgSlug collisions.
 		uniqueIndex("idx_oidc_trust_org_name").on(table.tenantId, table.orgSlug, table.displayName),
-		// Composite index for exchange service: find policies by (orgSlug, issuer).
-		index("idx_oidc_trust_org_issuer").on(table.orgSlug, table.issuer),
+		// Global uniqueness prevents cross-tenant collisions on the same orgSlug+issuer pair.
+		uniqueIndex("idx_oidc_trust_org_issuer").on(table.orgSlug, table.issuer),
 	],
 );
 

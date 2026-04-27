@@ -207,4 +207,142 @@ describe("JwksValidatorImpl", () => {
 		validator.dispose();
 		expect(getCacheSize(validator)).toBe(0);
 	});
+
+	// ========================================================================
+	// M12: SSRF guard on OIDC discovery
+	// ========================================================================
+
+	test("M12: rejects http:// issuer when allowHttp is false", async () => {
+		const validator = new JwksValidatorImpl({ allowHttp: false });
+		const token = await signJwt({ foo: "bar" });
+
+		try {
+			await validator.verify(token, "http://evil.com", "test-audience");
+			expect.unreachable();
+		} catch (err) {
+			expect(err).toBeInstanceOf(JwksValidationError);
+			expect((err as JwksValidationError).code).toBe("invalid_issuer");
+		}
+	});
+
+	test("M12: rejects private IP issuers (10.x)", async () => {
+		const validator = new JwksValidatorImpl({ allowHttp: false });
+		const token = await signJwt({ foo: "bar" }, { issuer: "https://10.0.0.1/.well-known" });
+
+		try {
+			await validator.verify(token, "https://10.0.0.1", "test-audience");
+			expect.unreachable();
+		} catch (err) {
+			expect(err).toBeInstanceOf(JwksValidationError);
+			expect((err as JwksValidationError).code).toBe("ssrf_blocked");
+		}
+	});
+
+	test("M12: rejects private IP issuers (127.x loopback)", async () => {
+		const validator = new JwksValidatorImpl({ allowHttp: false });
+
+		try {
+			await validator.verify(
+				await signJwt({ foo: "bar" }, { issuer: "https://127.0.0.1" }),
+				"https://127.0.0.1",
+				"test-audience",
+			);
+			expect.unreachable();
+		} catch (err) {
+			expect(err).toBeInstanceOf(JwksValidationError);
+			expect((err as JwksValidationError).code).toBe("ssrf_blocked");
+		}
+	});
+
+	test("M12: rejects .nip.io DNS rebinding issuer", async () => {
+		const validator = new JwksValidatorImpl({ allowHttp: false });
+
+		try {
+			await validator.verify(
+				await signJwt({ foo: "bar" }, { issuer: "https://169.254.169.254.nip.io" }),
+				"https://169.254.169.254.nip.io",
+				"test-audience",
+			);
+			expect.unreachable();
+		} catch (err) {
+			expect(err).toBeInstanceOf(JwksValidationError);
+			expect((err as JwksValidationError).code).toBe("ssrf_blocked");
+		}
+	});
+
+	test("M12: rejects .sslip.io DNS rebinding issuer", async () => {
+		const validator = new JwksValidatorImpl({ allowHttp: false });
+
+		try {
+			await validator.verify(
+				await signJwt({ foo: "bar" }, { issuer: "https://10.0.0.1.sslip.io" }),
+				"https://10.0.0.1.sslip.io",
+				"test-audience",
+			);
+			expect.unreachable();
+		} catch (err) {
+			expect(err).toBeInstanceOf(JwksValidationError);
+			expect((err as JwksValidationError).code).toBe("ssrf_blocked");
+		}
+	});
+
+	test("M12: rejects IPv4-mapped IPv6 loopback issuer", async () => {
+		const validator = new JwksValidatorImpl({ allowHttp: false });
+
+		try {
+			await validator.verify(
+				await signJwt({ foo: "bar" }, { issuer: "https://[::ffff:127.0.0.1]" }),
+				"https://[::ffff:127.0.0.1]",
+				"test-audience",
+			);
+			expect.unreachable();
+		} catch (err) {
+			expect(err).toBeInstanceOf(JwksValidationError);
+			expect((err as JwksValidationError).code).toBe("ssrf_blocked");
+		}
+	});
+
+	test("M12: rejects private IP in discovered jwks_uri via validateSsrf", async () => {
+		const validator = new JwksValidatorImpl({ allowHttp: false });
+		const validateSsrf = (
+			validator as unknown as { validateSsrf: (url: string, label: string) => Promise<void> }
+		).validateSsrf.bind(validator);
+
+		await expect(validateSsrf("https://10.0.0.1/.well-known/jwks", "jwks_uri")).rejects.toThrow(
+			JwksValidationError,
+		);
+		await expect(validateSsrf("https://192.168.1.1/.well-known/jwks", "jwks_uri")).rejects.toThrow(
+			JwksValidationError,
+		);
+		await expect(validateSsrf("https://172.16.0.1/.well-known/jwks", "jwks_uri")).rejects.toThrow(
+			JwksValidationError,
+		);
+	});
+
+	test("M12: rejects .lvh.me DNS rebinding in discovered jwks_uri", async () => {
+		const validator = new JwksValidatorImpl({ allowHttp: false });
+		const validateSsrf = (
+			validator as unknown as { validateSsrf: (url: string, label: string) => Promise<void> }
+		).validateSsrf.bind(validator);
+
+		await expect(validateSsrf("https://evil.lvh.me/.well-known/jwks", "jwks_uri")).rejects.toThrow(
+			JwksValidationError,
+		);
+	});
+
+	test("M12: uses redirect:manual to prevent SSRF via 302", async () => {
+		const validator = new JwksValidatorImpl({ allowHttp: false });
+
+		try {
+			await validator.verify(
+				await signJwt({ foo: "bar" }, { issuer: "https://192.168.1.1" }),
+				"https://192.168.1.1",
+				"test-audience",
+			);
+			expect.unreachable();
+		} catch (err) {
+			expect(err).toBeInstanceOf(JwksValidationError);
+			expect((err as JwksValidationError).code).toBe("ssrf_blocked");
+		}
+	});
 });

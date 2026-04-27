@@ -6,11 +6,69 @@
 
 import { gunzipSync } from "node:zlib";
 import type { MiddlewareHandler } from "hono";
+import { MAX_JSON_DEPTH, MAX_STRING_LENGTH } from "../handlers/schemas.js";
 
 const MAX_COMPRESSED_BYTES = 20 * 1024 * 1024; // 20 MB
-const MAX_DECOMPRESSED_BYTES = 128 * 1024 * 1024; // 128 MB
+const DEFAULT_MAX_DECOMPRESSED_BYTES = 32 * 1024 * 1024; // 32 MB
 
-export function decompress(): MiddlewareHandler {
+interface DecompressOptions {
+	maxDecompressedBytes?: number;
+}
+
+interface CachedBody {
+	json: Promise<unknown>;
+	text: Promise<string>;
+}
+
+const FORBIDDEN_JSON_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
+function validateJsonBounds(
+	value: unknown,
+	depth = 1,
+	path: (string | number)[] = [],
+): string | null {
+	if (depth > MAX_JSON_DEPTH) {
+		return `${formatPath(path)} exceeds maximum depth of ${MAX_JSON_DEPTH}`;
+	}
+
+	if (typeof value === "string") {
+		if (value.length > MAX_STRING_LENGTH) {
+			return `${formatPath(path)} exceeds maximum string length of ${MAX_STRING_LENGTH}`;
+		}
+		return null;
+	}
+
+	if (value === null || typeof value !== "object") {
+		return null;
+	}
+
+	if (Array.isArray(value)) {
+		for (const [index, item] of value.entries()) {
+			const error = validateJsonBounds(item, depth + 1, [...path, index]);
+			if (error) return error;
+		}
+		return null;
+	}
+
+	for (const [key, nestedValue] of Object.entries(value)) {
+		if (FORBIDDEN_JSON_KEYS.has(key)) {
+			return `${formatPath([...path, key])} uses forbidden JSON key`;
+		}
+		const error = validateJsonBounds(nestedValue, depth + 1, [...path, key]);
+		if (error) return error;
+	}
+
+	return null;
+}
+
+function formatPath(path: (string | number)[]): string {
+	if (path.length === 0) return "body";
+	return `body.${path.join(".")}`;
+}
+
+export function decompress(options: DecompressOptions = {}): MiddlewareHandler {
+	const maxDecompressedBytes = options.maxDecompressedBytes ?? DEFAULT_MAX_DECOMPRESSED_BYTES;
+
 	return async (c, next) => {
 		const encoding = c.req.header("Content-Encoding");
 		if (encoding === "gzip") {
@@ -21,7 +79,7 @@ export function decompress(): MiddlewareHandler {
 			let decompressed: Buffer;
 			try {
 				decompressed = gunzipSync(Buffer.from(compressed), {
-					maxOutputLength: MAX_DECOMPRESSED_BYTES,
+					maxOutputLength: maxDecompressedBytes,
 				});
 			} catch (err) {
 				const error = err as { code?: unknown } | null;
@@ -31,12 +89,24 @@ export function decompress(): MiddlewareHandler {
 				return c.json({ code: 400, message: "Invalid gzip payload" }, 400);
 			}
 			const text = new TextDecoder().decode(decompressed);
-			const json = JSON.parse(text);
-			// biome-ignore lint/suspicious/noExplicitAny: Hono internal body cache
-			(c.req as any).bodyCache = {
-				json: Promise.resolve(json),
-				text: Promise.resolve(text),
-			};
+			let json: unknown;
+			try {
+				json = JSON.parse(text);
+			} catch {
+				return c.json({ code: 400, message: "Invalid JSON payload" }, 400);
+			}
+
+			const boundsError = validateJsonBounds(json);
+			if (boundsError) {
+				return c.json({ code: 400, message: boundsError }, 400);
+			}
+
+			Object.assign(c.req, {
+				bodyCache: {
+					json: Promise.resolve(json),
+					text: Promise.resolve(text),
+				} satisfies CachedBody,
+			});
 		}
 		await next();
 	};

@@ -25,7 +25,7 @@ function mockPolicy(overrides: Partial<OidcTrustPolicy> = {}): OidcTrustPolicy {
 		displayName: "Test Policy",
 		issuer: "https://token.actions.githubusercontent.com",
 		maxExpiration: 7200,
-		claimConditions: { repository_owner_id: "12345" },
+		claimConditions: { sub: "repo:acme/procella", repository: "acme/procella" },
 		grantedRole: "member",
 		active: true,
 		createdAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -86,6 +86,7 @@ describe("OidcExchangeService", () => {
 				sub: "repo:acme/procella",
 				repository: "acme/procella",
 				environment: "prod",
+				repository_owner: "acme",
 				repository_owner_id: 12345,
 			};
 		});
@@ -231,7 +232,11 @@ describe("OidcExchangeService", () => {
 	test("JWT valid but no policy matches claims throws access_denied 403", async () => {
 		const service = new OidcExchangeService(
 			{
-				verify: mock(async () => ({ repository_owner_id: 99999, repository: "acme/procella" })),
+				verify: mock(async () => ({
+					sub: "repo:acme/other",
+					repository: "acme/procella",
+					repository_owner_id: 99999,
+				})),
 				dispose: mock(() => {}),
 			},
 			{
@@ -251,7 +256,7 @@ describe("OidcExchangeService", () => {
 		});
 	});
 
-	test("rejects exchange when policies span multiple tenants", async () => {
+	test("rejects exchange when policies span multiple tenants", () => {
 		const service = new OidcExchangeService(
 			{ verify: mock(async () => ({})), dispose: mock(() => {}) },
 			{
@@ -267,10 +272,10 @@ describe("OidcExchangeService", () => {
 			} as TrustPolicyRepositoryMock,
 			makeAuth(),
 		);
-		await expect(service.exchange(validRequest())).rejects.toThrow("Token exchange not available");
+		return expect(service.exchange(validRequest())).rejects.toThrow("Token exchange not available");
 	});
 
-	test("rejects if subject_token has no parseable iss claim", async () => {
+	test("rejects if subject_token has no parseable iss claim", () => {
 		const service = new OidcExchangeService(
 			{ verify: mock(async () => ({})), dispose: mock(() => {}) },
 			{
@@ -283,7 +288,7 @@ describe("OidcExchangeService", () => {
 			} as TrustPolicyRepositoryMock,
 			makeAuth(),
 		);
-		await expect(service.exchange(validRequest({ subjectToken: "not-a-jwt" }))).rejects.toThrow(
+		return expect(service.exchange(validRequest({ subjectToken: "not-a-jwt" }))).rejects.toThrow(
 			"missing issuer",
 		);
 	});
@@ -326,8 +331,7 @@ describe("OidcExchangeService", () => {
 		const service = new OidcExchangeService(
 			{
 				verify: mock(async () => ({
-					sub: "s",
-					repository_owner_id: 12345,
+					sub: "repo:acme/procella",
 					repository: "acme/procella",
 				})),
 				dispose: mock(() => {}),
@@ -357,7 +361,10 @@ describe("OidcExchangeService", () => {
 	test("missing expiration uses DEFAULT_EXCHANGE_EXPIRATION", async () => {
 		const service = new OidcExchangeService(
 			{
-				verify: mock(async () => ({ sub: "s", repository_owner_id: 12345 })),
+				verify: mock(async () => ({
+					sub: "repo:acme/procella",
+					repository: "acme/procella",
+				})),
 				dispose: mock(() => {}),
 			},
 			{
@@ -380,7 +387,7 @@ describe("OidcExchangeService", () => {
 	test("missing createCliAccessKey throws server_error 500", async () => {
 		const service = new OidcExchangeService(
 			{
-				verify: mock(async () => ({ sub: "s", repository_owner_id: 12345 })),
+				verify: mock(async () => ({ sub: "repo:acme/procella", repository: "acme/procella" })),
 				dispose: mock(() => {}),
 			},
 			{
@@ -478,7 +485,6 @@ describe("OidcExchangeService", () => {
 			{
 				verify: mock(async () => ({
 					sub: "repo:acme/procella",
-					repository_owner_id: 12345,
 					repository: "acme/procella",
 					environment: "prod",
 				})),

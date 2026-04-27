@@ -6,7 +6,11 @@ import {
 	mapUpdateStatusToCommitState,
 } from "@procella/github";
 import type { StacksService } from "@procella/stacks";
-import type { CompleteUpdateRequest, StartUpdateRequest, UpdateKind } from "@procella/types";
+import {
+	type CompleteUpdateRequest,
+	isValidUpdateKind,
+	type StartUpdateRequest,
+} from "@procella/types";
 import type { UpdatesService } from "@procella/updates";
 import type { WebhooksService } from "@procella/webhooks";
 import type { Context } from "hono";
@@ -29,7 +33,10 @@ export function updateHandlers(
 			const org = param(c, "org");
 			const project = param(c, "project");
 			const stack = param(c, "stack");
-			const kind = param(c, "kind") as UpdateKind;
+			const kind = param(c, "kind");
+			if (!isValidUpdateKind(kind)) {
+				return c.json({ code: "invalid_kind", message: `Invalid update kind: ${kind}` }, 400);
+			}
 			const stackInfo = await stacks.getStack(caller.tenantId, org, project, stack);
 			const body = await c.req.json().catch(() => ({}));
 			const typedBody = body as { config?: unknown; program?: unknown };
@@ -74,6 +81,8 @@ export function updateHandlers(
 			const project = c.req.param("project");
 			const stack = c.req.param("stack");
 
+			// Safe: updateAuth already verified that this URL tuple resolves to the
+			// same stackId that the lease token is bound to before any side effects run.
 			if (
 				caller &&
 				org &&
@@ -142,6 +151,7 @@ export function updateHandlers(
 			}
 
 			if (
+				caller &&
 				org &&
 				project &&
 				stack &&
@@ -150,7 +160,7 @@ export function updateHandlers(
 			) {
 				let tenantId = org;
 				try {
-					const stackInfo = await stacks.getStackByNames(org, project, stack);
+					const stackInfo = await stacks.getStack(caller.tenantId, org, project, stack);
 					tenantId = stackInfo.tenantId;
 				} catch (_) {}
 				await webhooks

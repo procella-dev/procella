@@ -1,6 +1,5 @@
-import { TRPCError } from "@trpc/server";
 import { z } from "zod/v4";
-import { publicProcedure, router } from "../trpc.js";
+import { adminProcedure, router } from "../trpc.js";
 
 const auditListInput = z.object({
 	startTime: z.date().optional(),
@@ -16,15 +15,8 @@ const auditExportInput = z.object({
 	action: z.string().optional(),
 });
 
-function assertAdmin(roles: readonly string[]): void {
-	if (!roles.includes("admin")) {
-		throw new TRPCError({ code: "FORBIDDEN", message: "Admin role required" });
-	}
-}
-
 export const auditRouter = router({
-	list: publicProcedure.input(auditListInput).query(async ({ ctx, input }) => {
-		assertAdmin(ctx.caller.roles);
+	list: adminProcedure.input(auditListInput).query(async ({ ctx, input }) => {
 		return ctx.audit.query(ctx.caller.tenantId, {
 			startTime: input.startTime,
 			endTime: input.endTime,
@@ -34,8 +26,7 @@ export const auditRouter = router({
 		});
 	}),
 
-	export: publicProcedure.input(auditExportInput).query(async ({ ctx, input }) => {
-		assertAdmin(ctx.caller.roles);
+	export: adminProcedure.input(auditExportInput).query(async ({ ctx, input }) => {
 		return ctx.audit.export(ctx.caller.tenantId, {
 			startTime: input.startTime,
 			endTime: input.endTime,

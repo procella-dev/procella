@@ -99,7 +99,7 @@ All configuration is via `PROCELLA_*` environment variables. Set these as Vercel
 |---|---|---|
 | `PROCELLA_LISTEN_ADDR` | `:9090` | Server listen address |
 | `PROCELLA_DATABASE_URL` | *(required)* | PostgreSQL connection string (Neon on Vercel, any PostgreSQL locally) |
-| `PROCELLA_AUTH_MODE` | `dev` | `dev` (static tokens) or `descope` (Descope access keys) |
+| `PROCELLA_AUTH_MODE` | *(required)* | `dev` (static tokens) or `descope` (Descope access keys) |
 | `PROCELLA_DEV_AUTH_TOKEN` | *(required if dev)* | Static auth token for dev mode |
 | `PROCELLA_DEV_USER_LOGIN` | `dev-user` | Dev user login name |
 | `PROCELLA_DEV_ORG_LOGIN` | `dev-org` | Dev org login name |
@@ -111,13 +111,27 @@ All configuration is via `PROCELLA_*` environment variables. Set these as Vercel
 | `PROCELLA_BLOB_S3_BUCKET` | *(required if s3)* | S3 bucket name |
 | `PROCELLA_BLOB_S3_ENDPOINT` | | Custom S3 endpoint (MinIO, R2, etc.) |
 | `PROCELLA_BLOB_S3_REGION` | `us-east-1` | S3 region |
-| `PROCELLA_ENCRYPTION_KEY` | *(auto in dev)* | 64 hex chars (32 bytes) for AES-256-GCM |
-| `PROCELLA_CORS_ORIGINS` | *(unrestricted)* | Comma-separated allowed CORS origins |
+| `PROCELLA_ENCRYPTION_KEY` | *(required)* | 64 hex chars (32 bytes) for AES-256-GCM |
+| `PROCELLA_CRON_SECRET` | *(required when `/cron/gc` is enabled)* | Bearer token used to authorize the GC cron endpoint |
+| `PROCELLA_CORS_ORIGINS` | *(optional)* | Comma-separated allowed CORS origins; omit for strict same-origin |
 | `PROCELLA_GITHUB_APP_ID` | *(optional)* | GitHub App ID for PR comments and commit status checks |
 | `PROCELLA_GITHUB_APP_PRIVATE_KEY` | *(optional)* | GitHub App private key (PEM format) |
 | `PROCELLA_GITHUB_APP_WEBHOOK_SECRET` | *(optional)* | GitHub App webhook secret for signature verification |
+| `PROCELLA_TRUST_PROXY` | *(optional)* | Set to `true` only behind a trusted reverse proxy so Procella honors `X-Forwarded-For` / `X-Real-IP` |
 
-Encryption keys are auto-generated in dev mode via `mise` (see `mise.toml`). For production, generate one with `openssl rand -hex 32`.
+Encryption keys must be set explicitly in every environment. Generate one with `openssl rand -hex 32`.
+
+### CORS
+
+By default Procella does **not** mount CORS middleware. Set `PROCELLA_CORS_ORIGINS` explicitly when you need browser cross-origin access.
+
+Using `PROCELLA_CORS_ORIGINS=*` is allowed for local experiments, but it enables any origin and should never be used in production.
+
+### Reverse proxy and TLS termination
+
+- Set `PROCELLA_TRUST_PROXY=true` only when Procella is behind a trusted reverse proxy (for example Caddy or CloudFront) that sanitizes and re-emits client IP headers.
+- When Procella is reached directly, leave `PROCELLA_TRUST_PROXY` unset so audit logging and rate limiting use the socket peer IP instead of user-supplied forwarded headers.
+- `apps/ui/Caddyfile` keeps `auto_https off` because it assumes TLS is terminated upstream. For self-hosted deployments without an upstream TLS terminator, remove `auto_https off` (or set `auto_https on`) and configure Caddy for Let's Encrypt.
 
 ## Quality Gates
 

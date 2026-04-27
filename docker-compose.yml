@@ -14,10 +14,15 @@ x-procella: &procella
     PROCELLA_LISTEN_ADDR: ":9090"
     PROCELLA_DATABASE_URL: "postgres://procella:procella@postgres:5432/procella?sslmode=disable"
     PROCELLA_AUTH_MODE: dev
-    PROCELLA_DEV_AUTH_TOKEN: devtoken123
+    # Use a non-secret placeholder here; copy to .env and replace for real use.
+    PROCELLA_DEV_AUTH_TOKEN: CHANGE_ME_GENERATE_RANDOM_64_HEX
     PROCELLA_DEV_USER_LOGIN: dev-user
     PROCELLA_DEV_ORG_LOGIN: dev-org
     PROCELLA_DEV_USERS: '[{"token":"token-user-b","login":"user-b","org":"org-b","role":"admin"},{"token":"token-viewer","login":"viewer-user","org":"dev-org","role":"viewer"}]'
+    # Generate via: openssl rand -hex 32 ; do not reuse across deployments.
+    PROCELLA_ENCRYPTION_KEY: ${PROCELLA_ENCRYPTION_KEY:?must be set; generate with `openssl rand -hex 32`}
+    # Placeholder only; generate a unique secret when enabling /cron/gc.
+    PROCELLA_CRON_SECRET: CHANGE_ME_GENERATE_RANDOM_32_HEX
     PROCELLA_BLOB_BACKEND: s3
     PROCELLA_BLOB_S3_BUCKET: procella-checkpoints
     PROCELLA_BLOB_S3_ENDPOINT: http://minio:9000

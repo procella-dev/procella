@@ -119,22 +119,15 @@ export {
 } from "./pulumi.gen.js";
 
 // ============================================================================
-// Enum objects (as const + type union pattern)
-//
-// The tygo-generated file uses `type X = string` with standalone const values.
-// We provide grouped const objects for better DX and exhaustive checking.
+// Enum allowlists (as const + type union pattern)
 // ============================================================================
 
-export const UpdateKind = {
-	Update: "update",
-	Preview: "preview",
-	Refresh: "refresh",
-	Rename: "rename",
-	Destroy: "destroy",
-	Import: "import",
-	ResourceImport: "resource-import",
-} as const;
-export type UpdateKind = (typeof UpdateKind)[keyof typeof UpdateKind];
+export const UPDATE_KINDS = ["update", "preview", "refresh", "destroy", "import"] as const;
+export type UpdateKind = (typeof UPDATE_KINDS)[number];
+
+export function isValidUpdateKind(s: string): s is UpdateKind {
+	return (UPDATE_KINDS as readonly string[]).includes(s);
+}
 
 export const UpdateResult = {
 	NotStarted: "not-started",

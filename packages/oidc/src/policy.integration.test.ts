@@ -6,10 +6,8 @@
 // Run explicitly: bun test packages/oidc/src/policy.integration.test.ts
 // Or via: bun run test:integration
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import type { Database } from "@procella/db";
-import { createDb } from "@procella/db";
-import { oidcTrustPolicies } from "@procella/db/src/schema.js";
-import { eq } from "drizzle-orm";
+import { createDb, type Database, oidcTrustPolicies } from "@procella/db";
+import { eq, sql } from "drizzle-orm";
 import { PostgresTrustPolicyRepository } from "./policy.js";
 
 const TEST_DB_URL =
@@ -21,7 +19,9 @@ let closeDb: () => Promise<void>;
 let repo: PostgresTrustPolicyRepository;
 
 const TENANT_ID = "integration-test-tenant";
+const OTHER_TENANT_ID = "integration-test-other-tenant";
 const ORG_SLUG = "integration-test-org";
+const ISSUER = "https://token.actions.githubusercontent.com";
 
 const SKIP_INTEGRATION =
 	process.env.SKIP_INTEGRATION_TESTS === "true" ||
@@ -37,8 +37,14 @@ describe_db("PostgresTrustPolicyRepository", () => {
 		db = result.db;
 		closeDb = async () => result.client.close();
 		repo = new PostgresTrustPolicyRepository(db);
+		await db.execute(
+			sql.raw(
+				`CREATE UNIQUE INDEX IF NOT EXISTS idx_oidc_trust_org_issuer_h6_test ON oidc_trust_policies (org_slug, issuer) WHERE org_slug = '${ORG_SLUG}'`,
+			),
+		);
 		// Clean up any leftover test data
 		await db.delete(oidcTrustPolicies).where(eq(oidcTrustPolicies.tenantId, TENANT_ID));
+		await db.delete(oidcTrustPolicies).where(eq(oidcTrustPolicies.tenantId, OTHER_TENANT_ID));
 	});
 
 	afterAll(async () => {
@@ -46,17 +52,67 @@ describe_db("PostgresTrustPolicyRepository", () => {
 			.delete(oidcTrustPolicies)
 			.where(eq(oidcTrustPolicies.tenantId, TENANT_ID))
 			.catch(() => {});
+		await db
+			.delete(oidcTrustPolicies)
+			.where(eq(oidcTrustPolicies.tenantId, OTHER_TENANT_ID))
+			.catch(() => {});
+		await db.execute(sql`DROP INDEX IF EXISTS idx_oidc_trust_org_issuer_h6_test`).catch(() => {});
 		await closeDb();
 	});
+
+	test("tenant B cannot replace tenant A policy for same org+issuer", async () => {
+		const tenantAPolicy = await repo.create({
+			tenantId: TENANT_ID,
+			orgSlug: ORG_SLUG,
+			provider: "github-actions",
+			displayName: "Tenant A Policy",
+			issuer: ISSUER,
+			maxExpiration: 3600,
+			claimConditions: { iss: ISSUER, repository_owner: "tenant-a-org" },
+			grantedRole: "member",
+			active: true,
+		});
+
+		try {
+			await repo.create({
+				tenantId: OTHER_TENANT_ID,
+				orgSlug: ORG_SLUG,
+				provider: "github-actions",
+				displayName: "Tenant B Policy",
+				issuer: ISSUER,
+				maxExpiration: 3600,
+				claimConditions: { iss: ISSUER, repository_owner: "tenant-b-org" },
+				grantedRole: "admin",
+				active: true,
+			});
+			expect.unreachable();
+		} catch (error) {
+			expect(error).toMatchObject({
+				code: "policy_conflict",
+				message: "OIDC trust policy with this org/issuer pair already exists",
+			});
+		}
+
+		const tenantAPolicies = await repo.listByOrgSlug(ORG_SLUG, TENANT_ID);
+		expect(tenantAPolicies).toHaveLength(1);
+		expect(tenantAPolicies[0]?.id).toBe(tenantAPolicy.id);
+		expect(tenantAPolicies[0]?.displayName).toBe("Tenant A Policy");
+
+		const tenantBPolicies = await repo.listByOrgSlug(ORG_SLUG, OTHER_TENANT_ID);
+		expect(tenantBPolicies).toHaveLength(0);
+
+		await repo.delete(tenantAPolicy.id, TENANT_ID);
+	});
+
 	test("create inserts a policy and returns it with generated id", async () => {
 		const policy = await repo.create({
 			tenantId: TENANT_ID,
 			orgSlug: ORG_SLUG,
 			provider: "github-actions",
 			displayName: "Test Policy",
-			issuer: "https://token.actions.githubusercontent.com",
+			issuer: ISSUER,
 			maxExpiration: 3600,
-			claimConditions: { repository_owner_id: "12345" },
+			claimConditions: { iss: ISSUER, repository_owner: "integration-test-org" },
 			grantedRole: "member",
 			active: true,
 		});
@@ -67,9 +123,12 @@ describe_db("PostgresTrustPolicyRepository", () => {
 		expect(policy.orgSlug).toBe(ORG_SLUG);
 		expect(policy.provider).toBe("github-actions");
 		expect(policy.displayName).toBe("Test Policy");
-		expect(policy.issuer).toBe("https://token.actions.githubusercontent.com");
+		expect(policy.issuer).toBe(ISSUER);
 		expect(policy.maxExpiration).toBe(3600);
-		expect(policy.claimConditions).toEqual({ repository_owner_id: "12345" });
+		expect(policy.claimConditions).toEqual({
+			iss: ISSUER,
+			repository_owner: "integration-test-org",
+		});
 		expect(policy.grantedRole).toBe("member");
 		expect(policy.active).toBe(true);
 		expect(policy.createdAt).toBeInstanceOf(Date);
@@ -103,8 +162,11 @@ describe_db("PostgresTrustPolicyRepository", () => {
 		expect(updated.maxExpiration).toBe(7200);
 		expect(updated.active).toBe(false);
 		// Unchanged fields
-		expect(updated.issuer).toBe("https://token.actions.githubusercontent.com");
-		expect(updated.claimConditions).toEqual({ repository_owner_id: "12345" });
+		expect(updated.issuer).toBe(ISSUER);
+		expect(updated.claimConditions).toEqual({
+			iss: ISSUER,
+			repository_owner: "integration-test-org",
+		});
 	});
 
 	test("findByOrgSlug excludes inactive policies", async () => {
@@ -122,8 +184,8 @@ describe_db("PostgresTrustPolicyRepository", () => {
 		expect(found?.active).toBe(false);
 	});
 
-	test("update returns error when policy not found for tenant", async () => {
-		await expect(
+	test("update returns error when policy not found for tenant", () => {
+		return expect(
 			repo.update(createdId, "wrong-tenant", { displayName: "Should Fail" }),
 		).rejects.toThrow();
 	});
@@ -145,9 +207,9 @@ describe_db("PostgresTrustPolicyRepository", () => {
 			orgSlug: ORG_SLUG,
 			provider: "github-actions",
 			displayName: "Delete Isolation Test",
-			issuer: "https://token.actions.githubusercontent.com",
+			issuer: ISSUER,
 			maxExpiration: 3600,
-			claimConditions: {},
+			claimConditions: { iss: ISSUER, repository_owner: "integration-test-org" },
 			grantedRole: "viewer",
 			active: true,
 		});

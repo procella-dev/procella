@@ -1,6 +1,6 @@
 // @procella/updates — PostgreSQL implementation of UpdatesService.
 
-import type { CryptoService } from "@procella/crypto";
+import type { CryptoService, StackCryptoInput } from "@procella/crypto";
 import type { Database } from "@procella/db";
 import { checkpoints, journalEntries, stacks, updateEvents, updates } from "@procella/db";
 import type { BlobStorage } from "@procella/storage";
@@ -62,7 +62,27 @@ import {
 	safeTokenCompare,
 } from "./helpers.js";
 import type { UpdatesService } from "./types.js";
-import { BLOB_THRESHOLD, LEASE_DURATION_SECONDS } from "./types.js";
+import { BLOB_THRESHOLD, ImportConflictError, LEASE_DURATION_SECONDS } from "./types.js";
+
+const MAX_JOURNAL_ENTRIES = 10_000;
+const MAX_EVENT_BATCH_SIZE = 1_000;
+
+type DbTransaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
+
+interface LockedUpdateRow {
+	stackId: string;
+	status: string;
+	leaseToken: string | null;
+	leaseExpiresAt: Date | null;
+}
+
+interface StackLockRow {
+	activeUpdateId: string | null;
+}
+
+interface NextCheckpointVersionRow {
+	nextVersion: number | string | bigint;
+}
 
 function pgErrorCode(err: unknown): string | undefined {
 	let current: unknown = err;
@@ -101,9 +121,7 @@ export class PostgresUpdatesService implements UpdatesService {
 
 	// Per-update caches for immutable/monotonic data. Cleared on completeUpdate/cancelUpdate.
 	// Journal entries are NOT cached — DB remains source of truth for cluster safety.
-	private static readonly MAX_CACHE_ENTRIES = 64;
 	private readonly baseDeploymentCache = new Map<string, Record<string, unknown>>();
-	private readonly checkpointVersionCache = new Map<string, number>();
 
 	constructor({
 		db,
@@ -394,14 +412,8 @@ export class PostgresUpdatesService implements UpdatesService {
 
 	async patchCheckpoint(updateId: string, request: PatchUpdateCheckpointRequest): Promise<void> {
 		return withDbSpan("patchCheckpoint", { "update.id": updateId }, async () => {
-			const [row] = await this.db.select().from(updates).where(eq(updates.id, updateId));
-
-			if (!row) {
-				throw new UpdateNotFoundError(updateId);
-			}
-
 			const deployment = (request as { deployment?: unknown }).deployment;
-			await this.upsertCheckpoint(updateId, row.stackId, deployment);
+			await this.upsertCheckpoint(updateId, deployment);
 		});
 	}
 
@@ -410,16 +422,10 @@ export class PostgresUpdatesService implements UpdatesService {
 		request: PatchUpdateVerbatimCheckpointRequest,
 	): Promise<void> {
 		return withDbSpan("patchCheckpointVerbatim", { "update.id": updateId }, async () => {
-			const [row] = await this.db.select().from(updates).where(eq(updates.id, updateId));
-
-			if (!row) {
-				throw new UpdateNotFoundError(updateId);
-			}
-
 			const wrapper = (request as { untypedDeployment?: { deployment?: unknown } })
 				.untypedDeployment;
 			const rawDeployment = wrapper?.deployment ?? wrapper;
-			await this.upsertCheckpoint(updateId, row.stackId, rawDeployment);
+			await this.upsertCheckpoint(updateId, rawDeployment);
 		});
 	}
 
@@ -428,12 +434,6 @@ export class PostgresUpdatesService implements UpdatesService {
 		request: PatchUpdateCheckpointDeltaRequest,
 	): Promise<void> {
 		return withDbSpan("patchCheckpointDelta", { "update.id": updateId }, async () => {
-			const [row] = await this.db.select().from(updates).where(eq(updates.id, updateId));
-
-			if (!row) {
-				throw new UpdateNotFoundError(updateId);
-			}
-
 			// Fetch latest non-delta checkpoint for this update
 			const [baseCheckpoint] = await this.db
 				.select()
@@ -480,56 +480,57 @@ export class PostgresUpdatesService implements UpdatesService {
 			}
 
 			const merged = JSON.parse(newJson);
-			await this.upsertCheckpoint(updateId, row.stackId, merged);
+			await this.upsertCheckpoint(updateId, merged);
 		});
 	}
 
 	async appendJournalEntries(updateId: string, batch: JournalEntries): Promise<void> {
 		return withDbSpan("appendJournalEntries", { "update.id": updateId }, async () => {
-			const [row] = await this.db.select().from(updates).where(eq(updates.id, updateId));
-
-			if (!row) {
-				throw new UpdateNotFoundError(updateId);
-			}
-
 			const entries = batch.entries ?? [];
 			if (entries.length === 0) {
 				return;
 			}
+			if (entries.length > MAX_JOURNAL_ENTRIES) {
+				throw new BadRequestError(`Too many journal entries (max ${MAX_JOURNAL_ENTRIES})`);
+			}
 
-			const rows = entries.map((entry: JournalEntry) => {
-				if (
-					typeof entry.sequenceID !== "number" ||
-					typeof entry.operationID !== "number" ||
-					typeof entry.kind !== "number"
-				) {
-					throw new BadRequestError(
-						"Invalid journal entry: sequenceID, operationID, and kind must be numbers",
-					);
-				}
-				return {
-					updateId,
-					stackId: row.stackId,
-					sequenceId: BigInt(entry.sequenceID),
-					operationId: BigInt(entry.operationID),
-					kind: entry.kind,
-					state: entry.state ?? null,
-					operation: entry.operation ?? null,
-					secretsProvider: entry.secretsProvider ?? null,
-					newSnapshot: entry.newSnapshot ?? null,
-					operationType: null,
-					removeOld: entry.removeOld != null ? BigInt(entry.removeOld) : null,
-					removeNew: entry.removeNew != null ? BigInt(entry.removeNew) : null,
-					elideWrite: entry.elideWrite ?? false,
-				};
+			const stackId = await this.db.transaction(async (tx) => {
+				const lockedUpdate = await this.lockUpdateForWrite(tx, updateId);
+				const rows = entries.map((entry: JournalEntry) => {
+					if (
+						typeof entry.sequenceID !== "number" ||
+						typeof entry.operationID !== "number" ||
+						typeof entry.kind !== "number"
+					) {
+						throw new BadRequestError(
+							"Invalid journal entry: sequenceID, operationID, and kind must be numbers",
+						);
+					}
+					return {
+						updateId,
+						stackId: lockedUpdate.stackId,
+						sequenceId: BigInt(entry.sequenceID),
+						operationId: BigInt(entry.operationID),
+						kind: entry.kind,
+						state: entry.state ?? null,
+						operation: entry.operation ?? null,
+						secretsProvider: entry.secretsProvider ?? null,
+						newSnapshot: entry.newSnapshot ?? null,
+						operationType: null,
+						removeOld: entry.removeOld != null ? BigInt(entry.removeOld) : null,
+						removeNew: entry.removeNew != null ? BigInt(entry.removeNew) : null,
+						elideWrite: entry.elideWrite ?? false,
+					};
+				});
+
+				await tx.insert(journalEntries).values(rows).onConflictDoNothing();
+				return lockedUpdate.stackId;
 			});
-
-			await this.db.insert(journalEntries).values(rows).onConflictDoNothing();
 			journalEntriesCount().add(entries.length, { "update.id": updateId });
 
 			const hasNonElided = entries.some((e: JournalEntry) => !e.elideWrite);
 			if (hasNonElided) {
-				await this.flushJournalToCheckpoint(updateId, row.stackId);
+				await this.flushJournalToCheckpoint(updateId, stackId);
 			}
 		});
 	}
@@ -538,6 +539,9 @@ export class PostgresUpdatesService implements UpdatesService {
 		const events = (batch as { events?: EngineEvent[] }).events;
 		if (!events || events.length === 0) {
 			return;
+		}
+		if (events.length > MAX_EVENT_BATCH_SIZE) {
+			throw new BadRequestError(`Too many events (max ${MAX_EVENT_BATCH_SIZE})`);
 		}
 
 		return withDbSpan(
@@ -551,13 +555,16 @@ export class PostgresUpdatesService implements UpdatesService {
 					fields: event as unknown,
 				}));
 
-				await this.db
-					.insert(updateEvents)
-					.values(rows)
-					.onConflictDoUpdate({
-						target: [updateEvents.updateId, updateEvents.sequence],
-						set: { kind: sql`excluded.kind`, fields: sql`excluded.fields` },
-					});
+				await this.db.transaction(async (tx) => {
+					await this.lockUpdateForWrite(tx, updateId);
+					await tx
+						.insert(updateEvents)
+						.values(rows)
+						.onConflictDoUpdate({
+							target: [updateEvents.updateId, updateEvents.sequence],
+							set: { kind: sql`excluded.kind`, fields: sql`excluded.fields` },
+						});
+				});
 
 				this.db.execute(sql`SELECT pg_notify('update_events', ${updateId})`).catch(() => {});
 			},
@@ -621,7 +628,10 @@ export class PostgresUpdatesService implements UpdatesService {
 				throw new LeaseExpiredError();
 			}
 
-			const duration = (request as { duration?: number }).duration ?? LEASE_DURATION_SECONDS;
+			const duration = Math.min(
+				(request as { duration?: number }).duration ?? LEASE_DURATION_SECONDS,
+				LEASE_DURATION_SECONDS,
+			);
 			const newExpiry = leaseExpiresAt(duration);
 
 			await this.db
@@ -688,79 +698,81 @@ export class PostgresUpdatesService implements UpdatesService {
 
 	async importStack(stackId: string, deployment: UntypedDeployment): Promise<ImportStackResponse> {
 		return withDbSpan("importStack", { "stack.id": stackId }, async () => {
-			const [updateRow] = await this.db
-				.insert(updates)
-				.values({
-					stackId,
-					kind: "import",
-					status: "succeeded",
-					completedAt: sql`now()`,
-				})
-				.returning();
+			const updateRow = await this.db.transaction(async (tx) => {
+				const stackLock = await this.lockStackForImport(tx, stackId);
+				if (stackLock.activeUpdateId) {
+					throw new ImportConflictError();
+				}
 
-			await this.upsertCheckpoint(updateRow.id, stackId, deployment.deployment);
+				const [row] = await tx
+					.insert(updates)
+					.values({
+						stackId,
+						kind: "import",
+						status: "succeeded",
+						completedAt: sql`now()`,
+					})
+					.returning();
+
+				await this.upsertCheckpointInTransaction(tx, row.id, deployment.deployment, {
+					requireRunningLease: false,
+				});
+
+				return row;
+			});
 
 			return { updateId: updateRow.id } satisfies ImportStackResponse;
 		});
 	}
 
-	async encryptValue(stackFQN: string, plaintext: Uint8Array): Promise<Uint8Array> {
-		return this.crypto.encrypt(plaintext, stackFQN);
+	async encryptValue(stack: StackCryptoInput, plaintext: Uint8Array): Promise<Uint8Array> {
+		return this.crypto.encrypt(stack, plaintext);
 	}
 
-	async decryptValue(stackFQN: string, ciphertext: Uint8Array): Promise<Uint8Array> {
-		return this.crypto.decrypt(ciphertext, stackFQN);
+	async decryptValue(stack: StackCryptoInput, ciphertext: Uint8Array): Promise<Uint8Array> {
+		return this.crypto.decrypt(stack, ciphertext);
 	}
 
-	async batchEncrypt(stackFQN: string, plaintexts: Uint8Array[]): Promise<Uint8Array[]> {
-		return Promise.all(plaintexts.map((p) => this.crypto.encrypt(p, stackFQN)));
+	async batchEncrypt(stack: StackCryptoInput, plaintexts: Uint8Array[]): Promise<Uint8Array[]> {
+		return Promise.all(plaintexts.map((p) => this.crypto.encrypt(stack, p)));
 	}
 
-	async batchDecrypt(stackFQN: string, ciphertexts: Uint8Array[]): Promise<Uint8Array[]> {
-		return Promise.all(ciphertexts.map((c) => this.crypto.decrypt(c, stackFQN)));
+	async batchDecrypt(stack: StackCryptoInput, ciphertexts: Uint8Array[]): Promise<Uint8Array[]> {
+		return Promise.all(ciphertexts.map((c) => this.crypto.decrypt(stack, c)));
 	}
 
 	// ========================================================================
 	// Private Helpers
 	// ========================================================================
 
-	private async nextCheckpointVersion(updateId: string): Promise<number> {
-		this.evictStaleCaches();
+	private async nextCheckpointVersion(tx: DbTransaction, updateId: string): Promise<number> {
+		const [row] = this.readExecuteRows<NextCheckpointVersionRow>(
+			await tx.execute(sql`
+				SELECT COALESCE(MAX(version), 0) + 1 AS "nextVersion"
+				FROM checkpoints
+				WHERE update_id = ${updateId}
+			`),
+		);
 
-		const cached = this.checkpointVersionCache.get(updateId);
-		if (cached !== undefined) {
-			const next = cached + 1;
-			this.checkpointVersionCache.set(updateId, next);
-			return next;
-		}
-
-		const [row] = await this.db
-			.select({ maxVersion: max(checkpoints.version) })
-			.from(checkpoints)
-			.where(eq(checkpoints.updateId, updateId));
-
-		const next = (row?.maxVersion ?? 0) + 1;
-		this.checkpointVersionCache.set(updateId, next);
-		return next;
+		const nextVersion = row?.nextVersion ?? 1;
+		return Number(nextVersion);
 	}
 
 	private clearUpdateCaches(updateId: string): void {
 		this.baseDeploymentCache.delete(updateId);
-		this.checkpointVersionCache.delete(updateId);
 		checkpointDedup.clear(updateId);
 	}
 
 	private evictStaleCaches(): void {
-		if (this.baseDeploymentCache.size > PostgresUpdatesService.MAX_CACHE_ENTRIES) {
+		if (this.baseDeploymentCache.size > 64) {
 			this.baseDeploymentCache.clear();
-		}
-		if (this.checkpointVersionCache.size > PostgresUpdatesService.MAX_CACHE_ENTRIES) {
-			this.checkpointVersionCache.clear();
 		}
 	}
 
 	private async flushJournalToCheckpoint(updateId: string, stackId: string): Promise<void> {
 		return withDbSpan("flushJournalToCheckpoint", { "update.id": updateId }, async () => {
+			this.evictStaleCaches();
+
 			const allEntries = await this.db
 				.select()
 				.from(journalEntries)
@@ -778,68 +790,143 @@ export class PostgresUpdatesService implements UpdatesService {
 			}
 
 			const reconstructed = applyJournalEntries(baseDeployment, allEntries);
-			await this.upsertCheckpoint(updateId, stackId, reconstructed);
+			await this.upsertCheckpoint(updateId, reconstructed);
 		});
 	}
 
-	private async upsertCheckpoint(updateId: string, stackId: string, data: unknown): Promise<void> {
-		return withDbSpan(
-			"upsertCheckpoint",
-			{ "update.id": updateId, "stack.id": stackId },
-			async () => {
-				const serialized = JSON.stringify(data);
-
-				if (await checkpointDedup.isDuplicate(updateId, serialized)) {
-					return;
-				}
-
-				checkpointSizeHistogram().record(Buffer.byteLength(serialized, "utf8"), {
-					"stack.id": stackId,
-				});
-				const version = await this.nextCheckpointVersion(updateId);
-
-				let blobKey: string | null = null;
-				const checkpointData: unknown = data;
-				if (serialized.length > BLOB_THRESHOLD) {
-					blobKey = formatBlobKey(stackId, updateId, version);
-					await this.storage.put(blobKey, new TextEncoder().encode(serialized));
-					await this.db
-						.insert(checkpoints)
-						.values({
-							updateId,
-							stackId,
-							version,
-							data: null,
-							blobKey,
-							isDelta: false,
-						})
-						.onConflictDoUpdate({
-							target: [checkpoints.updateId, checkpoints.version],
-							set: { data: null, blobKey, isDelta: false },
-						});
-					return;
-				}
-
-				await this.db
-					.insert(checkpoints)
-					.values({
-						updateId,
-						stackId,
-						version,
-						data: checkpointData,
-						blobKey,
-						isDelta: false,
-					})
-					.onConflictDoUpdate({
-						target: [checkpoints.updateId, checkpoints.version],
-						set: {
-							data: checkpointData,
-							blobKey,
-							isDelta: false,
-						},
-					});
-			},
+	private async upsertCheckpoint(
+		updateId: string,
+		data: unknown,
+		options?: { requireRunningLease?: boolean },
+	): Promise<void> {
+		return withDbSpan("upsertCheckpoint", { "update.id": updateId }, () =>
+			this.db.transaction((tx) => this.upsertCheckpointInTransaction(tx, updateId, data, options)),
 		);
+	}
+
+	private async upsertCheckpointInTransaction(
+		tx: DbTransaction,
+		updateId: string,
+		data: unknown,
+		options?: { requireRunningLease?: boolean },
+	): Promise<void> {
+		const serialized = JSON.stringify(data);
+		const lockedUpdate = await this.lockUpdateForWrite(tx, updateId, options);
+
+		if (await checkpointDedup.isDuplicate(updateId, serialized)) {
+			return;
+		}
+
+		checkpointSizeHistogram().record(Buffer.byteLength(serialized, "utf8"), {
+			"stack.id": lockedUpdate.stackId,
+		});
+		const version = await this.nextCheckpointVersion(tx, updateId);
+
+		let blobKey: string | null = null;
+		const checkpointData: unknown = data;
+		if (serialized.length > BLOB_THRESHOLD) {
+			blobKey = formatBlobKey(lockedUpdate.stackId, updateId, version);
+			await this.storage.put(blobKey, new TextEncoder().encode(serialized));
+			await tx
+				.insert(checkpoints)
+				.values({
+					updateId,
+					stackId: lockedUpdate.stackId,
+					version,
+					data: null,
+					blobKey,
+					isDelta: false,
+				})
+				.onConflictDoUpdate({
+					target: [checkpoints.updateId, checkpoints.version],
+					set: { data: null, blobKey, isDelta: false },
+				});
+			return;
+		}
+
+		await tx
+			.insert(checkpoints)
+			.values({
+				updateId,
+				stackId: lockedUpdate.stackId,
+				version,
+				data: checkpointData,
+				blobKey,
+				isDelta: false,
+			})
+			.onConflictDoUpdate({
+				target: [checkpoints.updateId, checkpoints.version],
+				set: {
+					data: checkpointData,
+					blobKey,
+					isDelta: false,
+				},
+			});
+	}
+
+	private async lockUpdateForWrite(
+		tx: DbTransaction,
+		updateId: string,
+		options?: { requireRunningLease?: boolean },
+	): Promise<LockedUpdateRow> {
+		const [row] = this.readExecuteRows<LockedUpdateRow>(
+			await tx.execute(sql`
+				SELECT stack_id AS "stackId", status, lease_token AS "leaseToken", lease_expires_at AS "leaseExpiresAt"
+				FROM updates
+				WHERE id = ${updateId}
+				FOR UPDATE
+			`),
+		);
+
+		if (!row) {
+			throw new UpdateNotFoundError(updateId);
+		}
+
+		if (options?.requireRunningLease === false) {
+			return row;
+		}
+
+		if (
+			row.status !== "running" ||
+			!row.leaseToken ||
+			(row.leaseExpiresAt != null && row.leaseExpiresAt.getTime() < Date.now())
+		) {
+			throw new LeaseExpiredError();
+		}
+
+		return row;
+	}
+
+	private async lockStackForImport(tx: DbTransaction, stackId: string): Promise<StackLockRow> {
+		const [row] = this.readExecuteRows<StackLockRow>(
+			await tx.execute(sql`
+				SELECT active_update_id AS "activeUpdateId"
+				FROM stacks
+				WHERE id = ${stackId}
+				FOR UPDATE
+			`),
+		);
+
+		if (!row) {
+			throw new Error(`Stack not found: ${stackId}`);
+		}
+
+		return row;
+	}
+
+	private readExecuteRows<T>(result: unknown): T[] {
+		if (Array.isArray(result)) {
+			return result as T[];
+		}
+
+		if (typeof result === "object" && result !== null && "rows" in result) {
+			const rows = (result as { rows?: unknown }).rows;
+			if (Array.isArray(rows)) {
+				return rows as T[];
+			}
+		}
+
+		throw new Error("Unexpected database execute result shape");
 	}
 
 	private async loadBaseDeploymentForUpdate(

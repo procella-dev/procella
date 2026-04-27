@@ -3,12 +3,13 @@
 // Descope handles authn; tenant_id and roles from JWT drive authz.
 // Dev mode uses a static token for local development.
 
+import { timingSafeEqual } from "node:crypto";
 import DescopeSdk from "@descope/node-sdk";
 import { OidcClaims } from "@procella/oidc";
 import { authAuthenticateDuration, authFailureCount, withSpan } from "@procella/telemetry";
-
 import type { Caller, Role, WorkloadIdentity } from "@procella/types";
 import { ForbiddenError, UnauthorizedError } from "@procella/types";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 
 // ============================================================================
 // Auth Service Interface
@@ -34,24 +35,46 @@ export interface AuthService {
 // ============================================================================
 
 export type AuthConfig =
-	| { mode: "dev"; token: string; userLogin: string; orgLogin: string }
-	| { mode: "descope"; projectId: string; managementKey?: string };
+	| {
+			mode: "dev";
+			token: string;
+			userLogin: string;
+			orgLogin: string;
+			users?: readonly DevAuthUser[];
+	  }
+	| { mode: "descope"; projectId: string; managementKey?: string; issuer?: string };
 
 // ============================================================================
 // Dev Auth Service
 // ============================================================================
 
+export interface DevAuthUser {
+	token: string;
+	login: string;
+	org: string;
+	role: Role;
+}
+
 export interface DevAuthConfig {
 	token: string;
 	userLogin: string;
 	orgLogin: string;
+	users?: readonly DevAuthUser[];
 }
 
 export class DevAuthService implements AuthService {
-	private readonly config: DevAuthConfig;
+	private readonly users: readonly DevAuthUser[];
 
 	constructor(config: DevAuthConfig) {
-		this.config = config;
+		this.users = [
+			{
+				token: config.token,
+				login: config.userLogin,
+				org: config.orgLogin,
+				role: "admin",
+			},
+			...(config.users ?? []),
+		];
 	}
 
 	async authenticate(request: Request): Promise<Caller> {
@@ -59,15 +82,16 @@ export class DevAuthService implements AuthService {
 			const start = performance.now();
 			try {
 				const { token } = extractToken(request);
-				if (token !== this.config.token) {
+				const user = this.users.find((entry) => safeEqualString(token, entry.token));
+				if (!user) {
 					throw new UnauthorizedError("Invalid authentication token");
 				}
 				return {
-					tenantId: this.config.orgLogin,
-					orgSlug: this.config.orgLogin,
-					userId: this.config.userLogin,
-					login: this.config.userLogin,
-					roles: ["admin"] as const,
+					tenantId: user.org,
+					orgSlug: user.org,
+					userId: user.login,
+					login: user.login,
+					roles: [user.role],
 					principalType: "user" as const,
 				};
 			} catch (error) {
@@ -106,9 +130,12 @@ export class DevAuthService implements AuthService {
 export interface DescopeAuthConfig {
 	projectId: string;
 	managementKey?: string;
+	issuer?: string;
 }
 
 type DescopeClient = ReturnType<typeof DescopeSdk>;
+
+const CLI_ACCESS_KEY_CUSTOM_CLAIM_ALLOWLIST = new Set<string>(Object.values(OidcClaims));
 
 /** Cached access-key → Caller mapping with TTL from JWT exp claim. */
 interface CachedAuth {
@@ -123,10 +150,18 @@ export class DescopeAuthService implements AuthService {
 	private readonly pending = new Map<string, Promise<Caller>>();
 	private readonly EXPIRY_MARGIN_S = 60;
 	private readonly MAX_CACHE_TTL_S = 300;
+	private readonly projectId: string;
+	private readonly issuer: string;
+	private readonly jwks: ReturnType<typeof createRemoteJWKSet>;
 	private sweepTimer: ReturnType<typeof setInterval> | null = null;
 
 	constructor(options: { sdk: DescopeClient; config: DescopeAuthConfig }) {
 		this.sdk = options.sdk;
+		this.projectId = options.config.projectId;
+		this.issuer = options.config.issuer ?? buildDescopeIssuer(options.config.projectId);
+		this.jwks = createRemoteJWKSet(
+			new URL(".well-known/jwks.json", this.issuer.endsWith("/") ? this.issuer : `${this.issuer}/`),
+		);
 		this.sweepTimer = setInterval(() => this.sweep(), 60_000);
 		if (this.sweepTimer.unref) this.sweepTimer.unref();
 	}
@@ -147,8 +182,12 @@ export class DescopeAuthService implements AuthService {
 
 				// JWT tokens (Bearer from UI) — validate directly, no caching needed.
 				if (token.startsWith("eyJ")) {
-					const authInfo = await this.sdk.validateJwt(token);
-					return this.extractCaller(authInfo.token);
+					const { payload } = await jwtVerify(token, this.jwks, {
+						algorithms: ["RS256"],
+						issuer: this.issuer,
+						audience: this.projectId,
+					});
+					return this.extractCaller(payload as Record<string, unknown>);
 				}
 
 				// Access key tokens — cache the exchanged JWT.
@@ -210,13 +249,7 @@ export class DescopeAuthService implements AuthService {
 						u?.loginIds?.[0] ??
 						caller.login; // use pre-computed login for workload callers
 					const expireTime = opts?.expireTime ?? 0;
-					// Strip procellaLogin and procellaOrgSlug from caller-provided claims,
-					// then re-add them with authoritative server-side values.
-					const {
-						procellaLogin: _a,
-						procellaOrgSlug: _b,
-						...safeCustomClaims
-					} = opts?.customClaims ?? {};
+					const safeCustomClaims = sanitizeCliAccessKeyCustomClaims(opts?.customClaims);
 					const customClaims = {
 						procellaLogin: loginId,
 						procellaOrgSlug: caller.orgSlug,
@@ -229,8 +262,7 @@ export class DescopeAuthService implements AuthService {
 						undefined,
 						[{ tenantId: caller.tenantId, roleNames: [...caller.roles] }],
 						caller.userId || undefined, // pass undefined for workload (empty string) to avoid Descope 33-char limit
-						// biome-ignore lint/suspicious/noExplicitAny: Descope SDK types use Record<string, any>
-						customClaims as Record<string, any>,
+						customClaims,
 					);
 					if (!resp.ok || !resp.data?.cleartext) {
 						throw new Error(
@@ -294,12 +326,7 @@ export class DescopeAuthService implements AuthService {
 			try {
 				const authInfo = await this.sdk.exchangeAccessKey(accessKey);
 				const claims = authInfo.token;
-				const elapsed = (performance.now() - started).toFixed(0);
 				const exp = typeof claims.exp === "number" ? claims.exp : undefined;
-				// biome-ignore lint/suspicious/noConsole: auth diagnostics
-				console.log(
-					`[auth] exchangeAccessKey OK ${elapsed}ms exp=${exp ? new Date(exp * 1000).toISOString() : "none"} sub=${claims.sub ?? "?"}`,
-				);
 
 				const caller = this.extractCaller(claims);
 
@@ -405,6 +432,7 @@ export function createAuthService(config: AuthConfig): AuthService {
 				token: config.token,
 				userLogin: config.userLogin,
 				orgLogin: config.orgLogin,
+				users: config.users,
 			});
 		case "descope": {
 			const sdk = DescopeSdk({
@@ -416,6 +444,7 @@ export function createAuthService(config: AuthConfig): AuthService {
 				config: {
 					projectId: config.projectId,
 					managementKey: config.managementKey,
+					issuer: config.issuer,
 				},
 			});
 		}
@@ -490,6 +519,15 @@ function parseUpdateToken(token: string): { updateId: string; stackId: string } 
 	return { updateId: parts[1], stackId: parts[2] };
 }
 
+function buildDescopeIssuer(projectId: string): string {
+	return `https://api.descope.com/${projectId}`;
+}
+
+function safeEqualString(a: string, b: string): boolean {
+	if (a.length !== b.length) return false;
+	return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
+
 /** Extract tenant ID from Descope JWT claims. */
 function extractTenantId(claims: Record<string, unknown>): string | undefined {
 	// `dct` = Descope Current Tenant (set when authenticating with tenant context)
@@ -550,7 +588,7 @@ export function slugify(value: string): string {
 }
 
 /** Extract roles from Descope JWT claims for a specific tenant. */
-function extractRoles(claims: Record<string, unknown>, tenantId: string): Role[] {
+export function extractRoles(claims: Record<string, unknown>, tenantId: string): Role[] {
 	const validRoles = new Set<string>(["admin", "member", "viewer"]);
 	const roles: Role[] = [];
 
@@ -567,19 +605,39 @@ function extractRoles(claims: Record<string, unknown>, tenantId: string): Role[]
 		}
 	}
 
-	// Fallback: top-level roles claim (for non-tenant-scoped JWTs)
-	if (roles.length === 0 && Array.isArray(claims.roles)) {
-		for (const role of claims.roles) {
-			if (typeof role === "string" && validRoles.has(role)) {
-				roles.push(role as Role);
-			}
-		}
-	}
-
-	// Default to viewer if no recognized roles found
-	if (roles.length === 0) {
-		roles.push("viewer");
-	}
-
 	return roles;
+}
+
+function sanitizeCliAccessKeyCustomClaims(
+	customClaims: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+	if (!customClaims) {
+		return {};
+	}
+
+	const safeClaims: Record<string, unknown> = {};
+	const strippedClaims: string[] = [];
+
+	for (const [claim, value] of Object.entries(customClaims)) {
+		if (claim === "procellaLogin" || claim === "procellaOrgSlug") {
+			strippedClaims.push(claim);
+			continue;
+		}
+
+		if (CLI_ACCESS_KEY_CUSTOM_CLAIM_ALLOWLIST.has(claim)) {
+			safeClaims[claim] = value;
+			continue;
+		}
+
+		strippedClaims.push(claim);
+	}
+
+	if (strippedClaims.length > 0) {
+		// biome-ignore lint/suspicious/noConsole: security warning when caller customClaims include reserved fields
+		console.warn(
+			`[auth] stripping unsupported CLI access-key custom claims: ${strippedClaims.join(", ")}`,
+		);
+	}
+
+	return safeClaims;
 }

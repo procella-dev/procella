@@ -1,3 +1,4 @@
+import { isBlockedHostname, resolveAndValidateUrl, validateUrl } from "@procella/webhooks";
 import { createRemoteJWKSet, errors as joseErrors, jwtVerify } from "jose";
 import type { JwksValidator } from "./types.js";
 
@@ -66,21 +67,24 @@ export class JwksValidatorImpl implements JwksValidator {
 	}
 
 	private async discoverJwksUri(issuer: string): Promise<string> {
-		// Guard against SSRF — only allow HTTPS issuers in production
 		if (!this.allowHttp && !issuer.startsWith("https://")) {
 			throw new JwksValidationError("invalid_issuer", `Issuer must use HTTPS, got: ${issuer}`);
 		}
+		if (!this.allowHttp) {
+			await this.validateSsrf(issuer, "Issuer");
+		}
+
 		const cached = this.discoveredJwksUris.get(issuer);
 		if (cached) {
 			return cached;
 		}
 
-		// Append discovery path to issuer, preserving any existing issuer path segment.
-		// new URL("/.well-known/...", issuer) would reset path for issuers like
-		// https://auth.example.com/realms/my-realm — use string concatenation instead.
 		const base = issuer.endsWith("/") ? issuer : `${issuer}/`;
 		const configUrl = new URL(".well-known/openid-configuration", base);
-		const resp = await fetch(configUrl.toString(), { signal: AbortSignal.timeout(5000) });
+		const resp = await fetch(configUrl.toString(), {
+			signal: AbortSignal.timeout(5000),
+			redirect: "manual",
+		});
 		if (!resp.ok) {
 			throw new JwksValidationError(
 				"discovery_failed",
@@ -93,13 +97,36 @@ export class JwksValidatorImpl implements JwksValidator {
 		if (typeof jwksUri !== "string") {
 			throw new JwksValidationError("discovery_failed", "OIDC configuration missing jwks_uri");
 		}
-		// Guard against SSRF via jwks_uri — must also use HTTPS (or localhost for testing)
 		if (!this.allowHttp && !jwksUri.startsWith("https://")) {
 			throw new JwksValidationError("discovery_failed", `jwks_uri must use HTTPS, got: ${jwksUri}`);
+		}
+		if (!this.allowHttp) {
+			await this.validateSsrf(jwksUri, "jwks_uri");
 		}
 
 		this.discoveredJwksUris.set(issuer, jwksUri);
 		return jwksUri;
+	}
+
+	private async validateSsrf(url: string, label: string): Promise<void> {
+		try {
+			validateUrl(url, label);
+			const parsed = new URL(url);
+			const hostname = parsed.hostname.toLowerCase();
+			if (isBlockedHostname(hostname)) {
+				throw new JwksValidationError(
+					"ssrf_blocked",
+					`${label} URL uses a blocked DNS rebinding service: ${hostname}`,
+				);
+			}
+			await resolveAndValidateUrl(url, label);
+		} catch (err) {
+			if (err instanceof JwksValidationError) throw err;
+			throw new JwksValidationError(
+				"ssrf_blocked",
+				`${label} URL blocked by SSRF guard: ${err instanceof Error ? err.message : String(err)}`,
+			);
+		}
 	}
 
 	dispose(): void {

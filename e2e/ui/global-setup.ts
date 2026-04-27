@@ -108,6 +108,13 @@ export default async function globalSetup(_config: FullConfig) {
 				PROCELLA_DATABASE_URL: TEST_DB_URL,
 				PROCELLA_AUTH_MODE: "dev",
 				PROCELLA_DEV_AUTH_TOKEN: TEST_TOKEN,
+				PROCELLA_ENCRYPTION_KEY:
+					process.env.PROCELLA_ENCRYPTION_KEY ??
+					"00000000000000000000000000000000000000000000000000000000000000aa",
+				PROCELLA_TICKET_SIGNING_KEY:
+					process.env.PROCELLA_TICKET_SIGNING_KEY ??
+					"playwright-ticket-signing-key-must-be-32plus-chars",
+				PROCELLA_CRON_SECRET: process.env.PROCELLA_CRON_SECRET ?? "playwright-cron-secret",
 				PROCELLA_BLOB_BACKEND: "local",
 				PROCELLA_BLOB_LOCAL_PATH: blobDir,
 				PROCELLA_ESC_EVALUATOR_BINARY: escEvaluatorBinary,

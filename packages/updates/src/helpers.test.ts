@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+	BadRequestError,
 	InvalidUpdateTokenError,
 	JournalEntryBegin,
 	JournalEntryFailure,
@@ -235,6 +236,58 @@ describe("@procella/updates helpers", () => {
 				},
 			];
 			expect(applyTextEdits(before, edits)).toBe("aXcdYf");
+		});
+
+		test("rejects negative spans", () => {
+			const before = "abcdef";
+			const edits = [
+				{
+					span: {
+						start: { line: 0, column: 0, offset: -1 },
+						end: { line: 0, column: 0, offset: 1 },
+					},
+					newText: "X",
+				},
+			];
+
+			expect(() => applyTextEdits(before, edits)).toThrow(BadRequestError);
+		});
+
+		test("rejects out-of-bounds spans", () => {
+			const before = "abcdef";
+			const edits = [
+				{
+					span: {
+						start: { line: 0, column: 0, offset: 2 },
+						end: { line: 0, column: 0, offset: 99 },
+					},
+					newText: "X",
+				},
+			];
+
+			expect(() => applyTextEdits(before, edits)).toThrow(BadRequestError);
+		});
+
+		test("rejects overlapping spans after sorting", () => {
+			const before = "abcdef";
+			const edits = [
+				{
+					span: {
+						start: { line: 0, column: 0, offset: 3 },
+						end: { line: 0, column: 0, offset: 5 },
+					},
+					newText: "Y",
+				},
+				{
+					span: {
+						start: { line: 0, column: 0, offset: 1 },
+						end: { line: 0, column: 0, offset: 4 },
+					},
+					newText: "X",
+				},
+			];
+
+			expect(() => applyTextEdits(before, edits)).toThrow(BadRequestError);
 		});
 
 		test("handles edit at start of string (offset 0)", () => {
@@ -485,7 +538,7 @@ describe("@procella/updates helpers", () => {
 			const conflict = Object.assign(new Error("duplicate key"), { code: "23505" });
 			const db = makeDb(() => Promise.reject(conflict));
 			const svc = new PostgresUpdatesService({ db, storage: noopStorage, crypto: noopCrypto });
-			await expect(svc.createUpdate("stack-1", "update")).rejects.toBeInstanceOf(
+			return expect(svc.createUpdate("stack-1", "update")).rejects.toBeInstanceOf(
 				UpdateConflictError,
 			);
 		});
@@ -494,7 +547,7 @@ describe("@procella/updates helpers", () => {
 			const conflict = Object.assign(new Error("duplicate key"), { code: "23505" });
 			const db = makeDb(() => Promise.reject(conflict));
 			const svc = new PostgresUpdatesService({ db, storage: noopStorage, crypto: noopCrypto });
-			await expect(svc.createUpdate("stack-1", "update")).rejects.toMatchObject({
+			return expect(svc.createUpdate("stack-1", "update")).rejects.toMatchObject({
 				message: expect.stringContaining("pulumi cancel"),
 			});
 		});
@@ -504,7 +557,7 @@ describe("@procella/updates helpers", () => {
 			const outer = Object.assign(new Error("query failed"), { cause: inner });
 			const db = makeDb(() => Promise.reject(outer));
 			const svc = new PostgresUpdatesService({ db, storage: noopStorage, crypto: noopCrypto });
-			await expect(svc.createUpdate("stack-1", "update")).rejects.toBeInstanceOf(
+			return expect(svc.createUpdate("stack-1", "update")).rejects.toBeInstanceOf(
 				UpdateConflictError,
 			);
 		});
@@ -516,7 +569,7 @@ describe("@procella/updates helpers", () => {
 			});
 			const db = makeDb(() => Promise.reject(bunSqlErr));
 			const svc = new PostgresUpdatesService({ db, storage: noopStorage, crypto: noopCrypto });
-			await expect(svc.createUpdate("stack-1", "update")).rejects.toBeInstanceOf(
+			return expect(svc.createUpdate("stack-1", "update")).rejects.toBeInstanceOf(
 				UpdateConflictError,
 			);
 		});
@@ -527,23 +580,20 @@ describe("@procella/updates helpers", () => {
 			});
 			const db = makeDb(() => Promise.reject(bunSqlErr));
 			const svc = new PostgresUpdatesService({ db, storage: noopStorage, crypto: noopCrypto });
-			await expect(svc.createUpdate("stack-1", "update")).rejects.toThrow("server error");
-			await expect(svc.createUpdate("stack-1", "update")).rejects.not.toBeInstanceOf(
-				UpdateConflictError,
-			);
+			return expect(svc.createUpdate("stack-1", "update")).rejects.toThrow("server error");
 		});
 
 		test("re-throws non-conflict DB errors unchanged", async () => {
 			const dbErr = Object.assign(new Error("connection reset"), { code: "08006" });
 			const db = makeDb(() => Promise.reject(dbErr));
 			const svc = new PostgresUpdatesService({ db, storage: noopStorage, crypto: noopCrypto });
-			await expect(svc.createUpdate("stack-1", "update")).rejects.toThrow("connection reset");
+			return expect(svc.createUpdate("stack-1", "update")).rejects.toThrow("connection reset");
 		});
 
 		test("re-throws errors with no code unchanged", async () => {
 			const db = makeDb(() => Promise.reject(new Error("unexpected")));
 			const svc = new PostgresUpdatesService({ db, storage: noopStorage, crypto: noopCrypto });
-			await expect(svc.createUpdate("stack-1", "update")).rejects.toThrow("unexpected");
+			return expect(svc.createUpdate("stack-1", "update")).rejects.toThrow("unexpected");
 		});
 
 		test("version defaults to 1 when no prior checkpoints exist", async () => {

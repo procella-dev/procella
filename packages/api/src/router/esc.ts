@@ -3,7 +3,7 @@
 
 import { TRPCError } from "@trpc/server";
 import { z } from "zod/v4";
-import { publicProcedure, router } from "../trpc.js";
+import { protectedProcedure, router } from "../trpc.js";
 
 const projectInput = z.object({
 	project: z.string().min(1),
@@ -26,15 +26,15 @@ const draftStatusFilter = environmentInput.extend({
 });
 
 export const escRouter = router({
-	listProjects: publicProcedure.query(async ({ ctx }) => {
+	listProjects: protectedProcedure.query(async ({ ctx }) => {
 		return ctx.esc.listProjects(ctx.caller.tenantId);
 	}),
 
-	listEnvironments: publicProcedure.input(projectInput).query(async ({ ctx, input }) => {
+	listEnvironments: protectedProcedure.input(projectInput).query(async ({ ctx, input }) => {
 		return ctx.esc.listEnvironments(ctx.caller.tenantId, input.project);
 	}),
 
-	getEnvironment: publicProcedure.input(environmentInput).query(async ({ ctx, input }) => {
+	getEnvironment: protectedProcedure.input(environmentInput).query(async ({ ctx, input }) => {
 		const env = await ctx.esc.getEnvironment(ctx.caller.tenantId, input.project, input.environment);
 		if (!env) {
 			throw new TRPCError({
@@ -45,11 +45,11 @@ export const escRouter = router({
 		return env;
 	}),
 
-	listRevisions: publicProcedure.input(environmentInput).query(async ({ ctx, input }) => {
+	listRevisions: protectedProcedure.input(environmentInput).query(async ({ ctx, input }) => {
 		return ctx.esc.listRevisions(ctx.caller.tenantId, input.project, input.environment);
 	}),
 
-	getRevision: publicProcedure.input(revisionInput).query(async ({ ctx, input }) => {
+	getRevision: protectedProcedure.input(revisionInput).query(async ({ ctx, input }) => {
 		const rev = await ctx.esc.getRevision(
 			ctx.caller.tenantId,
 			input.project,
@@ -65,19 +65,19 @@ export const escRouter = router({
 		return rev;
 	}),
 
-	listRevisionTags: publicProcedure.input(environmentInput).query(async ({ ctx, input }) => {
+	listRevisionTags: protectedProcedure.input(environmentInput).query(async ({ ctx, input }) => {
 		return ctx.esc.listRevisionTags(ctx.caller.tenantId, input.project, input.environment);
 	}),
 
-	getEnvironmentTags: publicProcedure.input(environmentInput).query(async ({ ctx, input }) => {
+	getEnvironmentTags: protectedProcedure.input(environmentInput).query(async ({ ctx, input }) => {
 		return ctx.esc.getEnvironmentTags(ctx.caller.tenantId, input.project, input.environment);
 	}),
 
-	listDrafts: publicProcedure.input(draftStatusFilter).query(async ({ ctx, input }) => {
+	listDrafts: protectedProcedure.input(draftStatusFilter).query(async ({ ctx, input }) => {
 		return ctx.esc.listDrafts(ctx.caller.tenantId, input.project, input.environment, input.status);
 	}),
 
-	getDraft: publicProcedure.input(draftInput).query(async ({ ctx, input }) => {
+	getDraft: protectedProcedure.input(draftInput).query(async ({ ctx, input }) => {
 		const draft = await ctx.esc.getDraft(
 			ctx.caller.tenantId,
 			input.project,

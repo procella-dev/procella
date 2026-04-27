@@ -10,6 +10,7 @@
 //   Body: {JSON prelude}\x00\x00\x00\x00\x00\x00\x00\x00{response body}
 
 import type { APIGatewayProxyEventV2 } from "aws-lambda";
+import { INTERNAL_CLIENT_IP_HEADER } from "./middleware/security.js";
 
 // biome-ignore lint/style/noNonNullAssertion: Lambda Runtime API always sets this
 const RUNTIME_API = process.env.AWS_LAMBDA_RUNTIME_API!;
@@ -36,6 +37,9 @@ function eventToRequest(event: APIGatewayProxyEventV2): Request {
 	}
 	if (event.cookies?.length) {
 		reqHeaders.set("cookie", event.cookies.join("; "));
+	}
+	if (requestContext.http.sourceIp) {
+		reqHeaders.set(INTERNAL_CLIENT_IP_HEADER, requestContext.http.sourceIp);
 	}
 
 	let reqBody: BodyInit | null = null;

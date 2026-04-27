@@ -5,7 +5,7 @@ import type { DeploymentV3, ResourceV3, UntypedDeployment } from "@procella/type
 import { type RepairMutation, repairCheckpoint } from "@procella/updates";
 import { and, desc, eq, max, sql } from "drizzle-orm";
 import { z } from "zod/v4";
-import { publicProcedure, router } from "../trpc.js";
+import { protectedProcedure, router } from "../trpc.js";
 
 // ============================================================================
 // Input Schema
@@ -78,7 +78,7 @@ function redactSecrets(obj: unknown): unknown {
 // ============================================================================
 
 export const stacksRouter = router({
-	list: publicProcedure.input(stacksListInputSchema).query(async ({ ctx, input }) => {
+	list: protectedProcedure.input(stacksListInputSchema).query(async ({ ctx, input }) => {
 		type StackListItem = {
 			orgName: string;
 			projectName: string;
@@ -162,7 +162,7 @@ export const stacksRouter = router({
 		};
 	}),
 
-	detail: publicProcedure.input(stackInput).query(async ({ ctx, input }) => {
+	detail: protectedProcedure.input(stackInput).query(async ({ ctx, input }) => {
 		const stackInfo = await ctx.stacks.getStack(
 			ctx.caller.tenantId,
 			input.org,
@@ -242,7 +242,7 @@ export const stacksRouter = router({
 		};
 	}),
 
-	updateTags: publicProcedure
+	updateTags: protectedProcedure
 		.input(stackInput.extend({ tags: z.record(z.string(), z.string()) }))
 		.mutation(async ({ ctx, input }) => {
 			await ctx.stacks.replaceStackTags(
@@ -254,7 +254,7 @@ export const stacksRouter = router({
 			);
 		}),
 
-	rename: publicProcedure
+	rename: protectedProcedure
 		.input(stackInput.extend({ newStack: z.string().min(1) }))
 		.mutation(async ({ ctx, input }) => {
 			await ctx.stacks.renameStack(
@@ -266,11 +266,11 @@ export const stacksRouter = router({
 			);
 		}),
 
-	delete: publicProcedure.input(stackInput).mutation(async ({ ctx, input }) => {
+	delete: protectedProcedure.input(stackInput).mutation(async ({ ctx, input }) => {
 		await ctx.stacks.deleteStack(ctx.caller.tenantId, input.org, input.project, input.stack);
 	}),
 
-	export: publicProcedure.input(stackInput).query(async ({ ctx, input }) => {
+	export: protectedProcedure.input(stackInput).query(async ({ ctx, input }) => {
 		const stackInfo = await ctx.stacks.getStack(
 			ctx.caller.tenantId,
 			input.org,
@@ -280,7 +280,7 @@ export const stacksRouter = router({
 		return ctx.updates.exportStack(stackInfo.id);
 	}),
 
-	import: publicProcedure
+	import: protectedProcedure
 		.input(stackInput.extend({ deployment: z.record(z.string(), z.unknown()) }))
 		.mutation(async ({ ctx, input }) => {
 			const stackInfo = await ctx.stacks.getStack(
@@ -293,7 +293,7 @@ export const stacksRouter = router({
 			return ctx.updates.importStack(stackInfo.id, deployment);
 		}),
 
-	repair: publicProcedure.input(stackInput).mutation(async ({ ctx, input }) => {
+	repair: protectedProcedure.input(stackInput).mutation(async ({ ctx, input }) => {
 		const stackInfo = await ctx.stacks.getStack(
 			ctx.caller.tenantId,
 			input.org,
@@ -325,7 +325,7 @@ export const stacksRouter = router({
 		return { mutations: typedMutations, mutationCount: typedMutations.length };
 	}),
 
-	resources: publicProcedure.input(stackInput).query(async ({ ctx, input }) => {
+	resources: protectedProcedure.input(stackInput).query(async ({ ctx, input }) => {
 		const stackInfo = await ctx.stacks.getStack(
 			ctx.caller.tenantId,
 			input.org,
@@ -354,7 +354,7 @@ export const stacksRouter = router({
 			}));
 	}),
 
-	resource: publicProcedure
+	resource: protectedProcedure
 		.input(stackInput.extend({ urn: z.string() }))
 		.query(async ({ ctx, input }) => {
 			const stackInfo = await ctx.stacks.getStack(

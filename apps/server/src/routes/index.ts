@@ -1,5 +1,6 @@
 // @procella/server — Hono route registration.
 
+import { timingSafeEqual } from "node:crypto";
 import { appRouter } from "@procella/api/src/router/index.js";
 import type { TRPCContext } from "@procella/api/src/trpc.js";
 import type { AuditService } from "@procella/audit";
@@ -34,6 +35,8 @@ import {
 import {
 	apiAuth,
 	auditMiddleware,
+	createIpRateLimiter,
+	createSecurityHeadersMiddleware,
 	decompress,
 	errorHandler,
 	pulumiAccept,
@@ -42,6 +45,7 @@ import {
 	updateAuth,
 } from "../middleware/index.js";
 import type { Env } from "../types.js";
+import { authenticateTrpcCaller } from "./trpc-auth.js";
 
 // ============================================================================
 // App Factory
@@ -52,6 +56,7 @@ export function createApp(deps: {
 	authConfig: AuthConfig;
 	audit: AuditService;
 	corsOrigins?: string[];
+	cronSecret?: string;
 	db: Database;
 	dbUrl: string;
 	stacks: StacksService;
@@ -60,19 +65,36 @@ export function createApp(deps: {
 	esc: EscService;
 	github: GitHubService | null;
 	githubWebhookSecret?: string;
+	issueSubscriptionTicket?: (caller: import("@procella/types").Caller) => Promise<string>;
 	oidc?: OidcService | null;
 	oidcPolicies?: TrustPolicyRepository | null;
+	verifySubscriptionTicket?: (ticket: string) => Promise<import("@procella/types").Caller>;
 }): Hono<Env> {
 	const app = new Hono<Env>();
+	const R = PulumiRoutes;
+	const withApiDecompress = decompress();
+	const withCheckpointDecompress = decompress({ maxDecompressedBytes: 100 * 1024 * 1024 });
 
 	// Global error handler (Hono onError hook)
 	app.onError(errorHandler());
 
 	// Global middleware
+	app.use("*", createSecurityHeadersMiddleware());
 	app.use("*", tracingMiddleware());
 	app.use("*", requestLogger());
-	app.use("*", cors(deps.corsOrigins ? { origin: deps.corsOrigins } : undefined));
-	app.use("*", decompress());
+	if ((deps.corsOrigins ?? []).length > 0) {
+		if (deps.corsOrigins?.includes("*")) {
+			// biome-ignore lint/suspicious/noConsole: intentional startup warning surfaced before serving traffic
+			console.warn("[cors] PROCELLA_CORS_ORIGINS=* allows any origin; do not use in production");
+		}
+		app.use("*", cors({ origin: deps.corsOrigins ?? [] }));
+	}
+	app.use("/api/*", (c, next) => {
+		if (isCheckpointPath(c.req.path)) {
+			return next();
+		}
+		return withApiDecompress(c, next);
+	});
 
 	// Create handler instances
 	const health = healthHandlers({ db: deps.db });
@@ -88,7 +110,7 @@ export function createApp(deps: {
 	});
 	const checkpointH = checkpointHandlers(deps.updates);
 	const eventH = eventHandlers(deps.updates, deps.stacks);
-	const cryptoH = cryptoHandlers(deps.updates);
+	const cryptoH = cryptoHandlers(deps.updates, deps.stacks);
 	const stateH = stateHandlers(deps.updates, deps.stacks);
 	const escH = escHandlers({ esc: deps.esc });
 
@@ -96,30 +118,33 @@ export function createApp(deps: {
 	const withApiAuth = apiAuth(deps.auth);
 	const withAudit = auditMiddleware(deps.audit);
 	const withPulumiAccept = pulumiAccept();
-	const withUpdateAuth = updateAuth(deps.auth, (updateId, token) =>
-		deps.updates.verifyLeaseToken(updateId, token),
+	const withCliTokenRateLimit = createIpRateLimiter({ limit: 10 });
+	const withOauthTokenRateLimit = createIpRateLimiter({ limit: 30 });
+	const withCryptoRateLimit = createIpRateLimiter({ limit: 1000 });
+	const withTrpcMutationRateLimit = createIpRateLimiter({
+		limit: 60,
+		skip: (c) => !isTrpcMutationRequest(c.req.path),
+	});
+	const withUpdateAuth = updateAuth(
+		deps.auth,
+		(updateId, token) => deps.updates.verifyLeaseToken(updateId, token),
+		deps.stacks,
 	);
 
 	// ========================================================================
-	// tRPC routes (/trpc/*)
+	// tRPC routes (/trpc/*) — SSE GET requests use short-lived signed tickets
 	// ========================================================================
 
-	app.all("/trpc/*", async (c) => {
-		let req = c.req.raw;
+	app.all("/trpc/*", withTrpcMutationRateLimit, async (c) => {
+		const req = c.req.raw;
+		const { caller, invalidTicket } = await authenticateTrpcCaller(req, c.req.query("ticket"), {
+			auth: deps.auth,
+			verifySubscriptionTicket: deps.verifySubscriptionTicket,
+		});
 
-		const cpRaw = c.req.query("connectionParams");
-		if (cpRaw && req.method === "GET" && !req.headers.get("Authorization")) {
-			try {
-				const cp = JSON.parse(decodeURIComponent(cpRaw)) as Record<string, string>;
-				if (cp.authorization) {
-					const headers = new Headers(req.headers);
-					headers.set("Authorization", cp.authorization);
-					req = new Request(req, { headers });
-				}
-			} catch {}
+		if (invalidTicket) {
+			return c.json({ code: "invalid_ticket" }, 401);
 		}
-
-		const caller = await deps.auth.authenticate(req).catch(() => null);
 
 		if (!caller) {
 			return c.json({ code: 401, message: "Unauthorized" }, 401);
@@ -127,6 +152,7 @@ export function createApp(deps: {
 
 		const ctx: TRPCContext = {
 			caller,
+			issueSubscriptionTicket: deps.issueSubscriptionTicket,
 			db: deps.db,
 			dbUrl: deps.dbUrl,
 			stacks: deps.stacks,
@@ -161,18 +187,16 @@ export function createApp(deps: {
 
 	// Vercel Cron endpoint — GC worker runs as a scheduled job.
 	// Registered outside /api/* to avoid pulumiAccept + apiAuth middleware.
-	// Secured via Authorization: Bearer <CRON_SECRET> (set by Vercel automatically).
+	// Secured via Authorization: Bearer <PROCELLA_CRON_SECRET>.
 	app.get("/cron/gc", async (c) => {
-		const secret = process.env.CRON_SECRET;
-		const nodeEnv = process.env.NODE_ENV;
+		const secret = deps.cronSecret;
+		const provided = c.req.header("authorization");
 
-		if (!secret) {
-			// Fail closed in non-development environments if the cron secret is missing.
-			if (nodeEnv !== "development" && nodeEnv !== "test") {
-				return c.json({ error: "Server misconfigured: CRON_SECRET is not set" }, 500);
-			}
-			// In development/test, allow running without auth to ease local testing.
-		} else if (c.req.header("authorization") !== `Bearer ${secret}`) {
+		if (!secret || !provided?.startsWith("Bearer ")) {
+			return c.json({ error: "Unauthorized" }, 401);
+		}
+		const providedSecret = provided.slice("Bearer ".length);
+		if (!safeEqualString(providedSecret, secret)) {
 			return c.json({ error: "Unauthorized" }, 401);
 		}
 		const gc = new GCWorker({ db: deps.db });
@@ -188,7 +212,7 @@ export function createApp(deps: {
 		return c.json({ mode: "dev" as const });
 	});
 
-	app.post("/api/auth/cli-token", async (c) => {
+	app.post("/api/auth/cli-token", withCliTokenRateLimit, async (c) => {
 		if (!deps.auth.createCliAccessKey) {
 			return c.json({ error: "CLI token creation not available in this auth mode" }, 400);
 		}
@@ -204,7 +228,7 @@ export function createApp(deps: {
 	});
 
 	const oauth = oauthHandlers(deps.oidc ?? null);
-	app.post("/api/oauth/token", oauth.tokenExchange);
+	app.post("/api/oauth/token", withOauthTokenRateLimit, oauth.tokenExchange);
 
 	app.post("/api/webhooks/github", githubH.handleGitHubWebhook);
 
@@ -213,11 +237,24 @@ export function createApp(deps: {
 	// These use "Authorization: update-token <lease-token>" from the CLI.
 	// ========================================================================
 
-	const R = PulumiRoutes;
-
-	app.patch(R.patchCheckpoint.path, withUpdateAuth, checkpointH.patchCheckpoint);
-	app.patch(R.patchCheckpointVerbatim.path, withUpdateAuth, checkpointH.patchCheckpointVerbatim);
-	app.patch(R.patchCheckpointDelta.path, withUpdateAuth, checkpointH.patchCheckpointDelta);
+	app.patch(
+		R.patchCheckpoint.path,
+		withCheckpointDecompress,
+		withUpdateAuth,
+		checkpointH.patchCheckpoint,
+	);
+	app.patch(
+		R.patchCheckpointVerbatim.path,
+		withCheckpointDecompress,
+		withUpdateAuth,
+		checkpointH.patchCheckpointVerbatim,
+	);
+	app.patch(
+		R.patchCheckpointDelta.path,
+		withCheckpointDecompress,
+		withUpdateAuth,
+		checkpointH.patchCheckpointDelta,
+	);
 	app.patch(R.patchJournalEntries.path, withUpdateAuth, checkpointH.appendJournalEntries);
 	app.post(R.postEngineEventBatch.path, withUpdateAuth, eventH.postEvents);
 	app.post(R.renewLease.path, withUpdateAuth, eventH.renewLease);
@@ -278,10 +315,10 @@ export function createApp(deps: {
 	api.post("/stacks/:org/:project/:stack/import", stateH.importStack);
 
 	// Crypto (API token)
-	api.post("/stacks/:org/:project/:stack/encrypt", cryptoH.encryptValue);
-	api.post("/stacks/:org/:project/:stack/decrypt", cryptoH.decryptValue);
-	api.post("/stacks/:org/:project/:stack/batch-encrypt", cryptoH.batchEncrypt);
-	api.post("/stacks/:org/:project/:stack/batch-decrypt", cryptoH.batchDecrypt);
+	api.post("/stacks/:org/:project/:stack/encrypt", withCryptoRateLimit, cryptoH.encryptValue);
+	api.post("/stacks/:org/:project/:stack/decrypt", withCryptoRateLimit, cryptoH.decryptValue);
+	api.post("/stacks/:org/:project/:stack/batch-encrypt", withCryptoRateLimit, cryptoH.batchEncrypt);
+	api.post("/stacks/:org/:project/:stack/batch-decrypt", withCryptoRateLimit, cryptoH.batchDecrypt);
 	api.post("/stacks/:org/:project/:stack/log-decryption", cryptoH.logDecryption);
 
 	// Stack CRUD + createUpdate (:kind catch-all LAST)
@@ -376,4 +413,54 @@ export function createApp(deps: {
 
 	app.route("/api", api);
 	return app;
+}
+
+function isCheckpointPath(path: string): boolean {
+	return /\/api\/stacks\/[^/]+\/[^/]+\/[^/]+\/[^/]+\/[^/]+\/(checkpoint|checkpointverbatim|checkpointdelta)$/.test(
+		path,
+	);
+}
+
+function safeEqualString(a: string, b: string): boolean {
+	const aBuf = Buffer.from(a);
+	const bBuf = Buffer.from(b);
+	if (aBuf.length !== bBuf.length) {
+		return false;
+	}
+	return timingSafeEqual(aBuf, bBuf);
+}
+
+function hasProcedureType(value: unknown): value is { _def: { type: string } } {
+	if (typeof value !== "object" || value === null || !("_def" in value)) {
+		return false;
+	}
+
+	const def = (value as { _def?: unknown })._def;
+	return typeof def === "object" && def !== null && "type" in def;
+}
+
+function isTrpcMutationRequest(path: string): boolean {
+	if (!path.startsWith("/trpc/")) {
+		return false;
+	}
+	const procedures = appRouter._def.procedures;
+	const procedurePaths = path
+		.slice("/trpc/".length)
+		.split(",")
+		.map((part) => {
+			try {
+				return decodeURIComponent(part);
+			} catch {
+				return part;
+			}
+		})
+		.filter(Boolean);
+	return procedurePaths.some((procedurePath) => {
+		if (!(procedurePath in procedures)) {
+			return false;
+		}
+
+		const candidate = procedures[procedurePath as keyof typeof procedures];
+		return hasProcedureType(candidate) && candidate._def.type === "mutation";
+	});
 }

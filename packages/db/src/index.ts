@@ -21,6 +21,7 @@ export {
 	escSessions,
 	githubInstallations,
 	journalEntries,
+	oidcTrustPolicies,
 	projects,
 	schema,
 	stacks,

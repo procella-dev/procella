@@ -2,7 +2,7 @@
 
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import type { UntypedDeployment } from "@procella/types";
-import { InvalidUpdateTokenError } from "@procella/types";
+import { BadRequestError, InvalidUpdateTokenError } from "@procella/types";
 import { LEASE_DURATION_SECONDS } from "./types.js";
 
 // ============================================================================
@@ -96,18 +96,34 @@ export function applyTextEdits(before: string, edits: TextEdit[]): string {
 		return before;
 	}
 
-	const sorted = [...edits].sort((a, b) => a.span.start.offset - b.span.start.offset);
+	const sorted = [...edits].sort(
+		(a, b) => a.span.start.offset - b.span.start.offset || a.span.end.offset - b.span.end.offset,
+	);
 
 	let result = "";
 	let last = 0;
 
 	for (const edit of sorted) {
 		const start = edit.span.start.offset;
+		const end = edit.span.end.offset;
+
+		if (!Number.isInteger(start) || !Number.isInteger(end)) {
+			throw new BadRequestError("TextEdit spans must use integer offsets");
+		}
+
+		if (start < 0 || end < 0 || start > end || end > before.length) {
+			throw new BadRequestError("TextEdit span is out of bounds");
+		}
+
+		if (start < last) {
+			throw new BadRequestError("TextEdit spans must not overlap");
+		}
+
 		if (start > last) {
 			result += before.slice(last, start);
 		}
 		result += edit.newText;
-		last = edit.span.end.offset;
+		last = end;
 	}
 
 	if (last < before.length) {

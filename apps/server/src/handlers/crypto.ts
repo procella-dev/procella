@@ -1,66 +1,111 @@
 // @procella/server — Encrypt/decrypt handlers.
 
+import type { StackCryptoInput } from "@procella/crypto";
+import type { StacksService } from "@procella/stacks";
+
 import type {
 	BatchDecryptRequest,
 	BatchEncryptRequest,
 	DecryptValueRequest,
 	EncryptValueRequest,
 } from "@procella/types";
+import { StackNotFoundError } from "@procella/types";
 import type { UpdatesService } from "@procella/updates";
 import type { Context } from "hono";
 import type { Env } from "../types.js";
+import { param } from "./params.js";
+import {
+	BatchDecryptRequestSchema,
+	BatchEncryptRequestSchema,
+	DecryptValueRequestSchema,
+	EncryptValueRequestSchema,
+} from "./schemas.js";
 
 // ============================================================================
 // Crypto Handlers
 // ============================================================================
 
-export function cryptoHandlers(updates: UpdatesService) {
+const INVALID_JSON_RESPONSE = {
+	code: "invalid_request",
+	message: "Body is not valid JSON",
+} as const;
+
+export function cryptoHandlers(updates: UpdatesService, stacks: StacksService) {
 	return {
 		encryptValue: async (c: Context<Env>) => {
-			const org = c.req.param("org");
-			const project = c.req.param("project");
-			const stack = c.req.param("stack");
-			const body = await c.req.json<EncryptValueRequest>();
-			const stackFQN = `${org}/${project}/${stack}`;
-			const plaintext = decodeBase64(body.plaintext);
-			const ciphertext = await updates.encryptValue(stackFQN, plaintext);
+			const stackInput = await resolveAuthorizedStack(c, stacks);
+			if (stackInput instanceof Response) return stackInput;
+			let raw: unknown;
+			try {
+				raw = await c.req.json();
+			} catch {
+				return c.json(INVALID_JSON_RESPONSE, 400);
+			}
+			const parseResult = EncryptValueRequestSchema.safeParse(raw);
+			if (!parseResult.success) {
+				return c.json({ code: "invalid_request", message: parseResult.error.message }, 400);
+			}
+			const plaintext = decodeBase64((parseResult.data as EncryptValueRequest).plaintext);
+			const ciphertext = await updates.encryptValue(stackInput, plaintext);
 			return c.json({ ciphertext: encodeBase64(ciphertext) });
 		},
 
 		decryptValue: async (c: Context<Env>) => {
-			const org = c.req.param("org");
-			const project = c.req.param("project");
-			const stack = c.req.param("stack");
-			const body = await c.req.json<DecryptValueRequest>();
-			const stackFQN = `${org}/${project}/${stack}`;
-			const ciphertext = decodeBase64(body.ciphertext);
-			const plaintext = await updates.decryptValue(stackFQN, ciphertext);
+			const stackInput = await resolveAuthorizedStack(c, stacks);
+			if (stackInput instanceof Response) return stackInput;
+			let raw: unknown;
+			try {
+				raw = await c.req.json();
+			} catch {
+				return c.json(INVALID_JSON_RESPONSE, 400);
+			}
+			const parseResult = DecryptValueRequestSchema.safeParse(raw);
+			if (!parseResult.success) {
+				return c.json({ code: "invalid_request", message: parseResult.error.message }, 400);
+			}
+			const ciphertext = decodeBase64((parseResult.data as DecryptValueRequest).ciphertext);
+			const plaintext = await updates.decryptValue(stackInput, ciphertext);
 			return c.json({ plaintext: encodeBase64(plaintext) });
 		},
 
 		batchEncrypt: async (c: Context<Env>) => {
-			const org = c.req.param("org");
-			const project = c.req.param("project");
-			const stack = c.req.param("stack");
-			const body = await c.req.json<BatchEncryptRequest>();
-			const stackFQN = `${org}/${project}/${stack}`;
-			const plaintexts = (body.plaintexts ?? []).map(decodeBase64);
-			const ciphertexts = await updates.batchEncrypt(stackFQN, plaintexts);
+			const stackInput = await resolveAuthorizedStack(c, stacks);
+			if (stackInput instanceof Response) return stackInput;
+			let raw: unknown;
+			try {
+				raw = await c.req.json();
+			} catch {
+				return c.json(INVALID_JSON_RESPONSE, 400);
+			}
+			const parseResult = BatchEncryptRequestSchema.safeParse(raw);
+			if (!parseResult.success) {
+				return c.json({ code: "invalid_request", message: parseResult.error.message }, 400);
+			}
+			const plaintexts = ((parseResult.data as BatchEncryptRequest).plaintexts ?? []).map(
+				decodeBase64,
+			);
+			const ciphertexts = await updates.batchEncrypt(stackInput, plaintexts);
 			return c.json({
 				ciphertexts: ciphertexts.map(encodeBase64),
 			});
 		},
 
 		batchDecrypt: async (c: Context<Env>) => {
-			const org = c.req.param("org");
-			const project = c.req.param("project");
-			const stack = c.req.param("stack");
-			const body = await c.req.json<BatchDecryptRequest>();
-			const stackFQN = `${org}/${project}/${stack}`;
-			const rawCiphertexts = body.ciphertexts ?? [];
+			const stackInput = await resolveAuthorizedStack(c, stacks);
+			if (stackInput instanceof Response) return stackInput;
+			let raw: unknown;
+			try {
+				raw = await c.req.json();
+			} catch {
+				return c.json(INVALID_JSON_RESPONSE, 400);
+			}
+			const parseResult = BatchDecryptRequestSchema.safeParse(raw);
+			if (!parseResult.success) {
+				return c.json({ code: "invalid_request", message: parseResult.error.message }, 400);
+			}
+			const rawCiphertexts = (parseResult.data as BatchDecryptRequest).ciphertexts ?? [];
 			const ciphertexts = rawCiphertexts.map(decodeBase64);
-			const decrypted = await updates.batchDecrypt(stackFQN, ciphertexts);
-			// Response is a map: base64(ciphertext) → base64(plaintext)
+			const decrypted = await updates.batchDecrypt(stackInput, ciphertexts);
 			const plaintexts: Record<string, string> = {};
 			for (let i = 0; i < rawCiphertexts.length; i++) {
 				const key =
@@ -72,6 +117,29 @@ export function cryptoHandlers(updates: UpdatesService) {
 
 		logDecryption: (c: Context<Env>) => c.body(null, 200),
 	};
+}
+
+async function resolveAuthorizedStack(
+	c: Context<Env>,
+	stacks: StacksService,
+): Promise<StackCryptoInput | Response> {
+	const caller = c.get("caller");
+	const org = param(c, "org");
+	const project = param(c, "project");
+	const stack = param(c, "stack");
+
+	try {
+		const stackInfo = await stacks.getStack(caller.tenantId, org, project, stack);
+		return {
+			stackId: stackInfo.id,
+			stackFQN: `${org}/${project}/${stack}`,
+		};
+	} catch (error) {
+		if (error instanceof StackNotFoundError) {
+			return c.json({ code: "stack_not_found" }, 404);
+		}
+		throw error;
+	}
 }
 
 // ============================================================================

@@ -1,0 +1,153 @@
+import { describe, expect, test } from "bun:test";
+import {
+	BatchDecryptRequestSchema,
+	BatchEncryptRequestSchema,
+	EncryptValueRequestSchema,
+	EngineEventBatchSchema,
+	JournalEntriesSchema,
+	MAX_JSON_DEPTH,
+	MAX_STRING_LENGTH,
+	PatchUpdateCheckpointDeltaRequestSchema,
+	PatchUpdateCheckpointRequestSchema,
+	PatchUpdateVerbatimCheckpointRequestSchema,
+	RenewUpdateLeaseRequestSchema,
+	UntypedDeploymentSchema,
+} from "./schemas.js";
+
+function createNestedObject(depth: number): unknown {
+	let current: Record<string, unknown> = { leaf: true };
+	for (let level = 0; level < depth; level++) {
+		current = { child: current };
+	}
+	return current;
+}
+
+describe("Pulumi request schemas", () => {
+	test("rejects deeply nested JSON bodies past 32 levels", () => {
+		const tooDeep = createNestedObject(MAX_JSON_DEPTH + 1);
+
+		expect(
+			PatchUpdateCheckpointRequestSchema.safeParse({
+				version: 3,
+				deployment: tooDeep,
+			}).success,
+		).toBe(false);
+
+		expect(
+			PatchUpdateVerbatimCheckpointRequestSchema.safeParse({
+				version: 3,
+				sequenceNumber: 1,
+				untypedDeployment: tooDeep,
+			}).success,
+		).toBe(false);
+
+		expect(
+			PatchUpdateCheckpointDeltaRequestSchema.safeParse({
+				version: 1,
+				checkpointHash: "hash",
+				sequenceNumber: 1,
+				deploymentDelta: [tooDeep],
+			}).success,
+		).toBe(false);
+
+		expect(
+			UntypedDeploymentSchema.safeParse({
+				version: 3,
+				deployment: tooDeep,
+			}).success,
+		).toBe(false);
+
+		expect(
+			EngineEventBatchSchema.safeParse({
+				events: [tooDeep],
+			}).success,
+		).toBe(false);
+
+		expect(
+			JournalEntriesSchema.safeParse({
+				entries: [
+					{
+						version: 1,
+						kind: 1,
+						operationID: 1,
+						sequenceID: 1,
+						state: tooDeep,
+					},
+				],
+			}).success,
+		).toBe(false);
+	});
+
+	test("rejects events batches over 1000 entries", () => {
+		const result = EngineEventBatchSchema.safeParse({
+			events: Array.from({ length: 1001 }, (_, index) => ({ sequence: index, timestamp: index })),
+		});
+
+		expect(result.success).toBe(false);
+	});
+
+	test("rejects plaintexts over 1 MiB", () => {
+		const tooLarge = "a".repeat(MAX_STRING_LENGTH + 1);
+
+		expect(EncryptValueRequestSchema.safeParse({ plaintext: tooLarge }).success).toBe(false);
+		expect(BatchEncryptRequestSchema.safeParse({ plaintexts: [tooLarge] }).success).toBe(false);
+	});
+
+	test("accepts valid Pulumi request bodies", () => {
+		expect(
+			PatchUpdateCheckpointRequestSchema.safeParse({
+				isInvalid: false,
+				version: 3,
+				features: ["secrets-providers"],
+				deployment: { resources: [] },
+			}).success,
+		).toBe(true);
+
+		expect(
+			PatchUpdateVerbatimCheckpointRequestSchema.safeParse({
+				version: 3,
+				sequenceNumber: 1,
+				untypedDeployment: { version: 3, deployment: { resources: [] } },
+			}).success,
+		).toBe(true);
+
+		expect(
+			PatchUpdateCheckpointDeltaRequestSchema.safeParse({
+				version: 1,
+				checkpointHash: "abc123",
+				sequenceNumber: 1,
+				deploymentDelta: [{ span: { start: { offset: 0 }, end: { offset: 0 } }, newText: "{}" }],
+			}).success,
+		).toBe(true);
+
+		expect(
+			EngineEventBatchSchema.safeParse({
+				events: [{ sequence: 1, timestamp: 1 }],
+			}).success,
+		).toBe(true);
+
+		expect(
+			JournalEntriesSchema.safeParse({
+				entries: [{ version: 1, kind: 1, operationID: 1, sequenceID: 1 }],
+			}).success,
+		).toBe(true);
+
+		expect(
+			UntypedDeploymentSchema.safeParse({
+				version: 3,
+				deployment: { resources: [] },
+			}).success,
+		).toBe(true);
+
+		expect(EncryptValueRequestSchema.safeParse({ plaintext: "aGVsbG8=" }).success).toBe(true);
+		expect(BatchEncryptRequestSchema.safeParse({ plaintexts: ["YQ==", "Yg=="] }).success).toBe(
+			true,
+		);
+		expect(BatchDecryptRequestSchema.safeParse({ ciphertexts: ["Y2lwaGVydGV4dA=="] }).success).toBe(
+			true,
+		);
+		expect(
+			RenewUpdateLeaseRequestSchema.safeParse({ token: "lease-token", duration: 300 }).success,
+		).toBe(true);
+	});
+});

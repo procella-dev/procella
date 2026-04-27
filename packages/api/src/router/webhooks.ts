@@ -1,7 +1,7 @@
 import { ALL_WEBHOOK_EVENTS } from "@procella/webhooks";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod/v4";
-import { publicProcedure, router } from "../trpc.js";
+import { adminProcedure, router } from "../trpc.js";
 
 const allWebhookEvents: readonly string[] = ALL_WEBHOOK_EVENTS;
 const webhookEventSchema = z
@@ -27,20 +27,12 @@ const webhookIdInput = z.object({
 	webhookId: z.string().uuid(),
 });
 
-function assertAdmin(roles: readonly string[]): void {
-	if (!roles.includes("admin")) {
-		throw new TRPCError({ code: "FORBIDDEN", message: "Admin role required" });
-	}
-}
-
 export const webhooksRouter = router({
-	list: publicProcedure.query(async ({ ctx }) => {
-		assertAdmin(ctx.caller.roles);
+	list: adminProcedure.query(async ({ ctx }) => {
 		return ctx.webhooks.listWebhooks(ctx.caller.tenantId);
 	}),
 
-	create: publicProcedure.input(createWebhookInput).mutation(async ({ ctx, input }) => {
-		assertAdmin(ctx.caller.roles);
+	create: adminProcedure.input(createWebhookInput).mutation(async ({ ctx, input }) => {
 		return ctx.webhooks.createWebhook(
 			ctx.caller.tenantId,
 			{
@@ -53,8 +45,7 @@ export const webhooksRouter = router({
 		);
 	}),
 
-	get: publicProcedure.input(webhookIdInput).query(async ({ ctx, input }) => {
-		assertAdmin(ctx.caller.roles);
+	get: adminProcedure.input(webhookIdInput).query(async ({ ctx, input }) => {
 		const webhook = await ctx.webhooks.getWebhook(ctx.caller.tenantId, input.webhookId);
 		if (!webhook) {
 			throw new TRPCError({ code: "NOT_FOUND", message: "Webhook not found" });
@@ -62,8 +53,7 @@ export const webhooksRouter = router({
 		return webhook;
 	}),
 
-	update: publicProcedure.input(updateWebhookInput).mutation(async ({ ctx, input }) => {
-		assertAdmin(ctx.caller.roles);
+	update: adminProcedure.input(updateWebhookInput).mutation(async ({ ctx, input }) => {
 		return ctx.webhooks.updateWebhook(ctx.caller.tenantId, input.webhookId, {
 			name: input.name,
 			url: input.url,
@@ -72,21 +62,18 @@ export const webhooksRouter = router({
 		});
 	}),
 
-	delete: publicProcedure.input(webhookIdInput).mutation(async ({ ctx, input }) => {
-		assertAdmin(ctx.caller.roles);
+	delete: adminProcedure.input(webhookIdInput).mutation(async ({ ctx, input }) => {
 		await ctx.webhooks.deleteWebhook(ctx.caller.tenantId, input.webhookId);
 		return { success: true };
 	}),
 
-	deliveries: publicProcedure
+	deliveries: adminProcedure
 		.input(webhookIdInput.extend({ limit: z.number().int().min(1).max(200).optional() }))
 		.query(async ({ ctx, input }) => {
-			assertAdmin(ctx.caller.roles);
 			return ctx.webhooks.listDeliveries(ctx.caller.tenantId, input.webhookId, input.limit);
 		}),
 
-	ping: publicProcedure.input(webhookIdInput).mutation(async ({ ctx, input }) => {
-		assertAdmin(ctx.caller.roles);
+	ping: adminProcedure.input(webhookIdInput).mutation(async ({ ctx, input }) => {
 		return ctx.webhooks.ping(ctx.caller.tenantId, input.webhookId);
 	}),
 });

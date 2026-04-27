@@ -19,8 +19,15 @@ import type { WebhooksService } from "@procella/webhooks";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { Hono } from "hono";
 import { healthHandlers, oauthHandlers } from "../handlers/index.js";
-import { decompress, errorHandler, requestLogger } from "../middleware/index.js";
+import {
+	createIpRateLimiter,
+	createSecurityHeadersMiddleware,
+	decompress,
+	errorHandler,
+	requestLogger,
+} from "../middleware/index.js";
 import type { Env } from "../types.js";
+import { authenticateTrpcCaller } from "./trpc-auth.js";
 
 export interface WebAppDeps {
 	auth: AuthService;
@@ -33,8 +40,10 @@ export interface WebAppDeps {
 	webhooks: WebhooksService;
 	esc: EscService;
 	github: GitHubService | null;
+	issueSubscriptionTicket?: (caller: import("@procella/types").Caller) => Promise<string>;
 	oidc?: OidcService | null;
 	oidcPolicies?: TrustPolicyRepository | null;
+	verifySubscriptionTicket?: (ticket: string) => Promise<import("@procella/types").Caller>;
 }
 
 export function createWebApp(deps: WebAppDeps): Hono<Env> {
@@ -43,9 +52,16 @@ export function createWebApp(deps: WebAppDeps): Hono<Env> {
 	app.onError(errorHandler());
 
 	// Global middleware — no CORS (same origin as UI)
+	app.use("*", createSecurityHeadersMiddleware());
 	app.use("*", tracingMiddleware());
 	app.use("*", requestLogger());
 	app.use("*", decompress());
+	const withCliTokenRateLimit = createIpRateLimiter({ limit: 10 });
+	const withOauthTokenRateLimit = createIpRateLimiter({ limit: 30 });
+	const withTrpcMutationRateLimit = createIpRateLimiter({
+		limit: 60,
+		skip: (c) => !isTrpcMutationRequest(c.req.path),
+	});
 
 	// Health check
 	const health = healthHandlers({ db: deps.db });
@@ -60,7 +76,7 @@ export function createWebApp(deps: WebAppDeps): Hono<Env> {
 	});
 
 	// CLI token creation — browser login flow
-	app.post("/api/auth/cli-token", async (c) => {
+	app.post("/api/auth/cli-token", withCliTokenRateLimit, async (c) => {
 		if (!deps.auth.createCliAccessKey) {
 			return c.json({ error: "CLI token creation not available in this auth mode" }, 400);
 		}
@@ -76,26 +92,19 @@ export function createWebApp(deps: WebAppDeps): Hono<Env> {
 	});
 
 	const oauth = oauthHandlers(deps.oidc ?? null);
-	app.post("/api/oauth/token", oauth.tokenExchange);
+	app.post("/api/oauth/token", withOauthTokenRateLimit, oauth.tokenExchange);
 
-	// tRPC routes — queries, mutations, SSE subscriptions
-	app.all("/trpc/*", async (c) => {
-		let req = c.req.raw;
+	// tRPC routes — queries, mutations, SSE subscriptions (short-lived ticket auth for GET)
+	app.all("/trpc/*", withTrpcMutationRateLimit, async (c) => {
+		const req = c.req.raw;
+		const { caller, invalidTicket } = await authenticateTrpcCaller(req, c.req.query("ticket"), {
+			auth: deps.auth,
+			verifySubscriptionTicket: deps.verifySubscriptionTicket,
+		});
 
-		// SSE subscriptions pass auth via connectionParams (EventSource can't set headers)
-		const cpRaw = c.req.query("connectionParams");
-		if (cpRaw && req.method === "GET" && !req.headers.get("Authorization")) {
-			try {
-				const cp = JSON.parse(decodeURIComponent(cpRaw)) as Record<string, string>;
-				if (cp.authorization) {
-					const headers = new Headers(req.headers);
-					headers.set("Authorization", cp.authorization);
-					req = new Request(req, { headers });
-				}
-			} catch {}
+		if (invalidTicket) {
+			return c.json({ code: "invalid_ticket" }, 401);
 		}
-
-		const caller = await deps.auth.authenticate(req).catch(() => null);
 
 		if (!caller) {
 			return c.json({ code: 401, message: "Unauthorized" }, 401);
@@ -103,6 +112,7 @@ export function createWebApp(deps: WebAppDeps): Hono<Env> {
 
 		const ctx: TRPCContext = {
 			caller,
+			issueSubscriptionTicket: deps.issueSubscriptionTicket,
 			db: deps.db,
 			dbUrl: deps.dbUrl,
 			stacks: deps.stacks,
@@ -128,4 +138,39 @@ export function createWebApp(deps: WebAppDeps): Hono<Env> {
 	});
 
 	return app;
+}
+
+function hasProcedureType(value: unknown): value is { _def: { type: string } } {
+	if (typeof value !== "object" || value === null || !("_def" in value)) {
+		return false;
+	}
+
+	const def = (value as { _def?: unknown })._def;
+	return typeof def === "object" && def !== null && "type" in def;
+}
+
+function isTrpcMutationRequest(path: string): boolean {
+	if (!path.startsWith("/trpc/")) {
+		return false;
+	}
+	const procedures = appRouter._def.procedures;
+	const procedurePaths = path
+		.slice("/trpc/".length)
+		.split(",")
+		.map((part) => {
+			try {
+				return decodeURIComponent(part);
+			} catch {
+				return part;
+			}
+		})
+		.filter(Boolean);
+	return procedurePaths.some((procedurePath) => {
+		if (!(procedurePath in procedures)) {
+			return false;
+		}
+
+		const candidate = procedures[procedurePath as keyof typeof procedures];
+		return hasProcedureType(candidate) && candidate._def.type === "mutation";
+	});
 }

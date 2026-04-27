@@ -1,9 +1,39 @@
 {
+	# auto_https is OFF assuming this Caddy runs behind a TLS-terminating proxy
+	# (CloudFront, Lambda Function URL, etc).
+	# For self-hosted deployments WITHOUT a TLS terminator in front, REMOVE the
+	# `auto_https off` directive (or set `auto_https on`) and configure email
+	# for Let's Encrypt automation.
 	auto_https off
 	admin off
+	servers {
+		trusted_proxies static private_ranges
+	}
 }
 
 :80 {
+	log {
+		output stdout
+		format filter {
+			wrap json
+			fields {
+				request>uri query {
+					delete ticket
+					delete connectionParams
+				}
+			}
+		}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "geolocation=(), microphone=(), camera=()"
+		-Server
+	}
+
 	root * /srv
 	file_server
 

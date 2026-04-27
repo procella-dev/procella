@@ -2,7 +2,12 @@
 // Pattern: runMigrations in beforeAll, truncateTables in afterEach.
 
 import { afterAll, beforeAll } from "bun:test";
+import { randomBytes } from "node:crypto";
 import { createDb, runMigrations, type Database, type DbClient } from "@procella/db";
+
+process.env.PROCELLA_AUTH_MODE ??= "dev";
+process.env.PROCELLA_ENCRYPTION_KEY ??= randomBytes(32).toString("hex");
+process.env.PROCELLA_CRON_SECRET ??= "integration-cron-secret";
 
 const TEST_DB_URL =
 	process.env.TEST_DATABASE_URL ??

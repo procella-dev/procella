@@ -6,11 +6,26 @@ import { withDbSpan, withSpan } from "@procella/telemetry";
 import {
 	BadRequestError,
 	ConflictError,
+	InvalidNameError,
 	parseStackFQN,
 	StackAlreadyExistsError,
 	StackNotFoundError,
 } from "@procella/types";
 import { and, asc, desc, eq, type SQL, sql } from "drizzle-orm";
+
+const NAME_REGEX = /^[a-zA-Z0-9._-]+$/;
+const MAX_NAME_LENGTH = 64;
+const MIN_NAME_LENGTH = 1;
+
+export function validateName(name: string, kind: "org" | "project" | "stack"): void {
+	if (typeof name !== "string") throw new InvalidNameError(`${kind} name must be a string`);
+	if (name.length < MIN_NAME_LENGTH || name.length > MAX_NAME_LENGTH) {
+		throw new InvalidNameError(`${kind} name length must be ${MIN_NAME_LENGTH}-${MAX_NAME_LENGTH}`);
+	}
+	if (!NAME_REGEX.test(name)) {
+		throw new InvalidNameError(`${kind} name must match ${NAME_REGEX.source}`);
+	}
+}
 
 export function pgErrorCode(err: unknown): string | undefined {
 	let current: unknown = err;
@@ -125,7 +140,13 @@ export interface StacksService {
 	): Promise<void>;
 
 	getStackByFQN(tenantId: string, fqn: string): Promise<StackInfo>;
-	getStackByNames(org: string, project: string, stack: string): Promise<StackInfo>;
+	/**
+	 * System-only: scoped by tenantId only (passed via the `org` param). The query is
+	 * `(projects.tenantId = org AND projects.name = project AND stacks.name = stack)`.
+	 * Callers MUST be system-context (auth middleware, GC) — there is no caller-context
+	 * authorization, only the URL-tuple resolution.
+	 */
+	getStackByNames_systemOnly(org: string, project: string, stack: string): Promise<StackInfo>;
 }
 
 // ============================================================================
@@ -244,6 +265,10 @@ export class PostgresStacksService implements StacksService {
 		stack: string,
 		userTags?: Record<string, string>,
 	): Promise<StackInfo> {
+		validateName(_org, "org");
+		validateName(project, "project");
+		validateName(stack, "stack");
+
 		return withDbSpan(
 			"createStack",
 			{
@@ -514,6 +539,8 @@ export class PostgresStacksService implements StacksService {
 		oldStack: string,
 		newStack: string,
 	): Promise<void> {
+		validateName(newStack, "stack");
+
 		return withDbSpan(
 			"renameStack",
 			{
@@ -582,35 +609,32 @@ export class PostgresStacksService implements StacksService {
 				"stack.name": stack,
 				"tags.count": Object.keys(tags).length,
 			},
-			async () => {
-				// Find the stack
-				const rows = await this.db
-					.select({
-						stackId: stacks.id,
-						existingTags: stacks.tags,
-					})
-					.from(stacks)
-					.innerJoin(projects, eq(stacks.projectId, projects.id))
-					.where(
-						and(
-							eq(projects.tenantId, tenantId),
-							eq(projects.name, project),
-							eq(stacks.name, stack),
-						),
-					);
+			() =>
+				this.db.transaction(async (tx) => {
+					const rows = await tx
+						.select({ stackId: stacks.id, stackTags: stacks.tags })
+						.from(stacks)
+						.innerJoin(projects, eq(stacks.projectId, projects.id))
+						.where(
+							and(
+								eq(projects.tenantId, tenantId),
+								eq(projects.name, project),
+								eq(stacks.name, stack),
+							),
+						);
 
-				if (rows.length === 0) {
-					throw new StackNotFoundError(tenantId, project, stack);
-				}
+					if (rows.length === 0) {
+						throw new StackNotFoundError(tenantId, project, stack);
+					}
 
-				const existingTags = (rows[0].existingTags ?? {}) as Record<string, string>;
-				const merged = mergeTags(existingTags, tags);
-
-				await this.db
-					.update(stacks)
-					.set({ tags: merged, updatedAt: sql`now()` })
-					.where(eq(stacks.id, rows[0].stackId));
-			},
+					await tx
+						.update(stacks)
+						.set({
+							tags: mergeTags((rows[0].stackTags ?? {}) as Record<string, string>, tags),
+							updatedAt: sql`now()`,
+						})
+						.where(eq(stacks.id, rows[0].stackId));
+				}),
 		);
 	}
 
@@ -651,7 +675,11 @@ export class PostgresStacksService implements StacksService {
 		);
 	}
 
-	async getStackByNames(org: string, project: string, stack: string): Promise<StackInfo> {
+	async getStackByNames_systemOnly(
+		org: string,
+		project: string,
+		stack: string,
+	): Promise<StackInfo> {
 		const rows = await this.db
 			.select({
 				stack_id: stacks.id,
@@ -666,7 +694,7 @@ export class PostgresStacksService implements StacksService {
 			})
 			.from(stacks)
 			.innerJoin(projects, eq(stacks.projectId, projects.id))
-			.where(and(eq(projects.name, project), eq(stacks.name, stack)));
+			.where(and(eq(projects.tenantId, org), eq(projects.name, project), eq(stacks.name, stack)));
 
 		if (rows.length === 0) {
 			throw new StackNotFoundError(org, project, stack);

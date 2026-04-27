@@ -7,7 +7,7 @@ import { TRPCError, tracked } from "@trpc/server";
 import { and, asc, desc, eq, gt, inArray } from "drizzle-orm";
 import { Client } from "pg";
 import { z } from "zod/v4";
-import { publicProcedure, router } from "../trpc.js";
+import { protectedProcedure, router } from "../trpc.js";
 
 // ============================================================================
 // Input Schema
@@ -71,7 +71,7 @@ export async function resolveUpdateId(
 // ============================================================================
 
 export const updatesRouter = router({
-	list: publicProcedure.input(stackInput).query(async ({ ctx, input }) => {
+	list: protectedProcedure.input(stackInput).query(async ({ ctx, input }) => {
 		// Resolve stack to verify access and get stackId
 		const stackInfo = await ctx.stacks.getStack(
 			ctx.caller.tenantId,
@@ -124,7 +124,7 @@ export const updatesRouter = router({
 		}));
 	}),
 
-	latest: publicProcedure.input(stackInput).query(async ({ ctx, input }) => {
+	latest: protectedProcedure.input(stackInput).query(async ({ ctx, input }) => {
 		const stackInfo = await ctx.stacks.getStack(
 			ctx.caller.tenantId,
 			input.org,
@@ -163,7 +163,7 @@ export const updatesRouter = router({
 		};
 	}),
 
-	get: publicProcedure
+	get: protectedProcedure
 		.input(
 			z.object({
 				org: z.string(),
@@ -211,7 +211,7 @@ export const updatesRouter = router({
 			};
 		}),
 
-	onEvents: publicProcedure
+	onEvents: protectedProcedure
 		.input(
 			z.object({
 				org: z.string(),
@@ -303,7 +303,7 @@ export const updatesRouter = router({
 			}
 		}),
 
-	onStackActivity: publicProcedure.input(stackInput).subscription(async function* (opts) {
+	onStackActivity: protectedProcedure.input(stackInput).subscription(async function* (opts) {
 		const { org, project, stack } = opts.input;
 
 		const stackInfo = await opts.ctx.stacks.getStack(opts.ctx.caller.tenantId, org, project, stack);

@@ -9,6 +9,7 @@ function setMinimalEnv() {
 		"postgres://procella:procella@localhost:5432/procella?sslmode=disable";
 	Bun.env.PROCELLA_AUTH_MODE = "dev";
 	Bun.env.PROCELLA_DEV_AUTH_TOKEN = "devtoken123";
+	Bun.env.PROCELLA_TICKET_SIGNING_KEY = "ticket-signing-key-ticket-signing-key";
 }
 
 function clearProcellaEnv() {
@@ -52,6 +53,7 @@ describe("@procella/config", () => {
 			expect(config.devAuthToken).toBe("devtoken123");
 			expect(config.devUserLogin).toBe("dev-user");
 			expect(config.devOrgLogin).toBe("dev-org");
+			expect(config.ticketSigningKey).toBe("ticket-signing-key-ticket-signing-key");
 			expect(config.blobBackend).toBe("local");
 			expect(config.blobLocalPath).toBe("./data/blobs");
 		});
@@ -88,6 +90,7 @@ describe("@procella/config", () => {
 			clearProcellaEnv();
 			Bun.env.PROCELLA_DATABASE_URL = "postgres://localhost:5432/procella?sslmode=disable";
 			Bun.env.PROCELLA_AUTH_MODE = "dev";
+			Bun.env.PROCELLA_TICKET_SIGNING_KEY = "ticket-signing-key-ticket-signing-key";
 			expect(() => loadConfig()).toThrow();
 		});
 
@@ -95,6 +98,32 @@ describe("@procella/config", () => {
 			clearProcellaEnv();
 			Bun.env.PROCELLA_DATABASE_URL = "postgres://localhost:5432/procella?sslmode=disable";
 			Bun.env.PROCELLA_AUTH_MODE = "descope";
+			Bun.env.PROCELLA_TICKET_SIGNING_KEY = "ticket-signing-key-ticket-signing-key";
+			expect(() => loadConfig()).toThrow();
+		});
+
+		test("allows missing ticket signing key (enforced in bootstrap, not schema)", () => {
+			clearProcellaEnv();
+			Bun.env.PROCELLA_DATABASE_URL = "postgres://localhost:5432/procella?sslmode=disable";
+			Bun.env.PROCELLA_AUTH_MODE = "dev";
+			Bun.env.PROCELLA_DEV_AUTH_TOKEN = "token";
+			const config = loadConfig();
+			expect(config.ticketSigningKey).toBeUndefined();
+		});
+
+		test("throws when ticket signing key is too short", () => {
+			clearProcellaEnv();
+			Bun.env.PROCELLA_DATABASE_URL = "postgres://localhost:5432/procella?sslmode=disable";
+			Bun.env.PROCELLA_AUTH_MODE = "dev";
+			Bun.env.PROCELLA_DEV_AUTH_TOKEN = "token";
+			Bun.env.PROCELLA_TICKET_SIGNING_KEY = "too-short";
+			expect(() => loadConfig()).toThrow();
+		});
+
+		test("throws when auth mode is missing", () => {
+			clearProcellaEnv();
+			Bun.env.PROCELLA_DATABASE_URL = "postgres://localhost:5432/procella?sslmode=disable";
+			Bun.env.PROCELLA_DEV_AUTH_TOKEN = "token";
 			expect(() => loadConfig()).toThrow();
 		});
 
@@ -112,18 +141,19 @@ describe("@procella/config", () => {
 			expect(() => loadConfig()).toThrow();
 		});
 
-		test("throws when non-dev mode lacks encryption key", () => {
-			clearProcellaEnv();
-			Bun.env.PROCELLA_DATABASE_URL = "postgres://localhost:5432/procella?sslmode=disable";
-			Bun.env.PROCELLA_AUTH_MODE = "descope";
-			Bun.env.PROCELLA_DESCOPE_PROJECT_ID = "P3test";
-			expect(() => loadConfig()).toThrow(/Required in production/);
-		});
-
 		test("allows missing encryption key in dev mode", () => {
 			clearProcellaEnv();
 			setMinimalEnv();
 			// No PROCELLA_ENCRYPTION_KEY set — should be fine in dev
+			const config = loadConfig();
+			expect(config.encryptionKey).toBeUndefined();
+		});
+
+		test("allows missing encryption key in descope mode", () => {
+			clearProcellaEnv();
+			Bun.env.PROCELLA_DATABASE_URL = "postgres://localhost:5432/procella?sslmode=disable";
+			Bun.env.PROCELLA_AUTH_MODE = "descope";
+			Bun.env.PROCELLA_DESCOPE_PROJECT_ID = "P3test";
 			const config = loadConfig();
 			expect(config.encryptionKey).toBeUndefined();
 		});

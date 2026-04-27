@@ -128,6 +128,13 @@ async function startBenchServer(): Promise<Subprocess> {
 			PROCELLA_DATABASE_URL: TEST_DB_URL,
 			PROCELLA_AUTH_MODE: "dev",
 			PROCELLA_DEV_AUTH_TOKEN: TEST_TOKEN,
+			PROCELLA_ENCRYPTION_KEY:
+				process.env.PROCELLA_ENCRYPTION_KEY ??
+				"00000000000000000000000000000000000000000000000000000000000000ff",
+			PROCELLA_TICKET_SIGNING_KEY:
+				process.env.PROCELLA_TICKET_SIGNING_KEY ??
+				"bench-ticket-signing-key-must-be-32plus-chars",
+			PROCELLA_CRON_SECRET: process.env.PROCELLA_CRON_SECRET ?? "bench-cron-secret",
 			PROCELLA_BLOB_BACKEND: "local",
 			PROCELLA_BLOB_LOCAL_PATH: "./data/bench-blobs",
 			...(process.env.PROCELLA_OTEL_ENABLED

@@ -4,6 +4,7 @@ import type { Caller } from "@procella/types";
 import { Hono } from "hono";
 import type { Env } from "../types.js";
 import { auditMiddleware } from "./audit.js";
+import { INTERNAL_CLIENT_IP_HEADER } from "./security.js";
 
 // ============================================================================
 // Mock Data
@@ -114,7 +115,7 @@ describe("auditMiddleware", () => {
 		expect(audit.log).not.toHaveBeenCalled();
 	});
 
-	test("includes IP and user-agent headers in log entry", async () => {
+	test("includes direct client IP and user-agent headers in log entry", async () => {
 		const audit = mockAuditService();
 		const app = new Hono<Env>();
 		app.use("*", injectCaller(validCaller));
@@ -125,15 +126,79 @@ describe("auditMiddleware", () => {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
-				"X-Forwarded-For": "1.2.3.4",
+				[INTERNAL_CLIENT_IP_HEADER]: "10.20.30.40",
 				"User-Agent": "pulumi-cli/3.100",
 			},
 			body: JSON.stringify({}),
 		});
 		expect(audit.log).toHaveBeenCalledTimes(1);
 		const entry = audit.log.mock.calls[0][1];
-		expect(entry.ipAddress).toBe("1.2.3.4");
+		expect(entry.ipAddress).toBe("10.20.30.40");
 		expect(entry.userAgent).toBe("pulumi-cli/3.100");
+	});
+
+	test("ignores X-Forwarded-For when PROCELLA_TRUST_PROXY is not true", async () => {
+		const previousTrustProxy = process.env.PROCELLA_TRUST_PROXY;
+		delete process.env.PROCELLA_TRUST_PROXY;
+
+		try {
+			const audit = mockAuditService();
+			const app = new Hono<Env>();
+			app.use("*", injectCaller(validCaller));
+			app.use("*", auditMiddleware(audit));
+			app.post("/api/stacks/:org/:project/:stack", (c) => c.json({ id: "s-1" }));
+
+			await app.request("/api/stacks/myorg/myproj/dev", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					[INTERNAL_CLIENT_IP_HEADER]: "10.0.0.7",
+					"X-Forwarded-For": "1.2.3.4, 5.6.7.8",
+				},
+				body: JSON.stringify({}),
+			});
+
+			expect(audit.log).toHaveBeenCalledTimes(1);
+			expect(audit.log.mock.calls[0][1].ipAddress).toBe("10.0.0.7");
+		} finally {
+			if (previousTrustProxy === undefined) {
+				delete process.env.PROCELLA_TRUST_PROXY;
+			} else {
+				process.env.PROCELLA_TRUST_PROXY = previousTrustProxy;
+			}
+		}
+	});
+
+	test("uses rightmost X-Forwarded-For value when PROCELLA_TRUST_PROXY is true (PR #149 review — leftmost is client-spoofable)", async () => {
+		const previousTrustProxy = process.env.PROCELLA_TRUST_PROXY;
+		process.env.PROCELLA_TRUST_PROXY = "true";
+
+		try {
+			const audit = mockAuditService();
+			const app = new Hono<Env>();
+			app.use("*", injectCaller(validCaller));
+			app.use("*", auditMiddleware(audit));
+			app.post("/api/stacks/:org/:project/:stack", (c) => c.json({ id: "s-1" }));
+
+			await app.request("/api/stacks/myorg/myproj/dev", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					[INTERNAL_CLIENT_IP_HEADER]: "10.0.0.7",
+					"X-Forwarded-For": "9.9.9.9, 5.6.7.8",
+				},
+				body: JSON.stringify({}),
+			});
+
+			expect(audit.log).toHaveBeenCalledTimes(1);
+			expect(audit.log.mock.calls[0][1].ipAddress).toBe("5.6.7.8");
+		} finally {
+			if (previousTrustProxy === undefined) {
+				delete process.env.PROCELLA_TRUST_PROXY;
+			} else {
+				process.env.PROCELLA_TRUST_PROXY = previousTrustProxy;
+			}
+		}
 	});
 
 	test("identifies token-based actors", async () => {

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { AuthService } from "@procella/auth";
+import type { StacksService } from "@procella/stacks";
 import type { Caller } from "@procella/types";
 import { StackNotFoundError, UnauthorizedError } from "@procella/types";
 import { Hono } from "hono";
@@ -37,6 +38,25 @@ function mockAuthService(opts?: { failAuth?: boolean }): AuthService {
 			}
 			return { updateId: parts[1], stackId: parts[2] };
 		},
+	};
+}
+
+function mockStacksService(stackId = "sid-1"): Pick<StacksService, "getStackByNames_systemOnly"> {
+	return {
+		getStackByNames_systemOnly: async () => ({
+			id: stackId,
+			projectId: "p-1",
+			tenantId: "t-1",
+			orgName: "my-org",
+			projectName: "myproj",
+			stackName: "dev",
+			tags: {},
+			activeUpdateId: null,
+			lastUpdate: null,
+			resourceCount: null,
+			createdAt: new Date("2025-01-01T00:00:00Z"),
+			updatedAt: new Date("2025-01-01T00:00:00Z"),
+		}),
 	};
 }
 
@@ -93,7 +113,7 @@ describe("@procella/server middleware", () => {
 
 		test("sets updateContext for valid update-token", async () => {
 			const app = new Hono<Env>();
-			app.use("*", updateAuth(mockAuthService(), stubVerifier));
+			app.use("*", updateAuth(mockAuthService(), stubVerifier, mockStacksService()));
 			app.get("/test", (c) => c.json(c.get("updateContext")));
 
 			const res = await app.request("/test", {
@@ -110,7 +130,7 @@ describe("@procella/server middleware", () => {
 
 		test("returns 401 for missing update-token", async () => {
 			const app = new Hono<Env>();
-			app.use("*", updateAuth(mockAuthService(), stubVerifier));
+			app.use("*", updateAuth(mockAuthService(), stubVerifier, mockStacksService()));
 			app.get("/test", (c) => c.json({ ok: true }));
 
 			const res = await app.request("/test");
@@ -119,7 +139,7 @@ describe("@procella/server middleware", () => {
 
 		test("returns 401 for malformed token", async () => {
 			const app = new Hono<Env>();
-			app.use("*", updateAuth(mockAuthService(), stubVerifier));
+			app.use("*", updateAuth(mockAuthService(), stubVerifier, mockStacksService()));
 			app.get("/test", (c) => c.json({ ok: true }));
 
 			const res = await app.request("/test", {

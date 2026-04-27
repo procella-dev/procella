@@ -9,6 +9,7 @@
 		"@procella/types": "workspace:*",
 		"@procella/config": "workspace:*",
 		"@procella/telemetry": "workspace:*",
-		"@descope/node-sdk": "^2.0.0"
+		"@descope/node-sdk": "^2.0.0",
+		"jose": "^6.0.0"
 	}
 }

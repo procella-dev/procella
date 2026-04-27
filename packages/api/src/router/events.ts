@@ -1,7 +1,7 @@
 // @procella/api — events.list tRPC procedure.
 
 import { z } from "zod/v4";
-import { publicProcedure, router } from "../trpc.js";
+import { protectedProcedure, router } from "../trpc.js";
 import { resolveUpdateId } from "./updates.js";
 
 // ============================================================================
@@ -9,7 +9,7 @@ import { resolveUpdateId } from "./updates.js";
 // ============================================================================
 
 export const eventsRouter = router({
-	list: publicProcedure
+	list: protectedProcedure
 		.input(
 			z.object({
 				org: z.string(),

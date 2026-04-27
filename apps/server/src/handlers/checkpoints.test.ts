@@ -47,7 +47,7 @@ describe("checkpointHandlers", () => {
 		const h = checkpointHandlers(updates);
 		app.patch("/checkpoint", h.patchCheckpoint);
 
-		const body = { version: 1, deployment: { resources: [] } };
+		const body = { isInvalid: false, version: 1, deployment: { resources: [] } };
 		const res = await app.request("/checkpoint", {
 			method: "PATCH",
 			headers: { "Content-Type": "application/json" },
@@ -59,6 +59,41 @@ describe("checkpointHandlers", () => {
 		expect(updates.patchCheckpoint).toHaveBeenCalledWith("u-1", body);
 	});
 
+	test("patchCheckpoint returns 400 (not 500) on malformed JSON (PR #149 review — JSON.parse failure must surface as invalid_request)", async () => {
+		const updates = mockUpdatesService();
+		const app = new Hono<Env>();
+		app.use("*", injectUpdateContext("u-1", "s-1"));
+		const h = checkpointHandlers(updates);
+		app.patch("/checkpoint", h.patchCheckpoint);
+
+		const res = await app.request("/checkpoint", {
+			method: "PATCH",
+			headers: { "Content-Type": "application/json" },
+			body: "{ this is not valid json",
+		});
+
+		expect(res.status).toBe(400);
+		const json = (await res.json()) as { code: string };
+		expect(json.code).toBe("invalid_request");
+		expect(updates.patchCheckpoint).not.toHaveBeenCalled();
+	});
+
+	test("patchCheckpointVerbatim returns 400 on malformed JSON", async () => {
+		const updates = mockUpdatesService();
+		const app = new Hono<Env>();
+		app.use("*", injectUpdateContext("u-2", "s-2"));
+		const h = checkpointHandlers(updates);
+		app.patch("/checkpointverbatim", h.patchCheckpointVerbatim);
+
+		const res = await app.request("/checkpointverbatim", {
+			method: "PATCH",
+			headers: { "Content-Type": "application/json" },
+			body: "not json at all",
+		});
+
+		expect(res.status).toBe(400);
+	});
+
 	test("patchCheckpointVerbatim calls service and returns 200", async () => {
 		const updates = mockUpdatesService();
 		const app = new Hono<Env>();
@@ -66,7 +101,11 @@ describe("checkpointHandlers", () => {
 		const h = checkpointHandlers(updates);
 		app.patch("/checkpointverbatim", h.patchCheckpointVerbatim);
 
-		const body = { version: 2, deployment: '{"resources":[]}' };
+		const body = {
+			version: 2,
+			sequenceNumber: 1,
+			untypedDeployment: { version: 3, deployment: { resources: [] } },
+		};
 		const res = await app.request("/checkpointverbatim", {
 			method: "PATCH",
 			headers: { "Content-Type": "application/json" },
@@ -109,7 +148,7 @@ describe("checkpointHandlers", () => {
 		const h = checkpointHandlers(updates);
 		app.patch("/journal", h.appendJournalEntries);
 
-		const body = { entries: [{ kind: 1 }] };
+		const body = { entries: [{ version: 1, kind: 1, operationID: 1, sequenceID: 1 }] };
 		const res = await app.request("/journal", {
 			method: "PATCH",
 			headers: { "Content-Type": "application/json" },

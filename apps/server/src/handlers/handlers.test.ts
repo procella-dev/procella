@@ -51,7 +51,7 @@ function mockStacksService(overrides?: Partial<StacksService>): StacksService {
 		updateStackTags: async () => {},
 		replaceStackTags: async () => {},
 		getStackByFQN: async () => mockStackInfo,
-		getStackByNames: async () => mockStackInfo,
+		getStackByNames_systemOnly: async () => mockStackInfo,
 		...overrides,
 	};
 }
@@ -325,7 +325,7 @@ describe("@procella/server handlers", () => {
 	// ========================================================================
 
 	describe("userHandlers — getOrganization", () => {
-		test("getOrganization returns org info with defaults", async () => {
+		test("getOrganization returns org info when URL matches caller.orgSlug", async () => {
 			const app = new Hono<Env>();
 			app.use("*", injectCaller(validCaller));
 			const user = userHandlers(mockStacksService());
@@ -349,10 +349,34 @@ describe("@procella/server handlers", () => {
 			const res = await app.request("/user/organizations/default");
 			expect(res.status).toBe(200);
 			const body = await res.json();
-			// Must return caller's org, not the literal string 'default'
 			expect(body.githubLogin).toBe(validCaller.orgSlug);
-			// The default org response only has githubLogin (no name/defaultTeam)
 			expect(body.name).toBeUndefined();
+		});
+
+		test("M5: getOrganization returns 404 when URL orgName != caller.orgSlug", async () => {
+			const app = new Hono<Env>();
+			app.use("*", injectCaller(validCaller));
+			const user = userHandlers(mockStacksService());
+			app.get("/user/organizations/:orgName", user.getOrganization);
+
+			const res = await app.request("/user/organizations/other-org");
+			expect(res.status).toBe(404);
+			const body = await res.json();
+			expect(body.code).toBe(404);
+		});
+
+		test("M5: getOrganization uses caller.orgSlug (not URL) in response", async () => {
+			const app = new Hono<Env>();
+			app.use("*", injectCaller(validCaller));
+			const user = userHandlers(mockStacksService());
+			app.get("/user/organizations/:orgName", user.getOrganization);
+
+			const res = await app.request("/user/organizations/my-org");
+			expect(res.status).toBe(200);
+			const body = await res.json();
+			expect(body.githubLogin).toBe(validCaller.orgSlug);
+			expect(body.name).toBe(validCaller.orgSlug);
+			expect(body.defaultTeam.name).toBe(validCaller.orgSlug);
 		});
 	});
 

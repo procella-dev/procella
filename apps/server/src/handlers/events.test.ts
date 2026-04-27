@@ -41,7 +41,7 @@ function mockStacksService(): StacksService {
 		updateStackTags: mock(async () => {}),
 		replaceStackTags: mock(async () => {}),
 		getStackByFQN: mock(async () => mockStackInfo),
-		getStackByNames: mock(async () => mockStackInfo),
+		getStackByNames_systemOnly: mock(async () => mockStackInfo),
 	};
 }
 
@@ -63,9 +63,7 @@ function mockUpdatesService(overrides?: Partial<UpdatesService>): UpdatesService
 		patchCheckpointDelta: mock(async () => {}),
 		appendJournalEntries: mock(async () => {}),
 		postEvents: mock(async () => {}),
-		renewLease: mock(
-			async () => ({ token: "new-lease", tokenExpiration: "2025-01-01T01:00:00Z" }) as never,
-		),
+		renewLease: mock(async () => ({ token: "new-lease", tokenExpiration: 1735693200 }) as never),
 		getUpdate: mock(async () => ({}) as never),
 		getUpdateEvents: mock(
 			async () =>
@@ -150,7 +148,7 @@ describe("eventHandlers", () => {
 		const h = eventHandlers(updates, mockStacksService());
 		app.post("/renew", h.renewLease);
 
-		const reqBody = { token: "old-lease" };
+		const reqBody = { token: "old-lease", duration: 300 };
 		const res = await app.request("/renew", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
@@ -160,7 +158,7 @@ describe("eventHandlers", () => {
 		expect(res.status).toBe(200);
 		const body = await res.json();
 		expect(body.token).toBe("new-lease");
-		expect(body.tokenExpiration).toBe("2025-01-01T01:00:00Z");
+		expect(body.tokenExpiration).toBe(1735693200);
 		expect(updates.renewLease).toHaveBeenCalledWith("u-5", reqBody);
 	});
 

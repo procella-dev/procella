@@ -40,8 +40,12 @@ describe("matchPolicy", () => {
 	});
 
 	test("extra jwt claims still matches when required subset matches", () => {
-		const policy = makePolicy({ sub: "repo:acme/procella:ref:refs/heads/main" });
+		const policy = makePolicy({
+			iss: "https://token.actions.githubusercontent.com",
+			sub: "repo:acme/procella:ref:refs/heads/main",
+		});
 		const claims = {
+			iss: "https://token.actions.githubusercontent.com",
 			sub: "repo:acme/procella:ref:refs/heads/main",
 			aud: "procella",
 			iat: 1715000000,
@@ -50,11 +54,56 @@ describe("matchPolicy", () => {
 		expect(matchPolicy(policy, claims)).toBe(true);
 	});
 
-	test("empty conditions REJECTS all jwt claim sets (security: prevents unrestricted access)", () => {
+	test("empty conditions rejects all jwt claim sets", () => {
 		const policy = makePolicy({});
 
 		expect(matchPolicy(policy, {})).toBe(false);
 		expect(matchPolicy(policy, { any: "value", n: 1 })).toBe(false);
+	});
+
+	test("rejects broad issuer-only policy", () => {
+		const policy = makePolicy({ iss: "https://token.actions.githubusercontent.com" });
+
+		expect(
+			matchPolicy(policy, {
+				iss: "https://token.actions.githubusercontent.com",
+				repository_owner: "myorg",
+			}),
+		).toBe(false);
+	});
+
+	test("rejects wildcard sub-only policy", () => {
+		const policy = makePolicy({ sub: "*" });
+
+		expect(matchPolicy(policy, { sub: "*" })).toBe(false);
+	});
+
+	test("accepts iss plus specific sub policy", () => {
+		const policy = makePolicy({
+			iss: "https://token.actions.githubusercontent.com",
+			sub: "repo:org/repo:ref:refs/heads/main",
+		});
+
+		expect(
+			matchPolicy(policy, {
+				iss: "https://token.actions.githubusercontent.com",
+				sub: "repo:org/repo:ref:refs/heads/main",
+			}),
+		).toBe(true);
+	});
+
+	test("accepts iss plus repository_owner policy", () => {
+		const policy = makePolicy({
+			iss: "https://token.actions.githubusercontent.com",
+			repository_owner: "myorg",
+		});
+
+		expect(
+			matchPolicy(policy, {
+				iss: "https://token.actions.githubusercontent.com",
+				repository_owner: "myorg",
+			}),
+		).toBe(true);
 	});
 
 	test("missing claim in jwt does not match", () => {
@@ -88,15 +137,26 @@ describe("matchPolicy", () => {
 describe("findMatchingPolicy", () => {
 	test("returns first matching policy from multiple policies", () => {
 		const policies: OidcTrustPolicy[] = [
-			makePolicy({ repository: "acme/other" }, { id: "p1", displayName: "no-match" }),
 			makePolicy(
-				{ repository: "acme/procella", ref: "refs/heads/main" },
+				{ iss: "https://token.actions.githubusercontent.com", repository: "acme/other" },
+				{ id: "p1", displayName: "no-match" },
+			),
+			makePolicy(
+				{
+					iss: "https://token.actions.githubusercontent.com",
+					repository: "acme/procella",
+					ref: "refs/heads/main",
+				},
 				{ id: "p2", displayName: "first-match" },
 			),
-			makePolicy({ repository: "acme/procella" }, { id: "p3", displayName: "second-match" }),
+			makePolicy(
+				{ iss: "https://token.actions.githubusercontent.com", repository: "acme/procella" },
+				{ id: "p3", displayName: "second-match" },
+			),
 		];
 
 		const found = findMatchingPolicy(policies, {
+			iss: "https://token.actions.githubusercontent.com",
 			repository: "acme/procella",
 			ref: "refs/heads/main",
 		});
@@ -106,11 +166,22 @@ describe("findMatchingPolicy", () => {
 
 	test("returns null when no policy matches", () => {
 		const policies: OidcTrustPolicy[] = [
-			makePolicy({ repository: "acme/one" }, { id: "p1" }),
-			makePolicy({ repository: "acme/two", ref: "refs/heads/main" }, { id: "p2" }),
+			makePolicy(
+				{ iss: "https://token.actions.githubusercontent.com", repository: "acme/one" },
+				{ id: "p1" },
+			),
+			makePolicy(
+				{
+					iss: "https://token.actions.githubusercontent.com",
+					repository: "acme/two",
+					ref: "refs/heads/main",
+				},
+				{ id: "p2" },
+			),
 		];
 
 		const found = findMatchingPolicy(policies, {
+			iss: "https://token.actions.githubusercontent.com",
 			repository: "acme/procella",
 			ref: "refs/heads/dev",
 		});

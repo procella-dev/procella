@@ -55,6 +55,17 @@ export class ForbiddenError extends ProcellaError {
 }
 
 // ============================================================================
+// Name Validation Errors
+// ============================================================================
+
+export class InvalidNameError extends BadRequestError {
+	constructor(message: string) {
+		super(message);
+		this.name = "InvalidNameError";
+	}
+}
+
+// ============================================================================
 // Stack Errors
 // ============================================================================
 

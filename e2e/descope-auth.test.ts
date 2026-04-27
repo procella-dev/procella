@@ -156,7 +156,7 @@ describe_descope("Descope auth (deployed preview)", () => {
 
 		// Find or create the Descope tenant for this test run.
 		const tenantsResp = await sdk.management.tenant.loadAll();
-		const existing = tenantsResp.data?.tenants?.find((t) => t.name === tenantName);
+		const existing = tenantsResp.data?.find((t) => t.name === tenantName);
 		if (existing?.id) {
 			tenantId = existing.id;
 		} else {

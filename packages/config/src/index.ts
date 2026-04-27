@@ -6,6 +6,14 @@
 
 import { z } from "zod";
 
+const roleSchema = z.enum(["admin", "member", "viewer"]);
+const devUserSchema = z.object({
+	token: z.string().min(1),
+	login: z.string().min(1),
+	org: z.string().min(1),
+	role: roleSchema.default("admin"),
+});
+
 // ============================================================================
 // Schema
 // ============================================================================
@@ -23,12 +31,31 @@ const configSchema = z
 		databasePoolMax: z.coerce.number().int().min(1).max(100).default(10),
 
 		// Auth
-		authMode: authModeSchema.default("dev"),
+		authMode: authModeSchema,
 		devAuthToken: z.string().optional(),
 		devUserLogin: z.string().default("dev-user"),
 		devOrgLogin: z.string().default("dev-org"),
+		devUsers: z
+			.string()
+			.optional()
+			.transform((value, ctx) => {
+				if (!value) return [];
+				try {
+					return z.array(devUserSchema).parse(JSON.parse(value));
+				} catch (error) {
+					ctx.addIssue({
+						code: z.ZodIssueCode.custom,
+						message:
+							error instanceof Error
+								? `Invalid PROCELLA_DEV_USERS: ${error.message}`
+								: "Invalid PROCELLA_DEV_USERS",
+					});
+					return z.NEVER;
+				}
+			}),
 		descopeProjectId: z.string().optional(),
 		descopeManagementKey: z.string().optional(),
+		ticketSigningKey: z.string().min(32, "Must be at least 32 characters").optional(),
 
 		// Blob storage
 		blobBackend: blobBackendSchema.default("local"),
@@ -42,6 +69,7 @@ const configSchema = z
 			.string()
 			.regex(/^[0-9a-fA-F]{64}$/, "Must be 64 hex chars (32 bytes)")
 			.optional(),
+		cronSecret: z.string().min(1).optional(),
 
 		// Telemetry
 		otelEnabled: z
@@ -67,7 +95,12 @@ const configSchema = z
 		// CORS
 		corsOrigins: z
 			.string()
-			.transform((s) => s.split(",").map((o) => o.trim()))
+			.transform((s) =>
+				s
+					.split(",")
+					.map((o) => o.trim())
+					.filter(Boolean),
+			)
 			.optional(),
 	})
 	.superRefine((data, ctx) => {
@@ -90,13 +123,6 @@ const configSchema = z
 				code: z.ZodIssueCode.custom,
 				message: "Required when PROCELLA_BLOB_BACKEND=s3",
 				path: ["blobS3Bucket"],
-			});
-		}
-		if (data.authMode !== "dev" && !data.encryptionKey) {
-			ctx.addIssue({
-				code: z.ZodIssueCode.custom,
-				message: "Required in production (non-dev auth mode). Must be 64 hex chars (32 bytes).",
-				path: ["encryptionKey"],
 			});
 		}
 		// OIDC enabled by default; dev mode silently disables it in bootstrap
@@ -133,14 +159,17 @@ const envMapping = {
 	devAuthToken: "PROCELLA_DEV_AUTH_TOKEN",
 	devUserLogin: "PROCELLA_DEV_USER_LOGIN",
 	devOrgLogin: "PROCELLA_DEV_ORG_LOGIN",
+	devUsers: "PROCELLA_DEV_USERS",
 	descopeProjectId: "PROCELLA_DESCOPE_PROJECT_ID",
 	descopeManagementKey: "PROCELLA_DESCOPE_MANAGEMENT_KEY",
+	ticketSigningKey: "PROCELLA_TICKET_SIGNING_KEY",
 	blobBackend: "PROCELLA_BLOB_BACKEND",
 	blobLocalPath: "PROCELLA_BLOB_LOCAL_PATH",
 	blobS3Bucket: "PROCELLA_BLOB_S3_BUCKET",
 	blobS3Endpoint: "PROCELLA_BLOB_S3_ENDPOINT",
 	blobS3Region: "PROCELLA_BLOB_S3_REGION",
 	encryptionKey: "PROCELLA_ENCRYPTION_KEY",
+	cronSecret: "PROCELLA_CRON_SECRET",
 	otelEnabled: "PROCELLA_OTEL_ENABLED",
 	oidcEnabled: "PROCELLA_OIDC_ENABLED",
 	githubAppId: "PROCELLA_GITHUB_APP_ID",

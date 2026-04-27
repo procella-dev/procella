@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { apiBase } from "../config";
 import { useAuthConfig } from "../hooks/useAuthConfig";
+import { parsePort } from "../utils/parsePort";
 
 export function CliLogin() {
 	const { config, isLoading } = useAuthConfig();
@@ -12,11 +13,13 @@ export function CliLogin() {
 	const cliNonce = searchParams.get("cliSessionNonce");
 	const cliDesc = searchParams.get("cliSessionDescription");
 
+	const portNum = parsePort(cliPort);
+
 	if (isLoading || !config) {
 		return <LoadingScreen />;
 	}
 
-	if (!cliPort || !cliNonce) {
+	if (!portNum || !cliNonce) {
 		return (
 			<Screen>
 				<p className="text-red-400 text-sm">
@@ -27,18 +30,18 @@ export function CliLogin() {
 	}
 
 	if (config.mode === "descope") {
-		return <DescopeCliLogin port={cliPort} nonce={cliNonce} description={cliDesc} />;
+		return <DescopeCliLogin portNum={portNum} nonce={cliNonce} description={cliDesc} />;
 	}
 
-	return <DevCliLogin port={cliPort} nonce={cliNonce} />;
+	return <DevCliLogin portNum={portNum} nonce={cliNonce} />;
 }
 
 function DescopeCliLogin({
-	port,
+	portNum,
 	nonce,
 	description,
 }: {
-	port: string;
+	portNum: number;
 	nonce: string;
 	description: string | null;
 }) {
@@ -69,7 +72,7 @@ function DescopeCliLogin({
 			.then((data) => {
 				if (!data.token) throw new Error(data.error ?? "No token returned");
 				setStatus("done");
-				const url = `http://localhost:${port}/?accessToken=${encodeURIComponent(data.token)}&nonce=${encodeURIComponent(nonce)}`;
+				const url = `http://127.0.0.1:${portNum}/?accessToken=${encodeURIComponent(data.token)}&nonce=${encodeURIComponent(nonce)}`;
 				window.location.href = url;
 			})
 			.catch((err: unknown) => {
@@ -153,7 +156,7 @@ function DescopeCliLogin({
 	);
 }
 
-function DevCliLogin({ port, nonce }: { port: string; nonce: string }) {
+function DevCliLogin({ portNum, nonce }: { portNum: number; nonce: string }) {
 	const [token, setToken] = useState("");
 	const [submitted, setSubmitted] = useState(false);
 
@@ -161,7 +164,7 @@ function DevCliLogin({ port, nonce }: { port: string; nonce: string }) {
 		e.preventDefault();
 		if (!token.trim() || submitted) return;
 		setSubmitted(true);
-		window.location.href = `http://localhost:${port}/?accessToken=${encodeURIComponent(token.trim())}&nonce=${encodeURIComponent(nonce)}`;
+		window.location.href = `http://127.0.0.1:${portNum}/?accessToken=${encodeURIComponent(token.trim())}&nonce=${encodeURIComponent(nonce)}`;
 	};
 
 	return (
