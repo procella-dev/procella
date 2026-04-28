@@ -40,7 +40,8 @@ export function errorHandler(): ErrorHandler {
 			c.header("Retry-After", String(TRANSIENT_RETRY_AFTER_SECONDS));
 			return c.json(
 				{
-					code: "transient_conflict",
+					code: 503,
+					error: "transient_conflict",
 					message: "Database transaction conflict; retry the request",
 					sqlState,
 				},

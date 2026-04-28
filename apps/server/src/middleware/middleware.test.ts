@@ -244,8 +244,14 @@ describe("@procella/server middleware", () => {
 			const res = await app.request("/test");
 			expect(res.status).toBe(503);
 			expect(res.headers.get("Retry-After")).toBe("1");
-			const body = (await res.json()) as { code: string; sqlState: string };
-			expect(body.code).toBe("transient_conflict");
+			const body = (await res.json()) as {
+				code: number;
+				error: string;
+				sqlState: string;
+				message: string;
+			};
+			expect(body.code).toBe(503);
+			expect(body.error).toBe("transient_conflict");
 			expect(body.sqlState).toBe("40001");
 		});
 
@@ -259,8 +265,14 @@ describe("@procella/server middleware", () => {
 			const res = await app.request("/test");
 			expect(res.status).toBe(503);
 			expect(res.headers.get("Retry-After")).toBe("1");
-			const body = (await res.json()) as { code: string; sqlState: string };
-			expect(body.code).toBe("transient_conflict");
+			const body = (await res.json()) as {
+				code: number;
+				error: string;
+				sqlState: string;
+				message: string;
+			};
+			expect(body.code).toBe(503);
+			expect(body.error).toBe("transient_conflict");
 			expect(body.sqlState).toBe("40P01");
 		});
 
