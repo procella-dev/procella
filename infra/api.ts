@@ -3,7 +3,6 @@ import { escEvaluator } from "./esc";
 import { router } from "./router";
 import {
 	allSecrets,
-	cronSecret,
 	descopeManagementKey,
 	devAuthToken,
 	encryptionKey,
@@ -47,7 +46,7 @@ export const api = new sst.aws.Function("ProcellaCliApi", {
 		},
 	},
 	vpc,
-	link: [database, bucket, escEvaluator, ...allSecrets],
+	link: [database, bucket, escEvaluator, ticketSigningKey, ...allSecrets],
 	environment: {
 		PROCELLA_DATABASE_URL: databaseUrl,
 		PROCELLA_BLOB_BACKEND: "s3",
@@ -55,7 +54,6 @@ export const api = new sst.aws.Function("ProcellaCliApi", {
 		PROCELLA_AUTH_MODE: $dev ? "dev" : "descope",
 		PROCELLA_ENCRYPTION_KEY: encryptionKey.value,
 		PROCELLA_TICKET_SIGNING_KEY: ticketSigningKey.value,
-		PROCELLA_CRON_SECRET: cronSecret.value,
 		PROCELLA_ESC_EVALUATOR_FN_NAME: escEvaluator.name,
 		PROCELLA_CORS_ORIGINS: `${appOrigin},${rootOrigin}`,
 		PROCELLA_OTEL_ENABLED: "true",

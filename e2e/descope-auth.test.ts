@@ -258,6 +258,9 @@ describe_descope("Descope auth (deployed preview)", () => {
 					maxExpiration: 600,
 					claimConditions: {
 						repository: process.env.GITHUB_REPOSITORY ?? "procella-dev/procella",
+						repository_owner:
+							(process.env.GITHUB_REPOSITORY ?? "procella-dev/procella").split("/")[0] ??
+							"procella-dev",
 					},
 					grantedRole: "member",
 				},
