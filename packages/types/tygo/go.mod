@@ -2,7 +2,7 @@ module procella-tygo
 
 go 1.25.8
 
-require github.com/pulumi/pulumi/sdk/v3 v3.232.0
+require github.com/pulumi/pulumi/sdk/v3 v3.234.0
 
 require (
 	github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da // indirect
