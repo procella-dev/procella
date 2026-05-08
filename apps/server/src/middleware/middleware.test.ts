@@ -184,6 +184,50 @@ describe("@procella/server middleware", () => {
 			});
 			expect(res.status).toBe(200);
 		});
+
+		test("allows newer API versions (v9 from Pulumi CLI v3.233+)", async () => {
+			const app = new Hono();
+			app.use("*", pulumiAccept());
+			app.get("/test", (c) => c.json({ ok: true }));
+
+			const res = await app.request("/test", {
+				headers: { Accept: "application/vnd.pulumi+9" },
+			});
+			expect(res.status).toBe(200);
+		});
+
+		test("allows future API versions (forward-compatible)", async () => {
+			const app = new Hono();
+			app.use("*", pulumiAccept());
+			app.get("/test", (c) => c.json({ ok: true }));
+
+			const res = await app.request("/test", {
+				headers: { Accept: "application/vnd.pulumi+42" },
+			});
+			expect(res.status).toBe(200);
+		});
+
+		test("rejects older API versions below v8", async () => {
+			const app = new Hono();
+			app.use("*", pulumiAccept());
+			app.get("/test", (c) => c.json({ ok: true }));
+
+			const res = await app.request("/test", {
+				headers: { Accept: "application/vnd.pulumi+7" },
+			});
+			expect(res.status).toBe(415);
+		});
+
+		test("rejects non-Pulumi Accept header", async () => {
+			const app = new Hono();
+			app.use("*", pulumiAccept());
+			app.get("/test", (c) => c.json({ ok: true }));
+
+			const res = await app.request("/test", {
+				headers: { Accept: "application/json" },
+			});
+			expect(res.status).toBe(415);
+		});
 	});
 
 	// ========================================================================
