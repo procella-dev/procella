@@ -228,6 +228,35 @@ describe("@procella/server middleware", () => {
 			});
 			expect(res.status).toBe(415);
 		});
+
+		// Regression: a multi-value Accept header with an old version FIRST and a
+		// supported version SECOND must be accepted. Earlier versions of this
+		// middleware used `match()` (first occurrence only) and would reject
+		// here. See PR #160 review feedback.
+		test("accepts multiple Pulumi versions when any is supported (old first)", async () => {
+			const app = new Hono();
+			app.use("*", pulumiAccept());
+			app.get("/test", (c) => c.json({ ok: true }));
+
+			const res = await app.request("/test", {
+				headers: { Accept: "application/vnd.pulumi+7, application/vnd.pulumi+9" },
+			});
+			expect(res.status).toBe(200);
+		});
+
+		// Regression: a multi-value Accept header where EVERY advertised version
+		// is below MIN_API_VERSION must still be rejected — the middleware must
+		// not be tricked by simply seeing "application/vnd.pulumi+" anywhere.
+		test("rejects multiple Pulumi versions when all are below v8", async () => {
+			const app = new Hono();
+			app.use("*", pulumiAccept());
+			app.get("/test", (c) => c.json({ ok: true }));
+
+			const res = await app.request("/test", {
+				headers: { Accept: "application/vnd.pulumi+6, application/vnd.pulumi+7" },
+			});
+			expect(res.status).toBe(415);
+		});
 	});
 
 	// ========================================================================
