@@ -13,10 +13,14 @@ export async function validate(opts: ValidateOptions): Promise<ValidationResult[
 
 	const filteredSource = filterStacks(sourceStacks, opts.filter, opts.exclude || undefined);
 
+	// Build target lookup once. `findMatchingTargetStack` would otherwise
+	// rebuild it on every iteration, making validation O(n²) over stacks.
+	const targetLookup = buildTargetLookup(targetStacks);
+
 	const results: ValidationResult[] = [];
 
 	for (const source of filteredSource) {
-		const target = findMatchingTargetStack(source, targetStacks);
+		const target = findMatchingTargetStack(source, targetLookup);
 
 		if (!target) {
 			results.push({
@@ -73,8 +77,10 @@ export async function validate(opts: ValidateOptions): Promise<ValidationResult[
 
 	// Check for stacks that exist on target but not on source
 	const filteredTarget = filterStacks(targetStacks, opts.filter, opts.exclude || undefined);
+	// Build source lookup once. Same O(n²) hazard as the target loop above.
+	const sourceLookup = buildSourceLookup(filteredSource);
 	for (const target of filteredTarget) {
-		if (!hasMatchingSourceStack(target, filteredSource)) {
+		if (!hasMatchingSourceStack(target, sourceLookup)) {
 			results.push({
 				fqn: target.fqn,
 				status: "missing-source",
@@ -128,34 +134,75 @@ export function formatDiffSummary(result: ValidationResult): string {
 	}
 }
 
+/**
+ * Precomputed lookup tables for `findMatchingTargetStack`. Build once per
+ * `validate()` invocation and reuse across all source stacks.
+ */
+export interface TargetLookup {
+	readonly byFqn: ReadonlyMap<string, DiscoveredStack>;
+	/** value === null means more than one stack shares the project/stack key */
+	readonly byProjectStack: ReadonlyMap<string, DiscoveredStack | null>;
+}
+
+/** Build a `TargetLookup` from a list of target stacks. O(n). */
+export function buildTargetLookup(targetStacks: DiscoveredStack[]): TargetLookup {
+	const byFqn = new Map<string, DiscoveredStack>();
+	for (const stack of targetStacks) {
+		byFqn.set(stack.fqn, stack);
+	}
+	return { byFqn, byProjectStack: buildProjectStackLookup(targetStacks) };
+}
+
 export function findMatchingTargetStack(
 	source: DiscoveredStack,
-	targetStacks: DiscoveredStack[],
+	targetStacksOrLookup: DiscoveredStack[] | TargetLookup,
 ): DiscoveredStack | undefined {
-	const targetByFqn = new Map(targetStacks.map((stack) => [stack.fqn, stack]));
-	const targetByProjectStack = buildProjectStackLookup(targetStacks);
+	const lookup = Array.isArray(targetStacksOrLookup)
+		? buildTargetLookup(targetStacksOrLookup)
+		: targetStacksOrLookup;
 	const normalizedRef = normalizeStackRef(source.ref);
 	const normalizedFqn = stackFqn(normalizedRef);
 	return (
-		targetByFqn.get(source.fqn) ??
-		targetByFqn.get(normalizedFqn) ??
-		getUniqueProjectStackMatch(targetByProjectStack, source.ref)
+		lookup.byFqn.get(source.fqn) ??
+		lookup.byFqn.get(normalizedFqn) ??
+		getUniqueProjectStackMatch(lookup.byProjectStack, source.ref)
 	);
+}
+
+/**
+ * Precomputed lookup tables for `hasMatchingSourceStack`. Build once per
+ * `validate()` invocation and reuse across all target stacks.
+ */
+export interface SourceLookup {
+	readonly fqns: ReadonlySet<string>;
+	readonly normalizedFqns: ReadonlySet<string>;
+	readonly projectStackKeys: ReadonlySet<string>;
+}
+
+/** Build a `SourceLookup` from a list of source stacks. O(n). */
+export function buildSourceLookup(sourceStacks: DiscoveredStack[]): SourceLookup {
+	const fqns = new Set<string>();
+	const normalizedFqns = new Set<string>();
+	const projectStackKeys = new Set<string>();
+	for (const source of sourceStacks) {
+		fqns.add(source.fqn);
+		normalizedFqns.add(stackFqn(normalizeStackRef(source.ref)));
+		projectStackKeys.add(projectStackKey(source.ref));
+	}
+	return { fqns, normalizedFqns, projectStackKeys };
 }
 
 export function hasMatchingSourceStack(
 	target: DiscoveredStack,
-	sourceStacks: DiscoveredStack[],
+	sourceStacksOrLookup: DiscoveredStack[] | SourceLookup,
 ): boolean {
-	const sourceByFqn = new Set(sourceStacks.map((source) => source.fqn));
-	const normalizedSourceFqns = new Set(
-		sourceStacks.map((source) => stackFqn(normalizeStackRef(source.ref))),
-	);
-	const sourceByProjectStack = new Set(sourceStacks.map((source) => projectStackKey(source.ref)));
+	const lookup = Array.isArray(sourceStacksOrLookup)
+		? buildSourceLookup(sourceStacksOrLookup)
+		: sourceStacksOrLookup;
 	return (
-		sourceByFqn.has(target.fqn) ||
-		normalizedSourceFqns.has(target.fqn) ||
-		sourceByProjectStack.has(projectStackKey(target.ref))
+		lookup.fqns.has(target.fqn) ||
+		lookup.normalizedFqns.has(target.fqn) ||
+		lookup.projectStackKeys.has(projectStackKey(target.ref))
 	);
 }
 
@@ -189,7 +236,7 @@ function buildProjectStackLookup(stacks: DiscoveredStack[]): Map<string, Discove
 }
 
 function getUniqueProjectStackMatch(
-	lookup: Map<string, DiscoveredStack | null>,
+	lookup: ReadonlyMap<string, DiscoveredStack | null>,
 	ref: StackRef,
 ): DiscoveredStack | undefined {
 	return lookup.get(projectStackKey(ref)) ?? undefined;
