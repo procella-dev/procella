@@ -228,6 +228,94 @@ describe("@procella/server middleware", () => {
 			});
 			expect(res.status).toBe(415);
 		});
+
+		// Regression: a multi-value Accept header with an old version FIRST and a
+		// supported version SECOND must be accepted. Earlier versions of this
+		// middleware used `match()` (first occurrence only) and would reject
+		// here. See PR #160 review feedback.
+		test("accepts multiple Pulumi versions when any is supported (old first)", async () => {
+			const app = new Hono();
+			app.use("*", pulumiAccept());
+			app.get("/test", (c) => c.json({ ok: true }));
+
+			const res = await app.request("/test", {
+				headers: { Accept: "application/vnd.pulumi+7, application/vnd.pulumi+9" },
+			});
+			expect(res.status).toBe(200);
+		});
+
+		// Regression: a multi-value Accept header where EVERY advertised version
+		// is below MIN_API_VERSION must still be rejected — the middleware must
+		// not be tricked by simply seeing "application/vnd.pulumi+" anywhere.
+		test("rejects multiple Pulumi versions when all are below v8", async () => {
+			const app = new Hono();
+			app.use("*", pulumiAccept());
+			app.get("/test", (c) => c.json({ ok: true }));
+
+			const res = await app.request("/test", {
+				headers: { Accept: "application/vnd.pulumi+6, application/vnd.pulumi+7" },
+			});
+			expect(res.status).toBe(415);
+		});
+
+		// Regression: per RFC 9110 §8.3.2 media types are case-insensitive.
+		// Earlier versions of this regex used no `i` flag and would reject
+		// `Application/Vnd.Pulumi+8` as if it were a non-Pulumi header.
+		test("accepts case-insensitive Pulumi media type", async () => {
+			const app = new Hono();
+			app.use("*", pulumiAccept());
+			app.get("/test", (c) => c.json({ ok: true }));
+
+			const res = await app.request("/test", {
+				headers: { Accept: "Application/Vnd.Pulumi+8" },
+			});
+			expect(res.status).toBe(200);
+		});
+
+		// Regression: without a media-range boundary (`;`, `,`, or end-of-string)
+		// after the version digits, `application/vnd.pulumi+8evil` would match
+		// the leading "8" and be accepted as v8. The current regex requires a
+		// proper boundary so junk-suffix media types are rejected.
+		test("rejects malformed media type with garbage suffix", async () => {
+			const app = new Hono();
+			app.use("*", pulumiAccept());
+			app.get("/test", (c) => c.json({ ok: true }));
+
+			const res = await app.request("/test", {
+				headers: { Accept: "application/vnd.pulumi+8evil" },
+			});
+			expect(res.status).toBe(415);
+		});
+
+		// Regression: when a header mixes a junk-suffix range with a valid
+		// range, only the valid one should be considered. Earlier versions of
+		// the regex would emit BOTH versions (treating `+8evil` as 8), which
+		// happens to still pass MIN here but is semantically wrong and would
+		// mask configuration mistakes.
+		test("ignores garbage-suffix range and uses only well-formed versions", async () => {
+			const app = new Hono();
+			app.use("*", pulumiAccept());
+			app.get("/test", (c) => c.json({ ok: true }));
+
+			const res = await app.request("/test", {
+				headers: { Accept: "application/vnd.pulumi+8evil, application/vnd.pulumi+9" },
+			});
+			expect(res.status).toBe(200);
+		});
+
+		// Regression: media types may have parameters (`;q=0.9`, `;charset=...`)
+		// per RFC 9110 §8.3.1. A header like `application/vnd.pulumi+8;q=0.9`
+		// must be accepted — the boundary check uses `;` as a valid terminator.
+		test("accepts media type with quality parameter", async () => {
+			const app = new Hono();
+			app.use("*", pulumiAccept());
+			app.get("/test", (c) => c.json({ ok: true }));
+
+			const res = await app.request("/test", {
+				headers: { Accept: "application/vnd.pulumi+8;q=0.9" },
+			});
+			expect(res.status).toBe(200);
+		});
 	});
 
 	// ========================================================================
