@@ -1,5 +1,5 @@
 import { mkdir, readFile, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { createAuditLog, finalizeAuditLog, recordResult, writeAuditLog } from "./audit.js";
 import * as log from "./log.js";
 import {
@@ -140,6 +140,48 @@ export async function run(opts: RunOptions): Promise<AuditLog> {
 	return audit;
 }
 
+/**
+ * Reject path segments that would let a hostile (or merely weird) stack name
+ * escape `opts.outputDir`. Procella's name validation allows dots, so a
+ * source stack literally named `..` is syntactically possible — without this
+ * guard, `join(outputDir, "..", "..")` would resolve outside outputDir and
+ * the subsequent `rm(exportFile)` could touch unintended files on disk.
+ *
+ * We reject:
+ *   - empty strings (caller must apply defaults before calling)
+ *   - `.` and `..` exactly (and any segment whose only chars are dots)
+ *   - segments containing path separators (`/`, `\`) or null bytes
+ *
+ * Caller MUST also verify the joined path with `assertWithin(outputDir, ...)`.
+ */
+export function assertSafePathSegment(segment: string, kind: string, ref: string): void {
+	if (!segment) {
+		throw new Error(`Refusing to migrate ${ref}: empty ${kind} cannot be used as a path segment`);
+	}
+	if (/^\.+$/.test(segment)) {
+		throw new Error(
+			`Refusing to migrate ${ref}: ${kind}=${JSON.stringify(segment)} would traverse the export directory`,
+		);
+	}
+	if (segment.includes("/") || segment.includes("\\") || segment.includes("\0")) {
+		throw new Error(
+			`Refusing to migrate ${ref}: ${kind}=${JSON.stringify(segment)} contains path separators or null bytes`,
+		);
+	}
+}
+
+/** Confirm the resolved child path is still inside `parent` (defence in depth). */
+export function assertWithin(parent: string, child: string, ref: string): void {
+	const resolvedParent = resolve(parent);
+	const resolvedChild = resolve(child);
+	const prefix = resolvedParent.endsWith(sep) ? resolvedParent : resolvedParent + sep;
+	if (resolvedChild !== resolvedParent && !resolvedChild.startsWith(prefix)) {
+		throw new Error(
+			`Refusing to migrate ${ref}: resolved export path ${resolvedChild} escapes outputDir ${resolvedParent}`,
+		);
+	}
+}
+
 async function migrateStack(
 	stack: DiscoveredStack,
 	index: number,
@@ -152,9 +194,21 @@ async function migrateStack(
 	const org = stack.ref.org || "imported";
 	const project = stack.ref.project || stack.ref.stack || "default";
 	const stackName = stack.ref.stack || stack.fqn;
+
+	// Path-traversal guard: source-backend stack names may legitimately contain
+	// dots (Procella allows it), so a stack literally named `..` is possible.
+	// Without sanitisation, `join(outputDir, "..")` resolves outside outputDir
+	// and a later `rm(exportFile)` could nuke unrelated files. Validate every
+	// segment AND verify the resolved path stays inside `opts.outputDir`.
+	assertSafePathSegment(org, "org", stack.fqn);
+	assertSafePathSegment(project, "project", stack.fqn);
+	assertSafePathSegment(stackName, "stack", stack.fqn);
+
 	const stackDir = join(opts.outputDir, org, project);
+	assertWithin(opts.outputDir, stackDir, stack.fqn);
 	await mkdir(stackDir, { recursive: true });
 	const exportFile = join(stackDir, `${stackName}.json`);
+	assertWithin(opts.outputDir, exportFile, stack.fqn);
 
 	log.info(`  [${index}/${total}] ${stack.fqn}`);
 
