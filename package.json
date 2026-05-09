@@ -55,7 +55,7 @@
 		"drizzle-kit": "catalog:",
 		"husky": "^9.1.7",
 		"jsdom": "^29.0.2",
-		"lint-staged": "^16.4.0",
+		"lint-staged": "^17.0.0",
 		"pg": "^8.20.0",
 		"sst": "^4.5.11",
 		"typescript": "catalog:"
