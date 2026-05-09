@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    types: [opened, reopened, synchronize]
 
 permissions:
   contents: read
@@ -160,8 +161,7 @@ jobs:
   types-freshness:
     name: Verify Pulumi Types Freshness
     runs-on: ubuntu-latest
-    # Runs on all PRs as a safety net to catch stale generated types
-    if: github.event_name == 'pull_request'
+    # Always runs — the strict ci-required gate fails on any skipped job.
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
@@ -378,3 +378,422 @@ jobs:
         with:
           name: benchmark-results
           path: bench/results.json
+
+  # =========================================================================
+  # esc-eval-go — was .github/workflows/esc-eval.yml; folded in for the gate.
+  # Also produces the bootstrap artifact consumed by preview-deploy below.
+  # =========================================================================
+  esc-eval-go:
+    name: Go vet, test & build ESC eval
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: esc-eval/go.mod
+          cache: true
+          cache-dependency-path: esc-eval/go.sum
+
+      - name: Download Go modules
+        run: cd esc-eval && go mod download
+
+      - name: Vet Go code
+        run: cd esc-eval && go vet ./...
+
+      - name: Test Go code
+        run: cd esc-eval && go test ./... -race -count=1 -covermode=atomic -coverprofile=coverage.out
+
+      - name: Upload Go coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v6
+        with:
+          files: ./esc-eval/coverage.out
+          flags: esc-eval
+          use_oidc: true
+          fail_ci_if_error: true
+
+      - name: Build ESC eval bootstrap
+        run: cd esc-eval && make build
+
+      - name: Upload bootstrap artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: esc-eval-bootstrap
+          path: .build/esc-eval/bootstrap
+          if-no-files-found: error
+
+  # =========================================================================
+  # preview-* — folded in from .github/workflows/preview.yml. These deploy a
+  # real SST stage to AWS and run integration + OIDC E2E against it. Only
+  # runs on pull_request events (push to main has its own Deploy workflow).
+  # =========================================================================
+  preview-deploy:
+    name: Deploy Preview
+    if: github.event_name == 'pull_request'
+    needs: [esc-eval-go]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: preview
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    outputs:
+      api_url: ${{ steps.outputs.outputs.api }}
+      app_url: ${{ steps.outputs.outputs.app }}
+      docs_url: ${{ steps.outputs.outputs.docs }}
+      descope_project_id: ${{ steps.outputs.outputs.descope_project_id }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: jdx/mise-action@v4
+      - uses: actions/cache@v5
+        with:
+          path: |
+            node_modules
+            ~/.bun/install/cache
+            ~/.pulumi/plugins
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+
+      - name: Download ESC eval bootstrap artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: esc-eval-bootstrap
+          path: .build/esc-eval
+
+      - name: Build Lambda binaries
+        run: |
+          mkdir -p .build/cli-api .build/web-api .build/gc .build/migrate
+          bun build --compile --target=bun-linux-x64 --production --sourcemap --compile-exec-argv="--smol" apps/server/src/lambda-cli.ts --outfile .build/cli-api/bootstrap
+          bun build --compile --target=bun-linux-x64 --production --sourcemap --compile-exec-argv="--smol" apps/server/src/lambda-web.ts --outfile .build/web-api/bootstrap
+          bun build --compile --target=bun-linux-x64 --production --sourcemap --compile-exec-argv="--smol" apps/server/src/gc-bootstrap.ts --outfile .build/gc/bootstrap
+          bun build --compile --target=bun-linux-x64 --production --sourcemap --compile-exec-argv="--smol" apps/server/src/migrate-bootstrap.ts --outfile .build/migrate/bootstrap
+          cp -rf packages/db/drizzle .build/migrate/drizzle
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+          role-session-name: GitHubActions-Preview-${{ github.run_id }}
+
+      - name: Unlock stale state
+        run: npx sst unlock --stage pr-${{ github.event.number }}
+        continue-on-error: true
+
+      - name: Deploy
+        id: deploy
+        run: |
+          set -o pipefail
+          npx sst deploy --stage pr-${{ github.event.number }} | tee /tmp/sst-deploy.log
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SST_SECRET_ProcellaEncryptionKey: ${{ secrets.PROCELLA_ENCRYPTION_KEY }}
+          SST_SECRET_ProcellaDevAuthToken: ${{ secrets.PROCELLA_DEV_AUTH_TOKEN }}
+          SST_SECRET_ProcellaDescopeManagementKey: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
+          SST_SECRET_ProcellaOtelEndpoint: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
+          SST_SECRET_ProcellaOtelHeaders: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
+
+      - name: Verify deployment health
+        id: health_check
+        run: |
+          STAGE="pr-${{ github.event.number }}"
+          API_URL="https://api.${STAGE}.procella.cloud/healthz"
+          echo "Verifying deployment at ${API_URL}..."
+          for i in $(seq 1 6); do
+            if curl -sf --max-time 10 "${API_URL}" >/dev/null 2>&1; then
+              echo "✅ Health check passed (attempt $i/6)"
+              exit 0
+            fi
+            echo "⏳ Attempt $i/6 failed, waiting 10s..."
+            sleep 10
+          done
+          echo "❌ Health check failed — possible infrastructure drift"
+          echo "drift=true" >> $GITHUB_OUTPUT
+
+      - name: Recover from infrastructure drift
+        if: steps.health_check.outputs.drift == 'true'
+        run: |
+          STAGE="pr-${{ github.event.number }}"
+          echo "::warning::Infrastructure drift detected — running full recovery cycle"
+          echo "Unlocking stale state..."
+          npx sst unlock --stage ${STAGE} || true
+          echo "Removing stale resources..."
+          npx sst remove --stage ${STAGE} || true
+          echo "Re-deploying from clean state..."
+          npx sst deploy --stage ${STAGE} | tee /tmp/sst-deploy.log
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SST_SECRET_ProcellaEncryptionKey: ${{ secrets.PROCELLA_ENCRYPTION_KEY }}
+          SST_SECRET_ProcellaDevAuthToken: ${{ secrets.PROCELLA_DEV_AUTH_TOKEN }}
+          SST_SECRET_ProcellaDescopeManagementKey: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
+          SST_SECRET_ProcellaOtelEndpoint: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
+          SST_SECRET_ProcellaOtelHeaders: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
+
+      - name: Verify recovery
+        if: steps.health_check.outputs.drift == 'true'
+        run: |
+          STAGE="pr-${{ github.event.number }}"
+          API_URL="https://api.${STAGE}.procella.cloud/healthz"
+          echo "Verifying recovery at ${API_URL}..."
+          for i in $(seq 1 12); do
+            if curl -sf --max-time 10 "${API_URL}" >/dev/null 2>&1; then
+              echo "✅ Recovery verified (attempt $i/12)"
+              exit 0
+            fi
+            echo "⏳ Waiting for recovery... ($i/12)"
+            sleep 10
+          done
+          echo "::error::Recovery failed — preview environment unreachable"
+          exit 1
+
+      - name: Get stack outputs
+        id: outputs
+        run: |
+          STAGE="pr-${{ github.event.number }}"
+          DESCOPE_ID=$(grep -oP 'descopeProjectId:\s*\K\S+' /tmp/sst-deploy.log | tail -1)
+          echo "api=https://api.${STAGE}.procella.cloud" >> $GITHUB_OUTPUT
+          echo "app=https://app.${STAGE}.procella.cloud" >> $GITHUB_OUTPUT
+          echo "docs=https://docs.${STAGE}.procella.cloud" >> $GITHUB_OUTPUT
+          echo "descope_project_id=${DESCOPE_ID}" >> $GITHUB_OUTPUT
+
+  preview-comment:
+    name: PR Comment
+    if: github.event_name == 'pull_request' && needs.preview-deploy.result == 'success'
+    needs: [preview-deploy]
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/github-script@v9
+        env:
+          API_URL: ${{ needs.preview-deploy.outputs.api_url }}
+          APP_URL: ${{ needs.preview-deploy.outputs.app_url }}
+          DOCS_URL: ${{ needs.preview-deploy.outputs.docs_url }}
+          STAGE: pr-${{ github.event.number }}
+        with:
+          script: |
+            const stage = process.env.STAGE;
+            const lines = [
+              '## Preview Environment\n',
+              `**Stage:** \`${stage}\`\n`,
+              '| Resource | URL |',
+              '|---|---|',
+            ];
+            if (process.env.API_URL) lines.push(`| API | ${process.env.API_URL} |`);
+            if (process.env.APP_URL) lines.push(`| App | ${process.env.APP_URL} |`);
+            if (process.env.DOCS_URL) lines.push(`| Docs | ${process.env.DOCS_URL} |`);
+            lines.push('');
+            lines.push(`_Deployed via SST to \`us-east-1\`. Domains: \`*.${stage}.procella.cloud\`_`);
+
+            const marker = '## Preview Environment';
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body?.startsWith(marker));
+            const body = lines.join('\n');
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+  preview-integration:
+    name: Integration Tests (Deployed Preview)
+    if: github.event_name == 'pull_request' && needs.preview-deploy.result == 'success' && needs.preview-deploy.outputs.descope_project_id != ''
+    runs-on: ubuntu-latest
+    needs: [preview-deploy]
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: jdx/mise-action@v4
+      - uses: actions/cache@v5
+        with:
+          path: |
+            node_modules
+            ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      - uses: pulumi/setup-pulumi@v2
+      - run: bun install --frozen-lockfile
+      - name: Run integration tests against deployed preview
+        env:
+          PROCELLA_API_URL: ${{ needs.preview-deploy.outputs.api_url }}
+          PROCELLA_APP_URL: ${{ needs.preview-deploy.outputs.app_url }}
+          PROCELLA_DESCOPE_PROJECT_ID: ${{ needs.preview-deploy.outputs.descope_project_id }}
+          PROCELLA_DESCOPE_MANAGEMENT_KEY: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
+          PROCELLA_E2E_ORG_SLUG: procella-pr-${{ github.event.number }}
+        run: bun run e2e:descope
+
+  preview-oidc-e2e:
+    name: OIDC Pulumi Deploy (real end-to-end)
+    if: github.event_name == 'pull_request' && needs.preview-deploy.result == 'success' && needs.preview-integration.result == 'success'
+    runs-on: ubuntu-latest
+    needs: [preview-deploy, preview-integration]
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      PROCELLA_API_URL: ${{ needs.preview-deploy.outputs.api_url }}
+      ORG_SLUG: procella-pr-${{ github.event.number }}
+      STACK_NAME: oidc-e2e-${{ github.run_id }}
+      PULUMI_BACKEND_URL: ${{ needs.preview-deploy.outputs.api_url }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pulumi/setup-pulumi@v2
+
+      - uses: pulumi/auth-actions@v1
+        with:
+          organization: ${{ env.ORG_SLUG }}
+          requested-token-type: urn:pulumi:token-type:access_token:organization
+          cloud-url: ${{ env.PROCELLA_API_URL }}
+
+      - name: Create stack + deploy + destroy
+        run: |
+          set -euxo pipefail
+          FULL_STACK="${ORG_SLUG}/replace-triggers/${STACK_NAME}"
+          pulumi login --cloud-url "${PULUMI_BACKEND_URL}"
+          pulumi whoami -v
+
+          echo "=== API diagnostics ==="
+          curl -sf -H "Authorization: token ${PULUMI_ACCESS_TOKEN}" \
+               -H "Accept: application/vnd.pulumi+8" \
+               "${PULUMI_BACKEND_URL}/api/user" | head -c 200
+          echo
+          curl -sf -H "Authorization: token ${PULUMI_ACCESS_TOKEN}" \
+               -H "Accept: application/vnd.pulumi+8" \
+               "${PULUMI_BACKEND_URL}/api/user/organizations/default" | head -c 200
+          echo
+
+          echo "Creating stack: ${FULL_STACK}"
+          HTTP_CODE=$(curl -s -o /tmp/stack-create.json -w '%{http_code}' -X POST \
+               -H "Authorization: token ${PULUMI_ACCESS_TOKEN}" \
+               -H "Accept: application/vnd.pulumi+8" \
+               -H "Content-Type: application/json" \
+               -d '{"stackName":"'"${STACK_NAME}"'"}' \
+               "${PULUMI_BACKEND_URL}/api/stacks/${ORG_SLUG}/replace-triggers/${STACK_NAME}")
+          echo "Create stack HTTP ${HTTP_CODE}: $(cat /tmp/stack-create.json)"
+          if [[ "${HTTP_CODE}" != "200" && "${HTTP_CODE}" != "409" ]]; then
+            echo "::error::Stack creation failed with HTTP ${HTTP_CODE}"
+            exit 1
+          fi
+
+          cd examples/replace-triggers
+          pulumi stack select "${FULL_STACK}"
+          echo "Selected: $(pulumi stack --show-name)"
+
+          pulumi up --yes --non-interactive
+          pulumi destroy --yes --non-interactive
+          pulumi stack rm --yes --non-interactive --force
+
+  # =========================================================================
+  # ci-required — single status check for branch protection.
+  #
+  # This job aggregates EVERY other job in this workflow. Configure the
+  # branch protection rule on `main` to require ONLY this check, and the
+  # entire CI suite is gated by it.
+  #
+  # Strict semantics: any non-success result on a needed job (failure,
+  # cancelled, OR skipped) fails the gate. Per the user's choice — this
+  # catches the case where a job's `if:` condition silently excluded it.
+  #
+  # `if: always()` ensures the gate evaluates even when an upstream job
+  # fails — without it, the gate would itself be skipped and (per GitHub's
+  # default branch-protection behavior) appear "successful". That's the
+  # exact pitfall this design avoids.
+  #
+  # Excluded from the gate (and therefore NOT required):
+  #   - CodeQL (separate workflow, GitHub Default Setup, can't be a job here)
+  #   - Cubic AI / Codecov bot status checks (third-party apps)
+  #   - Renovate self-validation (paths-filtered, doesn't run on every PR)
+  # =========================================================================
+  ci-required:
+    name: CI Required
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - check
+      - bundle-analysis
+      - integration
+      - esc-cli-e2e
+      - types-freshness
+      - e2e
+      - e2e-ui
+      - bench
+      - esc-eval-go
+      - preview-deploy
+      - preview-comment
+      - preview-integration
+      - preview-oidc-e2e
+    steps:
+      - name: Verify every needed job succeeded
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+          IS_PR: ${{ github.event_name == 'pull_request' }}
+        run: |
+          set -eu
+          # The preview-* jobs are gated `if: github.event_name == 'pull_request'`
+          # because they deploy a real SST stage scoped to the PR number. On push
+          # to main, those four jobs are intentionally skipped (Deploy workflow
+          # handles main). For every other event type, the strict rule applies:
+          # success is the ONLY acceptable result — `skipped` is treated as a
+          # failure, exactly to catch the case where someone adds a stale `if:`
+          # condition that quietly excludes a required check.
+
+          # Step 1: render a human-readable summary for the run log.
+          jq -r --arg is_pr "$IS_PR" '
+            (["preview-deploy","preview-comment","preview-integration","preview-oidc-e2e"]) as $preview |
+            to_entries[] |
+            . as $j |
+            ($preview | index($j.key)) as $is_preview |
+            (($is_pr != "true") and ($is_preview != null)) as $allowed_skip |
+            if $j.value.result == "success"
+              then "✅ \($j.key)"
+            elif $j.value.result == "skipped" and $allowed_skip
+              then "➖ \($j.key) (skipped — preview job on non-PR event, allowed)"
+            else
+              "❌ \($j.key) (result=\($j.value.result))"
+            end
+          ' <<< "$NEEDS_JSON"
+
+          # Step 2: decide exit status from the same JSON.
+          # `. as $e` binds the to_entries element so `$preview | index(...)`
+          # inside the inner pipeline can still reference $e.key (otherwise
+          # `.` rebinds to $preview and `.key` errors with "Cannot index array").
+          if jq -e --arg is_pr "$IS_PR" '
+              (["preview-deploy","preview-comment","preview-integration","preview-oidc-e2e"]) as $preview |
+              [ to_entries[]
+                | . as $e
+                | select($e.value.result != "success")
+                | select(
+                    ($is_pr == "true")
+                    or (($preview | index($e.key)) == null)
+                    or ($e.value.result != "skipped")
+                  )
+              ] | length > 0
+            ' <<< "$NEEDS_JSON" >/dev/null; then
+            echo ""
+            echo "::error::One or more required jobs did not succeed. CI gate failing."
+            exit 1
+          fi
+          echo ""
+          echo "All required jobs succeeded. CI gate passes."
