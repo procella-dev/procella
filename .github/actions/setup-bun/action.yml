@@ -11,8 +11,10 @@ runs:
         path: |
           node_modules
           ~/.bun/install/cache
-        key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-        restore-keys: bun-${{ runner.os }}-
+        # v2 prefix: includes bunfig.toml (linker layout) so cache invalidates
+        # when install configuration changes — not just lockfile.
+        key: bun-v2-${{ runner.os }}-${{ hashFiles('bun.lock', 'bunfig.toml') }}
+        restore-keys: bun-v2-${{ runner.os }}-
 
     - run: bun install --frozen-lockfile
       shell: bash
