@@ -72,7 +72,10 @@ jobs:
       - name: Build for distribution
         working-directory: packages/migrate
         run: |
-          bunx tsc --outDir dist
+          # Use the dist-only tsconfig that excludes *.test.ts so tests don't
+          # ship in the published npm package. The default tsconfig.json
+          # includes tests so `bun run typecheck` covers them.
+          bunx tsc -p tsconfig.build.json
           # Ensure shebang is preserved and cli.js is executable
           if [ -f dist/cli.js ] && ! head -n 1 dist/cli.js | grep -qx '#!/usr/bin/env node'; then
             { printf '%s\n' '#!/usr/bin/env node'; cat dist/cli.js; } > dist/cli.js.tmp && mv -f dist/cli.js.tmp dist/cli.js
