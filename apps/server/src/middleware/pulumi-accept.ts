@@ -17,11 +17,17 @@ import type { MiddlewareHandler } from "hono";
 // version meets the minimum. The Pulumi CLI itself only sends a single token,
 // but a proxy or alternate client could legitimately combine ranges.
 //
+// The regex enforces a proper media-range boundary after the digits — the
+// version must be followed by optional whitespace and then `;` (parameters),
+// `,` (next media range), or end-of-string. Without that boundary,
+// `application/vnd.pulumi+8evil` would falsely match as v8. Per RFC 9110
+// §8.3.2 media types are case-insensitive, so the pattern uses the `i` flag.
+//
 // References:
 //   - pulumi/pulumi `pkg/backend/httpstate/client/api.go` (currentAPIVersion table)
 //   - https://github.com/pulumi/pulumi/pull/22699 (v9 bump in v3.233.0)
 const MIN_API_VERSION = 8;
-const ACCEPT_PATTERN = /application\/vnd\.pulumi\+(\d+)/g;
+const ACCEPT_PATTERN = /application\/vnd\.pulumi\+(\d+)(?=\s*(?:[;,]|$))/gi;
 
 /** Require the Accept header to contain "application/vnd.pulumi+N" with N >= MIN_API_VERSION. */
 export function pulumiAccept(): MiddlewareHandler {
