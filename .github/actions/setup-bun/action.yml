@@ -1,0 +1,21 @@
+name: Setup Bun Workspace
+description: Install Bun via mise, restore cache, and install dependencies. Requires actions/checkout BEFORE this action.
+
+runs:
+  using: composite
+  steps:
+
+    - uses: jdx/mise-action@v4
+
+    - uses: actions/cache@v5
+      with:
+        path: |
+          node_modules
+          ~/.bun/install/cache
+        # v2 prefix: includes bunfig.toml (linker layout) so cache invalidates
+        # when install configuration changes — not just lockfile.
+        key: bun-v2-${{ runner.os }}-${{ hashFiles('bun.lock', 'bunfig.toml') }}
+        restore-keys: bun-v2-${{ runner.os }}-
+
+    - run: bun install --frozen-lockfile
+      shell: bash

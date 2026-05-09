@@ -95,6 +95,14 @@
 					"style": { "noNonNullAssertion": "off" }
 				}
 			}
+		},
+		{
+			"includes": ["packages/migrate/**"],
+			"linter": {
+				"rules": {
+					"suspicious": { "noConsole": "off" }
+				}
+			}
 		}
 	]
 }
