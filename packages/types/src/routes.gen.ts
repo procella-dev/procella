@@ -1,5 +1,5 @@
 // Auto-generated from pulumi/pulumi pkg/backend/httpstate/client/api_endpoints.go
-// Pulumi SDK v3.237.0 — do not edit manually.
+// Pulumi SDK v3.247.0 — do not edit manually.
 // Regenerate: bun run packages/types/tygo/generate-routes.ts
 
 type Method = "GET" | "POST" | "PATCH" | "DELETE";
@@ -23,6 +23,7 @@ export const PulumiRoutes = {
   getStackUpdate: { method: "GET" as Method, path: "/api/stacks/:org/:project/:stack/updates/:version" },
   getUpdateContentsFiles: { method: "GET" as Method, path: "/api/stacks/:org/:project/:stack/updates/:version/contents/files" },
   getUpdateContentsFilePath: { method: "GET" as Method, path: "/api/stacks/:org/:project/:stack/updates/:version/contents/file/:path" },
+  listOrganizationMembers: { method: "GET" as Method, path: "/api/orgs/:org/members" },
   listTemplates: { method: "GET" as Method, path: "/api/orgs/:org/templates" },
   downloadTemplates: { method: "GET" as Method, path: "/api/orgs/:org/templates/download" },
   batchDecrypt: { method: "POST" as Method, path: "/api/stacks/:org/:project/:stack/batch-decrypt" },
@@ -34,6 +35,8 @@ export const PulumiRoutes = {
   updateDeploymentSettings: { method: "PUT" as Method, path: "/api/stacks/:org/:project/:stack/deployments/settings" },
   encryptDeploymentSecret: { method: "POST" as Method, path: "/api/stacks/:org/:project/:stack/deployments/settings/encrypt" },
   destroyDeploymentSettings: { method: "DELETE" as Method, path: "/api/stacks/:org/:project/:stack/deployments/settings" },
+  listStackDeployments: { method: "GET" as Method, path: "/api/stacks/:org/:project/:stack/deployments" },
+  cancelStackDeployment: { method: "POST" as Method, path: "/api/stacks/:org/:project/:stack/deployments/:deploymentId/cancel" },
   createDestroy: { method: "POST" as Method, path: "/api/stacks/:org/:project/:stack/destroy" },
   createPreview: { method: "POST" as Method, path: "/api/stacks/:org/:project/:stack/preview" },
   createUpdate: { method: "POST" as Method, path: "/api/stacks/:org/:project/:stack/update" },
@@ -50,8 +53,12 @@ export const PulumiRoutes = {
   getGHAppIntegration: { method: "GET" as Method, path: "/api/console/orgs/:org/integrations/github-app" },
   publishPolicyPack: { method: "POST" as Method, path: "/api/orgs/:org/policypacks" },
   completePolicyPackPublish: { method: "POST" as Method, path: "/api/orgs/:org/policypacks/:policyPackName/:versionTag/complete" },
+  getUsageSummaryResourceHours: { method: "GET" as Method, path: "/api/orgs/:org/resources/summary" },
   getSearchResources: { method: "GET" as Method, path: "/api/orgs/:org/search/resources" },
   getSearchResourcesParse: { method: "GET" as Method, path: "/api/orgs/:org/search/resources/parse" },
+  getOrgResourceSearchV2: { method: "GET" as Method, path: "/api/orgs/:org/search/resourcesv2" },
+  listInsightsAccounts: { method: "GET" as Method, path: "/api/preview/insights/:org/accounts" },
+  getScanLogs: { method: "GET" as Method, path: "/api/preview/insights/:org/accounts/:accountName/scans/:scanId/logs" },
   publishPackage: { method: "POST" as Method, path: "/api/registry/packages/:source/:publisher/:name/versions" },
   completePackagePublish: { method: "POST" as Method, path: "/api/registry/packages/:source/:publisher/:name/versions/:version/complete" },
   deletePackageVersion: { method: "DELETE" as Method, path: "/api/registry/packages/:source/:publisher/:name/versions/:version" },
