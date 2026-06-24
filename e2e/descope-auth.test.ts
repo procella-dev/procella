@@ -66,8 +66,10 @@ async function setupTestUser(
 	const resp = await sdk.management.accessKey.create(
 		`procella-e2e-${RUN_ID}`,
 		expireTime,
-		{ procellaOrgSlug: orgSlug },
+		null,
 		[{ tenantId, roleNames: ["admin"] }],
+		undefined,
+		{ procellaOrgSlug: orgSlug },
 	);
 
 	if (!resp.data?.cleartext) {
