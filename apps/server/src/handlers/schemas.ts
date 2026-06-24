@@ -3,7 +3,7 @@ import { z } from "zod";
 export const MAX_JSON_DEPTH = 32;
 export const MAX_STRING_LENGTH = 1024 * 1024;
 export const MAX_EVENT_BATCH_SIZE = 1000;
-export const MAX_BATCH_CRYPT_ITEMS = 100;
+export const MAX_BATCH_CRYPT_ITEMS = 1000;
 export const MAX_FEATURE_COUNT = 100;
 export const MAX_LEASE_DURATION_SECONDS = 300;
 
