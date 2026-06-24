@@ -53,6 +53,7 @@ const TEST_LOGIN_ID = `procella-e2e-${RUN_ID}@test.invalid`;
 async function setupTestUser(
 	sdk: ReturnType<typeof DescopeClient>,
 	tenantId: string,
+	orgSlug: string,
 ): Promise<string> {
 	await sdk.management.user.createTestUser(TEST_LOGIN_ID, {
 		email: TEST_LOGIN_ID,
@@ -65,7 +66,7 @@ async function setupTestUser(
 	const resp = await sdk.management.accessKey.create(
 		`procella-e2e-${RUN_ID}`,
 		expireTime,
-		undefined,
+		{ procellaOrgSlug: orgSlug },
 		[{ tenantId, roleNames: ["admin"] }],
 	);
 
@@ -173,7 +174,7 @@ describe_descope("Descope auth (deployed preview)", () => {
 		}
 
 		await sdk.management.user.deleteAllTestUsers().catch(() => {});
-		accessKey = await setupTestUser(sdk, tenantId);
+		accessKey = await setupTestUser(sdk, tenantId, orgSlug);
 		pulumiHome = await createPulumiHome();
 	});
 
@@ -198,6 +199,7 @@ describe_descope("Descope auth (deployed preview)", () => {
 		expect(res.status).toBe(200);
 		const body = (await res.json()) as Record<string, unknown>;
 		expect(typeof body.name).toBe("string");
+		expect(body.organizations).toEqual([{ githubLogin: orgSlug, name: orgSlug }]);
 	});
 
 	test("invalid token is rejected", async () => {
