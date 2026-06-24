@@ -120,7 +120,7 @@ export function createApp(deps: {
 	const withPulumiAccept = pulumiAccept();
 	const withCliTokenRateLimit = createIpRateLimiter({ limit: 10 });
 	const withOauthTokenRateLimit = createIpRateLimiter({ limit: 30 });
-	const withCryptoRateLimit = createIpRateLimiter({ limit: 1000 });
+	const withCryptoRateLimit = createIpRateLimiter({ limit: 10_000 });
 	const withTrpcMutationRateLimit = createIpRateLimiter({
 		limit: 60,
 		skip: (c) => !isTrpcMutationRequest(c.req.path),

@@ -101,7 +101,7 @@ export function createCliApp(deps: CliAppDeps): Hono<Env> {
 	const withAudit = auditMiddleware(deps.audit);
 	const withPulumiAccept = pulumiAccept();
 	const withOauthTokenRateLimit = createIpRateLimiter({ limit: 30 });
-	const withCryptoRateLimit = createIpRateLimiter({ limit: 1000 });
+	const withCryptoRateLimit = createIpRateLimiter({ limit: 10_000 });
 	const withUpdateAuth = updateAuth(
 		deps.auth,
 		(updateId, token) => deps.updates.verifyLeaseToken(updateId, token),
