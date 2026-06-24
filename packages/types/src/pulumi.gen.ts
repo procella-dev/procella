@@ -828,6 +828,334 @@ export interface OperationStatus {
 }
 
 //////////
+// source: deployments.go
+
+/**
+ * PulumiOperation describes what operation to perform on the
+ * stack as defined in the Job spec.
+ */
+export type PulumiOperation = string;
+/**
+ * The possible operations we can deploy.
+ */
+export const Update: PulumiOperation = "update";
+/**
+ * The possible operations we can deploy.
+ */
+export const Preview: PulumiOperation = "preview";
+/**
+ * The possible operations we can deploy.
+ */
+export const Destroy: PulumiOperation = "destroy";
+/**
+ * The possible operations we can deploy.
+ */
+export const Refresh: PulumiOperation = "refresh";
+/**
+ * The possible operations we can deploy.
+ */
+export const DetectDrift: PulumiOperation = "detect-drift";
+/**
+ * The possible operations we can deploy.
+ */
+export const RemediateDrift: PulumiOperation = "remediate-drift";
+/**
+ * DeploymentDuration, wrapper over time.Duration to properly marshall
+ * time durations according to pulumi cloud spec.
+ */
+export type DeploymentDuration = number;
+/**
+ * CreateDeploymentRequest defines the request payload that is expected when
+ * creating a new deployment.
+ */
+export interface CreateDeploymentRequest {
+	/**
+	 * Op
+	 */
+	operation: PulumiOperation;
+	/**
+	 * InheritSettings is a flag that indicates whether the deployment should inherit
+	 * deployment settings from the stack.
+	 */
+	inheritSettings: boolean;
+	/**
+	 * Executor defines options that the executor is going to use to run the job.
+	 */
+	executorContext?: ExecutorContext;
+	/**
+	 * Source defines how the source code to the Pulumi program will be gathered.
+	 */
+	sourceContext?: SourceContext;
+	/**
+	 * Operation defines the options that the executor will use to run the Pulumi commands.
+	 */
+	operationContext?: OperationContext;
+	agentPoolID?: AgentPoolIDMarshaller;
+}
+export type AgentPoolIDMarshaller = string;
+export interface GitHubAppIntegration {
+	/**
+	 * Whether the app is installed for this org.
+	 */
+	installed: boolean;
+}
+export interface DeploymentSettings {
+	tag?: string;
+	executorContext?: ExecutorContext;
+	sourceContext?: SourceContext;
+	gitHub?: DeploymentSettingsGitHub;
+	operationContext?: OperationContext;
+	agentPoolID?: string;
+}
+export interface DeploymentSettingsGitHub {
+	repository?: string;
+	pullRequestTemplate?: boolean;
+	deployCommits?: boolean;
+	previewPullRequests?: boolean;
+	deployPullRequest?: number /* int64 */;
+	paths?: string[];
+}
+export interface ExecutorContext {
+	/**
+	 * WorkingDirectory defines the path where the work should be done when executing.
+	 */
+	workingDirectory?: string;
+	/**
+	 * Defines the image that the pulumi operations should run in.
+	 */
+	executorImage?: DockerImage;
+	/**
+	 * ExecutorRootPath overrides the default root path (`/`) used by the deployment executor. Useful when running
+	 * with non-root users (e.g. set to `/tmp`).
+	 */
+	executorRootPath?: string;
+}
+/**
+ * A DockerImage describes a Docker image reference + optional credentials for use with a job definition.
+ */
+export interface DockerImage {
+	reference: string;
+	credentials?: DockerImageCredentials;
+}
+/**
+ * DockerImageCredentials describes the credentials needed to access a Docker repository.
+ */
+export interface DockerImageCredentials {
+	username: string;
+	password: SecretValue;
+}
+/**
+ * SourceContext describes some source code, and how to obtain it.
+ */
+export interface SourceContext {
+	git?: SourceContextGit;
+}
+export interface SourceContextGit {
+	repoUrl?: string;
+	branch: string;
+	/**
+	 * (optional) RepoDir is the directory to work from in the project's source repository
+	 * where Pulumi.yaml is located. It is used in case Pulumi.yaml is not
+	 * in the project source root.
+	 */
+	repoDir?: string;
+	/**
+	 * (optional) Commit is the hash of the commit to deploy. If used, HEAD will be in detached mode. This
+	 * is mutually exclusive with the Branch setting. Either value needs to be specified.
+	 */
+	commit?: string;
+	/**
+	 * (optional) GitAuth allows configuring git authentication options
+	 * There are 3 different authentication options:
+	 *   * SSH private key (and its optional password)
+	 *   * Personal access token
+	 *   * Basic auth username and password
+	 * Only one authentication mode will be considered if more than one option is specified,
+	 * with ssh private key/password preferred first, then personal access token, and finally
+	 * basic auth credentials.
+	 */
+	gitAuth?: GitAuthConfig;
+}
+/**
+ * GitAuthConfig specifies git authentication configuration options.
+ * There are 3 different authentication options:
+ *   - Personal access token
+ *   - SSH private key (and its optional password)
+ *   - Basic auth username and password
+ * Only 1 authentication mode is valid.
+ */
+export interface GitAuthConfig {
+	accessToken?: SecretValue;
+	sshAuth?: SSHAuth;
+	basicAuth?: BasicAuth;
+}
+/**
+ * SSHAuth configures ssh-based auth for git authentication.
+ * SSHPrivateKey is required but password is optional.
+ */
+export interface SSHAuth {
+	sshPrivateKey: SecretValue;
+	password?: SecretValue;
+}
+/**
+ * BasicAuth configures git authentication through basic auth —
+ * i.e. username and password. Both UserName and Password are required.
+ */
+export interface BasicAuth {
+	userName: SecretValue;
+	password: SecretValue;
+}
+/**
+ * OperationContext describes what to do.
+ */
+export interface OperationContext {
+	/**
+	 * OIDC contains the OIDC configuration for the operation.
+	 */
+	oidc?: OperationContextOIDCConfiguration;
+	/**
+	 * PreRunCommands is an optional list of arbitrary commands to run before Pulumi
+	 * is invoked.
+	 * ref: https://github.com/pulumi/pulumi/issues/9397
+	 */
+	preRunCommands?: string[];
+	/**
+	 * EnvironmentVariables contains environment variables to be applied during the execution.
+	 */
+	environmentVariables?: { [key: string]: SecretValue};
+	/**
+	 * Options is a bag of settings to specify or override default behavior
+	 */
+	options?: OperationContextOptions;
+}
+export interface OperationContextOIDCConfiguration {
+	/**
+	 * AWS contains AWS-specific configuration.
+	 */
+	aws?: OperationContextAWSOIDCConfiguration;
+	/**
+	 * Azure contains Azure-specific configuration.
+	 */
+	azure?: OperationContextAzureOIDCConfiguration;
+	/**
+	 * GCP contains GCP-specific configuration.
+	 */
+	gcp?: OperationContextGCPOIDCConfiguration;
+}
+export interface OperationContextAWSOIDCConfiguration {
+	/**
+	 * Duration is the duration of the assume-role session.
+	 */
+	duration?: DeploymentDuration;
+	/**
+	 * PolicyARNs is an optional set of IAM policy ARNs that further restrict the assume-role session.
+	 */
+	policyArns?: string[];
+	/**
+	 * The ARN of the role to assume using the OIDC token.
+	 */
+	roleArn: string;
+	/**
+	 * The name of the assume-role session.
+	 */
+	sessionName: string;
+}
+export interface OperationContextAzureOIDCConfiguration {
+	/**
+	 * ClientID is the client ID of the federated workload identity.
+	 */
+	clientId?: string;
+	/**
+	 * TenantID is the tenant ID of the federated workload identity.
+	 */
+	tenantId?: string;
+	/**
+	 * SubscriptionID is the subscription ID of the federated workload identity.
+	 */
+	subscriptionId?: string;
+}
+export interface OperationContextGCPOIDCConfiguration {
+	/**
+	 * ProjectID is the numerical ID of the GCP project.
+	 */
+	projectId: string;
+	/**
+	 * Region is the region of the GCP project.
+	 */
+	region?: string;
+	/**
+	 * WorkloadPoolID is the ID of the workload pool to use.
+	 */
+	workloadPoolId: string;
+	/**
+	 * ProviderID is the ID of the identity provider associated with the workload pool.
+	 */
+	providerId: string;
+	/**
+	 * ServiceAccount is the email address of the service account to use.
+	 */
+	serviceAccount: string;
+	/**
+	 * TokenLifetime is the lifetime of the temporary credentials.
+	 */
+	tokenLifetime?: DeploymentDuration;
+}
+/**
+ * OperationContextOptions is a bag of settings to specify or override default behavior in a deployment
+ */
+export interface OperationContextOptions {
+	skipInstallDependencies: boolean;
+	skipIntermediateDeployments: boolean;
+	shell?: string;
+	deleteAfterDestroy: boolean;
+	remediateIfDriftDetected: boolean;
+}
+/**
+ * CreateDeploymentResponse defines the response given when a new Deployment is created.
+ */
+export interface CreateDeploymentResponse {
+	/**
+	 * ID represents the generated Deployment ID.
+	 */
+	id: string;
+	/**
+	 * ConsoleURL is the Console URL for the deployment.
+	 */
+	consoleUrl: string;
+}
+export interface DeploymentLogLine {
+	header?: string;
+	timestamp?: string;
+	line?: string;
+}
+export interface DeploymentLogs {
+	lines?: DeploymentLogLine[];
+	nextToken?: string;
+}
+/**
+ * A SecretValue describes a possibly-secret value.
+ */
+export interface SecretValue {
+	Value: string;
+	Ciphertext: string;
+	Secret: boolean;
+}
+export interface GetDeploymentUpdatesUpdateInfo {
+	/**
+	 * UpdateID is the underlying Update's ID on the PPC.
+	 */
+	updateID: string;
+	/**
+	 * Version of the stack that this UpdateInfo describe.
+	 */
+	version: number /* int */;
+	/**
+	 * LatestVersion of the stack in general. i.e. the latest when Version == LatestVersion.
+	 */
+	latestVersion: number /* int */;
+}
+
+//////////
 // source: drift.go
 
 /**

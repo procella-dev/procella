@@ -23,7 +23,6 @@ packages:
       "time.Duration": "number"
     exclude_files:
       - "ai.go"
-      - "deployments.go"
       - "environments.go"
       - "journal.go"
       - "logs.go"
