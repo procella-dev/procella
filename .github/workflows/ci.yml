@@ -291,7 +291,7 @@ jobs:
       - uses: pulumi/setup-pulumi@v2
       - run: bun install --frozen-lockfile
       - name: Install Playwright browsers
-        run: npx playwright install chromium
+        run: ./node_modules/.bin/playwright install chromium
       - name: Run Playwright UI tests
         env:
           CI: "true"
