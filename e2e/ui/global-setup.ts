@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { access, mkdtemp, rm } from "node:fs/promises";
+import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { FullConfig } from "@playwright/test";
@@ -13,6 +13,7 @@ const TEST_DB_URL =
 	"postgres://procella:procella@localhost:5432/procella?sslmode=disable";
 const TEST_TOKEN = process.env.PROCELLA_DEV_AUTH_TOKEN ?? "devtoken123";
 const ESC_EVAL_BOOTSTRAP = path.join(PROJECT_ROOT, ".build", "esc-eval", "bootstrap");
+const STATE_PATH = path.join(tmpdir(), `procella-playwright-${TEST_PORT}.json`);
 
 function sleep(ms: number) {
 	return new Promise<void>((r) => setTimeout(r, ms));
@@ -153,6 +154,12 @@ export default async function globalSetup(_config: FullConfig) {
 		);
 		await waitFor(`http://localhost:${UI_PORT}`, 30_000);
 	}
+
+	await writeFile(
+		STATE_PATH,
+		JSON.stringify({ blobDir, serverPid: server?.pid, uiPid: ui?.pid }),
+		"utf8",
+	);
 
 	return async () => {
 		await stopChild(ui);

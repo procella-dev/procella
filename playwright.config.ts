@@ -29,6 +29,7 @@ export default defineConfig({
 	],
 
 	globalSetup: "./e2e/ui/global-setup.ts",
+	globalTeardown: "./e2e/ui/global-teardown.ts",
 });
 
 export { API_URL, BASE_URL };
