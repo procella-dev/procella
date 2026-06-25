@@ -475,6 +475,38 @@ describe("@procella/server routes", () => {
 			expect(await limited.json()).toEqual({ error: "Too many requests" });
 		});
 
+		test("single crypto requests keep lower rate limit than batch crypto requests", async () => {
+			const app = makeApp();
+			const headers = {
+				...authHeaders,
+				"Content-Type": "application/json",
+				[INTERNAL_CLIENT_IP_HEADER]: "203.0.113.10",
+			};
+
+			for (let attempt = 1; attempt <= 1000; attempt++) {
+				const res = await app.request("/api/stacks/myorg/myproj/dev/encrypt", {
+					method: "POST",
+					headers,
+					body: JSON.stringify({ plaintext: "YQ==" }),
+				});
+				expect(res.status).toBe(200);
+			}
+
+			const limited = await app.request("/api/stacks/myorg/myproj/dev/encrypt", {
+				method: "POST",
+				headers,
+				body: JSON.stringify({ plaintext: "YQ==" }),
+			});
+			expect(limited.status).toBe(429);
+
+			const batch = await app.request("/api/stacks/myorg/myproj/dev/batch-encrypt", {
+				method: "POST",
+				headers,
+				body: JSON.stringify({ plaintexts: ["YQ=="] }),
+			});
+			expect(batch.status).toBe(200);
+		});
+
 		test("GET /api/esc/environments returns CLI environment list shape", async () => {
 			const app = makeApp();
 			const res = await app.request("/api/esc/environments", { headers: authHeaders });
