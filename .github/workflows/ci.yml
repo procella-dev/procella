@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: |
             node_modules
@@ -62,7 +62,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: |
             node_modules
@@ -98,7 +98,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: |
             node_modules
@@ -145,7 +145,7 @@ jobs:
         with:
           go-version-file: esc-eval/go.mod
           cache-dependency-path: esc-eval/go.sum
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: |
             node_modules
@@ -169,7 +169,7 @@ jobs:
         with:
           go-version-file: packages/types/tygo/go.mod
           cache-dependency-path: packages/types/tygo/go.sum
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: |
             node_modules
@@ -228,7 +228,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: |
             node_modules
@@ -281,7 +281,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: |
             node_modules
@@ -343,7 +343,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: |
             node_modules
@@ -449,7 +449,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: |
             node_modules
@@ -627,7 +627,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: |
             node_modules
