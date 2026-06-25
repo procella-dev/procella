@@ -290,8 +290,6 @@ jobs:
           restore-keys: bun-${{ runner.os }}-
       - uses: pulumi/setup-pulumi@v2
       - run: bun install --frozen-lockfile
-      - name: Install Playwright browsers
-        run: bunx playwright install chromium --with-deps
       - name: Run Playwright UI tests
         env:
           CI: "true"
@@ -350,10 +348,13 @@ jobs:
           path: |
             node_modules
             ~/.bun/install/cache
+            ~/.pulumi/plugins
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
       - uses: pulumi/setup-pulumi@v2
       - run: bun install --frozen-lockfile
+      - name: Install benchmark Pulumi plugins
+        run: pulumi plugin install resource random 4.21.0
       - name: Run benchmark
         env:
           PROCELLA_DATABASE_URL: postgres://procella:procella@localhost:5432/procella?sslmode=disable

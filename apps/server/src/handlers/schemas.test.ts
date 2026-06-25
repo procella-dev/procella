@@ -5,6 +5,7 @@ import {
 	EncryptValueRequestSchema,
 	EngineEventBatchSchema,
 	JournalEntriesSchema,
+	MAX_BATCH_CRYPT_ITEMS,
 	MAX_JSON_DEPTH,
 	MAX_STRING_LENGTH,
 	PatchUpdateCheckpointDeltaRequestSchema,
@@ -84,6 +85,28 @@ describe("Pulumi request schemas", () => {
 		});
 
 		expect(result.success).toBe(false);
+	});
+
+	test("accepts Pulumi large-state batch decrypt requests", () => {
+		const result = BatchDecryptRequestSchema.safeParse({
+			ciphertexts: Array.from({ length: 160 }, () => "Y2lwaGVydGV4dA=="),
+		});
+
+		expect(result.success).toBe(true);
+	});
+
+	test("rejects batch crypt requests over maximum", () => {
+		expect(
+			BatchEncryptRequestSchema.safeParse({
+				plaintexts: Array.from({ length: MAX_BATCH_CRYPT_ITEMS + 1 }, () => "YQ=="),
+			}).success,
+		).toBe(false);
+
+		expect(
+			BatchDecryptRequestSchema.safeParse({
+				ciphertexts: Array.from({ length: MAX_BATCH_CRYPT_ITEMS + 1 }, () => "Y2lwaGVydGV4dA=="),
+			}).success,
+		).toBe(false);
 	});
 
 	test("rejects plaintexts over 1 MiB", () => {

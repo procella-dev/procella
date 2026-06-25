@@ -24,11 +24,12 @@ export default defineConfig({
 	projects: [
 		{
 			name: "chromium",
-			use: { ...devices["Desktop Chrome"] },
+			use: { ...devices["Desktop Chrome"], ...(process.env.CI ? { channel: "chrome" as const } : {}) },
 		},
 	],
 
 	globalSetup: "./e2e/ui/global-setup.ts",
+	globalTeardown: "./e2e/ui/global-teardown.ts",
 });
 
 export { API_URL, BASE_URL };

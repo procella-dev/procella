@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { access, mkdtemp } from "node:fs/promises";
+import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { FullConfig } from "@playwright/test";
@@ -13,9 +13,23 @@ const TEST_DB_URL =
 	"postgres://procella:procella@localhost:5432/procella?sslmode=disable";
 const TEST_TOKEN = process.env.PROCELLA_DEV_AUTH_TOKEN ?? "devtoken123";
 const ESC_EVAL_BOOTSTRAP = path.join(PROJECT_ROOT, ".build", "esc-eval", "bootstrap");
+const STATE_PATH = path.join(tmpdir(), `procella-playwright-${TEST_PORT}.json`);
 
 function sleep(ms: number) {
 	return new Promise<void>((r) => setTimeout(r, ms));
+}
+
+type ManagedProcess = ReturnType<typeof spawn>;
+
+async function stopChild(proc: ManagedProcess | undefined): Promise<void> {
+	if (!proc || proc.exitCode !== null || proc.signalCode !== null) return;
+	proc.kill("SIGTERM");
+	await Promise.race([
+		new Promise<void>((resolve) => proc.once("close", () => resolve())),
+		sleep(5000).then(() => {
+			if (proc.exitCode === null && proc.signalCode === null) proc.kill("SIGKILL");
+		}),
+	]);
 }
 
 async function waitFor(url: string, timeoutMs: number): Promise<void> {
@@ -97,11 +111,13 @@ async function ensureEscEvaluatorBinary(): Promise<string> {
 export default async function globalSetup(_config: FullConfig) {
 	const blobDir = await mkdtemp(path.join(tmpdir(), "procella-pw-blobs-"));
 	const escEvaluatorBinary = await ensureEscEvaluatorBinary();
+	let server: ManagedProcess | undefined;
+	let ui: ManagedProcess | undefined;
 
 	const apiAlreadyUp = await isListening(TEST_PORT);
 	if (!apiAlreadyUp) {
 		await resetDb();
-		const server = spawn("bun", ["run", "apps/server/src/index.ts"], {
+		server = spawn("bun", ["run", "apps/server/src/index.ts"], {
 			env: {
 				...process.env,
 				PROCELLA_LISTEN_ADDR: `:${TEST_PORT}`,
@@ -122,14 +138,12 @@ export default async function globalSetup(_config: FullConfig) {
 			cwd: PROJECT_ROOT,
 			stdio: "ignore",
 		});
-		// biome-ignore lint/suspicious/noExplicitAny: storing on global for teardown
-		(globalThis as any).__PW_SERVER__ = server;
 		await waitFor(`http://localhost:${TEST_PORT}/healthz`, 30_000);
 	}
 
 	const uiAlreadyUp = await isListening(UI_PORT, "/").catch(() => false);
 	if (!uiAlreadyUp) {
-		const ui = spawn(
+		ui = spawn(
 			"bun",
 			["run", "--cwd", "apps/ui", "dev", "--port", String(UI_PORT), "--strictPort"],
 			{
@@ -138,8 +152,18 @@ export default async function globalSetup(_config: FullConfig) {
 				stdio: "ignore",
 			},
 		);
-		// biome-ignore lint/suspicious/noExplicitAny: storing on global for teardown
-		(globalThis as any).__PW_UI__ = ui;
 		await waitFor(`http://localhost:${UI_PORT}`, 30_000);
 	}
+
+	await writeFile(
+		STATE_PATH,
+		JSON.stringify({ blobDir, serverPid: server?.pid, uiPid: ui?.pid }),
+		"utf8",
+	);
+
+	return async () => {
+		await stopChild(ui);
+		await stopChild(server);
+		await rm(blobDir, { recursive: true, force: true });
+	};
 }

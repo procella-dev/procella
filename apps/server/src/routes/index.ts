@@ -120,7 +120,8 @@ export function createApp(deps: {
 	const withPulumiAccept = pulumiAccept();
 	const withCliTokenRateLimit = createIpRateLimiter({ limit: 10 });
 	const withOauthTokenRateLimit = createIpRateLimiter({ limit: 30 });
-	const withCryptoRateLimit = createIpRateLimiter({ limit: 1000 });
+	const withSingleCryptoRateLimit = createIpRateLimiter({ limit: 1000 });
+	const withBatchCryptoRateLimit = createIpRateLimiter({ limit: 10_000 });
 	const withTrpcMutationRateLimit = createIpRateLimiter({
 		limit: 60,
 		skip: (c) => !isTrpcMutationRequest(c.req.path),
@@ -315,10 +316,18 @@ export function createApp(deps: {
 	api.post("/stacks/:org/:project/:stack/import", stateH.importStack);
 
 	// Crypto (API token)
-	api.post("/stacks/:org/:project/:stack/encrypt", withCryptoRateLimit, cryptoH.encryptValue);
-	api.post("/stacks/:org/:project/:stack/decrypt", withCryptoRateLimit, cryptoH.decryptValue);
-	api.post("/stacks/:org/:project/:stack/batch-encrypt", withCryptoRateLimit, cryptoH.batchEncrypt);
-	api.post("/stacks/:org/:project/:stack/batch-decrypt", withCryptoRateLimit, cryptoH.batchDecrypt);
+	api.post("/stacks/:org/:project/:stack/encrypt", withSingleCryptoRateLimit, cryptoH.encryptValue);
+	api.post("/stacks/:org/:project/:stack/decrypt", withSingleCryptoRateLimit, cryptoH.decryptValue);
+	api.post(
+		"/stacks/:org/:project/:stack/batch-encrypt",
+		withBatchCryptoRateLimit,
+		cryptoH.batchEncrypt,
+	);
+	api.post(
+		"/stacks/:org/:project/:stack/batch-decrypt",
+		withBatchCryptoRateLimit,
+		cryptoH.batchDecrypt,
+	);
 	api.post("/stacks/:org/:project/:stack/log-decryption", cryptoH.logDecryption);
 
 	// Stack CRUD + createUpdate (:kind catch-all LAST)
