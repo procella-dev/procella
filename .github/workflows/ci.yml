@@ -438,6 +438,9 @@ jobs:
           SST_SECRET_ProcellaEncryptionKey: ${{ secrets.PROCELLA_ENCRYPTION_KEY }}
           SST_SECRET_ProcellaDevAuthToken: ${{ secrets.PROCELLA_DEV_AUTH_TOKEN }}
           SST_SECRET_ProcellaDescopeManagementKey: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
+          SST_SECRET_ProcellaGitHubAppId: ${{ secrets.RENOVATE_APP_ID }}
+          SST_SECRET_ProcellaGitHubAppPrivateKey: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
+          SST_SECRET_ProcellaGitHubAppWebhookSecret: ${{ secrets.PROCELLA_GITHUB_APP_WEBHOOK_SECRET }}
           SST_SECRET_ProcellaOtelEndpoint: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
           SST_SECRET_ProcellaOtelHeaders: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
 
@@ -474,6 +477,9 @@ jobs:
           SST_SECRET_ProcellaEncryptionKey: ${{ secrets.PROCELLA_ENCRYPTION_KEY }}
           SST_SECRET_ProcellaDevAuthToken: ${{ secrets.PROCELLA_DEV_AUTH_TOKEN }}
           SST_SECRET_ProcellaDescopeManagementKey: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
+          SST_SECRET_ProcellaGitHubAppId: ${{ secrets.RENOVATE_APP_ID }}
+          SST_SECRET_ProcellaGitHubAppPrivateKey: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
+          SST_SECRET_ProcellaGitHubAppWebhookSecret: ${{ secrets.PROCELLA_GITHUB_APP_WEBHOOK_SECRET }}
           SST_SECRET_ProcellaOtelEndpoint: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}
           SST_SECRET_ProcellaOtelHeaders: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
 

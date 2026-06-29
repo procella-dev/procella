@@ -1,6 +1,9 @@
 export const encryptionKey = new sst.Secret("ProcellaEncryptionKey");
 export const devAuthToken = new sst.Secret("ProcellaDevAuthToken");
 export const descopeManagementKey = new sst.Secret("ProcellaDescopeManagementKey");
+export const githubAppId = new sst.Secret("ProcellaGitHubAppId");
+export const githubAppPrivateKey = new sst.Secret("ProcellaGitHubAppPrivateKey");
+export const githubAppWebhookSecret = new sst.Secret("ProcellaGitHubAppWebhookSecret");
 export const otelEndpoint = new sst.Secret("ProcellaOtelEndpoint");
 export const otelHeaders = new sst.Secret("ProcellaOtelHeaders");
 export const ticketSigningKey = new sst.Secret("ProcellaTicketSigningKey");
@@ -15,7 +18,11 @@ export const ticketSigningKey = new sst.Secret("ProcellaTicketSigningKey");
 // remains in the codebase for Vercel/Render deploys that drive cron over HTTP.
 export const sharedSecrets = [encryptionKey, devAuthToken, otelEndpoint, otelHeaders];
 
-// apiSecrets are linked into the CLI API + Web API Lambdas. Adds the two
-// API-only secrets (descopeManagementKey, ticketSigningKey) on top of the
-// shared set.
-export const apiSecrets = [...sharedSecrets, descopeManagementKey, ticketSigningKey];
+export const apiSecrets = [
+	...sharedSecrets,
+	descopeManagementKey,
+	githubAppId,
+	githubAppPrivateKey,
+	githubAppWebhookSecret,
+	ticketSigningKey,
+];
