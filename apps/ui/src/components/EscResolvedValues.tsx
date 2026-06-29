@@ -75,7 +75,7 @@ function ValueNode({
 					{expanded ? "▾" : "▸"} {`{${entries.length}}`}
 				</button>
 				{expanded && (
-					<div className="ml-2 border-l border-zinc-700/40 pl-3">
+					<div className="ml-2 border-l border-cloud/20 pl-3">
 						{entries.map(([k, v]) => (
 							<div key={k} className="py-0.5">
 								<span className="text-lightning/80 text-xs font-mono">{k}</span>
@@ -107,7 +107,7 @@ function ValueNode({
 					{expanded ? "▾" : "▸"} [{value.length}]
 				</button>
 				{expanded && (
-					<div className="ml-2 border-l border-zinc-700/40 pl-3">
+					<div className="ml-2 border-l border-cloud/20 pl-3">
 						{value.map((item, i) => (
 							// biome-ignore lint/suspicious/noArrayIndexKey: array items have no stable ID
 							<div key={`${path}[${i}]`} className="py-0.5">
@@ -132,11 +132,11 @@ function ValueNode({
 	const display = value === null ? "null" : String(value);
 	const color =
 		typeof value === "string"
-			? "text-emerald-300"
+			? "text-success/80"
 			: typeof value === "number"
 				? "text-flash"
 				: typeof value === "boolean"
-					? "text-purple-300"
+					? "text-lightning/70"
 					: "text-cloud/60";
 
 	return (
@@ -230,19 +230,16 @@ export function EscResolvedValues({
 		return (
 			<div className="space-y-3">
 				{diagnostics.length > 0 && (
-					<div className="bg-red-950/30 border border-red-900/40 rounded-xl p-3 space-y-1.5">
-						<div className="text-xs font-medium text-red-300">Evaluation failed</div>
+					<div className="bg-danger/10 border border-danger/30 rounded-xl p-3 space-y-1.5">
+						<div className="text-xs font-medium text-danger/80">Evaluation failed</div>
 						{diagnostics.map((d) => (
-							<div
-								key={`${d.severity}-${d.summary}`}
-								className="text-xs text-red-300/80 flex gap-2"
-							>
-								<span className="uppercase text-[10px] font-medium text-red-400 shrink-0">
+							<div key={`${d.severity}-${d.summary}`} className="text-xs text-danger/70 flex gap-2">
+								<span className="uppercase text-[10px] font-medium text-danger shrink-0">
 									{d.severity}
 								</span>
 								<span>
 									{d.path && d.path.length > 0 && (
-										<span className="text-red-400/60 font-mono">{d.path.join(".")}: </span>
+										<span className="text-danger/60 font-mono">{d.path.join(".")}: </span>
 									)}
 									{d.summary}
 								</span>
@@ -251,7 +248,7 @@ export function EscResolvedValues({
 					</div>
 				)}
 				{error && (
-					<div className="bg-red-950/30 border border-red-900/40 text-red-300 p-3 rounded-xl text-sm">
+					<div className="bg-danger/10 border border-danger/30 text-danger/80 p-3 rounded-xl text-sm">
 						{error}
 					</div>
 				)}
@@ -305,7 +302,7 @@ export function EscResolvedValues({
 				</div>
 			)}
 
-			<div className="bg-zinc-900 border border-zinc-700 rounded-xl p-4 overflow-auto max-h-[400px]">
+			<div className="bg-surface-popup border border-cloud/20 rounded-xl p-4 overflow-auto max-h-[400px]">
 				<ValueNode
 					path=""
 					value={session.values}

@@ -46,10 +46,7 @@ const DebouncedInput = memo(function DebouncedInput({
 				timerRef.current = setTimeout(() => commitRef.current(val), delay);
 			}}
 			placeholder={placeholder}
-			className={
-				className ??
-				"bg-zinc-900 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-zinc-500"
-			}
+			className={className ?? "input-field"}
 		/>
 	);
 });
@@ -176,7 +173,7 @@ export function StackList() {
 		return (
 			<div className="space-y-6">
 				<h1 className="text-xl font-semibold text-mist">Stacks</h1>
-				<div className="bg-red-950/30 border border-red-900/40 text-red-300 p-4 rounded-xl text-sm">
+				<div className="bg-danger/10 border border-danger/30 text-danger/80 p-4 rounded-xl text-sm">
 					{error}
 				</div>
 			</div>
@@ -191,7 +188,7 @@ export function StackList() {
 				<h1 className="text-xl font-semibold text-mist">Stacks</h1>
 				<span className="text-xs text-cloud tabular-nums">
 					{isFetching && hasFilters ? (
-						<span className="text-zinc-500">Searching…</span>
+						<span className="text-cloud/60">Searching…</span>
 					) : (
 						items.length > 0 && `${items.length} stack${items.length !== 1 ? "s" : ""}`
 					)}
@@ -206,7 +203,7 @@ export function StackList() {
 							fill="none"
 							stroke="currentColor"
 							strokeWidth="2"
-							className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none"
+							className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cloud/40 pointer-events-none"
 							aria-hidden="true"
 						>
 							<path
@@ -219,7 +216,7 @@ export function StackList() {
 							onCommit={setQuery}
 							placeholder="Search stacks..."
 							resetKey={resetKey}
-							className="w-full bg-zinc-900 border border-zinc-700 text-zinc-100 rounded-lg pl-10 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-zinc-500"
+							className="w-full input-field pl-10"
 						/>
 					</div>
 
@@ -228,26 +225,26 @@ export function StackList() {
 							onCommit={setProject}
 							placeholder="Filter by project..."
 							resetKey={resetKey}
-							className="bg-zinc-900 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-zinc-500 w-48"
+							className="input-field w-48"
 						/>
 						<DebouncedInput
 							onCommit={setTagName}
 							placeholder="Tag name..."
 							resetKey={resetKey}
-							className="bg-zinc-900 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-zinc-500 w-36"
+							className="input-field w-36"
 						/>
 						<DebouncedInput
 							onCommit={setTagValue}
 							placeholder="Tag value..."
 							resetKey={resetKey}
-							className="bg-zinc-900 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-zinc-500 w-36"
+							className="input-field w-36"
 						/>
 
 						<div className="flex items-center gap-1.5">
 							<select
 								value={sortBy}
 								onChange={(e) => setSortBy(e.target.value as SortBy)}
-								className="bg-zinc-900 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+								className="input-field"
 							>
 								<option value="name">Name</option>
 								<option value="lastUpdated">Last Updated</option>
@@ -256,7 +253,7 @@ export function StackList() {
 							<button
 								type="button"
 								onClick={() => setSortOrder((p) => (p === "asc" ? "desc" : "asc"))}
-								className="bg-zinc-900 border border-zinc-700 text-zinc-400 hover:text-zinc-100 rounded-lg px-2.5 py-2 text-sm transition-colors"
+								className="bg-surface-popup border border-cloud/20 text-cloud hover:text-mist rounded-lg px-2.5 py-2 text-sm transition-colors"
 								title={sortOrder === "asc" ? "Ascending" : "Descending"}
 							>
 								{sortOrder === "asc" ? "↑" : "↓"}
@@ -267,7 +264,7 @@ export function StackList() {
 							<button
 								type="button"
 								onClick={clearFilters}
-								className="text-xs text-zinc-400 hover:text-zinc-100 transition-colors"
+								className="text-xs text-cloud hover:text-mist transition-colors"
 							>
 								Clear filters
 							</button>
@@ -293,13 +290,13 @@ export function StackList() {
 
 function EmptySearchState({ onClear }: { onClear: () => void }) {
 	return (
-		<div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-12 text-center">
+		<div className="bg-slate-brand/30 border border-slate-brand/60 rounded-xl p-12 text-center">
 			<svg
 				viewBox="0 0 24 24"
 				fill="none"
 				stroke="currentColor"
 				strokeWidth="1.5"
-				className="w-10 h-10 text-zinc-600 mx-auto mb-3"
+				className="w-10 h-10 text-cloud/40 mx-auto mb-3"
 				aria-hidden="true"
 			>
 				<path
@@ -308,13 +305,9 @@ function EmptySearchState({ onClear }: { onClear: () => void }) {
 					d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
 				/>
 			</svg>
-			<p className="text-zinc-400 text-sm font-medium mb-1">No stacks match your search</p>
-			<p className="text-zinc-500 text-xs mb-4">Try adjusting your filters or search terms.</p>
-			<button
-				type="button"
-				onClick={onClear}
-				className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-			>
+			<p className="text-cloud text-sm font-medium mb-1">No stacks match your search</p>
+			<p className="text-cloud/60 text-xs mb-4">Try adjusting your filters or search terms.</p>
+			<button type="button" onClick={onClear} className="btn-primary">
 				Clear filters
 			</button>
 		</div>
@@ -389,7 +382,7 @@ function CommandStep({ step, label, command }: { step: string; label: string; co
 			<div className="min-w-0 flex-1">
 				<p className="text-xs text-cloud mb-1">{label}</p>
 				<div className="bg-deep-sky border border-slate-brand rounded-lg px-3 py-2 font-mono text-xs text-mist/80 overflow-x-auto">
-					<span className="text-emerald-400 mr-1.5 select-none">$</span>
+					<span className="text-success mr-1.5 select-none">$</span>
 					{command}
 				</div>
 			</div>

@@ -12,11 +12,11 @@ type UpdateStatus =
 function getResultColor(result: string) {
 	switch (result) {
 		case "succeeded":
-			return "bg-green-900/30 text-green-400 border-green-900/50";
+			return "bg-success/10 text-success border-success/30";
 		case "failed":
-			return "bg-red-900/30 text-red-400 border-red-900/50";
+			return "bg-danger/10 text-danger border-danger/30";
 		case "in-progress":
-			return "bg-yellow-900/30 text-yellow-400 border-yellow-900/50";
+			return "bg-status-active/10 text-status-active border-status-active/30";
 		case "cancelled":
 			return "bg-slate-brand text-cloud border-cloud/30";
 		default:
@@ -77,10 +77,10 @@ function shortType(type: string) {
 
 describe("StackDetail helpers", () => {
 	test("getResultColor maps known and unknown results", () => {
-		expect(getResultColor("succeeded")).toBe("bg-green-900/30 text-green-400 border-green-900/50");
-		expect(getResultColor("failed")).toBe("bg-red-900/30 text-red-400 border-red-900/50");
+		expect(getResultColor("succeeded")).toBe("bg-success/10 text-success border-success/30");
+		expect(getResultColor("failed")).toBe("bg-danger/10 text-danger border-danger/30");
 		expect(getResultColor("in-progress")).toBe(
-			"bg-yellow-900/30 text-yellow-400 border-yellow-900/50",
+			"bg-status-active/10 text-status-active border-status-active/30",
 		);
 		expect(getResultColor("cancelled")).toBe("bg-slate-brand text-cloud border-cloud/30");
 		expect(getResultColor("mystery")).toBe("bg-slate-brand text-cloud border-cloud/30");

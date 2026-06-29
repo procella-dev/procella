@@ -274,35 +274,34 @@ export function HomePage() {
 						</div>
 						<div className="p-5 font-mono text-sm leading-relaxed">
 							<div className="text-cloud">
-								<span className="text-emerald-400">$</span> pulumi login {cliApiUrl}
+								<span className="text-success">$</span> pulumi login {cliApiUrl}
 							</div>
 							<div className="text-cloud mt-1">
 								Logged in to {new URL(cliApiUrl).host} as dev-user
 							</div>
 							<div className="mt-4 text-cloud">
-								<span className="text-emerald-400">$</span> pulumi stack init
-								myorg/myproject/production
+								<span className="text-success">$</span> pulumi stack init myorg/myproject/production
 							</div>
 							<div className="text-cloud mt-1">Created stack &apos;production&apos;</div>
 							<div className="mt-4 text-cloud">
-								<span className="text-emerald-400">$</span> pulumi up
+								<span className="text-success">$</span> pulumi up
 							</div>
 							<div className="text-cloud mt-1">Previewing update (myorg/myproject/production)</div>
 							<div className="mt-2 text-cloud">
 								&nbsp;&nbsp;&nbsp;&nbsp;
-								<span className="text-emerald-400">+</span> aws:s3:Bucket &nbsp;&nbsp;my-bucket{" "}
-								<span className="text-emerald-400">created</span>
+								<span className="text-success">+</span> aws:s3:Bucket   my-bucket{" "}
+								<span className="text-success">created</span>
 							</div>
 							<div className="text-cloud">
 								&nbsp;&nbsp;&nbsp;&nbsp;
-								<span className="text-emerald-400">+</span> aws:lambda:Function &nbsp;&nbsp;handler{" "}
-								<span className="text-emerald-400">created</span>
+								<span className="text-success">+</span> aws:lambda:Function   handler{" "}
+								<span className="text-success">created</span>
 							</div>
 							<div className="mt-2 text-cloud">
 								Resources:
 								<br />
 								&nbsp;&nbsp;&nbsp;&nbsp;
-								<span className="text-emerald-400">+ 2 created</span>
+								<span className="text-success">+ 2 created</span>
 							</div>
 							<div className="mt-1 text-cloud">Duration: 12s</div>
 						</div>
@@ -428,7 +427,7 @@ function Step({ number, title, code }: { number: string; title: string; code: st
 			<div className="min-w-0 flex-1">
 				<p className="text-sm font-medium text-mist/80 mb-2">{title}</p>
 				<div className="bg-deep-sky border border-slate-brand rounded-lg px-4 py-2.5 font-mono text-sm text-cloud overflow-x-auto">
-					<span className="text-emerald-400 mr-2">$</span>
+					<span className="text-success mr-2">$</span>
 					{code}
 				</div>
 			</div>
