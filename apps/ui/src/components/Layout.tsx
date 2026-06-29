@@ -182,7 +182,7 @@ function DevTokenInput() {
 
 	return (
 		<div className="flex items-center gap-3">
-			<label htmlFor="token" className="text-sm font-medium text-cloud">
+			<label htmlFor="token" className="hidden sm:inline text-sm font-medium text-cloud">
 				Token
 			</label>
 			<input
@@ -191,7 +191,7 @@ function DevTokenInput() {
 				value={token}
 				onChange={handleTokenChange}
 				placeholder="Enter API token..."
-				className="bg-slate-brand border border-cloud/30 rounded-md px-3 py-1.5 text-sm text-mist focus:outline-none focus:ring-2 focus:ring-lightning focus:border-transparent w-64 transition-all"
+				className="bg-slate-brand border border-cloud/30 rounded-md px-3 py-1.5 text-sm text-mist focus:outline-none focus:ring-2 focus:ring-lightning focus:border-transparent w-28 sm:w-64 transition-all"
 			/>
 		</div>
 	);
