@@ -182,7 +182,10 @@ function DevTokenInput() {
 
 	return (
 		<div className="flex items-center gap-3">
-			<label htmlFor="token" className="hidden sm:inline text-sm font-medium text-cloud">
+			<label
+				htmlFor="token"
+				className="sr-only sm:not-sr-only sm:inline text-sm font-medium text-cloud"
+			>
 				Token
 			</label>
 			<input
