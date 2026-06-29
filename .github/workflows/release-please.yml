@@ -12,12 +12,13 @@ jobs:
     concurrency:
       group: release-please-${{ github.ref }}
       cancel-in-progress: true
-    name: Create Release PR
+    name: Create Release PRs
     runs-on: ubuntu-latest
     outputs:
-      releases_created: ${{ steps.release.outputs['.--release_created'] }}
-      tag_name: ${{ steps.release.outputs['.--tag_name'] }}
+      procella_released: ${{ steps.release.outputs['.--release_created'] }}
+      procella_tag_name: ${{ steps.release.outputs['.--tag_name'] }}
       migrate_released: ${{ steps.release.outputs['packages/migrate--release_created'] }}
+      migrate_tag_name: ${{ steps.release.outputs['packages/migrate--tag_name'] }}
     steps:
       - name: Get GitHub App token
         id: get_token
@@ -36,14 +37,14 @@ jobs:
   deploy-production:
     name: Deploy Production
     needs: release-please
-    if: needs.release-please.outputs.releases_created == 'true'
+    if: needs.release-please.outputs.procella_released == 'true'
     uses: ./.github/workflows/deploy-sst.yml
     permissions:
       id-token: write
       contents: read
     with:
       stage: production
-      ref: ${{ needs.release-please.outputs.tag_name }}
+      ref: ${{ needs.release-please.outputs.procella_tag_name }}
     secrets: inherit
 
   publish-migrate:
@@ -56,6 +57,8 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release-please.outputs.migrate_tag_name }}
       - uses: ./.github/actions/setup-bun
 
       - name: Verify quality gates
