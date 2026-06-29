@@ -112,7 +112,7 @@ function DevLogin({ returnTo }: { returnTo: string }) {
 				</button>
 			</form>
 			<div className="mt-6 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-brand/50 border border-cloud/20">
-				<span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+				<span className="w-1.5 h-1.5 rounded-full bg-success" />
 				<span className="text-xs text-cloud">Dev mode</span>
 			</div>
 		</div>

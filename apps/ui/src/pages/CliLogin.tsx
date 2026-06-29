@@ -22,7 +22,7 @@ export function CliLogin() {
 	if (!portNum || !cliNonce) {
 		return (
 			<Screen>
-				<p className="text-red-400 text-sm">
+				<p className="text-danger text-sm">
 					Invalid CLI login request: missing session parameters.
 				</p>
 			</Screen>
@@ -107,7 +107,7 @@ function DescopeCliLogin({
 		return (
 			<Screen>
 				<div className="w-full max-w-md bg-slate-brand border border-slate-brand rounded-2xl p-8 space-y-3 text-center">
-					<p className="text-red-400 text-sm">{errorMsg}</p>
+					<p className="text-danger text-sm">{errorMsg}</p>
 					<p className="text-cloud text-xs">
 						Make sure <code className="text-mist/80">PROCELLA_DESCOPE_MANAGEMENT_KEY</code> is set
 						on the server.
