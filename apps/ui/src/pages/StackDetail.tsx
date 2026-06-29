@@ -11,11 +11,11 @@ import { trpc } from "../trpc";
 function getResultColor(result: string) {
 	switch (result) {
 		case "succeeded":
-			return "bg-green-900/30 text-green-400 border-green-900/50";
+			return "bg-success/10 text-success border-success/30";
 		case "failed":
-			return "bg-red-900/30 text-red-300 border-red-900/50";
+			return "bg-danger/10 text-danger/80 border-danger/30";
 		case "in-progress":
-			return "bg-yellow-900/30 text-yellow-400 border-yellow-900/50";
+			return "bg-status-active/10 text-status-active border-status-active/30";
 		case "cancelled":
 			return "bg-slate-brand text-cloud border-cloud/30";
 		default:
@@ -242,7 +242,7 @@ function ResourcesTab({ org, project, stack, resources, isLoading }: ResourcesTa
 							<td className="px-4 py-3 whitespace-nowrap hidden lg:table-cell">
 								<div className="flex gap-1.5">
 									{r.protect && (
-										<span className="px-1.5 py-0.5 rounded bg-amber-900/30 text-amber-400 text-xs border border-amber-900/50">
+										<span className="px-1.5 py-0.5 rounded bg-flash/10 text-flash text-xs border border-flash/20">
 											protected
 										</span>
 									)}
@@ -267,7 +267,7 @@ const SYSTEM_TAG_PREFIX = "pulumi:";
 const btnBase =
 	"inline-flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors disabled:opacity-60";
 const btnSecondary = `${btnBase} border border-cloud/40 bg-slate-brand text-mist hover:border-cloud/60`;
-const btnDanger = `${btnBase} border border-red-900/50 bg-red-900/20 text-red-300 hover:bg-red-900/30`;
+const btnDanger = `${btnBase} border border-danger/30 bg-danger/10 text-danger/80 hover:bg-danger/15`;
 const inputStyle =
 	"rounded-md border border-cloud/30 bg-deep-sky px-3 py-2 text-sm text-mist placeholder:text-cloud/50 outline-none focus:border-lightning/50";
 
@@ -402,7 +402,7 @@ function SettingsTab({ org, project, stack, tags }: SettingsTabProps) {
 										type="button"
 										onClick={() => handleRemoveTag(k)}
 										disabled={updateTags.isPending}
-										className="ml-auto text-cloud/50 hover:text-red-300 transition-colors text-xs"
+										className="ml-auto text-cloud/50 hover:text-danger/80 transition-colors text-xs"
 										aria-label={`Remove tag ${k}`}
 									>
 										&times;
@@ -490,7 +490,7 @@ function SettingsTab({ org, project, stack, tags }: SettingsTabProps) {
 						</button>
 					</div>
 					{renameMut.error && (
-						<p className="mt-2 text-sm text-red-300">{renameMut.error.message}</p>
+						<p className="mt-2 text-sm text-danger/80">{renameMut.error.message}</p>
 					)}
 				</div>
 			</section>
@@ -548,7 +548,7 @@ function SettingsTab({ org, project, stack, tags }: SettingsTabProps) {
 							&check; State imported successfully
 						</div>
 					)}
-					{importError && <p className="text-sm text-red-300">{importError}</p>}
+					{importError && <p className="text-sm text-danger/80">{importError}</p>}
 				</div>
 			</section>
 
@@ -645,9 +645,9 @@ function SettingsTab({ org, project, stack, tags }: SettingsTabProps) {
 			{/* ── Danger Zone ──────────────────────────────────────── */}
 			<section>
 				<div className="mb-4">
-					<h3 className="text-base font-semibold text-red-300">Danger Zone</h3>
+					<h3 className="text-base font-semibold text-danger/80">Danger Zone</h3>
 				</div>
-				<div className="rounded-lg border border-red-900/50 p-4 space-y-3">
+				<div className="rounded-lg border border-danger/30 p-4 space-y-3">
 					<p className="text-sm text-cloud">
 						Permanently delete <strong className="text-mist">{stack}</strong> and all its update
 						history. This action cannot be undone.
@@ -694,7 +694,7 @@ function SettingsTab({ org, project, stack, tags }: SettingsTabProps) {
 								{deleteMut.isPending ? "Deleting…" : "Delete Permanently"}
 							</button>
 						</div>
-						{deleteMut.error && <p className="text-sm text-red-300">{deleteMut.error.message}</p>}
+						{deleteMut.error && <p className="text-sm text-danger/80">{deleteMut.error.message}</p>}
 					</div>
 				</Dialog>
 			</section>
@@ -789,7 +789,7 @@ export function StackDetail() {
 						{org}/{project}/{stack}
 					</h1>
 				</div>
-				<div className="bg-red-900/20 border border-red-900/50 text-red-300 p-4 rounded-lg">
+				<div className="bg-danger/10 border border-danger/30 text-danger/80 p-4 rounded-lg">
 					{queryError.message}
 				</div>
 			</div>
@@ -816,10 +816,10 @@ export function StackDetail() {
 					</h1>
 				</div>
 				{detail?.activeUpdate && (
-					<span className="flex items-center gap-2 text-sm text-yellow-400">
+					<span className="flex items-center gap-2 text-sm text-status-active">
 						<span className="relative flex h-2.5 w-2.5">
-							<span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75" />
-							<span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-yellow-500" />
+							<span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-status-active opacity-75" />
+							<span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-status-active" />
 						</span>
 						Update in progress
 					</span>
