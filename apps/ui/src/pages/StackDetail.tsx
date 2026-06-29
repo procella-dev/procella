@@ -247,7 +247,7 @@ function ResourcesTab({ org, project, stack, resources, isLoading }: ResourcesTa
 										</span>
 									)}
 									{r.external && (
-										<span className="px-1.5 py-0.5 rounded bg-indigo-900/30 text-indigo-400 text-xs border border-indigo-900/50">
+										<span className="px-1.5 py-0.5 rounded bg-lightning/10 text-lightning text-xs border border-lightning/30">
 											external
 										</span>
 									)}
