@@ -1,6 +1,6 @@
 import { type Database, oidcTrustPolicies } from "@procella/db";
 import { ProcellaError } from "@procella/types";
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import type { OidcTrustPolicy, TrustPolicyRepository } from "./types.js";
 
 const GITHUB_ACTIONS_PROVIDER = "github-actions";
@@ -82,26 +82,53 @@ export class PostgresTrustPolicyRepository implements TrustPolicyRepository {
 
 		let row: typeof oidcTrustPolicies.$inferSelect | undefined;
 		try {
-			[row] = await this.db
-				.insert(oidcTrustPolicies)
-				.values({
-					tenantId: policy.tenantId,
-					orgSlug: policy.orgSlug,
-					provider: policy.provider,
-					displayName: policy.displayName,
-					issuer: policy.issuer,
-					maxExpiration: policy.maxExpiration,
-					claimConditions: policy.claimConditions,
-					grantedRole: policy.grantedRole,
-					active: policy.active,
-				})
-				.returning();
+			row = await this.db.transaction(async (tx) => {
+				const [inserted] = await tx
+					.insert(oidcTrustPolicies)
+					.values({
+						tenantId: policy.tenantId,
+						orgSlug: policy.orgSlug,
+						provider: policy.provider,
+						displayName: policy.displayName,
+						issuer: policy.issuer,
+						maxExpiration: policy.maxExpiration,
+						claimConditions: policy.claimConditions,
+						grantedRole: policy.grantedRole,
+						active: policy.active,
+					})
+					.returning();
+
+				await tx
+					.update(oidcTrustPolicies)
+					.set({ active: false, updatedAt: new Date() })
+					.where(
+						and(
+							eq(oidcTrustPolicies.orgSlug, policy.orgSlug),
+							eq(oidcTrustPolicies.issuer, policy.issuer),
+							eq(oidcTrustPolicies.active, true),
+							ne(oidcTrustPolicies.tenantId, policy.tenantId),
+						),
+					);
+
+				return inserted;
+			});
 		} catch (error) {
 			if (pgErrorCode(error) === "23505") {
 				const constraint = pgConstraintName(error);
 				if (constraint === "idx_oidc_trust_org_name") {
 					throw new OidcPolicyDisplayNameConflictError();
 				}
+				await this.db
+					.update(oidcTrustPolicies)
+					.set({ active: false, updatedAt: new Date() })
+					.where(
+						and(
+							eq(oidcTrustPolicies.orgSlug, policy.orgSlug),
+							eq(oidcTrustPolicies.issuer, policy.issuer),
+							eq(oidcTrustPolicies.active, true),
+							ne(oidcTrustPolicies.tenantId, policy.tenantId),
+						),
+					);
 				throw new OidcPolicyConflictError();
 			}
 			throw error;

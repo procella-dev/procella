@@ -152,8 +152,6 @@ describe_descope("Descope auth (deployed preview)", () => {
 			managementKey: DESCOPE_MANAGEMENT_KEY,
 		});
 
-		// Use PROCELLA_E2E_ORG_SLUG if given, otherwise derive from project.
-		// The tenant may need to be created if it doesn't exist yet.
 		const tenantName = process.env.PROCELLA_E2E_ORG_SLUG ?? `e2e-${RUN_ID}`;
 		orgSlug = tenantName;
 
