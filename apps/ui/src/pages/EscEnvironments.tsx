@@ -64,10 +64,7 @@ const DebouncedInput = memo(function DebouncedInput({
 				timerRef.current = setTimeout(() => commitRef.current(val), delay);
 			}}
 			placeholder={placeholder}
-			className={
-				className ??
-				"w-full bg-zinc-900 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-zinc-500"
-			}
+			className={className ?? "w-full input-field"}
 		/>
 	);
 });
@@ -191,7 +188,7 @@ export function EscEnvironments() {
 		return (
 			<div className="space-y-6">
 				<h1 className="text-xl font-semibold text-mist">Environments</h1>
-				<div className="bg-red-950/30 border border-red-900/40 text-red-300 p-4 rounded-xl text-sm">
+				<div className="bg-danger/10 border border-danger/30 text-danger/80 p-4 rounded-xl text-sm">
 					{error}
 				</div>
 			</div>
@@ -222,7 +219,7 @@ export function EscEnvironments() {
 						fill="none"
 						stroke="currentColor"
 						strokeWidth="2"
-						className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none"
+						className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cloud/40 pointer-events-none"
 						aria-hidden="true"
 					>
 						<path
@@ -234,7 +231,7 @@ export function EscEnvironments() {
 					<DebouncedInput
 						onCommit={setSearch}
 						placeholder="Search environments..."
-						className="w-full bg-zinc-900 border border-zinc-700 text-zinc-100 rounded-lg pl-10 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-zinc-500"
+						className="w-full input-field pl-10"
 					/>
 				</div>
 			)}
@@ -256,13 +253,13 @@ export function EscEnvironments() {
 
 function EmptySearchState() {
 	return (
-		<div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-12 text-center">
+		<div className="bg-slate-brand/30 border border-slate-brand/60 rounded-xl p-12 text-center">
 			<svg
 				viewBox="0 0 24 24"
 				fill="none"
 				stroke="currentColor"
 				strokeWidth="1.5"
-				className="w-10 h-10 text-zinc-600 mx-auto mb-3"
+				className="w-10 h-10 text-cloud/40 mx-auto mb-3"
 				aria-hidden="true"
 			>
 				<path
@@ -271,8 +268,8 @@ function EmptySearchState() {
 					d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
 				/>
 			</svg>
-			<p className="text-zinc-400 text-sm font-medium mb-1">No environments match your search</p>
-			<p className="text-zinc-500 text-xs">Try a different search term.</p>
+			<p className="text-cloud text-sm font-medium mb-1">No environments match your search</p>
+			<p className="text-cloud/60 text-xs">Try a different search term.</p>
 		</div>
 	);
 }
@@ -308,7 +305,7 @@ function EscEmptyState() {
 						Create your first ESC environment to manage configuration and secrets.
 					</p>
 					<div className="bg-deep-sky border border-slate-brand rounded-lg px-3 py-2 font-mono text-xs text-mist/80">
-						<span className="text-emerald-400 mr-1.5 select-none">$</span>
+						<span className="text-success mr-1.5 select-none">$</span>
 						esc env init myproject/dev --value greeting=hello
 					</div>
 				</div>

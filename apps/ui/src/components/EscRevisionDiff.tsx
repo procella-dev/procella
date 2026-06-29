@@ -77,8 +77,8 @@ function computeDiff(left: string, right: string): DiffLine[] {
 
 const LINE_STYLES: Record<DiffLine["type"], string> = {
 	equal: "text-cloud",
-	added: "bg-emerald-950/40 text-emerald-300",
-	removed: "bg-red-950/40 text-red-300",
+	added: "bg-success/10 text-success/80",
+	removed: "bg-danger/15 text-danger/80",
 };
 
 const PREFIX: Record<DiffLine["type"], string> = {
@@ -117,9 +117,9 @@ export function EscRevisionDiff({
 					<span className="text-mist">{rightLabel}</span>
 					{!noDiff && (
 						<span className="text-cloud/60 ml-2">
-							<span className="text-emerald-400">+{stats.added}</span>
+							<span className="text-success">+{stats.added}</span>
 							{" / "}
-							<span className="text-red-400">-{stats.removed}</span>
+							<span className="text-danger">-{stats.removed}</span>
 						</span>
 					)}
 				</div>
@@ -139,13 +139,13 @@ export function EscRevisionDiff({
 					No differences between these revisions.
 				</div>
 			) : (
-				<div className="overflow-auto max-h-[500px] bg-zinc-900 font-mono text-xs leading-5">
+				<div className="overflow-auto max-h-[500px] bg-surface-popup font-mono text-xs leading-5">
 					{diff.map((line) => (
 						<div
 							key={`${line.lineNum}-${line.type}`}
-							className={`flex ${LINE_STYLES[line.type]} border-b border-zinc-800/30`}
+							className={`flex ${LINE_STYLES[line.type]} border-b border-slate-brand/40`}
 						>
-							<span className="w-8 shrink-0 text-right pr-2 text-cloud/30 select-none border-r border-zinc-700/40">
+							<span className="w-8 shrink-0 text-right pr-2 text-cloud/30 select-none border-r border-cloud/15">
 								{line.lineNum}
 							</span>
 							<span className="w-5 shrink-0 text-center select-none opacity-60">

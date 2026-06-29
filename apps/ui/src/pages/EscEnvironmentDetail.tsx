@@ -167,7 +167,7 @@ export function EscEnvironmentDetail() {
 		return (
 			<div className="space-y-6">
 				<Breadcrumb project={project} envName={envName} />
-				<div className="bg-red-950/30 border border-red-900/40 text-red-300 p-4 rounded-xl text-sm">
+				<div className="bg-danger/10 border border-danger/30 text-danger/80 p-4 rounded-xl text-sm">
 					{queryError.message}
 				</div>
 			</div>
@@ -228,7 +228,7 @@ export function EscEnvironmentDetail() {
 			</div>
 
 			{saveError && (
-				<div className="bg-red-950/30 border border-red-900/40 text-red-300 p-3 rounded-xl text-sm">
+				<div className="bg-danger/10 border border-danger/30 text-danger/80 p-3 rounded-xl text-sm">
 					{saveError}
 				</div>
 			)}
@@ -277,7 +277,7 @@ export function EscEnvironmentDetail() {
 									onChange={handleChange}
 									readOnly={isViewingRevision}
 									spellCheck={false}
-									className={`w-full h-[500px] bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 font-mono text-sm text-mist leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-lightning focus:border-transparent placeholder:text-zinc-500 ${
+									className={`w-full h-[500px] bg-surface-popup border border-cloud/20 rounded-xl px-4 py-3 font-mono text-sm text-mist leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-lightning focus:border-transparent placeholder:text-cloud/50 ${
 										isViewingRevision ? "pt-10 opacity-75" : ""
 									}`}
 									placeholder="# Enter your YAML configuration..."

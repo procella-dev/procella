@@ -145,7 +145,7 @@ export function EscSessions({ project, environment, envId }: EscSessionsProps) {
 								<button
 									type="button"
 									onClick={() => clearSession(s.sessionId)}
-									className="text-xs text-cloud/40 hover:text-red-400 transition-colors px-2 py-1"
+									className="text-xs text-cloud/40 hover:text-danger transition-colors px-2 py-1"
 								>
 									Clear
 								</button>
@@ -156,17 +156,17 @@ export function EscSessions({ project, environment, envId }: EscSessionsProps) {
 			</div>
 
 			{fetchError && (
-				<div className="bg-red-950/30 border border-red-900/40 text-red-300 p-3 rounded-xl text-xs">
+				<div className="bg-danger/10 border border-danger/30 text-danger/80 p-3 rounded-xl text-xs">
 					{fetchError}
 				</div>
 			)}
 
 			{fetchResult && (
-				<div className="bg-zinc-900 border border-zinc-700 rounded-xl p-3">
+				<div className="bg-surface-popup border border-cloud/20 rounded-xl p-3">
 					<div className="text-xs text-cloud/60 mb-2">
 						Session{" "}
 						<span className="font-mono text-cloud">{fetchResult.sessionId.slice(0, 8)}…</span>
-						{fetchResult.closedAt && <span className="text-red-400 ml-2">closed</span>}
+						{fetchResult.closedAt && <span className="text-danger ml-2">closed</span>}
 					</div>
 					<pre className="text-xs font-mono text-mist overflow-auto max-h-[200px]">
 						{JSON.stringify(fetchResult.values, null, 2)}
