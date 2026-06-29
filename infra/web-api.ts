@@ -9,6 +9,9 @@ import {
 	descopeManagementKey,
 	devAuthToken,
 	encryptionKey,
+	githubAppId,
+	githubAppPrivateKey,
+	githubAppWebhookSecret,
 	otelEndpoint,
 	otelHeaders,
 	ticketSigningKey,
@@ -47,6 +50,9 @@ export const webApi = new sst.aws.Function("ProcellaWebApi", {
 			? {
 					PROCELLA_DESCOPE_PROJECT_ID: descopeProjectId,
 					PROCELLA_DESCOPE_MANAGEMENT_KEY: descopeManagementKey.value,
+					PROCELLA_GITHUB_APP_ID: githubAppId.value,
+					PROCELLA_GITHUB_APP_PRIVATE_KEY: githubAppPrivateKey.value,
+					PROCELLA_GITHUB_APP_WEBHOOK_SECRET: githubAppWebhookSecret.value,
 				}
 			: {}),
 	},
