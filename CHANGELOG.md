@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.3.0](https://github.com/procella-dev/procella/compare/procella-v0.2.0...procella-v0.3.0) (2026-06-29)
+
+
+### Features
+
+* **migrate:** add @procella/migrate CLI tool, migration docs, and release pipeline ([#123](https://github.com/procella-dev/procella/issues/123)) ([d5e0f7c](https://github.com/procella-dev/procella/commit/d5e0f7c50f274894f1738f2a4c1d0dde5825ed4a))
+
+
+### Bug Fixes
+
+* **ci:** isolate release jobs by component ([#188](https://github.com/procella-dev/procella/issues/188)) ([b4873a8](https://github.com/procella-dev/procella/commit/b4873a8e26c5e4320edcffcf5521c126faf58215))
+* **ci:** remove invalid release-please lockfile path ([#181](https://github.com/procella-dev/procella/issues/181)) ([15e25c2](https://github.com/procella-dev/procella/commit/15e25c2f2c00afa7b18ddbd8ce09b1f863047ecc))
+* **ci:** split release-please component PRs ([#185](https://github.com/procella-dev/procella/issues/185)) ([31d45da](https://github.com/procella-dev/procella/commit/31d45dadd4b54baccae1a99123681dbc36b8152e))
+* **infra:** wire GitHub app secrets into SST ([#184](https://github.com/procella-dev/procella/issues/184)) ([6506585](https://github.com/procella-dev/procella/commit/65065855ec03176f36d2da6e903fa8969760766a))
+
 ## [0.2.0](https://github.com/procella-dev/procella/compare/procella-v0.1.0...procella-v0.2.0) (2026-06-29)
 
 
