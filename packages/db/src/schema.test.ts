@@ -3,6 +3,7 @@ import { getTableColumns, getTableName } from "drizzle-orm";
 import {
 	checkpoints,
 	githubInstallations,
+	oidcTrustPolicies,
 	projects,
 	stacks,
 	updateEvents,
@@ -144,6 +145,15 @@ describe("@procella/db schema", () => {
 		});
 	});
 
+	describe("oidc_trust_policies table", () => {
+		test("has tenant-scoped policy columns", () => {
+			const columns = getTableColumns(oidcTrustPolicies);
+			expect(columns.tenantId.name).toBe("tenant_id");
+			expect(columns.orgSlug.name).toBe("org_slug");
+			expect(columns.issuer.name).toBe("issuer");
+		});
+	});
+
 	describe("all tables", () => {
 		test("all tables are defined", () => {
 			expect(getTableName(projects)).toBe("projects");
@@ -152,10 +162,18 @@ describe("@procella/db schema", () => {
 			expect(getTableName(checkpoints)).toBe("checkpoints");
 			expect(getTableName(updateEvents)).toBe("update_events");
 			expect(getTableName(githubInstallations)).toBe("github_installations");
+			expect(getTableName(oidcTrustPolicies)).toBe("oidc_trust_policies");
 		});
 
 		test("all tables have id and created_at columns", () => {
-			for (const table of [projects, stacks, updates, checkpoints, updateEvents]) {
+			for (const table of [
+				projects,
+				stacks,
+				updates,
+				checkpoints,
+				updateEvents,
+				oidcTrustPolicies,
+			]) {
 				const columns = getTableColumns(table);
 				const columnNames = Object.values(columns).map((c) => c.name);
 				expect(columnNames).toContain("id");

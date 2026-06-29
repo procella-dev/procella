@@ -108,6 +108,7 @@ function createMockDb(options?: {
 		insert: mockInsert,
 		update: mockUpdate,
 		delete: mockDelete,
+		transaction: mock((callback: (tx: unknown) => unknown) => callback(mockDb)),
 	};
 
 	return {
@@ -195,7 +196,7 @@ describe("PostgresTrustPolicyRepository", () => {
 		expect(withoutTenant.mockSelectWhere).toHaveBeenCalledTimes(1);
 	});
 
-	test("create returns mapped row without cross-tenant cleanup delete", async () => {
+	test("create retires stale active policies for the same org and issuer in other tenants", async () => {
 		const { db, calls } = createMockDb({ insertRows: [mockRow] });
 		const repo = new PostgresTrustPolicyRepository(db);
 
@@ -215,8 +216,43 @@ describe("PostgresTrustPolicyRepository", () => {
 		});
 
 		expect(result.id).toBe("policy-1");
-		expect(calls.some((call) => call.method === "delete.where")).toBe(false);
 		expect(calls.some((call) => call.method === "insert.returning")).toBe(true);
+		expect(calls.some((call) => call.method === "update.set")).toBe(true);
+		expect(calls).toContainEqual({
+			method: "update.set",
+			args: { active: false, updatedAt: expect.any(Date) },
+		});
+	});
+
+	test("create retires stale policies even when same-tenant policy already exists", async () => {
+		const { db, calls } = createMockDb({
+			insertError: Object.assign(new Error("duplicate key value violates unique constraint"), {
+				code: "23505",
+				constraint: "idx_oidc_trust_org_issuer",
+			}),
+		});
+		const repo = new PostgresTrustPolicyRepository(db);
+
+		await expect(
+			repo.create({
+				tenantId: "tenant-1",
+				orgSlug: "acme",
+				provider: "github-actions",
+				displayName: "Test Policy",
+				issuer: "https://token.actions.githubusercontent.com",
+				maxExpiration: 3600,
+				claimConditions: {
+					iss: "https://token.actions.githubusercontent.com",
+					repository: "acme/procella",
+				},
+				grantedRole: Role.Member,
+				active: true,
+			}),
+		).rejects.toMatchObject({ code: "policy_conflict" });
+		expect(calls).toContainEqual({
+			method: "update.set",
+			args: { active: false, updatedAt: expect.any(Date) },
+		});
 	});
 
 	test("create surfaces policy_conflict on unique constraint violation", () => {

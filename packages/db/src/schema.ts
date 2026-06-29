@@ -242,8 +242,7 @@ export const oidcTrustPolicies = pgTable(
 	(table) => [
 		index("idx_oidc_trust_tenant").on(table.tenantId),
 		uniqueIndex("idx_oidc_trust_org_name").on(table.tenantId, table.orgSlug, table.displayName),
-		// Global uniqueness prevents cross-tenant collisions on the same orgSlug+issuer pair.
-		uniqueIndex("idx_oidc_trust_org_issuer").on(table.orgSlug, table.issuer),
+		uniqueIndex("idx_oidc_trust_org_issuer").on(table.tenantId, table.orgSlug, table.issuer),
 	],
 );
 

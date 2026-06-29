@@ -85,6 +85,13 @@
       "when": 1777229530789,
       "tag": "0011_dazzling_madelyne_pryor",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1782399600000,
+      "tag": "0012_tenant_scoped_oidc_policy",
+      "breakpoints": true
     }
   ]
 }
