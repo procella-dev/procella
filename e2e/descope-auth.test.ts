@@ -152,7 +152,35 @@ describe_descope("Descope auth (deployed preview)", () => {
 			managementKey: DESCOPE_MANAGEMENT_KEY,
 		});
 
-		const tenantName = process.env.PROCELLA_E2E_ORG_SLUG ?? `e2e-${RUN_ID}`;
+		// Use PROCELLA_E2E_ORG_SLUG if given, otherwise derive a STABLE tenant
+		// name from the deployed preview's stage. The Descope project's JWT
+		// template emits `tenant_name` as the human-friendly slug, and the
+		// server's `extractOrgSlug` slugifies it into `caller.orgSlug` — which
+		// for preview deployments resolves to the project name
+		// (`procella-pr-<PR>`) because Descope's `autoTenantClaim` emits the
+		// project's default tenant name, not the per-run tenant we attach the
+		// user to.
+		//
+		// Why stable (not per-run RUN_ID): the `oidc_trust_policies` table has
+		// a globally-unique `(orgSlug, issuer)` constraint, intentionally
+		// preventing cross-tenant collisions. If we minted a fresh ephemeral
+		// `e2e-${RUN_ID}` tenant per run, every `oidc.createPolicy` would race
+		// against the unique row left over by the previous run (whose
+		// `tenantId` is now orphaned). The exchange's `findByOrgSlugAndIssuer`
+		// would return that stale row, the JWT would verify against a policy
+		// owned by a deleted tenant, and the test would fail with a confusing
+		// `access_denied: Token exchange not available`.
+		//
+		// Pinning the tenant name to the project's stable orgSlug means
+		// `caller.tenantId` is stable across runs, the unique row IS the
+		// current run's row, and the 409-on-create path correctly degrades to
+		// "reuse the existing valid policy".
+		// API_URL is `https://api.pr-NN.procella.cloud`. Extract the `pr-NN`
+		// segment as the stage; the Descope project name (and therefore the
+		// JWT-emitted `tenant_name` → slugified `orgSlug`) is `procella-${stage}`.
+		const stageMatch = API_URL.match(/api\.(pr-\d+)\./);
+		const derivedTenantName = stageMatch ? `procella-${stageMatch[1]}` : undefined;
+		const tenantName = process.env.PROCELLA_E2E_ORG_SLUG ?? derivedTenantName ?? `e2e-${RUN_ID}`;
 		orgSlug = tenantName;
 
 		// Find or create the Descope tenant for this test run.
@@ -161,7 +189,12 @@ describe_descope("Descope auth (deployed preview)", () => {
 		if (existing?.id) {
 			tenantId = existing.id;
 		} else {
-			// Create a fresh ephemeral tenant.
+			// Create the stable tenant. We do NOT mark `createdTenant = true`
+			// when we derived the name from the preview stage, because we want
+			// subsequent test runs to find and reuse this tenant — see the
+			// rationale on `tenantName` above for why per-run tenants corrupt
+			// the unique `(orgSlug, issuer)` index. Only an explicitly opt-in
+			// per-run tenant (legacy `e2e-${RUN_ID}` fallback) gets cleaned up.
 			// create() signature: (name, selfProvisioningDomains[], ...)
 			const created = await sdk.management.tenant.create(tenantName, []);
 			const createdId = created.data?.id;
@@ -170,12 +203,43 @@ describe_descope("Descope auth (deployed preview)", () => {
 					`Failed to create Descope tenant '${tenantName}': ${JSON.stringify(created)}`,
 				);
 			tenantId = createdId;
-			createdTenant = true;
+			createdTenant = tenantName.startsWith("e2e-");
 		}
 
 		await sdk.management.user.deleteAllTestUsers().catch(() => {});
 		accessKey = await setupTestUser(sdk, tenantId, orgSlug);
 		pulumiHome = await createPulumiHome();
+
+		// Discover the orgSlug the server actually derives from this access key's
+		// JWT (`extractOrgSlug` in packages/auth: tenant_name claim → slugify, with
+		// fallback to nested tenants[].name → tenantId).
+		//
+		// We use the server's authoritative view as both the policy `orgSlug`
+		// (created via tRPC, which writes `ctx.caller.orgSlug`) AND the OIDC
+		// exchange `audience` ("urn:pulumi:org:<slug>"). If we hard-coded the
+		// Descope tenant `name` here, drift in JWT templates across ephemeral
+		// preview projects (e.g. an older project missing `accessKeyJwtTemplate`
+		// binding) would write a policy under one slug and look it up under
+		// another, producing a confusing 403 "Token exchange not available".
+		const userRes = await fetch(`${API_URL}/api/user`, {
+			headers: {
+				Authorization: `token ${accessKey}`,
+				Accept: "application/vnd.pulumi+8",
+			},
+		});
+		if (!userRes.ok) {
+			throw new Error(`GET /api/user failed (${userRes.status}): ${await userRes.text()}`);
+		}
+		const userBody = (await userRes.json()) as {
+			organizations?: { githubLogin?: string }[];
+		};
+		const serverOrgSlug = userBody.organizations?.[0]?.githubLogin;
+		if (!serverOrgSlug) {
+			throw new Error(
+				`/api/user response did not include organizations[0].githubLogin: ${JSON.stringify(userBody)}`,
+			);
+		}
+		orgSlug = serverOrgSlug;
 	});
 
 	afterAll(async () => {
@@ -273,6 +337,9 @@ describe_descope("Descope auth (deployed preview)", () => {
 					message.includes("(409)") &&
 					message.includes("OIDC trust policy with this org/issuer pair already exists");
 				if (!isAlreadyExistsConflict) throw err;
+				// 409 is fine — the stable-tenant strategy guarantees the existing
+				// row belongs to the current caller's tenant, so the exchange will
+				// resolve it correctly.
 			}
 		});
 
