@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/procella-dev/procella/compare/procella-v0.2.0...procella-v0.3.0) (2026-06-29)
+
+
+### Features
+
+* **migrate:** add @procella/migrate CLI tool, migration docs, and release pipeline ([#123](https://github.com/procella-dev/procella/issues/123)) ([d5e0f7c](https://github.com/procella-dev/procella/commit/d5e0f7c50f274894f1738f2a4c1d0dde5825ed4a))
+
+
+### Bug Fixes
+
+* **ci:** remove invalid release-please lockfile path ([#181](https://github.com/procella-dev/procella/issues/181)) ([15e25c2](https://github.com/procella-dev/procella/commit/15e25c2f2c00afa7b18ddbd8ce09b1f863047ecc))
+
 ## [0.2.0](https://github.com/procella-dev/procella/compare/procella-v0.1.0...procella-v0.2.0) (2026-06-29)
 
 
