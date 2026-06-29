@@ -21,7 +21,7 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: jdx/mise-action@v4
       - uses: actions/cache@v5
         with:
@@ -60,7 +60,7 @@ jobs:
       id-token: write
     needs: [check]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: jdx/mise-action@v4
       - uses: actions/cache@v5
         with:
@@ -96,7 +96,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: jdx/mise-action@v4
       - uses: actions/cache@v5
         with:
@@ -139,7 +139,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: jdx/mise-action@v4
       - uses: actions/setup-go@v6
         with:
@@ -163,7 +163,7 @@ jobs:
     runs-on: ubuntu-latest
     # Always runs — the strict ci-required gate fails on any skipped job.
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: jdx/mise-action@v4
       - uses: actions/setup-go@v6
         with:
@@ -226,7 +226,7 @@ jobs:
           - 4318:4318
           - 16686:16686
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: jdx/mise-action@v4
       - uses: actions/cache@v5
         with:
@@ -279,7 +279,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: jdx/mise-action@v4
       - uses: actions/cache@v5
         with:
@@ -341,7 +341,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: jdx/mise-action@v4
       - uses: actions/cache@v5
         with:
@@ -390,7 +390,7 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
         with:
           go-version-file: esc-eval/go.mod
@@ -447,7 +447,7 @@ jobs:
       docs_url: ${{ steps.outputs.outputs.docs }}
       descope_project_id: ${{ steps.outputs.outputs.descope_project_id }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: jdx/mise-action@v4
       - uses: actions/cache@v5
         with:
@@ -625,7 +625,7 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: jdx/mise-action@v4
       - uses: actions/cache@v5
         with:
@@ -659,7 +659,7 @@ jobs:
       STACK_NAME: oidc-e2e-${{ github.run_id }}
       PULUMI_BACKEND_URL: ${{ needs.preview-deploy.outputs.api_url }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: pulumi/setup-pulumi@v2
 
       - uses: pulumi/auth-actions@v1
