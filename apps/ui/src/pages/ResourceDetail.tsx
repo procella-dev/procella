@@ -28,7 +28,7 @@ function formatTimestamp(ts: string | null) {
 function PropertyValue({ value }: { value: unknown }) {
 	if (value === "[secret]") {
 		return (
-			<span className="px-2 py-0.5 rounded bg-amber-900/30 text-amber-400 text-xs border border-amber-900/50 font-mono">
+			<span className="px-2 py-0.5 rounded bg-flash/10 text-flash text-xs border border-flash/20 font-mono">
 				[secret]
 			</span>
 		);
@@ -39,7 +39,7 @@ function PropertyValue({ value }: { value: unknown }) {
 	}
 
 	if (typeof value === "boolean") {
-		return <span className={value ? "text-green-400" : "text-cloud"}>{String(value)}</span>;
+		return <span className={value ? "text-success" : "text-cloud"}>{String(value)}</span>;
 	}
 
 	if (typeof value === "number") {
@@ -222,7 +222,7 @@ export function ResourceDetail() {
 					</Link>
 					<h1 className="text-2xl font-bold text-mist">Error</h1>
 				</div>
-				<div className="bg-red-900/20 border border-red-900/50 text-red-300 p-4 rounded-lg">
+				<div className="bg-danger/10 border border-danger/30 text-danger/80 p-4 rounded-lg">
 					{queryError.message}
 				</div>
 			</div>
@@ -262,7 +262,7 @@ export function ResourceDetail() {
 					</div>
 					<div className="flex gap-2">
 						{resource.protect && (
-							<span className="px-2 py-1 rounded bg-amber-900/30 text-amber-400 text-xs border border-amber-900/50">
+							<span className="px-2 py-1 rounded bg-flash/10 text-flash text-xs border border-flash/20">
 								protected
 							</span>
 						)}
@@ -272,17 +272,17 @@ export function ResourceDetail() {
 							</span>
 						)}
 						{resource.taint && (
-							<span className="px-2 py-1 rounded bg-orange-900/30 text-orange-400 text-xs border border-orange-900/50">
+							<span className="px-2 py-1 rounded bg-flash/10 text-flash text-xs border border-flash/20">
 								tainted
 							</span>
 						)}
 						{resource.delete && (
-							<span className="px-2 py-1 rounded bg-red-900/30 text-red-300 text-xs border border-red-900/50">
+							<span className="px-2 py-1 rounded bg-danger/15 text-danger/80 text-xs border border-danger/30">
 								pending delete
 							</span>
 						)}
 						{resource.pendingReplacement && (
-							<span className="px-2 py-1 rounded bg-yellow-900/30 text-yellow-400 text-xs border border-yellow-900/50">
+							<span className="px-2 py-1 rounded bg-status-active/10 text-status-active text-xs border border-status-active/30">
 								pending replacement
 							</span>
 						)}
@@ -358,13 +358,13 @@ export function ResourceDetail() {
 
 			{/* ── Init Errors ──────────────────────────────────────────── */}
 			{resource.initErrors.length > 0 && (
-				<div className="bg-red-900/10 border border-red-900/50 rounded-lg p-4">
-					<div className="text-xs font-medium text-red-300 uppercase tracking-wider mb-2">
+				<div className="bg-danger/10 border border-danger/30 rounded-lg p-4">
+					<div className="text-xs font-medium text-danger/80 uppercase tracking-wider mb-2">
 						Initialization Errors
 					</div>
 					<div className="space-y-1.5">
 						{resource.initErrors.map((err) => (
-							<div key={err} className="text-sm text-red-300 font-mono">
+							<div key={err} className="text-sm text-danger/80 font-mono">
 								{err}
 							</div>
 						))}

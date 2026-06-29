@@ -97,13 +97,13 @@ function getResourceStatusClass(status: ResourceStatus): string {
 function getOpBorder(op: string): string {
 	switch (op) {
 		case "create":
-			return "border-l-green-500";
+			return "border-l-success";
 		case "update":
-			return "border-l-yellow-500";
+			return "border-l-status-active";
 		case "delete":
-			return "border-l-red-500";
+			return "border-l-danger";
 		case "replace":
-			return "border-l-purple-500";
+			return "border-l-lightning";
 		case "same":
 			return "border-l-slate-brand opacity-70";
 		default:
@@ -303,11 +303,11 @@ export function UpdateDetail() {
 	const getOpColor = (op: string) => {
 		switch (op) {
 			case "create":
-				return "text-green-400";
+				return "text-success";
 			case "update":
-				return "text-yellow-400";
+				return "text-status-active";
 			case "delete":
-				return "text-red-300";
+				return "text-danger/80";
 			case "same":
 				return "text-cloud";
 			default:
@@ -322,9 +322,9 @@ export function UpdateDetail() {
 			const { severity, message } = event.diagnosticEvent;
 			const colorClass =
 				severity === "error"
-					? "text-red-300"
+					? "text-danger/80"
 					: severity === "warning"
-						? "text-yellow-400"
+						? "text-status-active"
 						: "text-lightning";
 			return (
 				<div
@@ -379,7 +379,7 @@ export function UpdateDetail() {
 					className="flex gap-4 py-3 border-b border-slate-brand/50 last:border-0 mt-4 bg-slate-brand/20 px-4 -mx-4 rounded-lg"
 				>
 					<span className="text-cloud shrink-0 w-20">{time}</span>
-					<span className="shrink-0 w-16 font-medium text-purple-400">summary</span>
+					<span className="shrink-0 w-16 font-medium text-lightning">summary</span>
 					<div className="flex gap-4 text-sm">
 						{Object.entries(event.summaryEvent.resourceChanges).map(([op, count]) => (
 							<span key={op} className="text-mist/80">
@@ -395,11 +395,11 @@ export function UpdateDetail() {
 			return (
 				<div
 					key={event.sequence}
-					className="flex gap-4 py-2 border-b border-slate-brand/50 last:border-0 bg-red-900/10 px-2 -mx-2 rounded"
+					className="flex gap-4 py-2 border-b border-slate-brand/50 last:border-0 bg-danger/10 px-2 -mx-2 rounded"
 				>
 					<span className="text-cloud shrink-0 w-20">{time}</span>
-					<span className="shrink-0 w-16 font-medium text-red-300">cancel</span>
-					<span className="text-red-300 font-mono text-sm">Update cancelled</span>
+					<span className="shrink-0 w-16 font-medium text-danger/80">cancel</span>
+					<span className="text-danger/80 font-mono text-sm">Update cancelled</span>
 				</div>
 			);
 		}
@@ -451,7 +451,7 @@ export function UpdateDetail() {
 					</span>
 				</div>
 				{resource.errorMessage && (
-					<div className="mt-1 text-xs text-red-300 font-mono whitespace-pre-wrap">
+					<div className="mt-1 text-xs text-danger/80 font-mono whitespace-pre-wrap">
 						{resource.errorMessage}
 					</div>
 				)}
@@ -509,7 +509,7 @@ export function UpdateDetail() {
 			</header>
 
 			{error && (
-				<div className="bg-red-900/20 border border-red-900/50 text-red-300 p-4 rounded-lg shrink-0">
+				<div className="bg-danger/10 border border-danger/30 text-danger/80 p-4 rounded-lg shrink-0">
 					{error}
 				</div>
 			)}
@@ -575,14 +575,14 @@ export function UpdateDetail() {
 						<button
 							type="button"
 							onClick={() => setFilter("errors")}
-							className={`px-2 py-1 rounded ${filter === "errors" ? "bg-red-900/30 text-red-300" : "text-cloud hover:text-mist"}`}
+							className={`px-2 py-1 rounded ${filter === "errors" ? "bg-danger/15 text-danger/80" : "text-cloud hover:text-mist"}`}
 						>
 							Errors ({errorCount})
 						</button>
 						<button
 							type="button"
 							onClick={() => setFilter("warnings")}
-							className={`px-2 py-1 rounded ${filter === "warnings" ? "bg-yellow-900/30 text-yellow-300" : "text-cloud hover:text-mist"}`}
+							className={`px-2 py-1 rounded ${filter === "warnings" ? "bg-status-active/10 text-status-active/80" : "text-cloud hover:text-mist"}`}
 						>
 							Warnings ({warningCount})
 						</button>
