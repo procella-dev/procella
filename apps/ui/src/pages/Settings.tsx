@@ -140,7 +140,7 @@ function GitHubSettingsTab() {
 	if (isLoading) {
 		return (
 			<div className="animate-pulse space-y-3">
-				<div className="h-32 bg-zinc-900 rounded-xl border border-zinc-800" />
+				<div className="h-32 bg-slate-brand/30 rounded-xl border border-slate-brand/60" />
 			</div>
 		);
 	}
@@ -170,41 +170,41 @@ function GitHubSettingsTab() {
 
 	return (
 		<>
-			<div className="bg-zinc-900 rounded-xl border border-zinc-800 p-6">
+			<div className="bg-slate-brand/50 border border-cloud/15 rounded-xl p-6">
 				<div className="flex items-start justify-between">
 					<div className="flex items-start gap-4">
-						<div className="w-10 h-10 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0">
+						<div className="w-10 h-10 rounded-lg bg-slate-brand border border-cloud/20 flex items-center justify-center shrink-0">
 							<svg
 								viewBox="0 0 24 24"
 								fill="currentColor"
-								className="w-6 h-6 text-zinc-300"
+								className="w-6 h-6 text-mist/80"
 								aria-hidden="true"
 							>
 								<path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
 							</svg>
 						</div>
 						<div>
-							<h3 className="text-sm font-semibold text-zinc-100 mb-1">GitHub App Connected</h3>
+							<h3 className="text-sm font-semibold text-mist mb-1">GitHub App Connected</h3>
 							<div className="space-y-1">
-								<p className="text-sm text-zinc-400">
-									<span className="text-zinc-500">Account:</span>{" "}
-									<span className="text-zinc-200 font-medium">{installation.accountLogin}</span>
+								<p className="text-sm text-cloud">
+									<span className="text-cloud/60">Account:</span>{" "}
+									<span className="text-mist/90 font-medium">{installation.accountLogin}</span>
 								</p>
-								<p className="text-sm text-zinc-400">
-									<span className="text-zinc-500">Type:</span> {installation.accountType}
+								<p className="text-sm text-cloud">
+									<span className="text-cloud/60">Type:</span> {installation.accountType}
 								</p>
-								<p className="text-sm text-zinc-400">
-									<span className="text-zinc-500">Installation ID:</span>{" "}
+								<p className="text-sm text-cloud">
+									<span className="text-cloud/60">Installation ID:</span>{" "}
 									<span className="tabular-nums">{installation.installationId}</span>
 								</p>
-								<p className="text-sm text-zinc-400">
-									<span className="text-zinc-500">Repositories:</span>{" "}
+								<p className="text-sm text-cloud">
+									<span className="text-cloud/60">Repositories:</span>{" "}
 									{installation.repositorySelection === "all"
 										? "All repositories"
 										: "Selected repositories"}
 								</p>
-								<p className="text-sm text-zinc-400">
-									<span className="text-zinc-500">Connected:</span>{" "}
+								<p className="text-sm text-cloud">
+									<span className="text-cloud/60">Connected:</span>{" "}
 									{new Date(installation.createdAt).toLocaleDateString()}
 								</p>
 							</div>
@@ -213,7 +213,7 @@ function GitHubSettingsTab() {
 					<button
 						type="button"
 						onClick={() => setShowDisconnectConfirm(true)}
-						className="bg-red-950/40 hover:bg-red-950/60 text-red-300 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border border-red-900/40"
+						className="bg-danger/15 hover:bg-danger/25 text-danger/80 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border border-danger/30"
 					>
 						Disconnect
 					</button>
@@ -222,9 +222,9 @@ function GitHubSettingsTab() {
 
 			{showDisconnectConfirm && (
 				<div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-					<div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 w-full max-w-sm mx-4">
-						<h3 className="text-lg font-semibold text-zinc-100 mb-2">Disconnect GitHub App</h3>
-						<p className="text-sm text-zinc-400 mb-4">
+					<div className="bg-surface-popup border border-cloud/20 rounded-xl p-6 w-full max-w-sm mx-4">
+						<h3 className="text-lg font-semibold text-mist mb-2">Disconnect GitHub App</h3>
+						<p className="text-sm text-cloud mb-4">
 							Are you sure you want to disconnect the GitHub App? PR comments and commit statuses
 							will stop working.
 						</p>
@@ -232,7 +232,7 @@ function GitHubSettingsTab() {
 							<button
 								type="button"
 								onClick={() => setShowDisconnectConfirm(false)}
-								className="px-4 py-2 text-sm font-medium text-zinc-400 hover:text-zinc-100 transition-colors"
+								className="btn-ghost"
 							>
 								Cancel
 							</button>
@@ -240,7 +240,7 @@ function GitHubSettingsTab() {
 								type="button"
 								onClick={handleDisconnect}
 								disabled={removeMutation.isPending}
-								className="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+								className="btn-danger"
 							>
 								{removeMutation.isPending ? "Disconnecting..." : "Disconnect"}
 							</button>
@@ -254,36 +254,32 @@ function GitHubSettingsTab() {
 
 function GitHubNotConfigured({ onCheckConnection }: { onCheckConnection: () => void }) {
 	return (
-		<div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8">
+		<div className="bg-slate-brand/30 border border-slate-brand/60 rounded-xl p-8">
 			<div className="flex items-start gap-4">
-				<div className="w-10 h-10 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0 opacity-50">
+				<div className="w-10 h-10 rounded-lg bg-slate-brand border border-cloud/20 flex items-center justify-center shrink-0 opacity-50">
 					<svg
 						viewBox="0 0 24 24"
 						fill="currentColor"
-						className="w-6 h-6 text-zinc-500"
+						className="w-6 h-6 text-cloud/60"
 						aria-hidden="true"
 					>
 						<path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
 					</svg>
 				</div>
 				<div>
-					<h3 className="text-sm font-semibold text-zinc-400 mb-1.5">
+					<h3 className="text-sm font-semibold text-cloud mb-1.5">
 						GitHub App Not Configured or Not Installed
 					</h3>
-					<p className="text-sm text-zinc-500 leading-relaxed mb-4">
+					<p className="text-sm text-cloud/60 leading-relaxed mb-4">
 						Procella cannot yet distinguish between missing server configuration and a missing
 						organization installation. Verify environment variables and app installation:
 					</p>
-					<div className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2.5 font-mono text-xs text-zinc-400 overflow-x-auto whitespace-pre leading-relaxed mb-4">
+					<div className="bg-deep-sky border border-cloud/15 rounded-lg px-3 py-2.5 font-mono text-xs text-cloud overflow-x-auto whitespace-pre leading-relaxed mb-4">
 						{`PROCELLA_GITHUB_APP_ID=<your-app-id>
 PROCELLA_GITHUB_APP_PRIVATE_KEY=<your-private-key>
 PROCELLA_GITHUB_APP_WEBHOOK_SECRET=<your-webhook-secret>`}
 					</div>
-					<button
-						type="button"
-						onClick={onCheckConnection}
-						className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-					>
+					<button type="button" onClick={onCheckConnection} className="btn-secondary">
 						Check Connection
 					</button>
 				</div>
@@ -294,63 +290,59 @@ PROCELLA_GITHUB_APP_WEBHOOK_SECRET=<your-webhook-secret>`}
 
 function GitHubNotConnected({ onCheckConnection }: { onCheckConnection: () => void }) {
 	return (
-		<div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8">
+		<div className="bg-slate-brand/30 border border-slate-brand/60 rounded-xl p-8">
 			<div className="flex items-start gap-4">
-				<div className="w-10 h-10 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
+				<div className="w-10 h-10 rounded-lg bg-lightning/10 border border-lightning/20 flex items-center justify-center shrink-0">
 					<svg
 						viewBox="0 0 24 24"
 						fill="currentColor"
-						className="w-6 h-6 text-blue-400"
+						className="w-6 h-6 text-lightning"
 						aria-hidden="true"
 					>
 						<path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
 					</svg>
 				</div>
 				<div>
-					<h3 className="text-sm font-semibold text-zinc-100 mb-1.5">Connect GitHub App</h3>
-					<p className="text-sm text-zinc-400 leading-relaxed mb-5">
+					<h3 className="text-sm font-semibold text-mist mb-1.5">Connect GitHub App</h3>
+					<p className="text-sm text-cloud leading-relaxed mb-5">
 						Connect a GitHub App to enable PR comments and commit status checks for Pulumi previews.
 					</p>
 
 					<div className="space-y-3 mb-5">
 						<div className="flex items-start gap-3">
-							<span className="w-5 h-5 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-[10px] font-semibold text-zinc-400 shrink-0 mt-0.5">
+							<span className="w-5 h-5 rounded-full bg-slate-brand border border-cloud/20 flex items-center justify-center text-[10px] font-semibold text-cloud shrink-0 mt-0.5">
 								1
 							</span>
 							<div>
-								<p className="text-xs text-zinc-500 mb-0.5">Create a GitHub App</p>
+								<p className="text-xs text-cloud/60 mb-0.5">Create a GitHub App</p>
 								<a
 									href="https://github.com/settings/apps/new"
 									target="_blank"
 									rel="noopener noreferrer"
-									className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+									className="text-xs text-lightning hover:text-lightning/80 transition-colors"
 								>
 									GitHub Settings → Developer settings → GitHub Apps →
 								</a>
 							</div>
 						</div>
 						<div className="flex items-start gap-3">
-							<span className="w-5 h-5 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-[10px] font-semibold text-zinc-400 shrink-0 mt-0.5">
+							<span className="w-5 h-5 rounded-full bg-slate-brand border border-cloud/20 flex items-center justify-center text-[10px] font-semibold text-cloud shrink-0 mt-0.5">
 								2
 							</span>
-							<p className="text-xs text-zinc-500">
+							<p className="text-xs text-cloud/60">
 								Set PROCELLA_GITHUB_APP_ID, PROCELLA_GITHUB_APP_PRIVATE_KEY, and
 								PROCELLA_GITHUB_APP_WEBHOOK_SECRET environment variables
 							</p>
 						</div>
 						<div className="flex items-start gap-3">
-							<span className="w-5 h-5 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-[10px] font-semibold text-zinc-400 shrink-0 mt-0.5">
+							<span className="w-5 h-5 rounded-full bg-slate-brand border border-cloud/20 flex items-center justify-center text-[10px] font-semibold text-cloud shrink-0 mt-0.5">
 								3
 							</span>
-							<p className="text-xs text-zinc-500">Install the GitHub App on your organization</p>
+							<p className="text-xs text-cloud/60">Install the GitHub App on your organization</p>
 						</div>
 					</div>
 
-					<button
-						type="button"
-						onClick={onCheckConnection}
-						className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-					>
+					<button type="button" onClick={onCheckConnection} className="btn-primary">
 						Check Connection
 					</button>
 				</div>
@@ -448,7 +440,7 @@ function OidcSettingsTab() {
 
 	if (isLoading) {
 		return (
-			<div className="animate-pulse h-32 bg-zinc-900 rounded-xl border border-zinc-800 mt-4" />
+			<div className="animate-pulse h-32 bg-slate-brand/30 rounded-xl border border-slate-brand/60 mt-4" />
 		);
 	}
 
@@ -465,7 +457,7 @@ function OidcSettingsTab() {
 			);
 		}
 		return (
-			<div className="mt-4 bg-red-950/30 border border-red-900/40 text-red-300 p-4 rounded-xl text-sm">
+			<div className="mt-4 bg-danger/10 border border-danger/30 text-danger/80 p-4 rounded-xl text-sm">
 				{queryError.message}
 			</div>
 		);
@@ -486,17 +478,17 @@ function OidcSettingsTab() {
 						resetForm();
 						setShowCreate(true);
 					}}
-					className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+					className="btn-primary"
 				>
 					Add Policy
 				</button>
 			</div>
 
 			{showCreate && (
-				<div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-4">
+				<div className="bg-surface-popup border border-cloud/15 rounded-xl p-5 space-y-4">
 					<h3 className="text-sm font-semibold text-mist">New Trust Policy</h3>
 					{formError && (
-						<div className="bg-red-950/30 border border-red-900/40 text-red-300 p-3 rounded-lg text-sm">
+						<div className="bg-danger/10 border border-danger/30 text-danger/80 p-3 rounded-lg text-sm">
 							{formError}
 						</div>
 					)}
@@ -511,7 +503,7 @@ function OidcSettingsTab() {
 								value={displayName}
 								onChange={(e) => setDisplayName(e.target.value)}
 								placeholder="CI Deploy Policy"
-								className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+								className="w-full input-field"
 							/>
 						</div>
 						<div>
@@ -522,7 +514,7 @@ function OidcSettingsTab() {
 								id="oidc-role"
 								value={grantedRole}
 								onChange={(e) => setGrantedRole(e.target.value as "viewer" | "member" | "admin")}
-								className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+								className="w-full input-field"
 							>
 								<option value="viewer">viewer</option>
 								<option value="member">member</option>
@@ -539,7 +531,7 @@ function OidcSettingsTab() {
 							type="url"
 							value={issuer}
 							onChange={(e) => setIssuer(e.target.value)}
-							className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+							className="w-full input-field"
 						/>
 					</div>
 					<div>
@@ -553,7 +545,7 @@ function OidcSettingsTab() {
 							onChange={(e) => setMaxExpiration(e.target.value)}
 							min={60}
 							max={86400}
-							className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+							className="w-full input-field"
 						/>
 					</div>
 					<div>
@@ -567,7 +559,7 @@ function OidcSettingsTab() {
 								onChange={(e) => setConditionKey(e.target.value)}
 								placeholder="repository_owner_id"
 								onKeyDown={(e) => e.key === "Enter" && addCondition()}
-								className="flex-1 bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+								className="flex-1 input-field"
 							/>
 							<input
 								type="text"
@@ -575,20 +567,16 @@ function OidcSettingsTab() {
 								onChange={(e) => setConditionValue(e.target.value)}
 								placeholder="12345"
 								onKeyDown={(e) => e.key === "Enter" && addCondition()}
-								className="flex-1 bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+								className="flex-1 input-field"
 							/>
-							<button
-								type="button"
-								onClick={addCondition}
-								className="px-3 py-2 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 rounded-lg text-sm transition-colors"
-							>
+							<button type="button" onClick={addCondition} className="btn-secondary">
 								Add
 							</button>
 						</div>
 						{Object.entries(conditions).map(([k, v]) => (
 							<div
 								key={k}
-								className="flex items-center gap-2 text-xs font-mono text-zinc-300 bg-zinc-800/50 rounded px-2 py-1 mb-1"
+								className="flex items-center gap-2 text-xs font-mono text-mist/80 bg-slate-brand/50 rounded px-2 py-1 mb-1"
 							>
 								<span className="flex-1">
 									{k} = {v}
@@ -596,7 +584,7 @@ function OidcSettingsTab() {
 								<button
 									type="button"
 									onClick={() => removeCondition(k)}
-									className="text-zinc-500 hover:text-red-400 transition-colors"
+									className="text-cloud/60 hover:text-danger/80 transition-colors"
 								>
 									×
 								</button>
@@ -610,7 +598,7 @@ function OidcSettingsTab() {
 								resetForm();
 								setShowCreate(false);
 							}}
-							className="px-4 py-2 text-sm text-zinc-400 hover:text-zinc-100 transition-colors"
+							className="btn-ghost"
 						>
 							Cancel
 						</button>
@@ -618,7 +606,7 @@ function OidcSettingsTab() {
 							type="button"
 							onClick={handleCreate}
 							disabled={createMutation.isPending}
-							className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+							className="btn-primary"
 						>
 							{createMutation.isPending ? "Creating…" : "Create Policy"}
 						</button>
@@ -637,17 +625,17 @@ function OidcSettingsTab() {
 			{policies && policies.length > 0 && (
 				<div className="space-y-2">
 					{policies.map((policy) => (
-						<div key={policy.id} className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+						<div key={policy.id} className="bg-surface-popup border border-cloud/15 rounded-xl p-4">
 							<div className="flex items-start justify-between gap-4">
 								<div className="min-w-0">
 									<div className="flex items-center gap-2">
 										<span className="text-sm font-medium text-mist">{policy.displayName}</span>
 										<span
-											className={`text-xs px-1.5 py-0.5 rounded font-mono ${policy.active ? "bg-green-900/40 text-green-300" : "bg-zinc-800 text-zinc-500"}`}
+											className={`text-xs px-1.5 py-0.5 rounded font-mono ${policy.active ? "bg-success/10 text-success/80" : "bg-slate-brand text-cloud/60"}`}
 										>
 											{policy.active ? "active" : "inactive"}
 										</span>
-										<span className="text-xs px-1.5 py-0.5 rounded bg-zinc-800 text-cloud font-mono">
+										<span className="text-xs px-1.5 py-0.5 rounded bg-slate-brand text-cloud font-mono">
 											{policy.grantedRole}
 										</span>
 									</div>
@@ -657,7 +645,7 @@ function OidcSettingsTab() {
 											{Object.entries(policy.claimConditions).map(([k, v]) => (
 												<span
 													key={k}
-													className="text-xs font-mono bg-zinc-800/70 text-zinc-400 px-2 py-0.5 rounded"
+													className="text-xs font-mono bg-slate-brand/70 text-cloud px-2 py-0.5 rounded"
 												>
 													{k}={v}
 												</span>
@@ -676,7 +664,7 @@ function OidcSettingsTab() {
 													setFormError(e instanceof Error ? e.message : "Update failed"),
 												);
 										}}
-										className="text-xs text-cloud hover:text-mist px-2 py-1 rounded border border-zinc-700 hover:border-zinc-500 transition-colors"
+										className="text-xs text-cloud hover:text-mist px-2 py-1 rounded border border-cloud/20 hover:border-cloud/40 transition-colors"
 									>
 										{policy.active ? "Disable" : "Enable"}
 									</button>
@@ -690,7 +678,7 @@ function OidcSettingsTab() {
 													setFormError(e instanceof Error ? e.message : "Delete failed"),
 												);
 										}}
-										className="text-xs text-red-400 hover:text-red-300 px-2 py-1 rounded border border-red-900/40 hover:border-red-700 transition-colors"
+										className="text-xs text-danger/70 hover:text-danger px-2 py-1 rounded border border-danger/20 hover:border-danger/40 transition-colors"
 									>
 										Delete
 									</button>
