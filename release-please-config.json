@@ -13,15 +13,7 @@
 			"release-type": "node",
 			"changelog-path": "CHANGELOG.md",
 			"bump-minor-pre-major": true,
-			"bump-patch-for-minor-pre-major": true,
-			"extra-files": [
-				"package.json",
-				{
-					"type": "json",
-					"path": "../../bun.lock",
-					"jsonpath": "$.workspaces['packages/migrate'].version"
-				}
-			]
+			"bump-patch-for-minor-pre-major": true
 		}
 	},
 	"bootstrap-sha": "bb2f594dbd55e72cfdd1679edbcb925d2b54a8ff"
