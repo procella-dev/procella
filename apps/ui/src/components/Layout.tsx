@@ -7,7 +7,7 @@ import { PageSkeleton } from "./PageSkeleton";
 import { ProcellaLogo } from "./ProcellaLogo";
 
 /** Descope-only nav items — only rendered inside AuthProvider. */
-function DescopeNav() {
+function DescopeNav({ onNav }: { onNav?: () => void }) {
 	const { sessionToken } = useSession();
 	const isAdmin = (() => {
 		if (!sessionToken) return false;
@@ -18,11 +18,11 @@ function DescopeNav() {
 
 	return (
 		<>
-			<NavLink to="/tokens" className={navLinkClass}>
+			<NavLink to="/tokens" className={navLinkClass} onClick={onNav}>
 				Tokens
 			</NavLink>
 			{isAdmin && (
-				<NavLink to="/settings" className={navLinkClass}>
+				<NavLink to="/settings" className={navLinkClass} onClick={onNav}>
 					Settings
 				</NavLink>
 			)}
@@ -40,6 +40,18 @@ function navLinkClass({ isActive }: { isActive: boolean }) {
 
 export function Layout() {
 	const { config } = useAuthConfig();
+	const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+	const mobileMenuRef = useRef<HTMLDivElement>(null);
+
+	useEffect(() => {
+		function handleClickOutside(e: MouseEvent) {
+			if (mobileMenuRef.current && !mobileMenuRef.current.contains(e.target as Node)) {
+				setMobileMenuOpen(false);
+			}
+		}
+		document.addEventListener("mousedown", handleClickOutside);
+		return () => document.removeEventListener("mousedown", handleClickOutside);
+	}, []);
 
 	return (
 		<div className="min-h-screen flex flex-col bg-deep-sky">
@@ -66,6 +78,55 @@ export function Layout() {
 						</nav>
 					</div>
 					<div className="flex items-center gap-3">
+						{/* Mobile navigation */}
+						<div className="relative sm:hidden" ref={mobileMenuRef}>
+							<button
+								type="button"
+								aria-label="Open navigation"
+								onClick={() => setMobileMenuOpen((o) => !o)}
+								className="flex items-center justify-center w-8 h-8 rounded-md text-cloud hover:text-mist transition-colors"
+							>
+								<svg
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									strokeWidth="2"
+									className="w-5 h-5"
+									aria-hidden="true"
+								>
+									<path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+								</svg>
+							</button>
+							{mobileMenuOpen && (
+								<div className="fixed inset-x-4 top-16 rounded-lg bg-slate-brand border border-cloud/30 shadow-xl z-50 flex flex-col gap-0.5 p-1">
+									<NavLink
+										to="/home"
+										end
+										className={navLinkClass}
+										onClick={() => setMobileMenuOpen(false)}
+									>
+										Stacks
+									</NavLink>
+									{config?.mode === "descope" && (
+										<DescopeNav onNav={() => setMobileMenuOpen(false)} />
+									)}
+									<NavLink
+										to="/webhooks"
+										className={navLinkClass}
+										onClick={() => setMobileMenuOpen(false)}
+									>
+										Webhooks
+									</NavLink>
+									<NavLink
+										to="/esc"
+										className={navLinkClass}
+										onClick={() => setMobileMenuOpen(false)}
+									>
+										Environments
+									</NavLink>
+								</div>
+							)}
+						</div>
 						<button
 							type="button"
 							onClick={openCommandBar}
