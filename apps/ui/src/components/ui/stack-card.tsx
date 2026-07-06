@@ -10,6 +10,9 @@ interface StackCardProps {
 	lastUpdateStatus?: UpdateStatus;
 	lastUpdatedAt?: string | null;
 	resourceCount?: number;
+	version?: number;
+	description?: string;
+	operation?: string;
 	isFirst?: boolean;
 	isLast?: boolean;
 	onHover?: () => void;
@@ -34,70 +37,47 @@ export function StackCard({
 	lastUpdateStatus,
 	lastUpdatedAt,
 	resourceCount,
+	version,
+	description,
+	operation,
 	isFirst,
 	isLast,
 	onHover,
 }: StackCardProps) {
 	return (
 		<div
-			style={{
-				position: "relative",
-				borderRadius: isFirst ? "8px 8px 0 0" : isLast ? "0 0 8px 8px" : 0,
-				borderBottom: isLast ? undefined : "1px solid rgba(255,255,255,0.06)",
-				backgroundColor: "var(--color-surface-secondary)",
-				transition: "background-color 0.15s ease",
-			}}
+			className={`relative bg-surface-secondary transition-colors duration-150${isFirst ? " rounded-t-lg" : ""}${isLast ? " rounded-b-lg" : ""}`}
+			style={!isLast ? { borderBottom: "1px solid rgba(255,255,255,0.06)" } : undefined}
 		>
 			<Link
 				to={href}
 				onMouseEnter={onHover}
-				style={{
-					position: "absolute",
-					inset: 0,
-					zIndex: 0,
-					borderRadius: "inherit",
-				}}
+				className="absolute inset-0 z-0 rounded-[inherit]"
 				aria-label={`Open stack ${orgName}/${projectName}/${stackName}`}
 			/>
-			<Row
-				space="3"
-				align="center"
-				style={{
-					padding: "1rem",
-					position: "relative",
-					zIndex: 1,
-					pointerEvents: "none",
-				}}
-			>
-				<Stack space="0.5" style={{ flex: 1, minWidth: 0 }}>
-					<span
-						style={{
-							fontFamily: "var(--font-mono)",
-							fontSize: "var(--text-mono-base)",
-							color: "var(--color-mist)",
-							fontWeight: 500,
-							overflow: "hidden",
-							textOverflow: "ellipsis",
-							whiteSpace: "nowrap",
-						}}
-					>
+			<Row space="3" align="center" className="p-4 relative z-[1] pointer-events-none">
+				<Stack space="0.5" className="flex-1 min-w-0">
+					<span className="font-mono text-mono-base text-mist font-medium overflow-hidden text-ellipsis whitespace-nowrap">
 						{projectName}/{stackName}
 					</span>
-					<span style={{ fontSize: "0.75rem", color: "var(--color-cloud)" }}>
+					<span className="text-xs text-cloud">
 						{orgName}
 						{resourceCount !== undefined && ` · ${String(resourceCount)} resources`}
 					</span>
+					{description && (
+						<span className="text-xs text-[var(--color-cloud)]/70 truncate">{description}</span>
+					)}
 				</Stack>
 				<Row space="2" align="center">
 					{lastUpdateStatus && <StatusDot status={lastUpdateStatus} size={8} />}
+					{lastUpdateStatus === "updating" && operation && (
+						<span className="text-xs text-cloud">{operation}</span>
+					)}
+					{version !== undefined && version > 0 && (
+						<span className="font-mono text-xs text-cloud">v{version}</span>
+					)}
 					{lastUpdatedAt && (
-						<span
-							style={{
-								fontSize: "0.75rem",
-								color: "var(--color-cloud)",
-								fontFamily: "var(--font-mono)",
-							}}
-						>
+						<span className="text-xs text-cloud font-mono">
 							{formatRelativeTime(lastUpdatedAt)}
 						</span>
 					)}
