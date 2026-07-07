@@ -1,14 +1,17 @@
 import { AuthProvider, useSession } from "@descope/react-sdk";
 import { type ReactNode, useEffect } from "react";
-import { setStoredDescopeSessionToken } from "../auth/sessionToken";
+import { setStoredDescopeSessionClaims, setStoredDescopeSessionToken } from "../auth/sessionToken";
 import { useAuthConfig } from "../hooks/useAuthConfig";
 
 function DescopeSessionTokenBridge() {
-	const { sessionToken } = useSession();
+	const { sessionToken, claims } = useSession();
 
 	useEffect(() => {
+		// sessionToken is empty when the project manages tokens in HttpOnly
+		// cookies — claims remain available in both modes and carry tenant/roles.
 		setStoredDescopeSessionToken(sessionToken);
-	}, [sessionToken]);
+		setStoredDescopeSessionClaims(claims);
+	}, [sessionToken, claims]);
 
 	return null;
 }
@@ -25,6 +28,7 @@ export function ProcellaAuthProvider({ children }: { children: ReactNode }) {
 			localStorage.removeItem("procella-token");
 		} else {
 			setStoredDescopeSessionToken(null);
+			setStoredDescopeSessionClaims(null);
 		}
 	}, [config]);
 
@@ -38,7 +42,7 @@ export function ProcellaAuthProvider({ children }: { children: ReactNode }) {
 
 	if (config.mode === "descope") {
 		return (
-			<AuthProvider projectId={config.projectId}>
+			<AuthProvider projectId={config.projectId} baseUrl={config.authBaseUrl}>
 				<DescopeSessionTokenBridge />
 				{children}
 			</AuthProvider>

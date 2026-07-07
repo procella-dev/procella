@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { apiBase } from "../config";
 
-export type AuthConfigResponse = { mode: "dev" } | { mode: "descope"; projectId: string };
+export type AuthConfigResponse =
+	| { mode: "dev" }
+	| { mode: "descope"; projectId: string; authBaseUrl?: string };
 
 let cachedConfig: AuthConfigResponse | null = null;
 let fetchPromise: Promise<AuthConfigResponse> | null = null;

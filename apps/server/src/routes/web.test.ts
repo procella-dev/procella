@@ -40,8 +40,9 @@ function mockAuthService(): AuthService {
 function makeApp(overrides?: {
 	issueSubscriptionTicket?: (caller: Caller) => Promise<string>;
 	verifySubscriptionTicket?: (ticket: string) => Promise<Caller>;
+	authConfig?: AuthConfig;
 }) {
-	const authConfig: AuthConfig = {
+	const authConfig: AuthConfig = overrides?.authConfig ?? {
 		mode: "dev",
 		token: "valid-token",
 		userLogin: validCaller.login,
@@ -109,5 +110,33 @@ describe("createWebApp tRPC auth", () => {
 
 		expect(res.status).toBe(401);
 		expect(await res.json()).toEqual({ code: "invalid_ticket" });
+	});
+});
+
+describe("createWebApp auth config discovery", () => {
+	test("GET /api/auth/config returns descope config with authBaseUrl when configured", async () => {
+		const app = makeApp({
+			authConfig: {
+				mode: "descope",
+				projectId: "P3web123",
+				authBaseUrl: "https://auth.procella.cloud",
+			},
+		});
+		const res = await app.request("/api/auth/config");
+
+		expect(res.status).toBe(200);
+		expect(await res.json()).toEqual({
+			mode: "descope",
+			projectId: "P3web123",
+			authBaseUrl: "https://auth.procella.cloud",
+		});
+	});
+
+	test("GET /api/auth/config omits authBaseUrl when no custom auth domain is set", async () => {
+		const app = makeApp({ authConfig: { mode: "descope", projectId: "P3web123" } });
+		const res = await app.request("/api/auth/config");
+
+		expect(res.status).toBe(200);
+		expect(await res.json()).toEqual({ mode: "descope", projectId: "P3web123" });
 	});
 });

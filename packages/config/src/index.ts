@@ -55,6 +55,7 @@ const configSchema = z
 			}),
 		descopeProjectId: z.string().optional(),
 		descopeManagementKey: z.string().optional(),
+		descopeAuthBaseUrl: z.string().url().optional(),
 		ticketSigningKey: z.string().min(32, "Must be at least 32 characters").optional(),
 
 		// Blob storage
@@ -162,6 +163,7 @@ const envMapping = {
 	devUsers: "PROCELLA_DEV_USERS",
 	descopeProjectId: "PROCELLA_DESCOPE_PROJECT_ID",
 	descopeManagementKey: "PROCELLA_DESCOPE_MANAGEMENT_KEY",
+	descopeAuthBaseUrl: "PROCELLA_DESCOPE_AUTH_BASE_URL",
 	ticketSigningKey: "PROCELLA_TICKET_SIGNING_KEY",
 	blobBackend: "PROCELLA_BLOB_BACKEND",
 	blobLocalPath: "PROCELLA_BLOB_LOCAL_PATH",

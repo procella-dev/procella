@@ -1,13 +1,12 @@
 import {
 	AuditManagement,
-	getCurrentTenant,
-	getJwtRoles,
 	RoleManagement,
 	TenantProfile,
 	UserManagement,
 	useSession,
 } from "@descope/react-sdk";
 import { useEffect, useState } from "react";
+import { rolesFromClaims, tenantFromClaims } from "../auth/claims";
 import { useAuthConfig } from "../hooks/useAuthConfig";
 import { trpc } from "../trpc";
 
@@ -28,7 +27,7 @@ function getTab(): SettingsTab {
 
 export function Settings() {
 	const { config } = useAuthConfig();
-	const { sessionToken } = useSession();
+	const { claims } = useSession();
 	const [tab, setTab] = useState<SettingsTab>(getTab);
 
 	useEffect(() => {
@@ -39,8 +38,9 @@ export function Settings() {
 
 	if (config?.mode !== "descope") return null;
 
-	const tenantId = sessionToken ? getCurrentTenant(sessionToken) : "";
-	const roles = sessionToken ? getJwtRoles(sessionToken, tenantId) : [];
+	// Claims-based — works even when the session JWT is an HttpOnly cookie.
+	const tenantId = tenantFromClaims(claims);
+	const roles = rolesFromClaims(claims, tenantId);
 	const isAdmin = roles.includes("admin");
 
 	const selectTab = (t: SettingsTab) => {

@@ -82,13 +82,13 @@ async function createJwtTestHarness() {
 async function signDescopeJwt(
 	privateKey: Parameters<SignJWT["sign"]>[0],
 	claims: Record<string, unknown>,
-	options: { issuer: string; audience: string; alg?: string; secret?: Uint8Array },
+	options: { issuer: string; audience?: string; alg?: string; secret?: Uint8Array },
 ): Promise<string> {
 	const signer = new SignJWT(claims)
 		.setProtectedHeader({ alg: options.alg ?? "RS256", kid: "descope-test-key" })
 		.setIssuer(options.issuer)
-		.setAudience(options.audience)
 		.setExpirationTime("1h");
+	if (options.audience) signer.setAudience(options.audience);
 
 	if (options.alg === "HS256") {
 		return signer.sign(options.secret ?? new TextEncoder().encode("test-secret"));
@@ -375,6 +375,189 @@ describe("DescopeAuthService", () => {
 		});
 
 		return expect(svc.authenticate(reqWithAuth(`Bearer ${token}`))).rejects.toThrow();
+	});
+});
+
+// ============================================================================
+// DescopeAuthService — DS session cookie fallback (HttpOnly cookie mode)
+// ============================================================================
+
+describe("DescopeAuthService — session cookie fallback", () => {
+	let harness: Awaited<ReturnType<typeof createJwtTestHarness>>;
+	let svc: DescopeAuthService;
+
+	const VALID_CLAIMS = {
+		sub: "user-1",
+		dct: "tenant-1",
+		procellaLogin: "omer",
+		tenant_name: "Omer Corp",
+		tenants: { "tenant-1": { roles: ["admin"] } },
+		exp: Math.floor(Date.now() / 1000) + 3600,
+	};
+
+	function reqWithCookie(cookieHeader: string): Request {
+		return new Request("http://localhost:9090/trpc/stacks.list", {
+			headers: { Cookie: cookieHeader },
+		});
+	}
+
+	beforeAll(async () => {
+		harness = await createJwtTestHarness();
+		svc = new DescopeAuthService({
+			sdk: DescopeSdk({ projectId: harness.audience }),
+			config: {
+				projectId: harness.audience,
+				issuer: harness.issuer,
+				authBaseUrl: "https://auth.example.com",
+			},
+		});
+	});
+
+	afterAll(() => {
+		svc.dispose();
+		harness.server.stop();
+	});
+
+	test("valid DS cookie authenticates without Authorization header", async () => {
+		const token = await signDescopeJwt(harness.privateKey, VALID_CLAIMS, {
+			issuer: harness.issuer,
+			audience: harness.audience,
+		});
+
+		const caller = await svc.authenticate(reqWithCookie(`DS=${token}`));
+
+		expect(caller.login).toBe("omer");
+		expect(caller.tenantId).toBe("tenant-1");
+		expect(caller.roles).toEqual(["admin"]);
+	});
+
+	test("valid dynamic Descope cookie name authenticates without Authorization header", async () => {
+		const token = await signDescopeJwt(harness.privateKey, VALID_CLAIMS, {
+			issuer: harness.issuer,
+			audience: harness.audience,
+		});
+
+		const caller = await svc.authenticate(
+			reqWithCookie(`DFN-3GBR6YFRBDhUEDalySpAbreWF4j=${encodeURIComponent(token)}`),
+		);
+
+		expect(caller.login).toBe("omer");
+		expect(caller.tenantId).toBe("tenant-1");
+	});
+
+	test("JWT issued via the custom auth domain issuer is accepted", async () => {
+		const token = await signDescopeJwt(harness.privateKey, VALID_CLAIMS, {
+			issuer: `https://auth.example.com/${harness.audience}`,
+			audience: harness.audience,
+		});
+
+		const caller = await svc.authenticate(reqWithCookie(`DS=${token}`));
+
+		expect(caller.login).toBe("omer");
+	});
+
+	test("JWT issued with bare projectId issuer is accepted", async () => {
+		const token = await signDescopeJwt(harness.privateKey, VALID_CLAIMS, {
+			issuer: harness.audience,
+			audience: harness.audience,
+		});
+
+		const caller = await svc.authenticate(reqWithCookie(`DS=${token}`));
+
+		expect(caller.login).toBe("omer");
+	});
+
+	test("JWT without aud claim is accepted when issuer and signature match", async () => {
+		const token = await signDescopeJwt(harness.privateKey, VALID_CLAIMS, {
+			issuer: harness.audience,
+		});
+
+		const caller = await svc.authenticate(reqWithCookie(`DS=${token}`));
+
+		expect(caller.login).toBe("omer");
+	});
+
+	test("JWT with aud array containing projectId is accepted", async () => {
+		const token = await signDescopeJwt(
+			harness.privateKey,
+			{
+				...VALID_CLAIMS,
+				aud: ["other-project", harness.audience],
+			},
+			{
+				issuer: harness.audience,
+			},
+		);
+
+		const caller = await svc.authenticate(reqWithCookie(`DS=${token}`));
+
+		expect(caller.login).toBe("omer");
+	});
+
+	test("JWT with aud array missing projectId is rejected", async () => {
+		const token = await signDescopeJwt(
+			harness.privateKey,
+			{
+				...VALID_CLAIMS,
+				aud: ["other-project"],
+			},
+			{
+				issuer: harness.audience,
+			},
+		);
+
+		return expect(svc.authenticate(reqWithCookie(`DS=${token}`))).rejects.toBeInstanceOf(
+			UnauthorizedError,
+		);
+	});
+
+	test("multiple DS cookies — a sibling environment's invalid token is skipped", async () => {
+		const valid = await signDescopeJwt(harness.privateKey, VALID_CLAIMS, {
+			issuer: harness.issuer,
+			audience: harness.audience,
+		});
+		const foreign = await signDescopeJwt(harness.privateKey, VALID_CLAIMS, {
+			issuer: harness.issuer,
+			audience: `${harness.audience}-other-project`,
+		});
+
+		const caller = await svc.authenticate(reqWithCookie(`other=1; DS=${foreign}; DS=${valid}`));
+
+		expect(caller.login).toBe("omer");
+	});
+
+	test("no Authorization header and no cookie throws UnauthorizedError", async () => {
+		return expect(svc.authenticate(reqWithoutAuth())).rejects.toBeInstanceOf(UnauthorizedError);
+	});
+
+	test("only invalid DS cookies throws UnauthorizedError", async () => {
+		const foreign = await signDescopeJwt(harness.privateKey, VALID_CLAIMS, {
+			issuer: harness.issuer,
+			audience: `${harness.audience}-other-project`,
+		});
+
+		return expect(svc.authenticate(reqWithCookie(`DS=${foreign}`))).rejects.toBeInstanceOf(
+			UnauthorizedError,
+		);
+	});
+
+	test("non-JWT DS cookie value is ignored", async () => {
+		return expect(svc.authenticate(reqWithCookie("DS=not-a-jwt"))).rejects.toBeInstanceOf(
+			UnauthorizedError,
+		);
+	});
+
+	test("Authorization header takes precedence over cookies", async () => {
+		const valid = await signDescopeJwt(harness.privateKey, VALID_CLAIMS, {
+			issuer: harness.issuer,
+			audience: harness.audience,
+		});
+		const request = new Request("http://localhost:9090/trpc/stacks.list", {
+			headers: { Authorization: "Bearer eyJ-invalid", Cookie: `DS=${valid}` },
+		});
+
+		// The invalid Bearer token must fail — not silently fall back to the cookie.
+		return expect(svc.authenticate(request)).rejects.toThrow();
 	});
 });
 
