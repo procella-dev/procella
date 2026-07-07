@@ -1,10 +1,16 @@
-# Self-hosted Renovate — runs directly on the runner (no Docker).
-# This enables postUpgradeTasks (e.g. regenerating Pulumi types after SDK bumps),
-# which the hosted app cannot do for security reasons.
+# Self-hosted Renovate — ONLY manages packages/types/tygo/go.mod: Pulumi SDK
+# bumps + TypeScript type regeneration via postUpgradeTasks, which the hosted
+# Mend app cannot run for security reasons. Everything else (bun/npm, GitHub
+# Actions, esc-eval/go.mod) is handled by the hosted Renovate GitHub App
+# reading renovate.json.
+#
+# This run ignores renovate.json entirely (requireConfig: "ignored") — its
+# config lives in .github/renovate-global.js. renovate.json carves out
+# packages/types/tygo/** so the two instances never overlap.
 #
 # Prerequisites:
-#   1. Uninstall the hosted Renovate GitHub App from the repository
-#   2. Create a GitHub App with these repository permissions:
+#   1. Hosted Renovate app installed on the repo (handles everything else)
+#   2. A GitHub App with these repository permissions:
 #        contents: write, pull_requests: write, issues: write, workflows: write
 #   3. Install the app on the procella-dev org / procella repo
 #   4. Add the app's ID and private key as repository secrets:
@@ -16,10 +22,10 @@ name: Renovate
 
 on:
   schedule:
-    - cron: "0 * * * *" # every hour
+    - cron: "0 3 * * *" # daily — Pulumi SDK releases ~weekly, hourly was waste
   pull_request:
     paths:
-      - renovate.json
+      # renovate.json intentionally absent — this run ignores it (requireConfig)
       - .github/renovate-global.js
       - .github/workflows/renovate.yml
   workflow_dispatch:
