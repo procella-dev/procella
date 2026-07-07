@@ -1,16 +1,10 @@
 import { Link, useParams, useSearchParams } from "react-router";
 import { trpc } from "../trpc";
+import { shortType } from "../utils/shortType";
 
 // ============================================================================
 // Helpers
 // ============================================================================
-
-/** Shorten a resource type for display (e.g., "aws:s3/bucket:Bucket" → "s3/bucket:Bucket"). */
-function shortType(type: string) {
-	const colonIdx = type.indexOf(":");
-	if (colonIdx === -1) return type;
-	return type.slice(colonIdx + 1);
-}
 
 function formatTimestamp(ts: string | null) {
 	if (!ts) return null;

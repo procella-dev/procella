@@ -3,11 +3,11 @@ import { useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { Dialog, UpdateCard } from "../components/ui";
 import { trpc } from "../trpc";
+import { shortType } from "../utils/shortType";
 
 import {
 	formatRelativeTime,
 	getResultColor,
-	shortType,
 	toChangeSummary,
 	toIsoOrNull,
 	toUpdateStatus,

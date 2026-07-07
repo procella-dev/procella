@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import {
 	formatRelativeTime,
 	getResultColor,
-	shortType,
 	toChangeSummary,
 	toIsoOrNull,
 	toUpdateStatus,
@@ -69,11 +68,5 @@ describe("StackDetail helpers", () => {
 		expect(result.includes("…")).toBe(true);
 		expect(result.startsWith("abc")).toBe(true);
 		expect(result.endsWith("xyz")).toBe(true);
-	});
-
-	test("shortType strips provider prefix only when colon exists", () => {
-		expect(shortType("aws:s3/bucket:Bucket")).toBe("s3/bucket:Bucket");
-		expect(shortType("simpleType")).toBe("simpleType");
-		expect(shortType("pulumi:pulumi:Stack")).toBe("pulumi:Stack");
 	});
 });
