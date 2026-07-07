@@ -1,48 +1,10 @@
 import { describe, expect, test } from "bun:test";
-
-type UpdateStatus =
-	| "succeeded"
-	| "failed"
-	| "updating"
-	| "cancelled"
-	| "queued"
-	| "not-started"
-	| "running";
-
-function formatDuration(ms?: number): string {
-	if (ms == null || Number.isNaN(ms)) return "";
-	if (ms < 1000) return `${Math.max(0, Math.round(ms))}ms`;
-	const seconds = ms / 1000;
-	if (seconds < 60) return `${seconds.toFixed(seconds < 10 ? 1 : 0)}s`;
-	const mins = Math.floor(seconds / 60);
-	const rem = Math.floor(seconds % 60);
-	return `${mins}m ${rem}s`;
-}
-
-function formatElapsed(ms: number): string {
-	const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-	const mins = Math.floor(totalSeconds / 60);
-	const secs = totalSeconds % 60;
-	return `${mins}m ${secs.toString().padStart(2, "0")}s elapsed`;
-}
-
-function formatRelative(ms: number, startMs: number): string {
-	const diff = Math.max(0, Math.floor((ms - startMs) / 1000));
-	const mins = Math.floor(diff / 60);
-	const secs = diff % 60;
-	return `+${mins}:${secs.toString().padStart(2, "0")}`;
-}
-
-function mapUpdateStatus(result?: string, hasEvents?: boolean): UpdateStatus {
-	if (result === "succeeded") return "succeeded";
-	if (result === "failed") return "failed";
-	if (result === "cancelled") return "cancelled";
-	if (result === "queued") return "queued";
-	if (result === "not-started") return "not-started";
-	if (result === "running") return "running";
-	if (result === "updating" || result === "in-progress") return "updating";
-	return hasEvents ? "updating" : "not-started";
-}
+import {
+	formatDuration,
+	formatElapsed,
+	formatRelative,
+	mapUpdateStatus,
+} from "./UpdateDetail.helpers";
 
 describe("UpdateDetail helpers", () => {
 	test("formatDuration handles undefined, small, seconds, and minutes", () => {
@@ -54,9 +16,21 @@ describe("UpdateDetail helpers", () => {
 		expect(formatDuration(60000)).toBe("1m 0s");
 	});
 
+	test("formatDuration rolls up to hours and days", () => {
+		expect(formatDuration((1 * 3600 + 12 * 60) * 1000)).toBe("1h 12m");
+		expect(formatDuration((2 * 86400 + 4 * 3600) * 1000)).toBe("2d 4h");
+		expect(formatDuration(3600 * 1000)).toBe("1h 0m");
+	});
+
 	test("formatElapsed renders zero-padded seconds", () => {
 		expect(formatElapsed(0)).toBe("0m 00s elapsed");
 		expect(formatElapsed(65000)).toBe("1m 05s elapsed");
+	});
+
+	test("formatElapsed rolls up to hours and days", () => {
+		expect(formatElapsed((1 * 3600 + 21 * 60) * 1000)).toBe("1h 21m elapsed");
+		expect(formatElapsed((98 * 86400 + 3 * 3600) * 1000)).toBe("98d 3h elapsed");
+		expect(formatElapsed(24 * 3600 * 1000)).toBe("1d 0h elapsed");
 	});
 
 	test("formatRelative renders +m:ss", () => {

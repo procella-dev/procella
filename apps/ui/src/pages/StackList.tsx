@@ -82,7 +82,14 @@ const StackTable = memo(function StackTable({ items }: { items: StackItem[] }) {
 	return (
 		<div className="bg-slate-brand/50 border border-slate-brand rounded-xl overflow-hidden">
 			{items.map((stack, index) => {
-				const status: UpdateStatus = stack.activeUpdate ? "updating" : "succeeded";
+				const status: UpdateStatus = stack.activeUpdate
+					? "updating"
+					: stack.version === 0
+						? "not-started"
+						: "succeeded";
+				const description = stack.tags["pulumi:description"] ?? undefined;
+				const operation =
+					stack.activeUpdate && stack.currentOperation ? stack.currentOperation : undefined;
 				return (
 					<StackCard
 						key={`${stack.orgName}/${stack.projectName}/${stack.stackName}`}
@@ -91,6 +98,9 @@ const StackTable = memo(function StackTable({ items }: { items: StackItem[] }) {
 						stackName={stack.stackName}
 						href={`/stacks/${stack.orgName}/${stack.projectName}/${stack.stackName}`}
 						lastUpdateStatus={status}
+						version={stack.version}
+						description={description}
+						operation={operation}
 						onHover={() => handleMouseEnter(stack)}
 						isFirst={index === 0}
 						isLast={index === items.length - 1}

@@ -1,13 +1,13 @@
 import { getCurrentTenant, getJwtRoles, useDescope, useSession, useUser } from "@descope/react-sdk";
 import { Suspense, useEffect, useRef, useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { useAuthConfig } from "../hooks/useAuthConfig";
 import { CommandBar, openCommandBar } from "./CommandBar";
 import { PageSkeleton } from "./PageSkeleton";
 import { ProcellaLogo } from "./ProcellaLogo";
 
 /** Descope-only nav items — only rendered inside AuthProvider. */
-function DescopeNav() {
+function DescopeNav({ onNav }: { onNav?: () => void }) {
 	const { sessionToken } = useSession();
 	const isAdmin = (() => {
 		if (!sessionToken) return false;
@@ -18,11 +18,11 @@ function DescopeNav() {
 
 	return (
 		<>
-			<NavLink to="/tokens" className={navLinkClass}>
+			<NavLink to="/tokens" className={navLinkClass} onClick={onNav}>
 				Tokens
 			</NavLink>
 			{isAdmin && (
-				<NavLink to="/settings" className={navLinkClass}>
+				<NavLink to="/settings" className={navLinkClass} onClick={onNav}>
 					Settings
 				</NavLink>
 			)}
@@ -40,6 +40,31 @@ function navLinkClass({ isActive }: { isActive: boolean }) {
 
 export function Layout() {
 	const { config } = useAuthConfig();
+	const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+	const mobileMenuRef = useRef<HTMLDivElement>(null);
+
+	useEffect(() => {
+		function handleClickOutside(e: MouseEvent) {
+			if (mobileMenuRef.current && !mobileMenuRef.current.contains(e.target as Node)) {
+				setMobileMenuOpen(false);
+			}
+		}
+		function handleKeyDown(e: KeyboardEvent) {
+			if (e.key === "Escape") setMobileMenuOpen(false);
+		}
+		document.addEventListener("mousedown", handleClickOutside);
+		document.addEventListener("keydown", handleKeyDown);
+		return () => {
+			document.removeEventListener("mousedown", handleClickOutside);
+			document.removeEventListener("keydown", handleKeyDown);
+		};
+	}, []);
+
+	const location = useLocation();
+	// biome-ignore lint/correctness/useExhaustiveDependencies: location.pathname is the trigger, not used inside the callback
+	useEffect(() => {
+		setMobileMenuOpen(false);
+	}, [location.pathname]);
 
 	return (
 		<div className="min-h-screen flex flex-col bg-deep-sky">
@@ -66,6 +91,59 @@ export function Layout() {
 						</nav>
 					</div>
 					<div className="flex items-center gap-3">
+						{/* Mobile navigation */}
+						<div className="relative sm:hidden" ref={mobileMenuRef}>
+							<button
+								type="button"
+								aria-label={mobileMenuOpen ? "Close navigation" : "Open navigation"}
+								aria-expanded={mobileMenuOpen}
+								onClick={() => setMobileMenuOpen((o) => !o)}
+								className="flex items-center justify-center w-8 h-8 rounded-md text-cloud hover:text-mist transition-colors"
+							>
+								<svg
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									strokeWidth="2"
+									className="w-5 h-5"
+									aria-hidden="true"
+								>
+									<path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+								</svg>
+							</button>
+							{mobileMenuOpen && (
+								<nav
+									aria-label="Mobile navigation"
+									className="fixed inset-x-4 top-16 rounded-lg bg-slate-brand border border-cloud/30 shadow-xl z-50 flex flex-col gap-0.5 p-1"
+								>
+									<NavLink
+										to="/home"
+										end
+										className={navLinkClass}
+										onClick={() => setMobileMenuOpen(false)}
+									>
+										Stacks
+									</NavLink>
+									{config?.mode === "descope" && (
+										<DescopeNav onNav={() => setMobileMenuOpen(false)} />
+									)}
+									<NavLink
+										to="/webhooks"
+										className={navLinkClass}
+										onClick={() => setMobileMenuOpen(false)}
+									>
+										Webhooks
+									</NavLink>
+									<NavLink
+										to="/esc"
+										className={navLinkClass}
+										onClick={() => setMobileMenuOpen(false)}
+									>
+										Environments
+									</NavLink>
+								</nav>
+							)}
+						</div>
 						<button
 							type="button"
 							onClick={openCommandBar}

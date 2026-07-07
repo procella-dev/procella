@@ -5,12 +5,6 @@ import { trpc } from "../trpc";
 
 const OPEN_COMMAND_BAR_EVENT = "open-command-bar";
 
-interface StackItem {
-	orgName: string;
-	projectName: string;
-	stackName: string;
-}
-
 export function CommandBar() {
 	const [open, setOpen] = useState(false);
 	const navigate = useNavigate();
@@ -44,7 +38,7 @@ export function CommandBar() {
 
 	if (!open) return null;
 
-	const stackItems = (stacks ?? []) as StackItem[];
+	const stackItems = stacks?.stacks ?? [];
 
 	return (
 		<div className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh]">
@@ -76,7 +70,6 @@ export function CommandBar() {
 									setOpen(false);
 								}}
 								label="All Stacks"
-								shortcut="G S"
 							/>
 							<CommandItem
 								onSelect={() => {
@@ -84,7 +77,6 @@ export function CommandBar() {
 									setOpen(false);
 								}}
 								label="API Tokens"
-								shortcut="G T"
 							/>
 							<CommandItem
 								onSelect={() => {
@@ -92,7 +84,20 @@ export function CommandBar() {
 									setOpen(false);
 								}}
 								label="Settings"
-								shortcut="G ,"
+							/>
+							<CommandItem
+								onSelect={() => {
+									navigate("/webhooks");
+									setOpen(false);
+								}}
+								label="Webhooks"
+							/>
+							<CommandItem
+								onSelect={() => {
+									navigate("/esc");
+									setOpen(false);
+								}}
+								label="Environments"
 							/>
 						</Command.Group>
 
