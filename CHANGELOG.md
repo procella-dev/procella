@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.3.0](https://github.com/procella-dev/procella/compare/procella-v0.2.0...procella-v0.3.0) (2026-07-07)
+
+
+### Features
+
+* **migrate:** add @procella/migrate CLI tool, migration docs, and release pipeline ([#123](https://github.com/procella-dev/procella/issues/123)) ([d5e0f7c](https://github.com/procella-dev/procella/commit/d5e0f7c50f274894f1738f2a4c1d0dde5825ed4a))
+
+
+### Bug Fixes
+
+* **auth:** use Descope HttpOnly cookie auth ([#199](https://github.com/procella-dev/procella/issues/199)) ([4dd3179](https://github.com/procella-dev/procella/commit/4dd31792321d67fd737435f373c4c8f4ab2a3260))
+* **ci:** isolate release jobs by component ([#188](https://github.com/procella-dev/procella/issues/188)) ([b4873a8](https://github.com/procella-dev/procella/commit/b4873a8e26c5e4320edcffcf5521c126faf58215))
+* **ci:** remove invalid release-please lockfile path ([#181](https://github.com/procella-dev/procella/issues/181)) ([15e25c2](https://github.com/procella-dev/procella/commit/15e25c2f2c00afa7b18ddbd8ce09b1f863047ecc))
+* **ci:** split release-please component PRs ([#185](https://github.com/procella-dev/procella/issues/185)) ([31d45da](https://github.com/procella-dev/procella/commit/31d45dadd4b54baccae1a99123681dbc36b8152e))
+* **deps:** update aws-sdk-go-v2 monorepo ([#193](https://github.com/procella-dev/procella/issues/193)) ([1dac751](https://github.com/procella-dev/procella/commit/1dac751b93146fa3873009224ced6c1b29dc145c))
+* **deps:** update dependency @opentelemetry/otlp-transformer to ^0.220.0 ([#196](https://github.com/procella-dev/procella/issues/196)) ([adac743](https://github.com/procella-dev/procella/commit/adac743d8fe7f3e6bde74cc4917e4af30ff59b5a))
+* **deps:** update module github.com/pulumi/pulumi/sdk/v3 to v3.250.0 ([#197](https://github.com/procella-dev/procella/issues/197)) ([d378b48](https://github.com/procella-dev/procella/commit/d378b4817cffdb68713923ecbf6d5e4e9b435e6a))
+* **infra:** wire GitHub app secrets into SST ([#184](https://github.com/procella-dev/procella/issues/184)) ([6506585](https://github.com/procella-dev/procella/commit/65065855ec03176f36d2da6e903fa8969760766a))
+* **ui:** dashboard polish — command bar search, mobile nav, honest stack rows, duration rollup ([#195](https://github.com/procella-dev/procella/issues/195)) ([5f3ef0b](https://github.com/procella-dev/procella/commit/5f3ef0bbf923130870ce27d1afc85c6763df7b43))
+
 ## [0.2.0](https://github.com/procella-dev/procella/compare/procella-v0.1.0...procella-v0.2.0) (2026-06-29)
 
 
