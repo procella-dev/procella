@@ -42,7 +42,14 @@ export type AuthConfig =
 			orgLogin: string;
 			users?: readonly DevAuthUser[];
 	  }
-	| { mode: "descope"; projectId: string; managementKey?: string; issuer?: string };
+	| {
+			mode: "descope";
+			projectId: string;
+			managementKey?: string;
+			issuer?: string;
+			/** Custom Descope auth domain (e.g. https://auth.procella.cloud) — accepted as an additional JWT issuer. */
+			authBaseUrl?: string;
+	  };
 
 // ============================================================================
 // Dev Auth Service
@@ -131,6 +138,8 @@ export interface DescopeAuthConfig {
 	projectId: string;
 	managementKey?: string;
 	issuer?: string;
+	/** Custom Descope auth domain — JWTs issued through it carry it as `iss`. */
+	authBaseUrl?: string;
 }
 
 type DescopeClient = ReturnType<typeof DescopeSdk>;
@@ -152,6 +161,8 @@ export class DescopeAuthService implements AuthService {
 	private readonly MAX_CACHE_TTL_S = 300;
 	private readonly projectId: string;
 	private readonly issuer: string;
+	/** Accepted `iss` values — the default api.descope.com issuer plus the custom auth domain (if any). */
+	private readonly issuers: string[];
 	private readonly jwks: ReturnType<typeof createRemoteJWKSet>;
 	private sweepTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -159,6 +170,16 @@ export class DescopeAuthService implements AuthService {
 		this.sdk = options.sdk;
 		this.projectId = options.config.projectId;
 		this.issuer = options.config.issuer ?? buildDescopeIssuer(options.config.projectId);
+		// Descope session cookies can carry `iss = <projectId>`; Bearer JWTs may use
+		// the default URL issuer or, when issued through the custom auth domain,
+		// `iss = https://<domain>/<projectId>`. Keys are the same project keys, so
+		// the JWKS URL stays on the default issuer.
+		const customIssuer = options.config.authBaseUrl
+			? `${options.config.authBaseUrl.replace(/\/$/, "")}/${options.config.projectId}`
+			: undefined;
+		this.issuers = customIssuer
+			? [this.issuer, this.projectId, customIssuer]
+			: [this.issuer, this.projectId];
 		this.jwks = createRemoteJWKSet(
 			new URL(".well-known/jwks.json", this.issuer.endsWith("/") ? this.issuer : `${this.issuer}/`),
 		);
@@ -170,6 +191,13 @@ export class DescopeAuthService implements AuthService {
 		return withSpan("procella.auth", "auth.authenticate", { "auth.mode": "descope" }, async () => {
 			const start = performance.now();
 			try {
+				// Cookie-mode dashboards: Descope stores the session JWT in an HttpOnly
+				// `DS` cookie on our apex domain, so the browser can't send a Bearer
+				// header. Fall back to the cookie when no Authorization header exists.
+				if (!request.headers.get("Authorization")) {
+					return await this.authenticateSessionCookie(request);
+				}
+
 				const { scheme, token } = extractToken(request);
 
 				// Block raw JWTs on the Pulumi CLI path — CLI should use access keys.
@@ -182,12 +210,7 @@ export class DescopeAuthService implements AuthService {
 
 				// JWT tokens (Bearer from UI) — validate directly, no caching needed.
 				if (token.startsWith("eyJ")) {
-					const { payload } = await jwtVerify(token, this.jwks, {
-						algorithms: ["RS256"],
-						issuer: this.issuer,
-						audience: this.projectId,
-					});
-					return this.extractCaller(payload as Record<string, unknown>);
+					return await this.verifySessionJwt(token);
 				}
 
 				// Access key tokens — cache the exchanged JWT.
@@ -199,6 +222,40 @@ export class DescopeAuthService implements AuthService {
 				authAuthenticateDuration().record(performance.now() - start, { "auth.mode": "descope" });
 			}
 		});
+	}
+
+	/** Validate a Descope session JWT and map it to a Caller. */
+	private async verifySessionJwt(token: string): Promise<Caller> {
+		const { payload } = await jwtVerify(token, this.jwks, {
+			algorithms: ["RS256"],
+			issuer: this.issuers,
+		});
+		if (payload.aud && !audienceIncludes(payload.aud, this.projectId)) {
+			throw new UnauthorizedError("JWT audience does not match project");
+		}
+		return this.extractCaller(payload as Record<string, unknown>);
+	}
+
+	/**
+	 * Authenticate from Descope's session cookie (HttpOnly, set on the apex domain
+	 * by the custom auth domain, sent implicitly on same-origin requests).
+	 * Descope may name the session cookie `DS` or a dynamic `DFN-*` value, and
+	 * multiple auth cookies can coexist when environments share a parent domain, so
+	 * every JWT-shaped candidate is verified until one matches this project.
+	 */
+	private async authenticateSessionCookie(request: Request): Promise<Caller> {
+		const tokens = extractSessionCookieTokens(request);
+		if (tokens.length === 0) {
+			throw new UnauthorizedError("Missing Authorization header");
+		}
+		for (const token of tokens) {
+			try {
+				return await this.verifySessionJwt(token);
+			} catch {
+				// Try the next candidate — may belong to a sibling environment.
+			}
+		}
+		throw new UnauthorizedError("Invalid session cookie");
 	}
 
 	async authenticateUpdateToken(token: string): Promise<{ updateId: string; stackId: string }> {
@@ -445,6 +502,7 @@ export function createAuthService(config: AuthConfig): AuthService {
 					projectId: config.projectId,
 					managementKey: config.managementKey,
 					issuer: config.issuer,
+					authBaseUrl: config.authBaseUrl,
 				},
 			});
 		}
@@ -508,6 +566,39 @@ function extractToken(request: Request): { scheme: "token" | "bearer"; token: st
 	}
 
 	throw new UnauthorizedError("Invalid Authorization header format");
+}
+
+/**
+ * Extract all JWT-shaped cookie values from a request's Cookie header.
+ *
+ * Descope's docs call out the default `DS` name, but custom-domain cookie mode
+ * can also emit dynamic names like `DFN-...`. Cookie names are not security
+ * boundaries here — issuer/audience/signature verification is. Header auth still
+ * takes precedence; this is only the no-Authorization cookie fallback.
+ */
+export function extractSessionCookieTokens(request: Request): string[] {
+	const header = request.headers.get("Cookie");
+	if (!header) return [];
+	const tokens: string[] = [];
+	for (const pair of header.split(";")) {
+		const eq = pair.indexOf("=");
+		if (eq === -1) continue;
+		const value = decodeCookieValue(pair.slice(eq + 1).trim());
+		if (value.startsWith("eyJ")) tokens.push(value);
+	}
+	return tokens;
+}
+
+function decodeCookieValue(value: string): string {
+	try {
+		return decodeURIComponent(value);
+	} catch {
+		return value;
+	}
+}
+
+function audienceIncludes(audience: string | string[], projectId: string): boolean {
+	return Array.isArray(audience) ? audience.includes(projectId) : audience === projectId;
 }
 
 /** Parse update token format: "update:<updateId>:<stackId>:<secret>" */

@@ -19,7 +19,9 @@ import {
 import { bucket } from "./storage";
 
 const stage = $app.stage;
-const descopeProjectId = !$dev ? (await import("./descope")).projectId : undefined;
+const descopeOutputs = !$dev ? await import("./descope") : undefined;
+const descopeProjectId = descopeOutputs?.projectId;
+const descopeAuthBaseUrl = descopeOutputs?.authBaseUrl;
 
 export const webApi = new sst.aws.Function("ProcellaWebApi", {
 	runtime: "provided.al2023",
@@ -49,6 +51,7 @@ export const webApi = new sst.aws.Function("ProcellaWebApi", {
 		...(!$dev
 			? {
 					PROCELLA_DESCOPE_PROJECT_ID: descopeProjectId,
+					PROCELLA_DESCOPE_AUTH_BASE_URL: descopeAuthBaseUrl,
 					PROCELLA_DESCOPE_MANAGEMENT_KEY: descopeManagementKey.value,
 					PROCELLA_GITHUB_APP_ID: githubAppId.value,
 					PROCELLA_GITHUB_APP_PRIVATE_KEY: githubAppPrivateKey.value,

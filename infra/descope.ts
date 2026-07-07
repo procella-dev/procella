@@ -6,6 +6,30 @@ import { descopeManagementKey } from "./secrets";
 const signUpOrInFlow = JSON.stringify(signUpOrInFlowJson);
 const stylesData = JSON.stringify(stylesJson);
 
+const isProd = $app.stage === "production";
+const rootDomain = isProd ? "procella.cloud" : `${$app.stage}.procella.cloud`;
+
+// ── Custom auth domain ──────────────────────────────────────────────────────
+// Descope serves auth from auth.<rootDomain> so it can set the session/refresh
+// cookies as HttpOnly first-party cookies scoped to <rootDomain>. The browser
+// then sends them implicitly to app.<rootDomain> (same registrable domain) and
+// the server validates the session JWT straight from the DS cookie.
+//
+// This CNAME is more specific than the router's `*.<rootDomain>` CloudFront
+// alias record, so DNS resolves auth.* to Descope, not to our distribution.
+// Descope provisions the TLS certificate automatically once the CNAME is live.
+const authDomain = `auth.${rootDomain}`;
+export const authBaseUrl = `https://${authDomain}`;
+
+const zone = aws.route53.getZoneOutput({ name: "procella.cloud" });
+new aws.route53.Record("DescopeAuthCname", {
+	zoneId: zone.zoneId,
+	name: authDomain,
+	type: "CNAME",
+	ttl: 300,
+	records: ["cname.descope.com"],
+});
+
 // ── Provider ────────────────────────────────────────────────────────────────
 const provider = new descope.Provider("DescopeProvider", {
 	managementKey: descopeManagementKey.value,
@@ -40,6 +64,22 @@ const project = new descope.Project(
 		projectSettings: {
 			userJwtTemplate: "Procella User",
 			accessKeyJwtTemplate: "Procella Access Key",
+			// Tokens are delivered as HttpOnly cookies (never exposed to JS) via the
+			// custom auth domain. Cookie domain is the stage apex so app.<rootDomain>
+			// receives them implicitly on same-origin requests; the server falls back
+			// to the DS cookie when no Authorization header is present (packages/auth).
+			// `lax` (not `strict`) so cookies survive the OAuth redirect back from the IdP.
+			// The Descope provider requires appUrl with customDomain, and customDomain
+			// must be a subdomain of the appUrl domain — use the stage apex (which
+			// also serves the UI, see infra/site.ts) so auth.<rootDomain> qualifies.
+			appUrl: `https://${rootDomain}`,
+			customDomain: authDomain,
+			sessionTokenResponseMethod: "cookies",
+			refreshTokenResponseMethod: "cookies",
+			sessionTokenCookieDomain: rootDomain,
+			refreshTokenCookieDomain: rootDomain,
+			sessionTokenCookiePolicy: "lax",
+			refreshTokenCookiePolicy: "lax",
 		},
 
 		// ── JWT templates ────────────────────────────────────────────────────

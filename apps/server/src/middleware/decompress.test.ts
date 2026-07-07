@@ -148,6 +148,8 @@ describe("decompress middleware", () => {
 		expect(res.status).toBe(413);
 	});
 
+	// Explicit timeout: gzipping + decompressing 50 MiB takes >5s (the bun test
+	// default) on coverage-instrumented CI runners — observed flaking at ~5.4s.
 	test("accepts 50 MiB decompressed payload with override cap", async () => {
 		const app = createApp(100 * 1024 * 1024);
 		const compressed = gzipSync(Buffer.from(createSizedPayload(50 * 1024 * 1024)));
@@ -162,5 +164,5 @@ describe("decompress middleware", () => {
 		});
 
 		expect(res.status).toBe(200);
-	});
+	}, 30_000);
 });

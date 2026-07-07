@@ -68,6 +68,7 @@ async function bootstrapServices() {
 					mode: "descope" as const,
 					projectId: config.descopeProjectId as string,
 					managementKey: config.descopeManagementKey,
+					authBaseUrl: config.descopeAuthBaseUrl,
 				};
 	const auth = createAuthService(authConfig);
 	if (!config.ticketSigningKey) {

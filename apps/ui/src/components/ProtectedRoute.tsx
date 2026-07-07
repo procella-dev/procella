@@ -21,7 +21,10 @@ export function ProtectedRoute() {
 }
 
 function DescopeGuard({ returnTo }: { returnTo: string }) {
-	const { isAuthenticated, isSessionLoading, sessionToken } = useSession();
+	// Gate on isAuthenticated only — when the Descope project manages tokens in
+	// HttpOnly cookies, sessionToken is never exposed to JS, so it must not be
+	// part of the guard.
+	const { isAuthenticated, isSessionLoading } = useSession();
 
 	if (isSessionLoading) {
 		return (
@@ -33,14 +36,6 @@ function DescopeGuard({ returnTo }: { returnTo: string }) {
 
 	if (!isAuthenticated) {
 		return <Navigate to="/login" state={{ returnTo }} replace />;
-	}
-
-	if (!sessionToken) {
-		return (
-			<div className="min-h-screen bg-deep-sky flex items-center justify-center">
-				<div className="h-8 w-8 animate-spin rounded-full border-2 border-cloud/30 border-t-lightning" />
-			</div>
-		);
 	}
 
 	return <Outlet />;

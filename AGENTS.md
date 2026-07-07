@@ -166,12 +166,13 @@ All state lives in PostgreSQL. No in-memory caches, no local-only state.
 
 ### Auth
 
-- **Descope** is the auth provider in production. Session JWTs are issued as the `DS` httpOnly cookie by the Descope React SDK.
-- **`authenticate(request)`** in `packages/auth/src/index.ts` reads `Authorization: Bearer <jwt>` or `Authorization: token <key>`.
-- **Descope's `DS` cookie lives on `api.descope.com`**, NOT on our domain — browsers will NOT send it to our server. Do not rely on the cookie for our API auth.
-- **`EventSource` cannot set custom headers.** For tRPC subscriptions (SSE), use `httpSubscriptionLink` with `connectionParams` — tRPC serializes these as URL query params and the server reads them in `createContext` via `opts.info.connectionParams`. See `apps/server/src/routes/index.ts`.
-- **NEVER invent a separate auth mechanism** (tickets, Postgres tables, custom query-token middleware) — use tRPC `connectionParams` for subscription auth and the standard `Authorization` header for all other requests.
-- **`sessionTokenViaCookie` mode**: If the Descope project is configured to store sessions in cookies (`sessionTokenViaCookie: true` on `AuthProvider`), the `DS` cookie IS set on our domain and browsers send it automatically. BUT in that mode `getSessionToken()` returns `null` — the JWT is not accessible to JS. We currently do NOT use this mode (`AuthProvider` has no `sessionTokenViaCookie`), so `getSessionToken()` works and tRPC `connectionParams` is the correct subscription auth pattern.
+- **Descope** is the auth provider in production. Tokens are managed **in HttpOnly cookies** (project settings: `sessionTokenResponseMethod`/`refreshTokenResponseMethod` = `cookies` in `infra/descope.ts`) served through a **custom auth domain** (`auth.<stage-domain>`, CNAME to `cname.descope.com`).
+- **Cookie domain is the stage apex** (`procella.cloud` in prod, `pr-N.procella.cloud` in previews), so Descope session cookies are first-party cookies sent **implicitly** on same-origin requests to `app.<stage-domain>`. The JWT is never accessible to JS.
+- **`authenticate(request)`** in `packages/auth/src/index.ts` reads `Authorization: Bearer <jwt>` / `Authorization: token <key>`, and **falls back to any JWT-shaped Descope session cookie** when no Authorization header is present. Descope may use `DS` or dynamic names like `DFN-*`; overlapping env-domain cookies are all tried until one verifies against this project.
+- **JWT `iss` variants**: Descope session cookies may carry bare `iss = <projectId>`; Bearer JWTs may use the default URL issuer or `iss = https://auth.<domain>/<projectId>`. `DescopeAuthService` accepts all three (`authBaseUrl` in config → `PROCELLA_DESCOPE_AUTH_BASE_URL`). JWKS stays on the default issuer host.
+- **UI must NOT depend on `getSessionToken()`/`sessionToken`** — it is empty in cookie mode. Gate routes on `isAuthenticated`; derive tenant/roles from `useSession().claims` via `apps/ui/src/auth/claims.ts`. `getAuthHeaders()` returns `{}` in cookie mode and the cookie rides along on same-origin requests.
+- **`EventSource` cannot set custom headers** — irrelevant for cookies (sent automatically on same-origin SSE). The ticket-based subscription auth still works as a header-mode fallback.
+- **NEVER invent a separate auth mechanism** — the standard `Authorization` header (CLI, access keys, body-mode projects) plus the DS-cookie fallback cover all cases.
 - **Dev mode** uses `Authorization: token <PROCELLA_DEV_AUTH_TOKEN>`. The cookie fallback is Descope-only.
 - **CLI** uses `Authorization: token <access-key>` (long-lived Descope access key, NOT a session JWT).
 

@@ -111,6 +111,18 @@ async function trpcMutation(procedure: string, input: unknown, token: string): P
 	return json[0]?.result?.data?.json;
 }
 
+async function trpcCookieQuery(procedure: string, cookieHeader: string): Promise<unknown> {
+	const url = `${APP_URL}/trpc/${procedure}?batch=1&input=${encodeURIComponent(
+		JSON.stringify({ 0: { json: null, meta: { values: ["undefined"], v: 1 } } }),
+	)}`;
+	const res = await fetch(url, { headers: { Cookie: cookieHeader } });
+	if (!res.ok) {
+		throw new Error(`cookie tRPC ${procedure} failed (${res.status}): ${await res.text()}`);
+	}
+	const json = (await res.json()) as { result?: { data?: { json?: unknown } } }[];
+	return json[0]?.result?.data?.json;
+}
+
 // ============================================================================
 // Tests
 // ============================================================================
@@ -274,6 +286,15 @@ describe_descope("Descope auth (deployed preview)", () => {
 			},
 		});
 		expect(res.status).toBe(401);
+	});
+
+	test("dashboard tRPC accepts a Descope session JWT in a cookie", async () => {
+		const exchange = await sdk.accessKey.exchange(accessKey);
+		expect(exchange.ok).toBe(true);
+		expect(exchange.data?.sessionJwt).toStartWith("eyJ");
+
+		const result = await trpcCookieQuery("stacks.list", `DS=${exchange.data?.sessionJwt}`);
+		expect(result).toHaveProperty("stacks");
 	});
 
 	// --- Pulumi CLI ---

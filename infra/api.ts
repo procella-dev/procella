@@ -18,7 +18,9 @@ import { bucket } from "./storage";
 const isProd = $app.stage === "production";
 const stage = $app.stage;
 
-const descopeProjectId = !$dev ? (await import("./descope")).projectId : undefined;
+const descopeOutputs = !$dev ? await import("./descope") : undefined;
+const descopeProjectId = descopeOutputs?.projectId;
+const descopeAuthBaseUrl = descopeOutputs?.authBaseUrl;
 
 const appOrigin = isProd ? "https://app.procella.cloud" : `https://app.${stage}.procella.cloud`;
 const rootOrigin = isProd ? "https://procella.cloud" : `https://${stage}.procella.cloud`;
@@ -67,6 +69,7 @@ export const api = new sst.aws.Function("ProcellaCliApi", {
 		...(!$dev
 			? {
 					PROCELLA_DESCOPE_PROJECT_ID: descopeProjectId,
+					PROCELLA_DESCOPE_AUTH_BASE_URL: descopeAuthBaseUrl,
 					PROCELLA_DESCOPE_MANAGEMENT_KEY: descopeManagementKey.value,
 					PROCELLA_GITHUB_APP_ID: githubAppId.value,
 					PROCELLA_GITHUB_APP_PRIVATE_KEY: githubAppPrivateKey.value,

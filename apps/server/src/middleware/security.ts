@@ -7,7 +7,13 @@ const ONE_MINUTE_MS = 60_000;
 
 export const INTERNAL_CLIENT_IP_HEADER = "x-procella-client-ip";
 
-export function createSecurityHeadersMiddleware(): MiddlewareHandler<Env> {
+/**
+ * @param extraOrigins Additional origins allowed for connect/frame — e.g. the
+ * custom Descope auth domain, which `*.descope.com` does not cover.
+ */
+export function createSecurityHeadersMiddleware(
+	extraOrigins: string[] = [],
+): MiddlewareHandler<Env> {
 	return secureHeaders({
 		contentSecurityPolicy: {
 			defaultSrc: ["'self'"],
@@ -15,8 +21,8 @@ export function createSecurityHeadersMiddleware(): MiddlewareHandler<Env> {
 			styleSrc: ["'self'", "'unsafe-inline'"],
 			imgSrc: ["'self'", "data:", "https:"],
 			fontSrc: ["'self'", "data:", "https:"],
-			connectSrc: ["'self'", "https://*.descope.com"],
-			frameSrc: ["'self'", "https://*.descope.com"],
+			connectSrc: ["'self'", "https://*.descope.com", ...extraOrigins],
+			frameSrc: ["'self'", "https://*.descope.com", ...extraOrigins],
 		},
 		xFrameOptions: "DENY",
 		referrerPolicy: "no-referrer",

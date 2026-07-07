@@ -1,11 +1,12 @@
-import { AccessKeyManagement, getCurrentTenant, UserProfile, useSession } from "@descope/react-sdk";
+import { AccessKeyManagement, UserProfile, useSession } from "@descope/react-sdk";
 import { useState } from "react";
+import { tenantFromClaims } from "../auth/claims";
 
 type TokensTab = "profile" | "tokens";
 
 export function Tokens() {
-	const { sessionToken } = useSession();
-	const tenantId = sessionToken ? getCurrentTenant(sessionToken) : "";
+	const { claims } = useSession();
+	const tenantId = tenantFromClaims(claims);
 	const [tab, setTab] = useState<TokensTab>("tokens");
 
 	if (!tenantId) {

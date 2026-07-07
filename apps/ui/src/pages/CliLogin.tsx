@@ -57,12 +57,14 @@ function DescopeCliLogin({
 		didCreate.current = true;
 		setStatus("creating");
 
+		// In cookie mode getSessionToken() is empty — the HttpOnly DS cookie rides
+		// along on this same-origin request and the server validates it directly.
 		const sessionToken = sdk.getSessionToken();
 		fetch(`${apiBase}/api/auth/cli-token`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
-				Authorization: `Bearer ${sessionToken}`,
+				...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
 			},
 			body: JSON.stringify({
 				name: description ? `procella-cli: ${description}` : undefined,

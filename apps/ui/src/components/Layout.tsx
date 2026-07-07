@@ -1,6 +1,7 @@
-import { getCurrentTenant, getJwtRoles, useDescope, useSession, useUser } from "@descope/react-sdk";
+import { useDescope, useSession, useUser } from "@descope/react-sdk";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
+import { rolesFromClaims, tenantFromClaims } from "../auth/claims";
 import { useAuthConfig } from "../hooks/useAuthConfig";
 import { CommandBar, openCommandBar } from "./CommandBar";
 import { PageSkeleton } from "./PageSkeleton";
@@ -8,13 +9,11 @@ import { ProcellaLogo } from "./ProcellaLogo";
 
 /** Descope-only nav items — only rendered inside AuthProvider. */
 function DescopeNav({ onNav }: { onNav?: () => void }) {
-	const { sessionToken } = useSession();
-	const isAdmin = (() => {
-		if (!sessionToken) return false;
-		const tenantId = getCurrentTenant(sessionToken);
-		if (!tenantId) return false;
-		return getJwtRoles(sessionToken, tenantId).includes("admin");
-	})();
+	// Derive RBAC from session claims — works even when the JWT itself lives in
+	// an HttpOnly cookie and is invisible to JS.
+	const { claims } = useSession();
+	const tenantId = tenantFromClaims(claims);
+	const isAdmin = !!tenantId && rolesFromClaims(claims, tenantId).includes("admin");
 
 	return (
 		<>

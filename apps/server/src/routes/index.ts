@@ -78,8 +78,10 @@ export function createApp(deps: {
 	// Global error handler (Hono onError hook)
 	app.onError(errorHandler());
 
-	// Global middleware
-	app.use("*", createSecurityHeadersMiddleware());
+	// Global middleware — the custom Descope auth domain must be allowed for
+	// connect/frame so the login flow can reach it.
+	const authOrigin = deps.authConfig.mode === "descope" ? deps.authConfig.authBaseUrl : undefined;
+	app.use("*", createSecurityHeadersMiddleware(authOrigin ? [authOrigin] : []));
 	app.use("*", tracingMiddleware());
 	app.use("*", requestLogger());
 	if ((deps.corsOrigins ?? []).length > 0) {
@@ -208,7 +210,11 @@ export function createApp(deps: {
 	// Auth config discovery — UI fetches this at runtime to determine auth mode.
 	app.get("/api/auth/config", (c) => {
 		if (deps.authConfig.mode === "descope") {
-			return c.json({ mode: "descope" as const, projectId: deps.authConfig.projectId });
+			return c.json({
+				mode: "descope" as const,
+				projectId: deps.authConfig.projectId,
+				...(deps.authConfig.authBaseUrl ? { authBaseUrl: deps.authConfig.authBaseUrl } : {}),
+			});
 		}
 		return c.json({ mode: "dev" as const });
 	});

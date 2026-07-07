@@ -314,6 +314,22 @@ describe("@procella/server routes", () => {
 			const body = await res.json();
 			expect(body).toEqual({ mode: "descope", projectId: "P3test123" });
 		});
+
+		test("GET /api/auth/config includes authBaseUrl when a custom auth domain is configured", async () => {
+			const app = makeApp({
+				mode: "descope",
+				projectId: "P3test123",
+				authBaseUrl: "https://auth.procella.cloud",
+			});
+			const res = await app.request("/api/auth/config");
+			expect(res.status).toBe(200);
+			const body = await res.json();
+			expect(body).toEqual({
+				mode: "descope",
+				projectId: "P3test123",
+				authBaseUrl: "https://auth.procella.cloud",
+			});
+		});
 	});
 
 	// ========================================================================

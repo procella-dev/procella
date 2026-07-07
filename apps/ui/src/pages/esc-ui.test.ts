@@ -4,7 +4,10 @@ import { cleanup, fireEvent, render, renderHook } from "@testing-library/react";
 import { JSDOM } from "jsdom";
 import { createElement } from "react";
 import { createMemoryRouter, MemoryRouter, RouterProvider } from "react-router";
-import { DESCOPE_SESSION_TOKEN_STORAGE_KEY } from "../auth/sessionToken";
+import {
+	DESCOPE_SESSION_CLAIMS_STORAGE_KEY,
+	DESCOPE_SESSION_TOKEN_STORAGE_KEY,
+} from "../auth/sessionToken";
 
 const configPath = resolve(import.meta.dir, "../config.ts");
 const trpcPath = resolve(import.meta.dir, "../trpc.ts");
@@ -153,6 +156,7 @@ function resetQueryState() {
 	getAuthHeadersMock.mockImplementation(() => ({ Authorization: "token devtoken123" }));
 	getCurrentTenantMock.mockClear();
 	localStorage.removeItem(DESCOPE_SESSION_TOKEN_STORAGE_KEY);
+	localStorage.removeItem(DESCOPE_SESSION_CLAIMS_STORAGE_KEY);
 }
 
 function renderDetailPage() {
@@ -195,7 +199,6 @@ describe("ESC UI coverage", () => {
 		const { result } = renderHook(() => useOrg());
 
 		expect(result.current).toEqual({ org: "dev-org", isLoading: false });
-		expect(getCurrentTenantMock).not.toHaveBeenCalled();
 	});
 
 	test("useOrg prefers the first stack org in dev mode when one exists", () => {
@@ -206,14 +209,18 @@ describe("ESC UI coverage", () => {
 		expect(result.current).toEqual({ org: "acme-org", isLoading: false });
 	});
 
-	test("useOrg derives the tenant from the Descope session token in descope mode", () => {
+	test("useOrg derives the tenant from the Descope session claims in descope mode", () => {
 		authConfigState = { config: { mode: "descope", projectId: "proj_123" } };
-		localStorage.setItem(DESCOPE_SESSION_TOKEN_STORAGE_KEY, "jwt-token");
+		// Claims are mirrored to localStorage by the AuthProvider bridge — they stay
+		// available even when the session JWT itself lives in an HttpOnly cookie.
+		localStorage.setItem(
+			DESCOPE_SESSION_CLAIMS_STORAGE_KEY,
+			JSON.stringify({ dct: "tenant-from-claims" }),
+		);
 
 		const { result } = renderHook(() => useOrg());
 
-		expect(result.current).toEqual({ org: "tenant-for-jwt-token", isLoading: false });
-		expect(getCurrentTenantMock).toHaveBeenCalledWith("jwt-token");
+		expect(result.current).toEqual({ org: "tenant-from-claims", isLoading: false });
 	});
 
 	test("EscEnvironmentDetail renders in dev mode without the auth provider crash", async () => {
