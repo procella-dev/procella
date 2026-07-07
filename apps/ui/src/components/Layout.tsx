@@ -1,6 +1,6 @@
 import { getCurrentTenant, getJwtRoles, useDescope, useSession, useUser } from "@descope/react-sdk";
 import { Suspense, useEffect, useRef, useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { useAuthConfig } from "../hooks/useAuthConfig";
 import { CommandBar, openCommandBar } from "./CommandBar";
 import { PageSkeleton } from "./PageSkeleton";
@@ -49,9 +49,22 @@ export function Layout() {
 				setMobileMenuOpen(false);
 			}
 		}
+		function handleKeyDown(e: KeyboardEvent) {
+			if (e.key === "Escape") setMobileMenuOpen(false);
+		}
 		document.addEventListener("mousedown", handleClickOutside);
-		return () => document.removeEventListener("mousedown", handleClickOutside);
+		document.addEventListener("keydown", handleKeyDown);
+		return () => {
+			document.removeEventListener("mousedown", handleClickOutside);
+			document.removeEventListener("keydown", handleKeyDown);
+		};
 	}, []);
+
+	const location = useLocation();
+	// biome-ignore lint/correctness/useExhaustiveDependencies: location.pathname is the trigger, not used inside the callback
+	useEffect(() => {
+		setMobileMenuOpen(false);
+	}, [location.pathname]);
 
 	return (
 		<div className="min-h-screen flex flex-col bg-deep-sky">
@@ -82,7 +95,8 @@ export function Layout() {
 						<div className="relative sm:hidden" ref={mobileMenuRef}>
 							<button
 								type="button"
-								aria-label="Open navigation"
+								aria-label={mobileMenuOpen ? "Close navigation" : "Open navigation"}
+								aria-expanded={mobileMenuOpen}
 								onClick={() => setMobileMenuOpen((o) => !o)}
 								className="flex items-center justify-center w-8 h-8 rounded-md text-cloud hover:text-mist transition-colors"
 							>
@@ -98,7 +112,10 @@ export function Layout() {
 								</svg>
 							</button>
 							{mobileMenuOpen && (
-								<div className="fixed inset-x-4 top-16 rounded-lg bg-slate-brand border border-cloud/30 shadow-xl z-50 flex flex-col gap-0.5 p-1">
+								<nav
+									aria-label="Mobile navigation"
+									className="fixed inset-x-4 top-16 rounded-lg bg-slate-brand border border-cloud/30 shadow-xl z-50 flex flex-col gap-0.5 p-1"
+								>
 									<NavLink
 										to="/home"
 										end
@@ -124,7 +141,7 @@ export function Layout() {
 									>
 										Environments
 									</NavLink>
-								</div>
+								</nav>
 							)}
 						</div>
 						<button

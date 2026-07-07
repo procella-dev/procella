@@ -70,7 +70,6 @@ export function CommandBar() {
 									setOpen(false);
 								}}
 								label="All Stacks"
-								shortcut="G S"
 							/>
 							<CommandItem
 								onSelect={() => {
@@ -78,7 +77,6 @@ export function CommandBar() {
 									setOpen(false);
 								}}
 								label="API Tokens"
-								shortcut="G T"
 							/>
 							<CommandItem
 								onSelect={() => {
@@ -86,7 +84,6 @@ export function CommandBar() {
 									setOpen(false);
 								}}
 								label="Settings"
-								shortcut="G ,"
 							/>
 							<CommandItem
 								onSelect={() => {
@@ -94,7 +91,6 @@ export function CommandBar() {
 									setOpen(false);
 								}}
 								label="Webhooks"
-								shortcut="G W"
 							/>
 							<CommandItem
 								onSelect={() => {
@@ -102,7 +98,6 @@ export function CommandBar() {
 									setOpen(false);
 								}}
 								label="Environments"
-								shortcut="G E"
 							/>
 						</Command.Group>
 
