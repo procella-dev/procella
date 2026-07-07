@@ -842,7 +842,7 @@ export interface OperationStatus {
  * ExtensionRef aliases [resource.ExtensionRef]. The canonical type lives in the
  * resource package so resource.State can use it without an import cycle.
  */
-export type ExtensionRef = any /* resource.ExtensionRef */;
+export type ExtensionRef = string;
 export interface Extension {
 	name: string;
 	version: string;

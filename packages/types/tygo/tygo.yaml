@@ -13,6 +13,7 @@ packages:
       "resource.PropertyKey": "string"
       "resource.PropertyPath": "string"
       "resource.HookType": "string"
+      "resource.ExtensionRef": "string"
       "colors.Colorization": "string"
       "config.Map": "Record<string, unknown>"
       "resource.CustomTimeouts": "{ create?: string; update?: string; delete?: string }"
