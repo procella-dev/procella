@@ -498,6 +498,14 @@ describe("@procella/server routes", () => {
 			expect(res.status).toBe(200);
 		});
 
+		test("state export remains compatible without Accept", async () => {
+			const app = makeApp();
+			const res = await app.request("/api/stacks/myorg/myproj/dev/export", {
+				headers: { Authorization: "token valid-token" },
+			});
+			expect(res.status).toBe(200);
+		});
+
 		test("delta checkpoints require the minimum Pulumi API version", async () => {
 			const app = makeApp();
 			const res = await app.request("/api/stacks/myorg/myproj/dev/update/upd-1/checkpointdelta", {

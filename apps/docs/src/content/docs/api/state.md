@@ -5,9 +5,8 @@ description: Export and import stack state endpoints.
 
 State operations allow exporting and importing infrastructure state. These are the API endpoints behind `pulumi stack export` and `pulumi stack import`.
 
-All endpoints require:
-- `Accept: application/vnd.pulumi+8`
-- `Authorization: token <api-token>`
+All endpoints require `Authorization: token <api-token>`. State export and
+import remain compatible with clients that omit the Pulumi `Accept` header.
 
 ## Export Stack
 
