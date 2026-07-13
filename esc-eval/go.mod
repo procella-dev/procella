@@ -10,7 +10,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.43.0
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.70.0
 	github.com/aws/aws-sdk-go-v2/service/sts v1.44.0
-	github.com/pulumi/esc v0.25.0
+	github.com/pulumi/esc v0.26.0
 )
 
 require (
