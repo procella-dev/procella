@@ -49,8 +49,8 @@ The Pulumi CLI API and tRPC dashboard share the same Hono server, database conne
 
 ## Request Flow
 
-1. **Pulumi CLI** sends HTTP requests with `Accept: application/vnd.pulumi+8` and `Authorization: token <key>`
-2. **Middleware chain** processes the request: CORS → PulumiAccept → Auth → RBAC
+1. **Pulumi CLI** sends HTTP requests with `Authorization: token <key>`; version-gated features also send `Accept: application/vnd.pulumi+8` or newer
+2. **Middleware chain** processes the request: CORS → Auth → RBAC, with route-local PulumiAccept checks for version-gated features
 3. **Handler** executes the business logic using injected service interfaces
 4. **Service** interacts with PostgreSQL (metadata) and blob storage (checkpoints)
 5. **Response** returns JSON with appropriate status codes
@@ -135,9 +135,9 @@ Unimplemented service phases use stub implementations that return sensible zero 
 All middleware is composable and applied in the Hono router:
 
 1. `CORS` — cross-origin headers
-2. `PulumiAccept` — enforces `Accept: application/vnd.pulumi+8` on `/api/` routes
-3. `Auth` — validates API token, sets `Caller` in context
-4. `RBAC` — checks role against HTTP method (GET→viewer, POST→member, DELETE→admin)
+2. `Auth` — validates API token, sets `Caller` in context
+3. `RBAC` — checks role against HTTP method (GET→viewer, POST→member, DELETE→admin)
+4. `PulumiAccept` — route-local minimum-version check for delta checkpoints and batch crypto
 
 ### All State in PostgreSQL
 
