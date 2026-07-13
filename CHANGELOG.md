@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1](https://github.com/procella-dev/procella/compare/procella-v0.3.0...procella-v0.3.1) (2026-07-13)
+
+
+### Bug Fixes
+
+* **deps:** update aws-sdk-go-v2 monorepo ([#202](https://github.com/procella-dev/procella/issues/202)) ([57b5fe9](https://github.com/procella-dev/procella/commit/57b5fe907d65f4f428fcbb32b38b7792b95cc8dd))
+* **deps:** update dependency react-router to v8 ([#201](https://github.com/procella-dev/procella/issues/201)) ([440e53f](https://github.com/procella-dev/procella/commit/440e53fadeacdd5776f06b66ced1e9516dd3d4b9))
+
 ## [0.3.0](https://github.com/procella-dev/procella/compare/procella-v0.2.0...procella-v0.3.0) (2026-07-07)
 
 
