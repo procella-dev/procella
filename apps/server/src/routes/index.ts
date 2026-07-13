@@ -258,8 +258,9 @@ export function createApp(deps: {
 	);
 	app.patch(
 		R.patchCheckpointDelta.path,
-		withCheckpointDecompress,
 		withUpdateAuth,
+		withPulumiAccept,
+		withCheckpointDecompress,
 		checkpointH.patchCheckpointDelta,
 	);
 	app.patch(R.patchJournalEntries.path, withUpdateAuth, checkpointH.appendJournalEntries);
@@ -274,7 +275,6 @@ export function createApp(deps: {
 	const api = new Hono<Env>();
 	api.use("*", withApiAuth);
 	api.use("*", withAudit);
-	api.use("*", withPulumiAccept);
 
 	// User
 	api.get("/user", user.getCurrentUser);
@@ -326,11 +326,13 @@ export function createApp(deps: {
 	api.post("/stacks/:org/:project/:stack/decrypt", withSingleCryptoRateLimit, cryptoH.decryptValue);
 	api.post(
 		"/stacks/:org/:project/:stack/batch-encrypt",
+		withPulumiAccept,
 		withBatchCryptoRateLimit,
 		cryptoH.batchEncrypt,
 	);
 	api.post(
 		"/stacks/:org/:project/:stack/batch-decrypt",
+		withPulumiAccept,
 		withBatchCryptoRateLimit,
 		cryptoH.batchDecrypt,
 	);

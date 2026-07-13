@@ -138,6 +138,7 @@ export function createCliApp(deps: CliAppDeps): Hono<Env> {
 	app.patch(
 		R.patchCheckpointDelta.path,
 		withUpdateAuth,
+		withPulumiAccept,
 		withCheckpointDecompress,
 		checkpointH.patchCheckpointDelta,
 	);
@@ -150,7 +151,6 @@ export function createCliApp(deps: CliAppDeps): Hono<Env> {
 	const api = new Hono<Env>();
 	api.use("*", withApiAuth);
 	api.use("*", withAudit);
-	api.use("*", withPulumiAccept);
 
 	// User
 	api.get("/user", user.getCurrentUser);
@@ -202,11 +202,13 @@ export function createCliApp(deps: CliAppDeps): Hono<Env> {
 	api.post("/stacks/:org/:project/:stack/decrypt", withSingleCryptoRateLimit, cryptoH.decryptValue);
 	api.post(
 		"/stacks/:org/:project/:stack/batch-encrypt",
+		withPulumiAccept,
 		withBatchCryptoRateLimit,
 		cryptoH.batchEncrypt,
 	);
 	api.post(
 		"/stacks/:org/:project/:stack/batch-decrypt",
+		withPulumiAccept,
 		withBatchCryptoRateLimit,
 		cryptoH.batchDecrypt,
 	);
