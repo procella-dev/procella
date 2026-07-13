@@ -5,7 +5,9 @@ description: Update lifecycle endpoints — create, start, execute, and complete
 
 The update API implements the Pulumi Service API protocol for managing infrastructure deployments. See [Update Lifecycle](../architecture/update-lifecycle/) for the conceptual overview.
 
-All endpoints require `Accept: application/vnd.pulumi+8`.
+Most update endpoints are compatible with clients that omit the Pulumi
+`Accept` header. The delta checkpoint endpoint below requires
+`Accept: application/vnd.pulumi+8` or newer.
 
 ## Create Update
 
@@ -185,6 +187,8 @@ PATCH /api/stacks/{org}/{project}/{stack}/update/{updateID}/checkpointdelta
 ```
 
 Saves only changed resources. The server applies the delta against the last full checkpoint.
+
+**Required header**: `Accept: application/vnd.pulumi+8` or newer.
 
 ### Record Events
 

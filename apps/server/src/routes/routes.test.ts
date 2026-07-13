@@ -484,6 +484,48 @@ describe("@procella/server routes", () => {
 			});
 			expect(res.status).toBe(200);
 		});
+
+		test("CLI token exchange remains compatible without Accept", async () => {
+			const app = makeApp();
+			const res = await app.request("/api/auth/cli-token", {
+				method: "POST",
+				headers: {
+					Authorization: "token valid-token",
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({ name: "compatibility-test" }),
+			});
+			expect(res.status).toBe(200);
+		});
+
+		test("delta checkpoints require the minimum Pulumi API version", async () => {
+			const app = makeApp();
+			const res = await app.request("/api/stacks/myorg/myproj/dev/update/upd-1/checkpointdelta", {
+				method: "PATCH",
+				headers: {
+					Authorization:
+						"update-token update:upd-1:sid-1:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({}),
+			});
+			expect(res.status).toBe(415);
+		});
+
+		test("delta checkpoints accept newer Pulumi API versions", async () => {
+			const app = makeApp();
+			const res = await app.request("/api/stacks/myorg/myproj/dev/update/upd-1/checkpointdelta", {
+				method: "PATCH",
+				headers: {
+					Authorization:
+						"update-token update:upd-1:sid-1:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+					Accept: "application/vnd.pulumi+9",
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({}),
+			});
+			expect(res.status).toBe(400);
+		});
 	});
 
 	// ========================================================================

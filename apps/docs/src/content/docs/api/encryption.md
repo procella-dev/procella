@@ -5,9 +5,10 @@ description: Encrypt, decrypt, and batch-decrypt endpoints for Pulumi secrets.
 
 The encryption API handles Pulumi secrets. When you run `pulumi config set --secret`, the CLI sends the plaintext to these endpoints for server-side encryption. See [Encryption Architecture](../architecture/encryption/) for the cryptographic details.
 
-All endpoints require:
-- `Accept: application/vnd.pulumi+8`
-- `Authorization: token <api-token>`
+All endpoints require `Authorization: token <api-token>`. Single-value encrypt
+and decrypt remain compatible with clients that omit the Pulumi `Accept`
+header. Batch encryption and batch decryption require
+`Accept: application/vnd.pulumi+8` or newer.
 
 ## Encrypt
 
@@ -72,6 +73,8 @@ POST /api/stacks/{org}/{project}/{stack}/batch-decrypt
 ```
 
 Decrypts multiple ciphertext values in a single request. Used by the CLI when displaying stack outputs or config values that contain secrets.
+
+**Required header**: `Accept: application/vnd.pulumi+8` or newer.
 
 **Required role**: `member`
 
