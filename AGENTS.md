@@ -101,7 +101,7 @@ Caddyfile              # Reverse proxy: /api/* + /trpc/* → server, /* → UI
 ### Key Patterns
 
 - **Single process** — CLI API + tRPC dashboard API share one Hono server on port 9090
-- **PulumiAccept middleware** — `/api/*` routes require `Accept: application/vnd.pulumi+8`; `/trpc/*` routes bypass this
+- **PulumiAccept middleware** — version-gated features (delta checkpoints and batch crypto) require `Accept: application/vnd.pulumi+8` or newer; legacy `/api/*` routes may omit it; `/trpc/*` routes bypass this
 - **Dual auth on tRPC** — Same `AuthService.authenticate()` as CLI routes, using `Authorization: token <value>`
 - **DevAuthenticator** — `Authorization: token <PROCELLA_DEV_AUTH_TOKEN>` for dev mode
 - **Transactions** — CreateStack, RenameStack, CancelUpdate use Drizzle transactions

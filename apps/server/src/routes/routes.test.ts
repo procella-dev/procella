@@ -450,12 +450,89 @@ describe("@procella/server routes", () => {
 	// ========================================================================
 
 	describe("PulumiAccept enforcement", () => {
-		test("GET /api/user with valid auth but no Accept header returns 415", async () => {
+		test("GET /api/user with valid auth but no Accept header remains backwards compatible", async () => {
 			const app = makeApp();
 			const res = await app.request("/api/user", {
 				headers: { Authorization: "token valid-token" },
 			});
+			expect(res.status).toBe(200);
+		});
+
+		test("batch crypto requires the minimum Pulumi API version", async () => {
+			const app = makeApp();
+			const res = await app.request("/api/stacks/myorg/myproj/dev/batch-encrypt", {
+				method: "POST",
+				headers: {
+					Authorization: "token valid-token",
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({ plaintexts: ["YQ=="] }),
+			});
 			expect(res.status).toBe(415);
+		});
+
+		test("batch crypto accepts newer Pulumi API versions", async () => {
+			const app = makeApp();
+			const res = await app.request("/api/stacks/myorg/myproj/dev/batch-encrypt", {
+				method: "POST",
+				headers: {
+					Authorization: "token valid-token",
+					Accept: "application/vnd.pulumi+9",
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({ plaintexts: ["YQ=="] }),
+			});
+			expect(res.status).toBe(200);
+		});
+
+		test("CLI token exchange remains compatible without Accept", async () => {
+			const app = makeApp();
+			const res = await app.request("/api/auth/cli-token", {
+				method: "POST",
+				headers: {
+					Authorization: "token valid-token",
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({ name: "compatibility-test" }),
+			});
+			expect(res.status).toBe(200);
+		});
+
+		test("state export remains compatible without Accept", async () => {
+			const app = makeApp();
+			const res = await app.request("/api/stacks/myorg/myproj/dev/export", {
+				headers: { Authorization: "token valid-token" },
+			});
+			expect(res.status).toBe(200);
+		});
+
+		test("delta checkpoints require the minimum Pulumi API version", async () => {
+			const app = makeApp();
+			const res = await app.request("/api/stacks/myorg/myproj/dev/update/upd-1/checkpointdelta", {
+				method: "PATCH",
+				headers: {
+					Authorization:
+						"update-token update:upd-1:sid-1:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({}),
+			});
+			expect(res.status).toBe(415);
+		});
+
+		test("delta checkpoints accept newer Pulumi API versions", async () => {
+			const app = makeApp();
+			const res = await app.request("/api/stacks/myorg/myproj/dev/update/upd-1/checkpointdelta", {
+				method: "PATCH",
+				headers: {
+					Authorization:
+						"update-token update:upd-1:sid-1:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+					Accept: "application/vnd.pulumi+9",
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({}),
+			});
+			expect(res.status).toBe(400);
 		});
 	});
 

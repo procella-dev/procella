@@ -3,9 +3,9 @@ title: Stack API
 description: Stack CRUD endpoints — create, list, get, delete, rename, and tag management.
 ---
 
-All stack API endpoints require:
-- `Accept: application/vnd.pulumi+8` header
-- `Authorization: token <api-token>` header
+Stack API endpoints require an `Authorization: token <api-token>` header. The
+`Accept: application/vnd.pulumi+N` header is optional for these legacy routes;
+version-gated features document their minimum version below.
 
 The `{org}` parameter in the URL determines which organization is being accessed. The OrgAuth middleware checks that the authenticated user has the required role in that organization.
 
@@ -169,12 +169,11 @@ Adds or removes tags on a stack. Tags are key-value pairs stored as JSONB.
 
 ## Common Headers
 
-All requests must include:
+Requests typically include:
 
 ```
-Accept: application/vnd.pulumi+8
 Authorization: token <api-token>
 Content-Type: application/json  (for POST/PATCH)
 ```
 
-The `PulumiAccept` middleware rejects requests to `/api/` routes that don't include the correct Accept header, returning `415 Unsupported Media Type`.
+Batch crypto endpoints require `Accept: application/vnd.pulumi+8` or newer.
