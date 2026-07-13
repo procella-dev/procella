@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.2](https://github.com/procella-dev/procella/compare/procella-v0.3.1...procella-v0.3.2) (2026-07-13)
+
+
+### Bug Fixes
+
+* **ci:** restore production release deploy ([#209](https://github.com/procella-dev/procella/issues/209)) ([4d2fd4b](https://github.com/procella-dev/procella/commit/4d2fd4b121f3d7a0843e6c44cb91165627b55fee))
+* **deps:** update module github.com/pulumi/esc to v0.26.0 ([#206](https://github.com/procella-dev/procella/issues/206)) ([3ed3428](https://github.com/procella-dev/procella/commit/3ed3428665dd8df938e982afe48735049b267040))
+
 ## [0.3.1](https://github.com/procella-dev/procella/compare/procella-v0.3.0...procella-v0.3.1) (2026-07-13)
 
 
