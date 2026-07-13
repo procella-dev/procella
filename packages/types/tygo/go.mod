@@ -2,7 +2,7 @@ module procella-tygo
 
 go 1.25.11
 
-require github.com/pulumi/pulumi/sdk/v3 v3.250.0
+require github.com/pulumi/pulumi/sdk/v3 v3.251.0
 
 require (
 	github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da // indirect
@@ -15,7 +15,6 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
 	github.com/pgavlin/fx/v2 v2.0.12 // indirect
-	github.com/pulumi/esc v0.24.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/bridges/otelslog v0.18.0 // indirect
