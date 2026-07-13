@@ -15,8 +15,8 @@ jobs:
     name: Create Release PRs
     runs-on: ubuntu-latest
     outputs:
-      procella_released: ${{ steps.release.outputs['.--release_created'] }}
-      procella_tag_name: ${{ steps.release.outputs['.--tag_name'] }}
+      procella_released: ${{ steps.release.outputs.release_created }}
+      procella_tag_name: ${{ steps.release.outputs.tag_name }}
       migrate_released: ${{ steps.release.outputs['packages/migrate--release_created'] }}
       migrate_tag_name: ${{ steps.release.outputs['packages/migrate--tag_name'] }}
     steps:

@@ -376,7 +376,7 @@ jobs:
   preview-deploy:
     name: Deploy Preview
     if: github.event_name == 'pull_request'
-    needs: [esc-eval-go]
+    needs: [check, esc-eval-go]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: preview
@@ -430,6 +430,7 @@ jobs:
 
       - name: Deploy
         id: deploy
+        continue-on-error: true
         run: |
           set -o pipefail
           npx sst deploy --stage pr-${{ github.event.number }} | tee /tmp/sst-deploy.log
@@ -446,6 +447,7 @@ jobs:
 
       - name: Verify deployment health
         id: health_check
+        if: steps.deploy.outcome == 'success'
         run: |
           STAGE="pr-${{ github.event.number }}"
           API_URL="https://api.${STAGE}.procella.cloud/healthz"
@@ -462,7 +464,7 @@ jobs:
           echo "drift=true" >> $GITHUB_OUTPUT
 
       - name: Recover from infrastructure drift
-        if: steps.health_check.outputs.drift == 'true'
+        if: steps.deploy.outcome == 'failure' || steps.health_check.outputs.drift == 'true'
         run: |
           STAGE="pr-${{ github.event.number }}"
           echo "::warning::Infrastructure drift detected — running full recovery cycle"
@@ -484,7 +486,7 @@ jobs:
           SST_SECRET_ProcellaOtelHeaders: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
 
       - name: Verify recovery
-        if: steps.health_check.outputs.drift == 'true'
+        if: steps.deploy.outcome == 'failure' || steps.health_check.outputs.drift == 'true'
         run: |
           STAGE="pr-${{ github.event.number }}"
           API_URL="https://api.${STAGE}.procella.cloud/healthz"

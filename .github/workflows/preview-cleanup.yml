@@ -44,22 +44,24 @@ jobs:
           set -x
           STAGE="pr-${{ github.event.number }}"
           DB_NAME="procella_${STAGE//-/_}"
-          CLUSTER_ID=$(aws rds describe-db-clusters \
-            --query "DBClusters[?starts_with(DBClusterIdentifier, 'procella')].DBClusterIdentifier | [0]" \
+          CLUSTER_IDS=$(aws rds describe-db-clusters \
+            --query "DBClusters[?starts_with(DBClusterIdentifier, 'procella')].DBClusterIdentifier" \
             --output text)
-          if [ -z "$CLUSTER_ID" ] || [ "$CLUSTER_ID" = "None" ]; then
+          if [ -z "$CLUSTER_IDS" ] || [ "$CLUSTER_IDS" = "None" ]; then
             echo "No Aurora cluster found — skipping cleanup"
             exit 0
           fi
-          CLUSTER_ARN=$(aws rds describe-db-clusters --db-cluster-identifier "$CLUSTER_ID" \
-            --query "DBClusters[0].DBClusterArn" --output text)
-          SECRET_ARN=$(aws rds describe-db-clusters --db-cluster-identifier "$CLUSTER_ID" \
-            --query "DBClusters[0].MasterUserSecret.SecretArn" --output text)
-          aws rds-data execute-statement \
-            --resource-arn "$CLUSTER_ARN" \
-            --secret-arn "$SECRET_ARN" \
-            --database "postgres" \
-            --sql "DROP DATABASE IF EXISTS \"$DB_NAME\"" 2>&1 || true
+          for CLUSTER_ID in $CLUSTER_IDS; do
+            CLUSTER_ARN=$(aws rds describe-db-clusters --db-cluster-identifier "$CLUSTER_ID" \
+              --query "DBClusters[0].DBClusterArn" --output text)
+            SECRET_ARN=$(aws rds describe-db-clusters --db-cluster-identifier "$CLUSTER_ID" \
+              --query "DBClusters[0].MasterUserSecret.SecretArn" --output text)
+            aws rds-data execute-statement \
+              --resource-arn "$CLUSTER_ARN" \
+              --secret-arn "$SECRET_ARN" \
+              --database "postgres" \
+              --sql "DROP DATABASE IF EXISTS \"$DB_NAME\"" 2>&1 || true
+          done
 
       - name: Remove SST stack
         run: npx sst remove --stage pr-${{ github.event.number }}
