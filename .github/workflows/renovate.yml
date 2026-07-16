@@ -69,7 +69,7 @@ jobs:
       # Running Renovate directly on the runner (not Docker) means
       # mise-installed tools are available without volume-mount gymnastics.
       - uses: jdx/mise-action@v4
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: packages/types/tygo/go.mod
           cache: false # no Go build cache needed — tygo install is fast
