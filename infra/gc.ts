@@ -39,6 +39,7 @@ export const gc = new sst.aws.Cron("ProcellaGcCron", {
 			...githubDeliveryEnvironment,
 			PROCELLA_ENCRYPTION_KEY: encryptionKey.value,
 			PROCELLA_OTEL_ENABLED: "true",
+			OTEL_SERVICE_NAME: `procella-gc-${$app.stage}`,
 			OTEL_EXPORTER_OTLP_ENDPOINT: otelEndpoint.value,
 			OTEL_EXPORTER_OTLP_HEADERS: otelHeaders.value,
 		},

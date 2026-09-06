@@ -76,6 +76,11 @@ export function initTelemetry(config: TelemetryConfig): void {
 	metrics.setGlobalMeterProvider(meterProvider);
 }
 
+/** Flush pending telemetry without shutting down providers. */
+export async function flushTelemetry(): Promise<void> {
+	await Promise.all([traceProvider?.forceFlush(), meterProvider?.forceFlush()]);
+}
+
 /**
  * Gracefully shut down the telemetry SDK. Flushes pending spans.
  * Call during server shutdown, before process.exit().

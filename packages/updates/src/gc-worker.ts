@@ -28,8 +28,8 @@ export class GCWorker {
 	}
 
 	async start(): Promise<void> {
-		await this.runCycle();
-		this.timer = setInterval(() => this.runCycle(), this.interval);
+		await this.runBestEffortCycle();
+		this.timer = setInterval(() => void this.runBestEffortCycle(), this.interval);
 	}
 
 	async stop(): Promise<void> {
@@ -46,6 +46,15 @@ export class GCWorker {
 	/** Run a single GC cycle (for use by cron endpoints). */
 	async runOnce(): Promise<void> {
 		await this.runCycle();
+	}
+
+	private async runBestEffortCycle(): Promise<void> {
+		try {
+			await this.runCycle();
+		} catch (err) {
+			// Interval mode is best-effort: log and retry on the next cycle.
+			console.error("[gc] cycle failed:", projectError(err));
+		}
 	}
 
 	private async runCycle(): Promise<void> {
@@ -142,9 +151,7 @@ export class GCWorker {
 				activeUpdatesGauge().add(-result.expiredRunningCount);
 			}
 			gcOrphansCleanedCount().add(result.orphanCount);
-		} catch (err) {
-			// GC is best-effort — log and retry on next interval. Never crash the server.
-			console.error("[gc] cycle failed:", projectError(err));
+
 		} finally {
 			this.running = false;
 		}

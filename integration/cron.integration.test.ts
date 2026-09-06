@@ -21,7 +21,10 @@ const baseDeps = {
 	auth: {} as AuthService,
 	authConfig,
 	audit: {} as AuditService,
-	db: { execute: async () => ({ rows: [{ acquired: false }] }) } as unknown as Database,
+	db: {
+		transaction: async (callback: (tx: unknown) => unknown) =>
+			callback({ execute: async () => ({ rows: [{ acquired: false }] }) }),
+	} as unknown as Database,
 	dbUrl: "postgres://test:test@localhost:5432/test",
 	github: null as GitHubService | null,
 	githubWebhookSecret: undefined,
@@ -34,8 +37,8 @@ const baseDeps = {
 	oidcPolicies: null as TrustPolicyRepository | null,
 };
 
-function makeApp(cronSecret?: string) {
-	return createApp({ ...baseDeps, cronSecret });
+function makeApp(cronSecret?: string, db: Database = baseDeps.db) {
+	return createApp({ ...baseDeps, cronSecret, db });
 }
 
 describe("/cron/gc integration", () => {
@@ -57,10 +60,23 @@ describe("/cron/gc integration", () => {
 		expect(res.status).toBe(401);
 	});
 
-	test("returns 200 with correct secret", async () => {
+	test("returns 200 with correct secret when GC succeeds", async () => {
 		const res = await makeApp("correct-secret").request("/cron/gc", {
 			headers: { Authorization: "Bearer correct-secret" },
 		});
 		expect(res.status).toBe(200);
+		expect(await res.json()).toEqual({ ok: true });
+	});
+
+	test("returns non-2xx when the database fails", async () => {
+		const failingDb = {
+			transaction: () => Promise.reject(new Error("database unavailable")),
+		} as unknown as Database;
+
+		const res = await makeApp("correct-secret", failingDb).request("/cron/gc", {
+			headers: { Authorization: "Bearer correct-secret" },
+		});
+
+		expect(res.status).toBeGreaterThanOrEqual(500);
 	});
 });
