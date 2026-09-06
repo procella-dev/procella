@@ -4,7 +4,7 @@ import { timingSafeEqual } from "node:crypto";
 import { appRouter } from "@procella/api/src/router/index.js";
 import type { TRPCContext } from "@procella/api/src/trpc.js";
 import type { AuditService } from "@procella/audit";
-import type { AuthConfig, AuthService } from "@procella/auth";
+import { type AuthConfig, type AuthService, METHOD_ROLE_MAP } from "@procella/auth";
 import type { Database } from "@procella/db";
 import type { EscService } from "@procella/esc";
 import {
@@ -19,7 +19,7 @@ import { PulumiRoutes, projectError } from "@procella/types";
 import { GCWorker, type UpdatesService } from "@procella/updates";
 import type { WebhooksService } from "@procella/webhooks";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import { Hono } from "hono";
+import { Hono, type MiddlewareHandler } from "hono";
 import { cors } from "hono/cors";
 import {
 	auditHandlers,
@@ -296,6 +296,13 @@ export function createApp(deps: {
 	const api = new Hono<Env>();
 	api.use("*", withApiAuth);
 	api.use("*", withAudit);
+	const roleMiddlewareByMethod = new Map<string, MiddlewareHandler<Env>>(
+		Object.entries(METHOD_ROLE_MAP).map(([method, role]) => [method, requireRoleMiddleware(role)]),
+	);
+	const withMethodRole: MiddlewareHandler<Env> = (c, next) =>
+		roleMiddlewareByMethod.get(c.req.method)?.(c, next) ?? next();
+	api.use("/stacks/*", withMethodRole);
+	api.use("/esc/*", withMethodRole);
 
 	// User
 	api.get("/user", user.getCurrentUser);

@@ -5,7 +5,7 @@ import type { DeploymentV3, ResourceV3, UntypedDeployment } from "@procella/type
 import { type RepairMutation, repairCheckpoint } from "@procella/updates";
 import { and, desc, eq, max, sql } from "drizzle-orm";
 import { z } from "zod/v4";
-import { protectedProcedure, router } from "../trpc.js";
+import { adminProcedure, memberProcedure, protectedProcedure, router } from "../trpc.js";
 
 // ============================================================================
 // Input Schema
@@ -242,7 +242,7 @@ export const stacksRouter = router({
 		};
 	}),
 
-	updateTags: protectedProcedure
+	updateTags: memberProcedure
 		.input(stackInput.extend({ tags: z.record(z.string(), z.string()) }))
 		.mutation(async ({ ctx, input }) => {
 			await ctx.stacks.replaceStackTags(
@@ -254,7 +254,7 @@ export const stacksRouter = router({
 			);
 		}),
 
-	rename: protectedProcedure
+	rename: memberProcedure
 		.input(stackInput.extend({ newStack: z.string().min(1) }))
 		.mutation(async ({ ctx, input }) => {
 			await ctx.stacks.renameStack(
@@ -266,7 +266,7 @@ export const stacksRouter = router({
 			);
 		}),
 
-	delete: protectedProcedure.input(stackInput).mutation(async ({ ctx, input }) => {
+	delete: adminProcedure.input(stackInput).mutation(async ({ ctx, input }) => {
 		await ctx.stacks.deleteStack(ctx.caller.tenantId, input.org, input.project, input.stack);
 	}),
 
@@ -280,7 +280,7 @@ export const stacksRouter = router({
 		return ctx.updates.exportStack(stackInfo.id);
 	}),
 
-	import: protectedProcedure
+	import: memberProcedure
 		.input(stackInput.extend({ deployment: z.record(z.string(), z.unknown()) }))
 		.mutation(async ({ ctx, input }) => {
 			const stackInfo = await ctx.stacks.getStack(
@@ -289,11 +289,11 @@ export const stacksRouter = router({
 				input.project,
 				input.stack,
 			);
-			const deployment = input.deployment as import("@procella/types").UntypedDeployment;
+			const deployment = input.deployment as UntypedDeployment;
 			return ctx.updates.importStack(stackInfo.id, deployment);
 		}),
 
-	repair: protectedProcedure.input(stackInput).mutation(async ({ ctx, input }) => {
+	repair: memberProcedure.input(stackInput).mutation(async ({ ctx, input }) => {
 		const stackInfo = await ctx.stacks.getStack(
 			ctx.caller.tenantId,
 			input.org,

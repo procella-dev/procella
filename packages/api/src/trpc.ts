@@ -73,6 +73,23 @@ const protectedMiddleware = t.middleware(async ({ ctx, next }) => {
 	});
 });
 
+const memberMiddleware = t.middleware(async ({ ctx, next }) => {
+	if (!ctx.caller) {
+		throw new TRPCError({ code: "UNAUTHORIZED", message: "Authentication required" });
+	}
+
+	if (!ctx.caller.roles.some((role) => role === "member" || role === "admin")) {
+		throw new TRPCError({ code: "FORBIDDEN", message: "Member role required" });
+	}
+
+	return next({
+		ctx: {
+			...ctx,
+			caller: ctx.caller,
+		},
+	});
+});
+
 const adminMiddleware = t.middleware(async ({ ctx, next }) => {
 	if (!ctx.caller) {
 		throw new TRPCError({ code: "UNAUTHORIZED", message: "Authentication required" });
@@ -96,4 +113,5 @@ const instrumentedProcedure = t.procedure.use(tracingMiddleware);
 export const router = t.router;
 export const publicProcedure = instrumentedProcedure;
 export const protectedProcedure = instrumentedProcedure.use(protectedMiddleware);
+export const memberProcedure = instrumentedProcedure.use(memberMiddleware);
 export const adminProcedure = instrumentedProcedure.use(adminMiddleware);

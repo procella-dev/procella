@@ -4,7 +4,7 @@
 // with API-token and update-token auth. No tRPC, no CORS, no SSE.
 
 import type { AuditService } from "@procella/audit";
-import type { AuthConfig, AuthService } from "@procella/auth";
+import { type AuthConfig, type AuthService, METHOD_ROLE_MAP } from "@procella/auth";
 import type { Database } from "@procella/db";
 import type { EscService } from "@procella/esc";
 import { type GitHubService, verifyGitHubWebhookSignature } from "@procella/github";
@@ -14,7 +14,7 @@ import { tracingMiddleware } from "@procella/telemetry";
 import { PulumiRoutes } from "@procella/types";
 import type { UpdatesService } from "@procella/updates";
 import type { WebhooksService } from "@procella/webhooks";
-import { Hono } from "hono";
+import { Hono, type MiddlewareHandler } from "hono";
 import {
 	auditHandlers,
 	checkpointHandlers,
@@ -158,6 +158,13 @@ export function createCliApp(deps: CliAppDeps): Hono<Env> {
 	const api = new Hono<Env>();
 	api.use("*", withApiAuth);
 	api.use("*", withAudit);
+	const roleMiddlewareByMethod = new Map<string, MiddlewareHandler<Env>>(
+		Object.entries(METHOD_ROLE_MAP).map(([method, role]) => [method, requireRoleMiddleware(role)]),
+	);
+	const withMethodRole: MiddlewareHandler<Env> = (c, next) =>
+		roleMiddlewareByMethod.get(c.req.method)?.(c, next) ?? next();
+	api.use("/stacks/*", withMethodRole);
+	api.use("/esc/*", withMethodRole);
 
 	// User
 	api.get("/user", user.getCurrentUser);
