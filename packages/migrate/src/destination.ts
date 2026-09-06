@@ -51,14 +51,6 @@ export function findDestinationCollisions(stacks: DiscoveredStack[]): Destinatio
 	return collisions;
 }
 
-export function assertUniqueDestinationIdentities(stacks: DiscoveredStack[]): void {
-	const collisions = findDestinationCollisions(stacks);
-	if (collisions.length === 0) return;
-
-	const details = collisions
-		.map(({ identity, sourceFqns }) => `${identity} from ${sourceFqns.join(", ")}`)
-		.join("; ");
-	throw new Error(
-		`Refusing migration because distinct source stacks map to the same authenticated target stack: ${details}`,
-	);
+export function destinationCollisionMessage(collision: DestinationCollision): string {
+	return `Ambiguous target ${collision.identity}: conflicting sources ${collision.sourceFqns.join(", ")}`;
 }

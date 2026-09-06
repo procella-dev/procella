@@ -218,7 +218,7 @@ procella-migrate run --exclude "*/*/production" ...
 | **Source is never modified** | Export is read-only; the tool never writes to the source backend |
 | **Atomic per-stack** | Each stack migrates completely or fails — no partial state |
 | **Idempotent** | Re-running migration on an already-migrated stack overwrites cleanly |
-| **Collision-safe** | Selected source stacks that map to the same target project/stack are rejected before target writes |
+| **Collision-safe per run** | Within one run, selected source stacks that map to the same target project/stack are rejected before target writes; separate filtered runs are intentionally independent |
 | **Secrets handled safely** | `--show-secrets` decrypts on the source, a scratch payload is re-encrypted through the target provider by `pulumi stack import`, and target state is rejected if any plaintext secret envelope remains; scratch deletion failures record the retained path and error in the audit log, while source exports are deleted unless explicitly retained with `--keep-exports` |
 | **Validation before completion** | Resource count + URN comparison ensures state integrity |
 | **Audit trail** | Full JSON log of every action for compliance and debugging |

@@ -1,4 +1,9 @@
-import { destinationIdentity, destinationRef, findDestinationCollisions } from "./destination.js";
+import {
+	destinationCollisionMessage,
+	destinationIdentity,
+	destinationRef,
+	findDestinationCollisions,
+} from "./destination.js";
 import * as log from "./log.js";
 import { discoverStacks, exportState, filterStacks } from "./procella.js";
 import type { DiscoveredStack, StackRef, ValidateOptions, ValidationResult } from "./types.js";
@@ -49,7 +54,7 @@ export async function validate(
 				targetResourceCount: 0,
 				missingOnTarget: [],
 				missingOnSource: [],
-				error: `Ambiguous target ${sourceCollision.identity}: conflicting sources ${sourceCollision.sourceFqns.join(", ")}`,
+				error: destinationCollisionMessage(sourceCollision),
 			});
 			continue;
 		}

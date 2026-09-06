@@ -1,7 +1,11 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
 import { createAuditLog, finalizeAuditLog, recordResult, writeAuditLog } from "./audit.js";
-import { assertUniqueDestinationIdentities, destinationRef } from "./destination.js";
+import {
+	destinationCollisionMessage,
+	destinationRef,
+	findDestinationCollisions,
+} from "./destination.js";
 import * as log from "./log.js";
 import { createStack, discoverStacks, exportState, filterStacks, healthCheck } from "./procella.js";
 import * as pulumi from "./pulumi.js";
@@ -62,20 +66,59 @@ export async function run(
 		return audit;
 	}
 
-	// Procella ignores the source org path segment for persistence and scopes
-	// destination stacks to the authenticated tenant. Reject collapses before
-	// any target-side create/import can overwrite another selected source.
-	assertUniqueDestinationIdentities(filtered);
-
 	log.success(`Found ${filtered.length} stacks to migrate`);
 
-	// Warn but don't abort — target may come online during a long migration,
-	// and each stack import fails individually with a clear error in the audit log.
-	const targetOk = await operations.healthCheck(opts.targetUrl);
-	if (!targetOk) {
-		log.warn(
-			`Target ${opts.targetUrl} is not reachable. ${opts.dryRun ? "Real migration will fail." : "Migration may fail."}`,
+	// Procella ignores the source org path segment for persistence and scopes
+	// destination stacks to the authenticated tenant. Record every collision
+	// before any target-side create/import can overwrite another selected source.
+	const collisions = findDestinationCollisions(filtered);
+	const collisionErrorBySourceFqn = new Map<string, string>();
+	for (const collision of collisions) {
+		const error = destinationCollisionMessage(collision);
+		for (const fqn of collision.sourceFqns) collisionErrorBySourceFqn.set(fqn, error);
+	}
+	for (const stack of filtered) {
+		const error = collisionErrorBySourceFqn.get(stack.fqn);
+		if (!error) continue;
+		log.error(`         ${stack.fqn} — ${error}`);
+		recordResult(audit, {
+			fqn: stack.fqn,
+			status: "failed",
+			sourceResourceCount: stack.resourceCount ?? 0,
+			targetResourceCount: null,
+			duration: 0,
+			error,
+		});
+	}
+
+	let stacksToMigrate = filtered.filter((stack) => !collisionErrorBySourceFqn.has(stack.fqn));
+	if (collisions.length > 0 && !opts.continueOnError) {
+		log.error(
+			"Migration stopped due to target identity collisions. Use --continue-on-error to migrate unaffected stacks.",
 		);
+		for (const stack of stacksToMigrate) {
+			recordResult(audit, {
+				fqn: stack.fqn,
+				status: "skipped",
+				sourceResourceCount: stack.resourceCount ?? 0,
+				targetResourceCount: null,
+				duration: 0,
+				error:
+					"Migration aborted before target writes (target identity collision, --continue-on-error=false)",
+			});
+		}
+		stacksToMigrate = [];
+	}
+
+	if (stacksToMigrate.length > 0) {
+		// Warn but don't abort — target may come online during a long migration,
+		// and each stack import fails individually with a clear error in the audit log.
+		const targetOk = await operations.healthCheck(opts.targetUrl);
+		if (!targetOk) {
+			log.warn(
+				`Target ${opts.targetUrl} is not reachable. ${opts.dryRun ? "Real migration will fail." : "Migration may fail."}`,
+			);
+		}
 	}
 
 	// 2. Create output directory for exports
@@ -84,10 +127,15 @@ export async function run(
 	// 3. Migrate stacks (sequential or concurrent)
 	log.step(2, 4, "Migrating stacks...\n");
 
-	let lastProcessed = filtered.length;
+	let lastProcessed = stacksToMigrate.length;
 	if (opts.concurrency <= 1) {
-		for (let i = 0; i < filtered.length; i++) {
-			const result = await operations.migrateOne(filtered[i], i + 1, filtered.length, opts);
+		for (let i = 0; i < stacksToMigrate.length; i++) {
+			const result = await operations.migrateOne(
+				stacksToMigrate[i],
+				i + 1,
+				stacksToMigrate.length,
+				opts,
+			);
 			recordResult(audit, result);
 
 			if (result.status === "failed" && !opts.continueOnError) {
@@ -105,9 +153,9 @@ export async function run(
 		const processNext = async (): Promise<void> => {
 			while (!aborted) {
 				const index = cursor++;
-				if (index >= filtered.length) break;
-				const stack = filtered[index];
-				const result = await operations.migrateOne(stack, index + 1, filtered.length, opts);
+				if (index >= stacksToMigrate.length) break;
+				const stack = stacksToMigrate[index];
+				const result = await operations.migrateOne(stack, index + 1, stacksToMigrate.length, opts);
 				recordResult(audit, result);
 				processedIndices.add(index);
 
@@ -129,8 +177,8 @@ export async function run(
 	}
 
 	// Record skipped stacks so audit.summary.total always matches filtered.length
-	if (lastProcessed < filtered.length) {
-		for (const stack of filtered.slice(lastProcessed)) {
+	if (lastProcessed < stacksToMigrate.length) {
+		for (const stack of stacksToMigrate.slice(lastProcessed)) {
 			if (!audit.stacks.some((s) => s.fqn === stack.fqn)) {
 				recordResult(audit, {
 					fqn: stack.fqn,
