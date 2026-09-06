@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type MigrationOperations, migrateOne } from "./migrate.js";
+import { hasPlaintextSecret, type MigrationOperations, migrateOne } from "./migrate.js";
 import * as pulumi from "./pulumi.js";
 import type { RunOptions, UntypedDeployment } from "./types.js";
 
@@ -17,35 +17,51 @@ function plaintextSecret(value: string): Record<string, string> {
 	};
 }
 
-test("migrateOne reserializes plaintext secrets with the target service provider", async () => {
-	const tempDir = await mkdtemp(join(tmpdir(), "procella-migrate-secret-provider-"));
-	const binDir = join(tempDir, "bin");
-	const targetStateFile = join(tempDir, "target-state.json");
-	const targetUrl = "https://target.example.test";
-	const targetToken = randomUUID();
-	const secretValues = Array.from({ length: 4 }, () => `secret-${randomUUID()}`);
-	const sourceDeployment: UntypedDeployment = {
+function ciphertextSecret(value: string): Record<string, string> {
+	return {
+		[secretSignatureKey]: secretSignature,
+		ciphertext: Buffer.from(JSON.stringify(value)).toString("base64"),
+	};
+}
+
+function deploymentWithSecrets(
+	secrets: Array<Record<string, string>>,
+	provider: UntypedDeployment["deployment"]["secrets_providers"],
+): UntypedDeployment {
+	return {
 		version: 3,
 		deployment: {
-			secrets_providers: {
-				type: "passphrase",
-				state: { salt: "generated-source-provider-state" },
-			},
+			secrets_providers: provider,
 			resources: [
 				{
 					urn: "urn:pulumi:prod::api::pulumi:pulumi:Stack::api-prod",
 					type: "pulumi:pulumi:Stack",
 					inputs: {
-						database: plaintextSecret(secretValues[0]),
-						nested: {
-							credentials: [plaintextSecret(secretValues[1]), plaintextSecret(secretValues[2])],
-						},
+						database: secrets[0],
+						nested: { credentials: [secrets[1], secrets[2]] },
 					},
-					outputs: { signingKey: plaintextSecret(secretValues[3]) },
+					outputs: { signingKey: secrets[3] },
 				},
 			],
 		},
 	};
+}
+
+test("migrateOne routes plaintext exports through the normalized target import", async () => {
+	const tempDir = await mkdtemp(join(tmpdir(), "procella-migrate-secret-provider-"));
+	const binDir = join(tempDir, "bin");
+	const capturedImportFile = join(tempDir, "captured-import.json");
+	const targetUrl = "https://target.example.test";
+	const targetToken = randomUUID();
+	const secretValues = Array.from({ length: 4 }, () => `secret-${randomUUID()}`);
+	const sourceDeployment = deploymentWithSecrets(secretValues.map(plaintextSecret), {
+		type: "passphrase",
+		state: { salt: "generated-source-provider-state" },
+	});
+	const targetDeployment = deploymentWithSecrets(secretValues.map(ciphertextSecret), {
+		type: "service",
+		state: { url: targetUrl, owner: "target-org", project: "api", stack: "prod" },
+	});
 
 	const fakePulumi = `#!/usr/bin/env node
 const fs = require("node:fs");
@@ -56,19 +72,7 @@ if (args[0] !== "--non-interactive" || args[1] !== "stack" || args[2] !== "impor
 if (args[stackIndex + 1] !== "target-org/api/prod") process.exit(12);
 if (process.env.PULUMI_BACKEND_URL !== process.env.EXPECTED_TARGET_BACKEND) process.exit(13);
 if (process.env.PULUMI_ACCESS_TOKEN !== process.env.EXPECTED_TARGET_TOKEN) process.exit(14);
-const deployment = JSON.parse(fs.readFileSync(args[fileIndex + 1], "utf8"));
-const encrypt = (value) => {
-  if (Array.isArray(value)) return value.map(encrypt);
-  if (value && typeof value === "object") {
-    if (Object.hasOwn(value, "plaintext")) {
-      const { plaintext, ...secret } = value;
-      return { ...secret, ciphertext: Buffer.from(plaintext).toString("base64") };
-    }
-    return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, encrypt(entry)]));
-  }
-  return value;
-};
-fs.writeFileSync(process.env.TARGET_STATE_FILE, JSON.stringify(encrypt(deployment)));
+fs.copyFileSync(args[fileIndex + 1], process.env.CAPTURED_IMPORT_FILE);
 `;
 
 	await mkdir(binDir);
@@ -77,15 +81,14 @@ fs.writeFileSync(process.env.TARGET_STATE_FILE, JSON.stringify(encrypt(deploymen
 	await chmod(pulumiPath, 0o755);
 
 	const previousPath = process.env.PATH;
-	const previousTargetStateFile = process.env.TARGET_STATE_FILE;
+	const previousCapturedImportFile = process.env.CAPTURED_IMPORT_FILE;
 	const previousExpectedBackend = process.env.EXPECTED_TARGET_BACKEND;
 	const previousExpectedToken = process.env.EXPECTED_TARGET_TOKEN;
 	process.env.PATH = `${binDir}:${previousPath ?? ""}`;
-	process.env.TARGET_STATE_FILE = targetStateFile;
+	process.env.CAPTURED_IMPORT_FILE = capturedImportFile;
 	process.env.EXPECTED_TARGET_BACKEND = targetUrl;
 	process.env.EXPECTED_TARGET_TOKEN = targetToken;
 
-	let targetState: UntypedDeployment | undefined;
 	try {
 		const operations: MigrationOperations = {
 			exportStack: async (_stackFqn, filePath, options) => {
@@ -101,22 +104,22 @@ fs.writeFileSync(process.env.TARGET_STATE_FILE, JSON.stringify(encrypt(deploymen
 				return { created: true };
 			},
 			importStack: pulumi.importStack,
-			exportState: async () => {
-				targetState = JSON.parse(await readFile(targetStateFile, "utf8"));
-				return targetState as UntypedDeployment;
+			exportState: async (options) => {
+				expect(options).toEqual({ url: targetUrl, token: targetToken });
+				return targetDeployment;
 			},
 		};
 		const options: RunOptions = {
 			sourceUrl: "https://source.example.test",
 			sourceToken: randomUUID(),
-			targetUrl,
+			targetUrl: `${targetUrl}/`,
 			targetToken,
 			filter: "*",
 			exclude: "",
 			dryRun: false,
 			concurrency: 1,
 			continueOnError: false,
-			keepExports: false,
+			keepExports: true,
 			outputDir: join(tempDir, "exports"),
 		};
 
@@ -134,30 +137,31 @@ fs.writeFileSync(process.env.TARGET_STATE_FILE, JSON.stringify(encrypt(deploymen
 		);
 
 		expect(result.status).toBe("succeeded");
-		expect(targetState?.deployment.secrets_providers).toEqual({
+		const importDeployment = JSON.parse(await readFile(capturedImportFile, "utf8"));
+		expect(importDeployment.deployment.secrets_providers).toEqual({
 			type: "service",
-			state: {
-				url: targetUrl,
-				owner: "target-org",
-				project: "api",
-				stack: "prod",
-			},
+			state: { url: targetUrl, owner: "target-org", project: "api", stack: "prod" },
 		});
-		const serializedTarget = JSON.stringify(targetState);
-		expect(serializedTarget).not.toContain('"plaintext"');
-		for (const secretValue of secretValues) {
-			expect(serializedTarget).not.toContain(secretValue);
-		}
-		expect(serializedTarget.match(/"ciphertext"/g)).toHaveLength(secretValues.length);
+		expect(hasPlaintextSecret(importDeployment)).toBe(true);
+		expect(JSON.parse(await readFile(result.exportFile ?? "", "utf8"))).toEqual(sourceDeployment);
+		expect(
+			await Bun.file(join(options.outputDir, "target-org/api/prod.import.json")).exists(),
+		).toBe(false);
 	} finally {
 		if (previousPath === undefined) delete process.env.PATH;
 		else process.env.PATH = previousPath;
-		if (previousTargetStateFile === undefined) delete process.env.TARGET_STATE_FILE;
-		else process.env.TARGET_STATE_FILE = previousTargetStateFile;
+		if (previousCapturedImportFile === undefined) delete process.env.CAPTURED_IMPORT_FILE;
+		else process.env.CAPTURED_IMPORT_FILE = previousCapturedImportFile;
 		if (previousExpectedBackend === undefined) delete process.env.EXPECTED_TARGET_BACKEND;
 		else process.env.EXPECTED_TARGET_BACKEND = previousExpectedBackend;
 		if (previousExpectedToken === undefined) delete process.env.EXPECTED_TARGET_TOKEN;
 		else process.env.EXPECTED_TARGET_TOKEN = previousExpectedToken;
 		await rm(tempDir, { recursive: true, force: true });
 	}
+});
+
+test("hasPlaintextSecret detects only signed Pulumi plaintext envelopes", () => {
+	expect(hasPlaintextSecret({ nested: [plaintextSecret(randomUUID())] })).toBe(true);
+	expect(hasPlaintextSecret({ plaintext: randomUUID() })).toBe(false);
+	expect(hasPlaintextSecret(ciphertextSecret(randomUUID()))).toBe(false);
 });

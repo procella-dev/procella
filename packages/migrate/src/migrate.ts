@@ -189,6 +189,20 @@ export function assertWithin(parent: string, child: string, ref: string): void {
 	}
 }
 
+const secretSignatureKey = "4dabf18193072939515e22adb298388d";
+const secretSignature = "1b47061264138c4ac30d75fd1eb44270";
+
+export function hasPlaintextSecret(value: unknown): boolean {
+	if (Array.isArray(value)) return value.some(hasPlaintextSecret);
+	if (value === null || typeof value !== "object") return false;
+
+	const object = value as Record<string, unknown>;
+	if (object[secretSignatureKey] === secretSignature && Object.hasOwn(object, "plaintext")) {
+		return true;
+	}
+	return Object.values(object).some(hasPlaintextSecret);
+}
+
 export async function migrateOne(
 	stack: DiscoveredStack,
 	index: number,
@@ -202,6 +216,7 @@ export async function migrateOne(
 	const org = stack.ref.org || "imported";
 	const project = stack.ref.project || stack.ref.stack || "default";
 	const stackName = stack.ref.stack || stack.fqn;
+	const targetUrl = opts.targetUrl.replace(/\/$/, "");
 
 	// Path-traversal guard: source-backend stack names may legitimately contain
 	// dots (Procella allows it), so a stack literally named `..` is possible.
@@ -217,6 +232,8 @@ export async function migrateOne(
 	await mkdir(stackDir, { recursive: true });
 	const exportFile = join(stackDir, `${stackName}.json`);
 	assertWithin(opts.outputDir, exportFile, stack.fqn);
+	const importFile = join(stackDir, `${stackName}.import.json`);
+	assertWithin(opts.outputDir, importFile, stack.fqn);
 
 	log.info(`  [${index}/${total}] ${stack.fqn}`);
 
@@ -257,7 +274,7 @@ export async function migrateOne(
 
 		log.dim("           Creating stack on target...");
 		const { created } = await operations.createStack(
-			{ url: opts.targetUrl, token: opts.targetToken },
+			{ url: targetUrl, token: opts.targetToken },
 			org,
 			project,
 			stackName,
@@ -269,30 +286,35 @@ export async function migrateOne(
 		deployment.deployment.secrets_providers = {
 			type: "service",
 			state: {
-				url: opts.targetUrl,
+				url: targetUrl,
 				owner: org,
 				project,
 				stack: stackName,
 			},
 		};
-		await writeFile(exportFile, JSON.stringify(deployment));
+		await writeFile(importFile, JSON.stringify(deployment));
 
 		log.dim("           Importing state through target secret provider...");
-		await operations.importStack(`${org}/${project}/${stackName}`, exportFile, {
-			backendUrl: opts.targetUrl,
+		await operations.importStack(`${org}/${project}/${stackName}`, importFile, {
+			backendUrl: targetUrl,
 			token: opts.targetToken,
 		});
+		await rm(importFile, { force: true });
 		log.dim("           Imported");
 
 		// Phase 4: Verify resource count
 		log.dim("           Verifying...");
 		const targetState = await operations.exportState(
-			{ url: opts.targetUrl, token: opts.targetToken },
+			{ url: targetUrl, token: opts.targetToken },
 			org,
 			project,
 			stackName,
 		);
 		const targetResourceCount = targetState.deployment.resources?.length ?? 0;
+
+		if (hasPlaintextSecret(targetState)) {
+			throw new Error("Target state contains plaintext Pulumi secret envelopes after import");
+		}
 
 		if (targetResourceCount !== sourceResourceCount) {
 			throw new Error(
@@ -321,6 +343,7 @@ export async function migrateOne(
 		const message = err instanceof Error ? err.message : String(err);
 		log.error(`         ${stack.fqn} — ${message}`);
 
+		await rm(importFile, { force: true }).catch(() => {});
 		// Clean up export file on failure — contains plaintext secrets
 		if (!opts.keepExports) {
 			await rm(exportFile, { force: true }).catch(() => {});

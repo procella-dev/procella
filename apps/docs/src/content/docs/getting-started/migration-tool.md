@@ -144,10 +144,9 @@ The tool follows this sequence for each stack:
 1. Export     → pulumi stack export --show-secrets --file <temp>
 2. Validate   → Parse JSON, check resource count, verify no corruption
 3. Create     → Stack creation on Procella via API (idempotent)
-4. Retarget   → Rewrite the export's secrets_providers block to the target Procella stack
-5. Import     → pulumi stack import --force against the target backend, so every plaintext
-                secret is re-encrypted by the target stack's secret provider
-6. Verify     → Compare resource count between source export and target re-export
+4. Retarget   → Write a scratch import payload with the target Procella secret provider
+5. Import     → pulumi stack import --force re-encrypts every plaintext secret through the target provider
+6. Verify     → Compare resource count and reject any plaintext secret envelope in target state
 7. Report     → Log result to audit trail
 8. Cleanup    → Delete temp export file (unless --keep-exports)
 ```
@@ -219,7 +218,7 @@ procella-migrate run --exclude "*/*/production" ...
 | **Source is never modified** | Export is read-only; the tool never writes to the source backend |
 | **Atomic per-stack** | Each stack migrates completely or fails — no partial state |
 | **Idempotent** | Re-running migration on an already-migrated stack overwrites cleanly |
-| **Secrets handled safely** | `--show-secrets` decrypts on the source, `pulumi stack import` re-encrypts through the target provider so plaintext is never persisted on the target; export files are deleted after import (unless `--keep-exports`) |
+| **Secrets handled safely** | `--show-secrets` decrypts on the source, a scratch payload is re-encrypted through the target provider by `pulumi stack import`, and target state is rejected if any plaintext secret envelope remains; plaintext files are deleted unless the source export is explicitly retained with `--keep-exports` |
 | **Validation before completion** | Resource count + URN comparison ensures state integrity |
 | **Audit trail** | Full JSON log of every action for compliance and debugging |
 | **Dry-run first** | Always run `--dry-run` before real migration to catch issues |
