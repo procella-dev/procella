@@ -90,6 +90,7 @@ import {
 	LEASE_DURATION_SECONDS,
 } from "./types.js";
 
+const CHECKPOINT_HEAD_ORDER = [desc(checkpoints.createdAt), desc(checkpoints.id)] as const;
 const MAX_JOURNAL_ENTRIES = 10_000;
 const MAX_EVENT_BATCH_SIZE = 1_000;
 
@@ -789,11 +790,10 @@ export class PostgresUpdatesService implements UpdatesService {
 					throw new CheckpointNotFoundError("", "", `version ${version}`);
 				}
 			} else {
-				const checkpoint = await this.readHeadCheckpoint(this.db, stackId);
+				checkpoint = await this.readHeadCheckpoint(this.db, stackId);
 				if (!checkpoint) {
 					return emptyDeployment();
 				}
-				return this.readCheckpointDeployment(checkpoint);
 			}
 
 			return this.readCheckpointDeployment(checkpoint);
@@ -844,8 +844,8 @@ export class PostgresUpdatesService implements UpdatesService {
 				throw new ImportConflictError();
 			}
 			if (expectedCheckpointId !== undefined) {
-				const headCheckpoint = await this.readHeadCheckpoint(tx, stackId);
-				if (headCheckpoint?.id !== expectedCheckpointId) {
+				const headCheckpointId = await this.readHeadCheckpointId(tx, stackId);
+				if (headCheckpointId !== expectedCheckpointId) {
 					throw new ImportConflictError("Cannot repair because the stack checkpoint changed");
 				}
 			}
@@ -884,9 +884,22 @@ export class PostgresUpdatesService implements UpdatesService {
 			.select()
 			.from(checkpoints)
 			.where(and(eq(checkpoints.stackId, stackId), eq(checkpoints.isDelta, false)))
-			.orderBy(desc(checkpoints.createdAt), desc(checkpoints.id))
+			.orderBy(...CHECKPOINT_HEAD_ORDER)
 			.limit(1);
 		return checkpoint;
+	}
+
+	private async readHeadCheckpointId(
+		db: Pick<Database, "select">,
+		stackId: string,
+	): Promise<string | undefined> {
+		const [checkpoint] = await db
+			.select({ id: checkpoints.id })
+			.from(checkpoints)
+			.where(and(eq(checkpoints.stackId, stackId), eq(checkpoints.isDelta, false)))
+			.orderBy(...CHECKPOINT_HEAD_ORDER)
+			.limit(1);
+		return checkpoint?.id;
 	}
 
 	private async readCheckpointDeployment(

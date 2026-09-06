@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { Database } from "@procella/db";
+import { checkpoints, type Database } from "@procella/db";
 import { PostgresUpdatesService } from "./postgres.js";
 import { ImportConflictError } from "./types.js";
 
@@ -50,7 +50,8 @@ function staleRepairDatabase() {
 				from: () => query,
 				where: () => query,
 				orderBy: (...columns: unknown[]) => {
-					deterministicOrder = columns.length === 2;
+					const tieBreaker = columns[1] as { queryChunks?: unknown[] } | undefined;
+					deterministicOrder = tieBreaker?.queryChunks?.includes(checkpoints.id) ?? false;
 					return query;
 				},
 				limit: () => Promise.resolve([deterministicOrder ? headCheckpoint : sourceCheckpoint]),
