@@ -187,6 +187,7 @@ export const JournalEntriesSchema = withJsonBounds(
 
 const DeploymentEnvelopeSchema = z
 	.unknown()
+	.nonoptional()
 	.superRefine((value, ctx) => addBoundedJsonIssues(value, ctx, 2))
 	.pipe(
 		z

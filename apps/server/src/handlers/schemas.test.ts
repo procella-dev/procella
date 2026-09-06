@@ -205,6 +205,10 @@ describe("Pulumi request schemas", () => {
 		).toBe(true);
 	});
 
+	test("requires the import deployment payload", () => {
+		expect(UntypedDeploymentSchema.safeParse({ version: 3 }).success).toBe(false);
+	});
+
 	test("rejects structurally invalid import deployments", () => {
 		for (const resources of ["not-an-array", {}, [null], ["not-a-resource"]]) {
 			expect(

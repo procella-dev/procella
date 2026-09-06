@@ -138,8 +138,13 @@ describe("stateHandlers", () => {
 		expect(updates.importStack).toHaveBeenCalledWith("stack-uuid-1", deployment);
 	});
 
-	test("importStack rejects malformed resources with 400", async () => {
-		for (const resources of ["not-an-array", {}, [null]]) {
+	test("importStack rejects malformed deployments with 400", async () => {
+		for (const body of [
+			{ version: 3 },
+			{ version: 3, deployment: { resources: "not-an-array" } },
+			{ version: 3, deployment: { resources: {} } },
+			{ version: 3, deployment: { resources: [null] } },
+		]) {
 			const updates = mockUpdatesService();
 			const app = new Hono<Env>();
 			app.use("*", injectCaller(validCaller));
@@ -149,7 +154,7 @@ describe("stateHandlers", () => {
 			const res = await app.request("/stacks/myorg/myproj/dev/import", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ version: 3, deployment: { resources } }),
+				body: JSON.stringify(body),
 			});
 
 			expect(res.status).toBe(400);
