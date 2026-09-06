@@ -146,12 +146,12 @@ The tool follows this sequence for each stack:
 3. Create     → Stack creation on Procella via API (idempotent)
 4. Retarget   → Write a scratch import payload with the target Procella secret provider
 5. Import     → pulumi stack import --force re-encrypts every plaintext secret through the target provider
-6. Verify     → Compare resource count and reject any plaintext secret envelope in target state
-7. Report     → Log result to audit trail
-8. Cleanup    → Delete scratch payload; record its path and error in the audit log on failure
+6. Cleanup    → Delete scratch payload; record its path and error in the audit log on failure
+7. Verify     → Compare resource count and reject any plaintext secret envelope in target state
+8. Report     → Log result to audit trail, deleting the source export unless --keep-exports
 ```
 
-In `--dry-run` mode, steps 3–5 are skipped — the tool exports and validates without modifying the target.
+In `--dry-run` mode, steps 3–7 are skipped — the tool exports and validates without modifying the target.
 
 ## Audit Trail
 
