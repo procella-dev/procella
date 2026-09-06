@@ -8,6 +8,7 @@ import type {
 	OpenSessionResult,
 	ValidateYamlResult,
 } from "@procella/esc";
+import { EscPreconditionFailedError } from "@procella/esc";
 import type { Caller } from "@procella/types";
 import { Hono } from "hono";
 import type { Env } from "../types.js";
@@ -333,13 +334,17 @@ describe("escHandlers", () => {
 			"t-1",
 			"proj",
 			"staging",
-			{ yamlBody: "values:\n  greeting: updated\n" },
+			{ yamlBody: "values:\n  greeting: updated\n", expectedRevisionNumber: 3 },
 			"u-1",
 		);
 	});
 
 	test("updateEnvironment returns 412 on ETag mismatch", async () => {
-		const esc = mockEscService();
+		const esc = mockEscService({
+			updateEnvironment: mock(async () => {
+				throw new EscPreconditionFailedError();
+			}),
+		});
 		const app = createTestApp(esc);
 
 		const res = await app.request("/esc/environments/my-org/proj/staging", {
@@ -348,7 +353,13 @@ describe("escHandlers", () => {
 			body: "values: {}\n",
 		});
 		expect(res.status).toBe(412);
-		expect(esc.updateEnvironment).not.toHaveBeenCalled();
+		expect(esc.updateEnvironment).toHaveBeenCalledWith(
+			"t-1",
+			"proj",
+			"staging",
+			{ yamlBody: "values: {}\n", expectedRevisionNumber: 99 },
+			"u-1",
+		);
 	});
 
 	test("validateYaml returns esc-compatible properties JSON", async () => {
@@ -413,6 +424,7 @@ describe("escHandlers", () => {
 			"staging",
 			"draft-1",
 			"values:\n  greeting: newer\n",
+			now.getTime(),
 		);
 	});
 

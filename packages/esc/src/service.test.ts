@@ -1,9 +1,17 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { createCipheriv, hkdfSync } from "node:crypto";
 import { AesCryptoService } from "@procella/crypto";
-import { createDb, type Database, escProjects, escSessions } from "@procella/db";
+import {
+	createDb,
+	type Database,
+	escDrafts,
+	escEnvironments,
+	escProjects,
+	escSessions,
+} from "@procella/db";
 import { ConflictError, NotFoundError } from "@procella/types";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { runBehindRowLock } from "./concurrency.test-helper.js";
 import {
 	type EvaluatePayload,
 	type EvaluateResult,
@@ -44,12 +52,14 @@ describe.skipIf(!(await hasDb()))("PostgresEscService", () => {
 	const evaluator = new UnimplementedEvaluatorClient();
 	const encryptionKeyHex = "00".repeat(32);
 
+	let db: Database;
 	let service: PostgresEscService;
 	let dbClient: { close(): Promise<void> };
 
 	beforeAll(async () => {
-		const { db, client } = await createDb({ url: DB_URL });
-		dbClient = client;
+		const connection = await createDb({ url: DB_URL });
+		db = connection.db;
+		dbClient = connection.client;
 		service = new PostgresEscService({ db, evaluator, encryptionKeyHex });
 	});
 
@@ -218,7 +228,7 @@ describe.skipIf(!(await hasDb()))("PostgresEscService", () => {
 		).rejects.toMatchObject({ code: "BAD_REQUEST" });
 	});
 
-	test("concurrent updateEnvironment serializes via SELECT FOR UPDATE (no duplicate revision)", async () => {
+	test("concurrent updateEnvironment without preconditions serializes both writes", async () => {
 		await service.createEnvironment(
 			tenant,
 			{ projectName: "race", name: "env", yamlBody: "values: {n: 0}" },
@@ -235,6 +245,48 @@ describe.skipIf(!(await hasDb()))("PostgresEscService", () => {
 		const nums = revs.map((r) => r.revisionNumber).sort((a, b) => a - b);
 		expect(nums).toEqual([1, 2, 3]);
 	});
+
+	test("concurrent updateEnvironment writers sharing a revision allow exactly one", async () => {
+		const env = await service.createEnvironment(
+			tenant,
+			{ projectName: "cas-race", name: "env", yamlBody: "values: {n: 0}" },
+			user,
+		);
+		const results = await runBehindRowLock(
+			db,
+			DB_URL,
+			async (tx) => {
+				const [locked] = await tx
+					.select({ pid: sql<number>`pg_backend_pid()` })
+					.from(escEnvironments)
+					.where(eq(escEnvironments.id, env.id))
+					.for("update", { of: escEnvironments });
+				return locked.pid;
+			},
+			() => [
+				service.updateEnvironment(
+					tenant,
+					"cas-race",
+					"env",
+					{ yamlBody: "values: {n: 1}", expectedRevisionNumber: 1 },
+					user,
+				),
+				service.updateEnvironment(
+					tenant,
+					"cas-race",
+					"env",
+					{ yamlBody: "values: {n: 2}", expectedRevisionNumber: 1 },
+					user,
+				),
+			],
+		);
+
+		expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+		const [rejected] = results.filter((result) => result.status === "rejected");
+		expect(rejected).toMatchObject({ reason: { code: "PRECONDITION_FAILED", statusCode: 412 } });
+		const revisions = await service.listRevisions(tenant, "cas-race", "env");
+		expect(revisions.map((revision) => revision.revisionNumber)).toEqual([2, 1]);
+	}, 15_000);
 
 	test("concurrent deleteEnvironment is idempotent-safe (transaction + isNull guard)", async () => {
 		await service.createEnvironment(
@@ -483,10 +535,12 @@ describe.skipIf(!(await hasDb()))("PostgresEscService — drafts", () => {
 
 	let service: PostgresEscService;
 	let dbClient: { close(): Promise<void> };
+	let db: Database;
 
 	beforeAll(async () => {
-		const { db, client } = await createDb({ url: DB_URL });
-		dbClient = client;
+		const connection = await createDb({ url: DB_URL });
+		db = connection.db;
+		dbClient = connection.client;
 		service = new PostgresEscService({ db, evaluator, encryptionKeyHex });
 	});
 
@@ -549,6 +603,33 @@ describe.skipIf(!(await hasDb()))("PostgresEscService — drafts", () => {
 			"values: {a: 3}",
 		);
 		expect(updated.yamlBody).toBe("values: {a: 3}");
+	});
+
+	test("updateDraft rejects a stale supplied ETag revision", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "demo", name: "draft-cas", yamlBody: "values: {a: 1}" },
+			user,
+		);
+		const draft = await service.createDraft(
+			tenant,
+			"demo",
+			"draft-cas",
+			"values: {a: 2}",
+			"",
+			user,
+		);
+
+		await expect(
+			service.updateDraft(
+				tenant,
+				"demo",
+				"draft-cas",
+				draft.id,
+				"values: {a: 3}",
+				draft.updatedAt.getTime() - 1,
+			),
+		).rejects.toMatchObject({ code: "PRECONDITION_FAILED", statusCode: 412 });
 	});
 
 	test("listDrafts returns all drafts, filterable by status", async () => {
@@ -624,6 +705,48 @@ describe.skipIf(!(await hasDb()))("PostgresEscService — drafts", () => {
 		const fetched = await service.getDraft(tenant, "demo", "env4", draft.id);
 		expect(fetched?.status).toBe("discarded");
 	});
+
+	test("concurrent apply and discard serialize to one terminal transition", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "draft-race", name: "env", yamlBody: "values: {n: 0}" },
+			user,
+		);
+		const draft = await service.createDraft(
+			tenant,
+			"draft-race",
+			"env",
+			"values: {n: 1}",
+			"",
+			user,
+		);
+		const results = await runBehindRowLock(
+			db,
+			DB_URL,
+			async (tx) => {
+				const [locked] = await tx
+					.select({ pid: sql<number>`pg_backend_pid()` })
+					.from(escDrafts)
+					.where(eq(escDrafts.id, draft.id))
+					.for("update", { of: escDrafts });
+				return locked.pid;
+			},
+			() => [
+				service.applyDraft(tenant, "draft-race", "env", draft.id, user),
+				service.discardDraft(tenant, "draft-race", "env", draft.id),
+			],
+		);
+
+		expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+		const [rejected] = results.filter((result) => result.status === "rejected");
+		expect(rejected).toMatchObject({ reason: { code: "BAD_REQUEST" } });
+		const finalDraft = await service.getDraft(tenant, "draft-race", "env", draft.id);
+		expect(finalDraft).not.toBeNull();
+		if (!finalDraft) throw new Error("Draft disappeared after concurrent transition");
+		expect(["applied", "discarded"]).toContain(finalDraft.status);
+		const revisions = await service.listRevisions(tenant, "draft-race", "env");
+		expect(revisions).toHaveLength(finalDraft.status === "applied" ? 2 : 1);
+	}, 15_000);
 
 	test("discardDraft rejects already-discarded draft", async () => {
 		await service.createEnvironment(

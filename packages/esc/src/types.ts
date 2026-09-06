@@ -61,6 +61,7 @@ export interface CloneEnvironmentInput {
 
 export interface UpdateEnvironmentInput {
 	yamlBody: string;
+	expectedRevisionNumber?: number;
 }
 
 export interface OrgEnvironmentSummary {
