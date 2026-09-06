@@ -28,6 +28,7 @@ import {
 	escHandlers,
 	eventHandlers,
 	githubHandlers,
+	githubSetupCookieHeader,
 	healthHandlers,
 	oauthHandlers,
 	stackHandlers,
@@ -174,7 +175,13 @@ export function createApp(deps: {
 				endpoint: "/trpc",
 				req: c.req.raw,
 				router: appRouter,
-				createContext: () => ctx,
+				createContext: ({ resHeaders }) => ({
+					...ctx,
+					setGitHubSetupCookie(nonce: string) {
+						resHeaders.append("Set-Cookie", githubSetupCookieHeader(nonce, c.req.url));
+						resHeaders.set("Cache-Control", "no-store");
+					},
+				}),
 				onError({ error }) {
 					if (error.code !== "UNAUTHORIZED") {
 						console.error("[trpc]", projectError(error));

@@ -1,3 +1,4 @@
+import { createGitHubSetupNonce } from "@procella/github";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod/v4";
 import { adminProcedure, protectedProcedure, router } from "../trpc.js";
@@ -31,9 +32,22 @@ export const githubRouter = router({
 					message: "GitHub App is not configured on this server",
 				});
 			}
-			return {
-				url: await ctx.github.issueAuthorizationUrl(ctx.caller.tenantId, input.accountLogin),
-			};
+			if (!ctx.setGitHubSetupCookie) {
+				throw new TRPCError({
+					code: "INTERNAL_SERVER_ERROR",
+					message: "GitHub setup cookie support is unavailable",
+				});
+			}
+
+			const browserNonce = createGitHubSetupNonce();
+			const url = await ctx.github.issueInstallationUrl(
+				ctx.caller.tenantId,
+				input.accountLogin,
+				ctx.caller.userId,
+				browserNonce,
+			);
+			ctx.setGitHubSetupCookie(browserNonce);
+			return { url };
 		}),
 
 	removeInstallation: adminProcedure

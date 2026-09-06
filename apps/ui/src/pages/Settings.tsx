@@ -250,7 +250,7 @@ function GitHubSettingsTab() {
 										disabled={createUrlMutation.isPending}
 										className="btn-primary"
 									>
-										{createUrlMutation.isPending ? "Opening GitHub…" : "Verify & Configure"}
+										{createUrlMutation.isPending ? "Opening GitHub…" : "Configure & Verify"}
 									</button>
 									<button
 										type="button"
@@ -354,8 +354,9 @@ function GitHubAccountConnect({
 		<div className="bg-slate-brand/30 border border-slate-brand/60 rounded-xl p-8">
 			<h3 className="text-sm font-semibold text-mist mb-1.5">{title}</h3>
 			<p className="text-sm text-cloud leading-relaxed mb-5">
-				Enter the GitHub user or organization account to connect. GitHub will verify that your user
-				owns the account or is an active organization administrator.
+				Enter the GitHub user or organization account to connect. Install the App first, then
+				Procella asks GitHub to verify that your user owns the account or is an active organization
+				administrator.
 			</p>
 			<form
 				aria-label="Connect GitHub App"
@@ -380,7 +381,7 @@ function GitHubAccountConnect({
 					/>
 				</label>
 				<button type="submit" disabled={pending} className="btn-primary">
-					{pending ? "Opening GitHub…" : "Verify & Connect GitHub App"}
+					{pending ? "Opening GitHub…" : "Install & Verify GitHub App"}
 				</button>
 			</form>
 		</div>

@@ -21,6 +21,7 @@ import superjson from "superjson";
 export interface TRPCContext {
 	caller: Caller | null;
 	issueSubscriptionTicket?: (caller: Caller) => Promise<string>;
+	setGitHubSetupCookie?: (nonce: string) => void;
 	resolveUserDisplayName: (subject: string) => Promise<string | null>;
 	db: Database;
 	dbUrl: string;
@@ -105,6 +106,7 @@ const protectedMiddleware = t.middleware(async ({ ctx, next }) => {
 		ctx: {
 			...ctx,
 			caller: ctx.caller,
+			setGitHubSetupCookie: ctx.setGitHubSetupCookie,
 		},
 	});
 });
@@ -122,6 +124,7 @@ const memberMiddleware = t.middleware(async ({ ctx, next }) => {
 		ctx: {
 			...ctx,
 			caller: ctx.caller,
+			setGitHubSetupCookie: ctx.setGitHubSetupCookie,
 		},
 	});
 });
@@ -139,6 +142,7 @@ const adminMiddleware = t.middleware(async ({ ctx, next }) => {
 		ctx: {
 			...ctx,
 			caller: ctx.caller,
+			setGitHubSetupCookie: ctx.setGitHubSetupCookie,
 		},
 	});
 });

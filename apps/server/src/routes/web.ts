@@ -19,7 +19,12 @@ import type { UpdatesService } from "@procella/updates";
 import type { WebhooksService } from "@procella/webhooks";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { Hono } from "hono";
-import { githubHandlers, healthHandlers, oauthHandlers } from "../handlers/index.js";
+import {
+	githubHandlers,
+	githubSetupCookieHeader,
+	healthHandlers,
+	oauthHandlers,
+} from "../handlers/index.js";
 import {
 	createIpRateLimiter,
 	createSecurityHeadersMiddleware,
@@ -156,7 +161,13 @@ export function createWebApp(deps: WebAppDeps): Hono<Env> {
 				endpoint: "/trpc",
 				req: c.req.raw,
 				router: appRouter,
-				createContext: () => ctx,
+				createContext: ({ resHeaders }) => ({
+					...ctx,
+					setGitHubSetupCookie(nonce: string) {
+						resHeaders.append("Set-Cookie", githubSetupCookieHeader(nonce, c.req.url));
+						resHeaders.set("Cache-Control", "no-store");
+					},
+				}),
 				onError({ error }) {
 					if (error.code !== "UNAUTHORIZED") {
 						console.error("[trpc]", projectError(error));

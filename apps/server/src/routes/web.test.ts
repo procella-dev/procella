@@ -1,9 +1,10 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import { gzipSync } from "node:zlib";
 import type { AuditService } from "@procella/audit";
 import type { AuthConfig, AuthService } from "@procella/auth";
 import type { Database } from "@procella/db";
 import type { EscService } from "@procella/esc";
+import { GITHUB_SETUP_COOKIE_NAME, type GitHubService } from "@procella/github";
 import type { StacksService } from "@procella/stacks";
 import type { Caller } from "@procella/types";
 import { UnauthorizedError } from "@procella/types";
@@ -28,7 +29,8 @@ function mockAuthService(): AuthService {
 	return {
 		authenticate: async (request: Request) => {
 			const header = request.headers.get("Authorization");
-			if (header !== "token valid-token") {
+			const cookie = request.headers.get("Cookie");
+			if (header !== "token valid-token" && cookie !== "DS=session-cookie") {
 				throw new UnauthorizedError("Invalid token");
 			}
 			return validCaller;
@@ -39,11 +41,37 @@ function mockAuthService(): AuthService {
 	};
 }
 
+function mockGitHubService(): GitHubService {
+	return {
+		handleWebhookEvent: mock(async () => {}),
+		issueInstallationUrl: mock(async () => "https://github.com/apps/procella/installations/new"),
+		completeInstallation: mock(async () => "https://github.com/login/oauth/authorize"),
+		completeAuthorization: mock(async () => ({
+			id: "row-1",
+			tenantId: validCaller.tenantId,
+			installationId: 101,
+			accountLogin: "acme",
+			accountType: "Organization" as const,
+			repositorySelection: "all" as const,
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		})),
+		listInstallations: mock(async () => []),
+		resolveInstallation: mock(async () => null),
+		removeInstallation: mock(async () => {}),
+		createPRComment: mock(async () => 1),
+		findPRComment: mock(async () => null),
+		updatePRComment: mock(async () => {}),
+		setCommitStatus: mock(async () => {}),
+	};
+}
+
 function makeApp(overrides?: {
 	issueSubscriptionTicket?: (caller: Caller) => Promise<string>;
 	verifySubscriptionTicket?: (ticket: string) => Promise<Caller>;
 	auth?: AuthService;
 	authConfig?: AuthConfig;
+	github?: GitHubService | null;
 }) {
 	const authConfig: AuthConfig = overrides?.authConfig ?? {
 		mode: "dev",
@@ -62,7 +90,7 @@ function makeApp(overrides?: {
 		updates: {} as UpdatesService,
 		webhooks: {} as WebhooksService,
 		esc: {} as EscService,
-		github: null,
+		github: overrides?.github ?? null,
 		issueSubscriptionTicket:
 			overrides?.issueSubscriptionTicket ??
 			((caller: Caller) => subscriptionTickets.issueTicket(caller)),
@@ -149,6 +177,38 @@ describe("createWebApp tRPC auth", () => {
 
 		expect(res.status).toBe(200);
 		expect(await res.json()).toEqual({ token: "bound-cli-token" });
+	});
+
+	test("GitHub setup sets a browser nonce for header and cookie authentication", async () => {
+		const authenticationHeaders: Array<Record<string, string>> = [
+			{ Authorization: "token valid-token" },
+			{ Cookie: "DS=session-cookie" },
+		];
+		for (const headers of authenticationHeaders) {
+			const github = mockGitHubService();
+			const app = makeApp({ github });
+			const res = await app.request("https://app.procella.test/trpc/github.createInstallationUrl", {
+				method: "POST",
+				headers: { ...headers, "Content-Type": "application/json" },
+				body: JSON.stringify({ json: { accountLogin: "acme" } }),
+			});
+
+			expect(res.status).toBe(200);
+			expect(res.headers.get("cache-control")).toBe("no-store");
+			const cookie = res.headers.get("set-cookie") ?? "";
+			expect(cookie).toContain(`${GITHUB_SETUP_COOKIE_NAME}=`);
+			expect(cookie).toContain("HttpOnly");
+			expect(cookie).toContain("SameSite=Lax");
+			expect(cookie).toContain("Secure");
+			const nonce = cookie.match(new RegExp(`${GITHUB_SETUP_COOKIE_NAME}=([^;]+)`))?.[1];
+			expect(nonce).toMatch(/^[a-zA-Z0-9_-]{43}$/);
+			expect(github.issueInstallationUrl).toHaveBeenCalledWith(
+				validCaller.tenantId,
+				"acme",
+				validCaller.userId,
+				nonce,
+			);
+		}
 	});
 
 	test("SSE endpoint rejects wrong-signature tickets", async () => {

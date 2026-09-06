@@ -1,6 +1,12 @@
-import { type GitHubService, GitHubSetupError } from "@procella/github";
+import {
+	GITHUB_SETUP_COOKIE_NAME,
+	GITHUB_SETUP_STATE_TTL_SECONDS,
+	type GitHubService,
+	GitHubSetupError,
+} from "@procella/github";
 import { BadRequestError } from "@procella/types";
 import type { Context } from "hono";
+import { getCookie } from "hono/cookie";
 import type { Env } from "../types.js";
 import { param } from "./params.js";
 
@@ -36,6 +42,15 @@ async function readGitHubWebhookBody(body: ReadableStream<Uint8Array> | null): P
 	}
 
 	return Buffer.concat(chunks, bytesRead);
+}
+
+export function githubSetupCookieHeader(
+	browserNonce: string,
+	requestUrl: string,
+	maxAge = GITHUB_SETUP_STATE_TTL_SECONDS,
+): string {
+	const secure = new URL(requestUrl).protocol === "https:" ? "; Secure" : "";
+	return `${GITHUB_SETUP_COOKIE_NAME}=${browserNonce}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
 }
 
 export function githubHandlers(deps: {
@@ -99,10 +114,13 @@ export function githubHandlers(deps: {
 			if (!state || state.length > 4096 || !code || code.length > 1024) {
 				return redirectToGitHubSettings(c, "invalid_callback");
 			}
+			const browserNonce = getCookie(c, GITHUB_SETUP_COOKIE_NAME);
+			if (!browserNonce) return redirectToGitHubSettings(c, "invalid_state");
 
 			try {
-				const installationUrl = await deps.github.completeAuthorization(state, code);
-				return c.redirect(installationUrl, 303);
+				await deps.github.completeAuthorization(state, code, browserNonce);
+				c.header("Set-Cookie", githubSetupCookieHeader("", c.req.url, 0));
+				return c.redirect("/settings?github=connected#github", 303);
 			} catch (error) {
 				const reason = error instanceof GitHubSetupError ? error.code : "github_error";
 				return redirectToGitHubSettings(c, reason);
@@ -136,9 +154,16 @@ export function githubHandlers(deps: {
 				return redirectToGitHubSettings(c, "invalid_callback");
 			}
 
+			const browserNonce = getCookie(c, GITHUB_SETUP_COOKIE_NAME);
+			if (!browserNonce) return redirectToGitHubSettings(c, "invalid_state");
+
 			try {
-				await deps.github.completeInstallation(state, installationId);
-				return c.redirect("/settings?github=connected#github", 303);
+				const authorizationUrl = await deps.github.completeInstallation(
+					state,
+					installationId,
+					browserNonce,
+				);
+				return c.redirect(authorizationUrl, 303);
 			} catch (error) {
 				const reason = error instanceof GitHubSetupError ? error.code : "github_error";
 				return redirectToGitHubSettings(c, reason);

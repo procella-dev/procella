@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
-import { type GitHubService, GitHubSetupError } from "@procella/github";
+import { GITHUB_SETUP_COOKIE_NAME, type GitHubService, GitHubSetupError } from "@procella/github";
 import type { Caller } from "@procella/types";
 import { Hono } from "hono";
 import type { Env } from "../types.js";
@@ -29,6 +29,9 @@ const mockInstallation = {
 	updatedAt: new Date("2025-01-01"),
 };
 
+const BROWSER_NONCE = "a".repeat(43);
+const SETUP_COOKIE = `${GITHUB_SETUP_COOKIE_NAME}=${BROWSER_NONCE}`;
+
 // ============================================================================
 // Mock Services
 // ============================================================================
@@ -36,11 +39,11 @@ const mockInstallation = {
 function mockGitHubService(overrides?: Partial<GitHubService>): GitHubService {
 	return {
 		handleWebhookEvent: mock(async () => {}),
-		issueAuthorizationUrl: mock(async () => "https://github.com/apps/procella/installations/new"),
-		completeAuthorization: mock(
-			async () => "https://github.com/apps/procella/installations/new?state=installation-state",
+		issueInstallationUrl: mock(async () => "https://github.com/apps/procella/installations/new"),
+		completeAuthorization: mock(async () => mockInstallation),
+		completeInstallation: mock(
+			async () => "https://github.com/login/oauth/authorize?state=authorization-state",
 		),
-		completeInstallation: mock(async () => mockInstallation),
 		listInstallations: mock(async () => [mockInstallation]),
 		resolveInstallation: mock(async () => mockInstallation),
 		createPRComment: mock(async () => 1),
@@ -214,7 +217,7 @@ describe("githubHandlers", () => {
 	});
 
 	describe("completeAuthorization", () => {
-		test("redirects a verified GitHub user to app installation", async () => {
+		test("completes authorization in the initiating browser and clears its nonce", async () => {
 			const github = mockGitHubService();
 			const app = new Hono<Env>();
 			const h = githubHandlers({ github, verifySignature: mock(async () => true) });
@@ -222,14 +225,15 @@ describe("githubHandlers", () => {
 
 			const res = await app.request(
 				"/github/oauth/callback?code=oauth-code&state=authorization-state",
+				{ headers: { Cookie: SETUP_COOKIE } },
 			);
 			expect(res.status).toBe(303);
-			expect(res.headers.get("location")).toBe(
-				"https://github.com/apps/procella/installations/new?state=installation-state",
-			);
+			expect(res.headers.get("location")).toBe("/settings?github=connected#github");
+			expect(res.headers.get("set-cookie")).toContain("Max-Age=0");
 			expect(github.completeAuthorization).toHaveBeenCalledWith(
 				"authorization-state",
 				"oauth-code",
+				BROWSER_NONCE,
 			);
 		});
 
@@ -246,10 +250,23 @@ describe("githubHandlers", () => {
 			}
 			expect(github.completeAuthorization).not.toHaveBeenCalled();
 		});
+
+		test("rejects an OAuth callback without the initiating browser cookie", async () => {
+			const github = mockGitHubService();
+			const app = new Hono<Env>();
+			const h = githubHandlers({ github, verifySignature: mock(async () => true) });
+			app.get("/github/oauth/callback", h.completeAuthorization);
+
+			const res = await app.request(
+				"/github/oauth/callback?code=oauth-code&state=authorization-state",
+			);
+			expect(res.headers.get("location")).toContain("reason=invalid_state");
+			expect(github.completeAuthorization).not.toHaveBeenCalled();
+		});
 	});
 
 	describe("completeInstallation", () => {
-		test("accepts a valid GitHub setup callback and ignores forged account fields", async () => {
+		test("continues from installation to user authorization in the initiating browser", async () => {
 			const github = mockGitHubService();
 			const app = new Hono<Env>();
 			const h = githubHandlers({ github, verifySignature: mock(async () => true) });
@@ -257,10 +274,17 @@ describe("githubHandlers", () => {
 
 			const res = await app.request(
 				"/github/setup?installation_id=12345&setup_action=install&state=signed-state&account_login=attacker",
+				{ headers: { Cookie: SETUP_COOKIE } },
 			);
 			expect(res.status).toBe(303);
-			expect(res.headers.get("location")).toBe("/settings?github=connected#github");
-			expect(github.completeInstallation).toHaveBeenCalledWith("signed-state", 12345);
+			expect(res.headers.get("location")).toBe(
+				"https://github.com/login/oauth/authorize?state=authorization-state",
+			);
+			expect(github.completeInstallation).toHaveBeenCalledWith(
+				"signed-state",
+				12345,
+				BROWSER_NONCE,
+			);
 		});
 
 		test("rejects missing or malformed callback parameters before persistence", async () => {
@@ -278,6 +302,19 @@ describe("githubHandlers", () => {
 				expect(res.status).toBe(303);
 				expect(res.headers.get("location")).toContain("reason=invalid_callback");
 			}
+			expect(github.completeInstallation).not.toHaveBeenCalled();
+		});
+
+		test("rejects an installation callback without the initiating browser cookie", async () => {
+			const github = mockGitHubService();
+			const app = new Hono<Env>();
+			const h = githubHandlers({ github, verifySignature: mock(async () => true) });
+			app.get("/github/setup", h.completeInstallation);
+
+			const res = await app.request(
+				"/github/setup?installation_id=123&setup_action=install&state=signed-state",
+			);
+			expect(res.headers.get("location")).toContain("reason=invalid_state");
 			expect(github.completeInstallation).not.toHaveBeenCalled();
 		});
 
@@ -307,6 +344,7 @@ describe("githubHandlers", () => {
 
 			const res = await app.request(
 				"/github/setup?installation_id=123&setup_action=install&state=expired",
+				{ headers: { Cookie: SETUP_COOKIE } },
 			);
 			expect(res.status).toBe(303);
 			expect(res.headers.get("location")).toContain("reason=expired_state");

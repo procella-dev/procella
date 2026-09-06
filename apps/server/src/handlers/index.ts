@@ -5,7 +5,7 @@ export { checkpointHandlers } from "./checkpoints.js";
 export { cryptoHandlers } from "./crypto.js";
 export { escHandlers } from "./esc.js";
 export { eventHandlers } from "./events.js";
-export { githubHandlers } from "./github.js";
+export { githubHandlers, githubSetupCookieHeader } from "./github.js";
 export { healthHandlers } from "./health.js";
 export { oauthHandlers } from "./oauth.js";
 export { stackHandlers } from "./stacks.js";
