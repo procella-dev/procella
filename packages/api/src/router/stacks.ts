@@ -266,9 +266,17 @@ export const stacksRouter = router({
 			);
 		}),
 
-	delete: protectedProcedure.input(stackInput).mutation(async ({ ctx, input }) => {
-		await ctx.stacks.deleteStack(ctx.caller.tenantId, input.org, input.project, input.stack);
-	}),
+	delete: protectedProcedure
+		.input(stackInput.extend({ force: z.boolean().optional() }))
+		.mutation(async ({ ctx, input }) => {
+			await ctx.stacks.deleteStack(
+				ctx.caller.tenantId,
+				input.org,
+				input.project,
+				input.stack,
+				input.force,
+			);
+		}),
 
 	export: protectedProcedure.input(stackInput).query(async ({ ctx, input }) => {
 		const stackInfo = await ctx.stacks.getStack(

@@ -162,6 +162,25 @@ describe("PostgresStacksService — integration", () => {
 			).rejects.toBeInstanceOf(StackNotFoundError);
 		});
 
+		test("allows deletion when an empty deployment omits resources", async () => {
+			const stack = await stacks.createStack("tenant-1", "org-1", "proj-1", "dev");
+			const [update] = await db
+				.insert(updates)
+				.values({ stackId: stack.id, kind: "destroy", status: "succeeded" })
+				.returning({ id: updates.id });
+			await db.insert(checkpoints).values({
+				updateId: update.id,
+				stackId: stack.id,
+				version: 1,
+				data: { manifest: {} },
+			});
+
+			await stacks.deleteStack("tenant-1", "org-1", "proj-1", "dev");
+			await expect(
+				stacks.getStack("tenant-1", "org-1", "proj-1", "dev"),
+			).rejects.toBeInstanceOf(StackNotFoundError);
+		});
+
 		test("rejects a stack with an active update unless force is set", async () => {
 			const stack = await stacks.createStack("tenant-1", "org-1", "proj-1", "dev");
 			const [update] = await db

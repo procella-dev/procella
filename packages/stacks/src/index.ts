@@ -281,6 +281,7 @@ function checkpointHasResources(data: unknown, blobKey: string | null): boolean 
 	if (typeof data !== "object" || data === null) return true;
 
 	const resources = (data as Record<string, unknown>).resources;
+	if (resources === undefined || resources === null) return false;
 	return !Array.isArray(resources) || resources.length > 0;
 }
 
