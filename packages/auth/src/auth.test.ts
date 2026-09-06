@@ -664,6 +664,13 @@ describe("DescopeAuthService — JWT cache", () => {
 		expect(mockExchangeAccessKey).toHaveBeenCalledTimes(1);
 	});
 
+	test("classifies legacy access keys without a principal claim as token principals", async () => {
+		const caller = await svc.authenticate(reqWithAuth("token ak_legacy"));
+
+		expect(caller.userId).toBe("user-1");
+		expect(caller.principalType).toBe("token");
+	});
+
 	test("cache miss after expiry — triggers re-exchange", async () => {
 		const expiredClaims = { ...CLAIMS, exp: nowSec - 100 };
 		mockExchangeAccessKey.mockResolvedValue({ token: expiredClaims });
@@ -1147,6 +1154,7 @@ describe("DescopeAuthService — createCliAccessKey", () => {
 		const createCall = mockAccessKeyCreate.mock.calls[0];
 		const customClaims = createCall[5];
 		expect(customClaims.procellaLogin).toBe("github-actions:acme/procella");
+		expect(customClaims[OidcClaims.principalType]).toBe("workload");
 	});
 
 	test("passes undefined userId for workload (empty string)", async () => {
