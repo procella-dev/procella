@@ -109,6 +109,19 @@ fs.copyFileSync(args[fileIndex + 1], process.env.CAPTURED_IMPORT_FILE);
 				expect(options).toEqual({ url: targetUrl, token: targetToken });
 				return targetDeployment;
 			},
+			batchDecrypt: async (options, org, project, stack, ciphertexts) => {
+				expect(options).toEqual({ url: targetUrl, token: targetToken });
+				expect([org, project, stack]).toEqual(["target-org", "api", "prod"]);
+				const map = new Map<string, string>();
+				for (const ciphertext of ciphertexts) {
+					map.set(ciphertext, Buffer.from(ciphertext, "base64").toString("utf-8"));
+				}
+				return map;
+			},
+			getCallerOrg: async (options) => {
+				expect(options).toEqual({ url: targetUrl, token: targetToken });
+				return "target-org";
+			},
 		};
 		const options: RunOptions = {
 			sourceUrl: "https://source.example.test",
@@ -205,6 +218,12 @@ test("migrateOne fails on plaintext target state and retries scratch cleanup", a
 				createStack: async () => ({ created: true }),
 				importStack: async () => {},
 				exportState: async () => deployment,
+				batchDecrypt: async () => {
+					throw new Error("batchDecrypt should not be called when target state is plaintext");
+				},
+				getCallerOrg: async () => {
+					throw new Error("getCallerOrg should not be called when target state is plaintext");
+				},
 				removeScratchFile: async () => {
 					cleanupAttempts++;
 					if (cleanupAttempts === 1) throw new Error("scratch file is busy");
@@ -270,6 +289,14 @@ test("migrateOne verifies a successful import when scratch cleanup fails", async
 				createStack: async () => ({ created: true }),
 				importStack: async () => {},
 				exportState: async () => target,
+				batchDecrypt: async (_options, _org, _project, _stack, ciphertexts) => {
+					const map = new Map<string, string>();
+					for (const ciphertext of ciphertexts) {
+						map.set(ciphertext, Buffer.from(ciphertext, "base64").toString("utf-8"));
+					}
+					return map;
+				},
+				getCallerOrg: async () => "target-org",
 				removeScratchFile: () => {
 					throw new Error("scratch file is busy");
 				},

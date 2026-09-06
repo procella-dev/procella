@@ -1,3 +1,5 @@
+import type { DeploymentMismatch } from "./compare.js";
+
 /**
  * Parsed stack name reference. Canonical form is `org/project/stack` (Procella/Pulumi Cloud),
  * but DIY backends (local, S3, etc.) may return 2-part (`project/stack`) or 1-part (`stack`)
@@ -124,4 +126,8 @@ export interface ValidationResult {
 	missingOnTarget: string[];
 	missingOnSource: string[];
 	error?: string;
+	/** Every mismatch the canonical comparator found, in order (first is the reported `error`). */
+	mismatches?: DeploymentMismatch[];
+	/** True when at least one mismatch could not be conclusively verified (e.g. undecryptable secret). */
+	unverifiable?: boolean;
 }

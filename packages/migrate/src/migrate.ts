@@ -2,12 +2,26 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
 import { createAuditLog, finalizeAuditLog, recordResult, writeAuditLog } from "./audit.js";
 import {
+	compareDeploymentState,
+	describeFirstMismatch,
+	SECRET_SIGNATURE,
+	SECRET_SIGNATURE_KEY,
+} from "./compare.js";
+import {
 	destinationCollisionMessage,
 	destinationRef,
 	findDestinationCollisions,
 } from "./destination.js";
 import * as log from "./log.js";
-import { createStack, discoverStacks, exportState, filterStacks, healthCheck } from "./procella.js";
+import {
+	batchDecrypt,
+	createStack,
+	discoverStacks,
+	exportState,
+	filterStacks,
+	getCallerOrg,
+	healthCheck,
+} from "./procella.js";
 import * as pulumi from "./pulumi.js";
 import type {
 	AuditLog,
@@ -22,6 +36,8 @@ export interface MigrationOperations {
 	createStack: typeof createStack;
 	importStack: typeof pulumi.importStack;
 	exportState: typeof exportState;
+	batchDecrypt: typeof batchDecrypt;
+	getCallerOrg: typeof getCallerOrg;
 	removeScratchFile?: (filePath: string) => Promise<void>;
 }
 
@@ -30,6 +46,8 @@ const defaultMigrationOperations: MigrationOperations = {
 	createStack,
 	importStack: pulumi.importStack,
 	exportState,
+	batchDecrypt,
+	getCallerOrg,
 };
 
 export interface RunOperations {
@@ -259,15 +277,12 @@ export function assertWithin(parent: string, child: string, ref: string): void {
 	}
 }
 
-const secretSignatureKey = "4dabf18193072939515e22adb298388d";
-const secretSignature = "1b47061264138c4ac30d75fd1eb44270";
-
 export function hasPlaintextSecret(value: unknown): boolean {
 	if (Array.isArray(value)) return value.some(hasPlaintextSecret);
 	if (value === null || typeof value !== "object") return false;
 
 	const object = value as Record<string, unknown>;
-	if (object[secretSignatureKey] === secretSignature && Object.hasOwn(object, "plaintext")) {
+	if (object[SECRET_SIGNATURE_KEY] === SECRET_SIGNATURE && Object.hasOwn(object, "plaintext")) {
 		return true;
 	}
 	return Object.values(object).some(hasPlaintextSecret);
@@ -390,7 +405,7 @@ export async function migrateOne(
 		await cleanupScratchFile();
 		log.dim("           Imported");
 
-		// Phase 4: Verify resource count
+		// Phase 4: Verify the full logical deployment state, not merely resource counts.
 		log.dim("           Verifying...");
 		const targetState = await operations.exportState(
 			{ url: targetUrl, token: opts.targetToken },
@@ -398,16 +413,31 @@ export async function migrateOne(
 			project,
 			stackName,
 		);
-		const targetResourceCount = targetState.deployment.resources?.length ?? 0;
 
 		if (hasPlaintextSecret(targetState)) {
 			throw new Error("Target state contains plaintext Pulumi secret envelopes after import");
 		}
 
-		if (targetResourceCount !== sourceResourceCount) {
-			throw new Error(
-				`Resource count mismatch: source=${sourceResourceCount}, target=${targetResourceCount}`,
-			);
+		// Crypto endpoints require the real caller org, unlike state endpoints which
+		// tolerate the source-derived `org` above (see getCallerOrg doc). Resolve lazily —
+		// only migrations that actually carry ciphertext secrets pay for the extra call.
+		let targetOrg: Promise<string> | undefined;
+		const comparison = await compareDeploymentState(deployment, targetState, {
+			decryptTarget: async (ciphertexts) => {
+				targetOrg ??= operations.getCallerOrg({ url: targetUrl, token: opts.targetToken });
+				return operations.batchDecrypt(
+					{ url: targetUrl, token: opts.targetToken },
+					await targetOrg,
+					project,
+					stackName,
+					ciphertexts,
+				);
+			},
+		});
+		const targetResourceCount = comparison.targetResourceCount;
+
+		if (!comparison.match) {
+			throw new Error(`Deep verification failed: ${describeFirstMismatch(comparison)}`);
 		}
 
 		// Cleanup export file unless --keep-exports

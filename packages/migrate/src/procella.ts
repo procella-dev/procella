@@ -3,7 +3,7 @@ import type { DiscoveredStack, UntypedDeployment } from "./types.js";
 
 const PULUMI_ACCEPT = "application/vnd.pulumi+8";
 
-interface RequestOptions {
+export interface RequestOptions {
 	url: string;
 	token: string;
 }
@@ -47,6 +47,24 @@ export async function checkAuth(opts: RequestOptions): Promise<boolean> {
 	} catch {
 		return false;
 	}
+}
+
+/**
+ * Resolve the authenticated caller's real org — GET /api/user. Crypto endpoints
+ * (`/decrypt`, `/batch-decrypt`) require the URL's `org` segment to match the caller's
+ * actual org exactly; state endpoints (export/import/create) tolerate any value there
+ * (Procella scopes stacks to the authenticated tenant, not the path's org — see
+ * destination.ts). A migration's destination `org` is derived from the *source* stack
+ * and is therefore not reliable for crypto calls; this resolves the real one instead.
+ */
+export async function getCallerOrg(opts: RequestOptions): Promise<string> {
+	const res = await request("GET", "/api/user", opts);
+	if (!res.ok) {
+		const text = await res.text();
+		throw new Error(`Failed to resolve caller org (${res.status}): ${text}`);
+	}
+	const body = (await res.json()) as { organizations?: Array<{ githubLogin?: string }> };
+	return body.organizations?.[0]?.githubLogin ?? "";
 }
 
 /** List all stacks — GET /api/user/stacks */
@@ -117,6 +135,42 @@ export async function exportState(
 		);
 	}
 	return (await res.json()) as UntypedDeployment;
+}
+
+/**
+ * Decrypt a batch of secret ciphertexts through a stack's own secret provider —
+ * POST /api/stacks/:org/:project/:stack/batch-decrypt. Used to compare secret values by
+ * decrypted logical content instead of ciphertext (which legitimately differs whenever a
+ * stack is re-encrypted under a different provider, e.g. after migration).
+ *
+ * Returns a map from ciphertext to decrypted plaintext (UTF-8 decoded). Ciphertexts this
+ * stack's provider cannot decrypt are simply absent from the result.
+ */
+export async function batchDecrypt(
+	opts: RequestOptions,
+	org: string,
+	project: string,
+	stack: string,
+	ciphertexts: string[],
+): Promise<Map<string, string>> {
+	if (ciphertexts.length === 0) return new Map();
+
+	const res = await request("POST", `/api/stacks/${org}/${project}/${stack}/batch-decrypt`, opts, {
+		ciphertexts,
+	});
+	if (!res.ok) {
+		const text = await res.text();
+		throw new Error(
+			`Failed to batch-decrypt secrets for ${org}/${project}/${stack} (${res.status}): ${text}`,
+		);
+	}
+
+	const body = (await res.json()) as { plaintexts?: Record<string, string> };
+	const result = new Map<string, string>();
+	for (const [ciphertext, plaintextBase64] of Object.entries(body.plaintexts ?? {})) {
+		result.set(ciphertext, Buffer.from(plaintextBase64, "base64").toString("utf-8"));
+	}
+	return result;
 }
 
 /**

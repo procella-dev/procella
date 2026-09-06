@@ -1,23 +1,36 @@
 import {
+	type BatchSecretDecrypter,
+	compareDeploymentState,
+	describeFirstMismatch,
+} from "./compare.js";
+import {
 	destinationCollisionMessage,
 	destinationIdentity,
 	destinationRef,
 	findDestinationCollisions,
 } from "./destination.js";
 import * as log from "./log.js";
-import { discoverStacks, exportState, filterStacks } from "./procella.js";
-import type { DiscoveredStack, StackRef, ValidateOptions, ValidationResult } from "./types.js";
+import { batchDecrypt, discoverStacks, exportState, filterStacks } from "./procella.js";
+import type {
+	DiscoveredStack,
+	StackRef,
+	UntypedDeployment,
+	ValidateOptions,
+	ValidationResult,
+} from "./types.js";
 
-interface ValidationOperations {
+export interface ValidationOperations {
 	discoverStacks: typeof discoverStacks;
 	exportState: typeof exportState;
 	exportFromBackend: typeof exportFromBackend;
+	batchDecrypt: typeof batchDecrypt;
 }
 
 const defaultValidationOperations: ValidationOperations = {
 	discoverStacks,
 	exportState,
 	exportFromBackend,
+	batchDecrypt,
 };
 
 export async function validate(
@@ -73,7 +86,7 @@ export async function validate(
 			continue;
 		}
 
-		// Deep comparison: export state from both and compare URNs
+		// Deep comparison: full logical deployment state, not merely URN membership.
 		try {
 			const [sourceState, targetState] = await Promise.all([
 				operations.exportFromBackend(opts.sourceUrl, opts.sourceToken, source.ref),
@@ -85,21 +98,49 @@ export async function validate(
 				),
 			]);
 
-			const sourceUrns = new Set((sourceState.deployment.resources ?? []).map((r) => r.urn));
-			const targetUrns = new Set((targetState.deployment.resources ?? []).map((r) => r.urn));
+			const decryptSource: BatchSecretDecrypter | undefined = isHttpUrl(opts.sourceUrl)
+				? (ciphertexts) =>
+						operations.batchDecrypt(
+							{ url: opts.sourceUrl, token: opts.sourceToken },
+							source.ref.org,
+							source.ref.project,
+							source.ref.stack,
+							ciphertexts,
+						)
+				: undefined;
+			const decryptTarget: BatchSecretDecrypter | undefined = isHttpUrl(opts.targetUrl)
+				? (ciphertexts) =>
+						operations.batchDecrypt(
+							{ url: opts.targetUrl, token: opts.targetToken },
+							target.ref.org,
+							target.ref.project,
+							target.ref.stack,
+							ciphertexts,
+						)
+				: undefined;
 
-			const missingOnTarget = [...sourceUrns].filter((u) => !targetUrns.has(u));
-			const missingOnSource = [...targetUrns].filter((u) => !sourceUrns.has(u));
+			const comparison = await compareDeploymentState(sourceState, targetState, {
+				decryptSource,
+				decryptTarget,
+			});
 
-			const match = missingOnTarget.length === 0 && missingOnSource.length === 0;
+			const missingOnTarget = comparison.mismatches
+				.filter((m) => m.kind === "missing-on-target")
+				.map((m) => m.urn ?? "");
+			const missingOnSource = comparison.mismatches
+				.filter((m) => m.kind === "missing-on-source")
+				.map((m) => m.urn ?? "");
 
 			results.push({
 				fqn: source.fqn,
-				status: match ? "match" : "mismatch",
-				sourceResourceCount: sourceUrns.size,
-				targetResourceCount: targetUrns.size,
+				status: comparison.match ? "match" : comparison.unverifiable ? "error" : "mismatch",
+				sourceResourceCount: comparison.sourceResourceCount,
+				targetResourceCount: comparison.targetResourceCount,
 				missingOnTarget,
 				missingOnSource,
+				mismatches: comparison.mismatches,
+				unverifiable: comparison.unverifiable,
+				...(comparison.match ? {} : { error: describeFirstMismatch(comparison) }),
 			});
 		} catch (err) {
 			results.push({
@@ -109,6 +150,7 @@ export async function validate(
 				targetResourceCount: target.resourceCount ?? 0,
 				missingOnTarget: [],
 				missingOnSource: [],
+				mismatches: [],
 				error: err instanceof Error ? err.message : String(err),
 			});
 		}
@@ -160,6 +202,13 @@ export async function validate(
 export function formatDiffSummary(result: ValidationResult): string {
 	if (result.missingOnTarget.length + result.missingOnSource.length > 0) {
 		return `${result.missingOnTarget.length} missing on target, ${result.missingOnSource.length} extra`;
+	}
+
+	const fieldMismatches = (result.mismatches ?? []).filter(
+		(m) => m.kind !== "missing-on-target" && m.kind !== "missing-on-source",
+	);
+	if (fieldMismatches.length > 0) {
+		return `${fieldMismatches.length} field mismatch(es): ${fieldMismatches[0].detail}`;
 	}
 
 	switch (result.status) {
@@ -307,13 +356,18 @@ function statusLabel(status: ValidationResult["status"]): string {
 	}
 }
 
+/** True for backends reachable through the Procella-protocol HTTP API (export, decrypt, ...). */
+function isHttpUrl(url: string): boolean {
+	return url.startsWith("http://") || url.startsWith("https://");
+}
+
 /** Export state from a backend — tries Procella API first, falls back to CLI temp file. */
 async function exportFromBackend(
 	url: string,
 	token: string,
 	ref: { org: string; project: string; stack: string },
-): Promise<import("./types.js").UntypedDeployment> {
-	if (url.startsWith("http://") || url.startsWith("https://")) {
+): Promise<UntypedDeployment> {
+	if (isHttpUrl(url)) {
 		try {
 			return await exportState({ url, token }, ref.org, ref.project, ref.stack);
 		} catch {

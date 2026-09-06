@@ -4,7 +4,12 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type MigrationOperations, migrateOne } from "../packages/migrate/src/migrate.js";
-import { createStack, exportState } from "../packages/migrate/src/procella.js";
+import {
+	batchDecrypt,
+	createStack,
+	exportState,
+	getCallerOrg,
+} from "../packages/migrate/src/procella.js";
 import { importStack } from "../packages/migrate/src/pulumi.js";
 import type { RunOptions, UntypedDeployment } from "../packages/migrate/src/types.js";
 import {
@@ -71,6 +76,8 @@ test("H5 migration stores secrets as target-provider ciphertext", async () => {
 			createStack,
 			importStack,
 			exportState,
+			batchDecrypt,
+			getCallerOrg,
 		};
 		const options: RunOptions = {
 			sourceUrl: `file://${join(outputDir, "source")}`,

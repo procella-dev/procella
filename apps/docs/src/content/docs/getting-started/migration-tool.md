@@ -113,10 +113,17 @@ procella-migrate validate \
   --filter "myorg/myproject/*"
 ```
 
-Checks (the `validate` command goes deeper than `run`'s post-import verification — it compares resource URNs across both backends, while `run` only compares counts):
+Checks (`run`'s post-import verification and `validate` share one canonical logical-state
+comparator, so both catch the same corruption — `validate` simply runs it standalone,
+without migrating anything):
 
-- Resource count matches between source and target
-- All resource URNs are present on both sides
+- Every resource is present on both sides (by URN)
+- Every resource field matches — id, inputs, outputs, dependencies, provider references,
+  pending operations, and any other field the source and target carry
+- Every secret matches by *decrypted logical value*, never by ciphertext — re-encryption
+  under the target's own secret provider is expected and does not count as a mismatch
+- A secret that cannot be decrypted, or a deployment schema version this comparator
+  cannot safely interpret, is reported as unverifiable and never certified as a match
 
 ### `preflight`
 
@@ -147,7 +154,8 @@ The tool follows this sequence for each stack:
 4. Retarget   → Write a scratch import payload with the target Procella secret provider
 5. Import     → pulumi stack import --force re-encrypts every plaintext secret through the target provider
 6. Cleanup    → Delete scratch payload; record its path and error in the audit log on failure
-7. Verify     → Compare resource count and reject any plaintext secret envelope in target state
+7. Verify     → Reject any plaintext secret envelope in target state, then run the canonical
+   logical-state comparator (resources, fields, decrypted secrets) between source and target
 8. Report     → Log result to audit trail, deleting the source export unless --keep-exports
 ```
 
@@ -220,7 +228,7 @@ procella-migrate run --exclude "*/*/production" ...
 | **Idempotent** | Re-running migration on an already-migrated stack overwrites cleanly |
 | **Collision-safe per run** | Within one run, selected source stacks that map to the same target project/stack are rejected before target writes; separate filtered runs are intentionally independent |
 | **Secrets handled safely** | `--show-secrets` decrypts on the source, a scratch payload is re-encrypted through the target provider by `pulumi stack import`, and target state is rejected if any plaintext secret envelope remains; scratch deletion failures record the retained path and error in the audit log, while source exports are deleted unless explicitly retained with `--keep-exports` |
-| **Validation before completion** | Resource count + URN comparison ensures state integrity |
+| **Validation before completion** | Full logical-state comparison (resources, fields, decrypted secret values) ensures state integrity, not just a count or URN match |
 | **Audit trail** | Full JSON log of every action for compliance and debugging |
 | **Dry-run first** | Always run `--dry-run` before real migration to catch issues |
 
@@ -250,10 +258,11 @@ packages/migrate/src/
 ├── pulumi.ts       — Pulumi CLI adapter (spawn with per-call env overrides)
 ├── procella.ts     — Procella HTTP API client + glob filtering
 ├── destination.ts  — Effective target identity mapping and collision detection
+├── compare.ts      — Canonical logical deployment-state comparator (shared by run + validate)
 ├── audit.ts        — JSON audit trail writer
 ├── discover.ts     — discover command
 ├── migrate.ts      — run command (core export→create→retarget→import→verify pipeline)
-├── validate.ts     — validate command (URN-level comparison)
+├── validate.ts     — validate command (same comparator as run, standalone)
 └── preflight.ts    — preflight command (connectivity + auth checks)
 ```
 
