@@ -1,15 +1,8 @@
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
 import { createAuditLog, finalizeAuditLog, recordResult, writeAuditLog } from "./audit.js";
 import * as log from "./log.js";
-import {
-	createStack,
-	discoverStacks,
-	exportState,
-	filterStacks,
-	healthCheck,
-	importState,
-} from "./procella.js";
+import { createStack, discoverStacks, exportState, filterStacks, healthCheck } from "./procella.js";
 import * as pulumi from "./pulumi.js";
 import type {
 	AuditLog,
@@ -18,6 +11,20 @@ import type {
 	RunOptions,
 	UntypedDeployment,
 } from "./types.js";
+
+export interface MigrationOperations {
+	exportStack: typeof pulumi.exportStack;
+	createStack: typeof createStack;
+	importStack: typeof pulumi.importStack;
+	exportState: typeof exportState;
+}
+
+const defaultMigrationOperations: MigrationOperations = {
+	exportStack: pulumi.exportStack,
+	createStack,
+	importStack: pulumi.importStack,
+	exportState,
+};
 
 export async function run(opts: RunOptions): Promise<AuditLog> {
 	const audit = createAuditLog(opts.sourceUrl, opts.targetUrl);
@@ -58,7 +65,7 @@ export async function run(opts: RunOptions): Promise<AuditLog> {
 	let lastProcessed = filtered.length;
 	if (opts.concurrency <= 1) {
 		for (let i = 0; i < filtered.length; i++) {
-			const result = await migrateStack(filtered[i], i + 1, filtered.length, opts);
+			const result = await migrateOne(filtered[i], i + 1, filtered.length, opts);
 			recordResult(audit, result);
 
 			if (result.status === "failed" && !opts.continueOnError) {
@@ -78,7 +85,7 @@ export async function run(opts: RunOptions): Promise<AuditLog> {
 				const index = cursor++;
 				if (index >= filtered.length) break;
 				const stack = filtered[index];
-				const result = await migrateStack(stack, index + 1, filtered.length, opts);
+				const result = await migrateOne(stack, index + 1, filtered.length, opts);
 				recordResult(audit, result);
 				processedIndices.add(index);
 
@@ -182,11 +189,12 @@ export function assertWithin(parent: string, child: string, ref: string): void {
 	}
 }
 
-async function migrateStack(
+export async function migrateOne(
 	stack: DiscoveredStack,
 	index: number,
 	total: number,
 	opts: RunOptions,
+	operations: MigrationOperations = defaultMigrationOperations,
 ): Promise<MigrationResult> {
 	const start = Date.now();
 	// Use directory hierarchy to avoid filename collisions.
@@ -216,7 +224,7 @@ async function migrateStack(
 	try {
 		// Phase 1: Export from source
 		log.dim(`           Exporting from source...`);
-		await pulumi.exportStack(stack.fqn, exportFile, {
+		await operations.exportStack(stack.fqn, exportFile, {
 			backendUrl: opts.sourceUrl,
 			token: opts.sourceToken,
 		});
@@ -248,7 +256,7 @@ async function migrateStack(
 		// org, project, stackName already computed above with DIY fallbacks
 
 		log.dim("           Creating stack on target...");
-		const { created } = await createStack(
+		const { created } = await operations.createStack(
 			{ url: opts.targetUrl, token: opts.targetToken },
 			org,
 			project,
@@ -256,20 +264,29 @@ async function migrateStack(
 		);
 		log.dim(`           Stack ${created ? "created" : "already exists"}`);
 
-		// Phase 3: Import state
-		log.dim("           Importing state...");
-		const { updateId } = await importState(
-			{ url: opts.targetUrl, token: opts.targetToken },
-			org,
-			project,
-			stackName,
-			deployment,
-		);
-		log.dim(`           Imported (update ${updateId})`);
+		// Phase 3: Replace source-provider metadata, then let Pulumi deserialize
+		// the plaintext export and serialize it with the target service provider.
+		deployment.deployment.secrets_providers = {
+			type: "service",
+			state: {
+				url: opts.targetUrl,
+				owner: org,
+				project,
+				stack: stackName,
+			},
+		};
+		await writeFile(exportFile, JSON.stringify(deployment));
+
+		log.dim("           Importing state through target secret provider...");
+		await operations.importStack(`${org}/${project}/${stackName}`, exportFile, {
+			backendUrl: opts.targetUrl,
+			token: opts.targetToken,
+		});
+		log.dim("           Imported");
 
 		// Phase 4: Verify resource count
 		log.dim("           Verifying...");
-		const targetState = await exportState(
+		const targetState = await operations.exportState(
 			{ url: opts.targetUrl, token: opts.targetToken },
 			org,
 			project,

@@ -102,33 +102,6 @@ export async function createStack(
 	throw new Error(`Failed to create stack ${org}/${project}/${stack} (${res.status}): ${text}`);
 }
 
-/**
- * Import state into a stack — POST /api/stacks/:org/:project/:stack/import
- * Single-shot atomic operation.
- */
-export async function importState(
-	opts: RequestOptions,
-	org: string,
-	project: string,
-	stack: string,
-	deployment: UntypedDeployment,
-): Promise<{ updateId: string }> {
-	const res = await request(
-		"POST",
-		`/api/stacks/${org}/${project}/${stack}/import`,
-		opts,
-		deployment,
-	);
-	if (!res.ok) {
-		const text = await res.text();
-		throw new Error(
-			`Failed to import state for ${org}/${project}/${stack} (${res.status}): ${text}`,
-		);
-	}
-	const body = (await res.json()) as { updateID: string };
-	return { updateId: body.updateID };
-}
-
 /** Export state from a stack — GET /api/stacks/:org/:project/:stack/export */
 export async function exportState(
 	opts: RequestOptions,

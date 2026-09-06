@@ -144,13 +144,15 @@ The tool follows this sequence for each stack:
 1. Export     → pulumi stack export --show-secrets --file <temp>
 2. Validate   → Parse JSON, check resource count, verify no corruption
 3. Create     → Stack creation on Procella via API (idempotent)
-4. Import     → State import via Procella API (atomic, single-shot)
-5. Verify     → Compare resource count between source export and target re-export
-6. Report     → Log result to audit trail
-7. Cleanup    → Delete temp export file (unless --keep-exports)
+4. Retarget   → Rewrite the export's secrets_providers block to the target Procella stack
+5. Import     → pulumi stack import --force against the target backend, so every plaintext
+                secret is re-encrypted by the target stack's secret provider
+6. Verify     → Compare resource count between source export and target re-export
+7. Report     → Log result to audit trail
+8. Cleanup    → Delete temp export file (unless --keep-exports)
 ```
 
-In `--dry-run` mode, steps 3–4 are skipped — the tool exports and validates without modifying the target.
+In `--dry-run` mode, steps 3–5 are skipped — the tool exports and validates without modifying the target.
 
 ## Audit Trail
 
@@ -217,7 +219,7 @@ procella-migrate run --exclude "*/*/production" ...
 | **Source is never modified** | Export is read-only; the tool never writes to the source backend |
 | **Atomic per-stack** | Each stack migrates completely or fails — no partial state |
 | **Idempotent** | Re-running migration on an already-migrated stack overwrites cleanly |
-| **Secrets handled safely** | `--show-secrets` is always used; export files are deleted after import (unless `--keep-exports`) |
+| **Secrets handled safely** | `--show-secrets` decrypts on the source, `pulumi stack import` re-encrypts through the target provider so plaintext is never persisted on the target; export files are deleted after import (unless `--keep-exports`) |
 | **Validation before completion** | Resource count + URN comparison ensures state integrity |
 | **Audit trail** | Full JSON log of every action for compliance and debugging |
 | **Dry-run first** | Always run `--dry-run` before real migration to catch issues |
@@ -249,9 +251,9 @@ packages/migrate/src/
 ├── procella.ts     — Procella HTTP API client + glob filtering
 ├── audit.ts        — JSON audit trail writer
 ├── discover.ts     — discover command
-├── migrate.ts      — run command (core export→create→import→verify pipeline)
+├── migrate.ts      — run command (core export→create→retarget→import→verify pipeline)
 ├── validate.ts     — validate command (URN-level comparison)
 └── preflight.ts    — preflight command (connectivity + auth checks)
 ```
 
-The tool wraps the Pulumi CLI for state export (ensuring compatibility with all source backends) and uses Procella's HTTP API directly for stack creation and import (faster, no CLI overhead).
+The tool wraps the Pulumi CLI for state export and import (ensuring compatibility with all source backends, and letting the target secret provider re-encrypt every secret) and uses Procella's HTTP API directly for stack creation and verification.

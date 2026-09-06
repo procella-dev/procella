@@ -111,6 +111,21 @@ export async function exportStack(
 	}
 }
 
+/** Import state through Pulumi so secrets are encrypted by the destination stack's provider. */
+export async function importStack(
+	stackFqn: string,
+	filePath: string,
+	opts: ExecOptions,
+): Promise<void> {
+	const result = await exec(
+		["stack", "import", "--force", "--stack", stackFqn, "--file", filePath],
+		opts,
+	);
+	if (result.exitCode !== 0) {
+		throw new Error(`pulumi stack import failed for ${stackFqn}: ${result.stderr}`);
+	}
+}
+
 /** Check if the pulumi CLI is installed and return its version. */
 export async function getVersion(): Promise<string> {
 	const result = await exec(["version"]);
