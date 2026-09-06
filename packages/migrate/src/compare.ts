@@ -344,7 +344,7 @@ function diffValues(
 				out.push({
 					urn,
 					kind: "field-mismatch",
-					path: reportPath,
+					path: sensitiveRootPath ?? childPath,
 					detail:
 						sensitiveRootPath !== undefined
 							? `${reportPath}: secret value differs (redacted)`
@@ -380,8 +380,17 @@ function diffValues(
 	}
 }
 
-/** Stable sort key so duplicate-URN groups (pending-delete remnants) pair up deterministically. */
+/**
+ * Stable sort key so duplicate-URN groups (pending-delete remnants) pair up deterministically.
+ * Secret sentinels (see `resolveSecrets`) carry a symbol-keyed brand invisible to
+ * `Object.keys`, so a resolved secret `{value: "x"}` would otherwise produce the exact same
+ * signature as an ordinary field `{value: "x"}` — recognise them explicitly so a secret
+ * slot can never be paired against a non-secret slot (or an unverifiable one) by signature.
+ */
 function canonicalSignature(value: unknown): string {
+	if (isUnverifiableSecret(value)) return "\u0000unverifiable-secret\u0000";
+	if (isResolvedSecret(value))
+		return `\u0000resolved-secret\u0000${canonicalSignature(value.value)}`;
 	if (Array.isArray(value)) return `[${value.map(canonicalSignature).join(",")}]`;
 	if (isPlainObject(value)) {
 		const keys = Object.keys(value).sort();
@@ -461,15 +470,18 @@ function compareResources(
 			continue;
 		}
 
+		// Sort by (normalized, raw) signature, not array position: two entries whose
+		// normalized signatures tie (e.g. `marker: false` vs `marker: null`, both stripped
+		// by normalizeResourceForSignature) still order consistently on both sides because
+		// the raw signature differs — pairing no longer depends on which side happened to
+		// declare them in which order.
+		const pairingKey = (resource: unknown): string =>
+			`${canonicalSignature(normalizeResourceForSignature(resource))}\u0000${canonicalSignature(resource)}`;
 		const sortedSource = [...sourceGroup].sort((a, b) =>
-			canonicalSignature(normalizeResourceForSignature(a)).localeCompare(
-				canonicalSignature(normalizeResourceForSignature(b)),
-			),
+			pairingKey(a).localeCompare(pairingKey(b)),
 		);
 		const sortedTarget = [...targetGroup].sort((a, b) =>
-			canonicalSignature(normalizeResourceForSignature(a)).localeCompare(
-				canonicalSignature(normalizeResourceForSignature(b)),
-			),
+			pairingKey(a).localeCompare(pairingKey(b)),
 		);
 		for (let i = 0; i < sortedSource.length; i++) {
 			diffValues("", sortedSource[i], sortedTarget[i], undefined, urn, out, true);

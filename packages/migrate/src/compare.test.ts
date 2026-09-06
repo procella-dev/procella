@@ -490,6 +490,106 @@ describe("compareDeploymentState — hardening against adversarial/coincidental 
 		const result = await compareDeploymentState(source, target);
 		expect(result.match).toBe(true);
 	});
+
+	test("path field identifies the exact missing non-secret field, not its parent", async () => {
+		const source = baseDeployment();
+		const target = cloneDeployment(source);
+		firstResource(target).outputs = {}; // "endpoint" key entirely missing on target
+
+		const result = await compareDeploymentState(source, target);
+		expect(result.match).toBe(false);
+		expect(result.mismatches.some((m) => m.path === "outputs.endpoint")).toBe(true);
+		expect(result.mismatches.some((m) => m.path === "outputs")).toBe(false);
+	});
+
+	test("one comparison reports an exact non-secret path and a redacted secret-only path together", async () => {
+		const source = baseDeployment({
+			resources: [
+				{
+					urn: "urn:pulumi:prod::api::pulumi:pulumi:Stack::api-prod",
+					type: "pulumi:pulumi:Stack",
+					outputs: {
+						endpoint: "https://api.example.test",
+						credentials: {
+							[SECRET_SIGNATURE_KEY]: SECRET_SIGNATURE,
+							plaintext: JSON.stringify({ "private-token": "aaa" }),
+						},
+					},
+				},
+			],
+		});
+		const target = cloneDeployment(source);
+		firstResource(target).outputs = {
+			// Non-secret: "endpoint" is genuinely dropped (not empty-equivalent).
+			// Secret: same envelope shape, different decrypted structured value.
+			credentials: {
+				[SECRET_SIGNATURE_KEY]: SECRET_SIGNATURE,
+				plaintext: JSON.stringify({ "private-token": "bbb" }),
+			},
+		};
+
+		const result = await compareDeploymentState(source, target);
+
+		expect(result.match).toBe(false);
+		expect(result.mismatches.some((m) => m.path === "outputs.endpoint")).toBe(true);
+		expect(result.mismatches.some((m) => m.path === "outputs.credentials")).toBe(true);
+		expect(result.mismatches.some((m) => m.path === "outputs")).toBe(false);
+		const serialized = JSON.stringify(result.mismatches);
+		expect(serialized).not.toContain("private-token");
+		expect(serialized).not.toContain("aaa");
+		expect(serialized).not.toContain("bbb");
+	});
+
+	test("duplicate-URN pairing disambiguates empty-equivalent ties regardless of declared order", async () => {
+		const base = baseDeployment();
+		const dupUrn = "urn:pulumi:prod::api::pkg:type::replaced";
+		const source = baseDeployment({
+			resources: [
+				...(base.deployment.resources ?? []),
+				{ urn: dupUrn, type: "pkg:type", id: "same-id", marker: false },
+				{ urn: dupUrn, type: "pkg:type", id: "same-id", marker: null },
+			],
+		});
+		const target = baseDeployment({
+			resources: [
+				...(base.deployment.resources ?? []),
+				// Declared in the opposite order from source. `marker: false` and
+				// `marker: null` both normalize away as empty, so a naive stable sort
+				// on the normalized signature alone would preserve this reversed order
+				// and cross-pair the two logically distinct entries.
+				{ urn: dupUrn, type: "pkg:type", id: "same-id", marker: null },
+				{ urn: dupUrn, type: "pkg:type", id: "same-id", marker: false },
+			],
+		});
+
+		const result = await compareDeploymentState(source, target);
+		expect(result.match).toBe(true);
+	});
+
+	test("duplicate-URN pairing never crosses a resolved secret with an ordinary field", async () => {
+		const base = baseDeployment();
+		const dupUrn = "urn:pulumi:prod::api::pkg:type::replaced";
+		const source = baseDeployment({
+			resources: [
+				...(base.deployment.resources ?? []),
+				{ urn: dupUrn, type: "pkg:type", id: "same-id", data: plaintextSecret("hello") },
+				{ urn: dupUrn, type: "pkg:type", id: "same-id", data: { value: "hello" } },
+			],
+		});
+		const target = baseDeployment({
+			resources: [
+				...(base.deployment.resources ?? []),
+				// Declared in the opposite order. A resolved secret `{value: "hello"}`
+				// (after unwrapping) is textually indistinguishable from the ordinary
+				// `{value: "hello"}` field to a signature blind to the wrapper's brand.
+				{ urn: dupUrn, type: "pkg:type", id: "same-id", data: { value: "hello" } },
+				{ urn: dupUrn, type: "pkg:type", id: "same-id", data: plaintextSecret("hello") },
+			],
+		});
+
+		const result = await compareDeploymentState(source, target);
+		expect(result.match).toBe(true);
+	});
 });
 
 describe("describeFirstMismatch", () => {
