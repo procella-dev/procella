@@ -60,12 +60,14 @@ async function createJwtTestHarness() {
 	publicJwk.use = "sig";
 	publicJwk.kid = "descope-test-key";
 	const audience = "P3Aaha02iJvkGVbPDAF78KWuAxe6";
+	const jwksJson = { keys: [publicJwk] };
 
 	return {
 		issuer: "https://descope.test.local",
 		audience,
 		privateKey,
-		jwks: createLocalJWKSet({ keys: [publicJwk] }),
+		jwks: createLocalJWKSet(jwksJson),
+		jwksJson,
 	};
 }
 
@@ -252,6 +254,43 @@ describe("DescopeAuthService", () => {
 		return expect(svc.authenticate(reqWithAuth(`token ${fakeJwt}`))).rejects.toThrow(
 			/pulumi login/,
 		);
+	});
+
+	test("default remote JWKS resolver preserves the configured issuer path", async () => {
+		const issuer = `${harness.issuer}/project`;
+		const token = await signDescopeJwt(
+			harness.privateKey,
+			{
+				sub: "user-1",
+				dct: "tenant-1",
+				tenants: { "tenant-1": { roles: ["admin"] } },
+				amr: ["pwd"],
+			},
+			{ issuer, audience: harness.audience },
+		);
+		const requestedUrls: string[] = [];
+		const originalFetch = globalThis.fetch;
+		const remoteService = new DescopeAuthService({
+			sdk: DescopeSdk({ projectId: harness.audience }),
+			config: { projectId: harness.audience, issuer },
+		});
+		globalThis.fetch = Object.assign(
+			async (input: RequestInfo | URL) => {
+				requestedUrls.push(input instanceof Request ? input.url : String(input));
+				return Response.json(harness.jwksJson);
+			},
+			{ preconnect: originalFetch.preconnect },
+		);
+
+		try {
+			const caller = await remoteService.authenticate(reqWithAuth(`Bearer ${token}`));
+
+			expect(caller.principalType).toBe("user");
+			expect(requestedUrls).toEqual([`${issuer}/.well-known/jwks.json`]);
+		} finally {
+			remoteService.dispose();
+			globalThis.fetch = originalFetch;
+		}
 	});
 
 	test("standard human JWT returns principalType user without workload", async () => {
