@@ -562,6 +562,22 @@ describe("@procella/updates helpers", () => {
 			expect(validateImportedDeployment({ deployment: {} })).toEqual({ deployment: {} });
 		});
 
+		test("does not reflect unsupported feature contents in errors", () => {
+			const marker = "sensitive-feature-value";
+			let rejection: unknown;
+			try {
+				validateImportedDeployment({
+					version: 3,
+					features: [marker],
+					deployment: {},
+				});
+			} catch (error) {
+				rejection = error;
+			}
+			expect(rejection).toBeInstanceOf(BadRequestError);
+			expect((rejection as Error).message).not.toContain(marker);
+		});
+
 		test("rejects malformed deployments before persistence starts", async () => {
 			const transaction = mock(async () => {
 				throw new Error("persistence reached");

@@ -277,42 +277,39 @@ export function assertSupportedDeploymentEnvelope(
 	}
 }
 
-export const MAX_IMPORT_JSON_DEPTH = 32;
-export const MAX_IMPORT_STRING_LENGTH = 1024 * 1024;
-export const MAX_IMPORT_FEATURE_COUNT = 100;
+export const MAX_JSON_DEPTH = 32;
+export const MAX_STRING_LENGTH = 1024 * 1024;
+export const MAX_FEATURE_COUNT = 100;
 
-function assertImportJsonBounds(value: unknown, depth = 1): void {
-	if (depth > MAX_IMPORT_JSON_DEPTH) {
-		throw new BadRequestError(
-			`Imported deployment exceeds maximum JSON depth of ${MAX_IMPORT_JSON_DEPTH}`,
-		);
+/** Enforce the JSON limits shared by wire schemas and persisted deployment imports. */
+export function assertBoundedJson(value: unknown, depth = 1): void {
+	if (depth > MAX_JSON_DEPTH) {
+		throw new BadRequestError(`JSON body exceeds maximum depth of ${MAX_JSON_DEPTH}`);
 	}
 	if (typeof value === "string") {
-		if (value.length > MAX_IMPORT_STRING_LENGTH) {
-			throw new BadRequestError(
-				`Imported deployment string exceeds maximum length of ${MAX_IMPORT_STRING_LENGTH}`,
-			);
+		if (value.length > MAX_STRING_LENGTH) {
+			throw new BadRequestError(`String field exceeds maximum length of ${MAX_STRING_LENGTH}`);
 		}
 		return;
 	}
 	if (value === null || typeof value !== "object") return;
 
 	if (Array.isArray(value)) {
-		for (const item of value) assertImportJsonBounds(item, depth + 1);
+		for (const item of value) assertBoundedJson(item, depth + 1);
 		return;
 	}
 
 	for (const [key, nestedValue] of Object.entries(value)) {
 		if (key === "__proto__" || key === "constructor" || key === "prototype") {
-			throw new BadRequestError(`Imported deployment contains forbidden JSON key: ${key}`);
+			throw new BadRequestError(`Forbidden JSON key: ${key}`);
 		}
-		assertImportJsonBounds(nestedValue, depth + 1);
+		assertBoundedJson(nestedValue, depth + 1);
 	}
 }
 
 /** Validate an import envelope before any update or checkpoint rows are written. */
 export function validateImportedDeployment(value: unknown): UntypedDeployment {
-	assertImportJsonBounds(value);
+	assertBoundedJson(value);
 	if (!isPlainObject(value)) {
 		throw new BadRequestError("Imported deployment envelope must be an object");
 	}
@@ -332,12 +329,13 @@ export function validateImportedDeployment(value: unknown): UntypedDeployment {
 	if (features !== undefined && !Array.isArray(features)) {
 		throw new BadRequestError("Imported deployment features must be an array");
 	}
-	assertSupportedDeploymentEnvelope(value, "Imported deployment");
-	if (Array.isArray(features) && features.length > MAX_IMPORT_FEATURE_COUNT) {
+	if (Array.isArray(features) && features.length > 0) {
 		throw new BadRequestError(
-			`Imported deployment has more than ${MAX_IMPORT_FEATURE_COUNT} features`,
+			`Imported deployment has ${features.length} unsupported features; ` +
+				`Procella supports up to deployment schema version ${SUPPORTED_DEPLOYMENT_SCHEMA_VERSION}`,
 		);
 	}
+	assertSupportedDeploymentEnvelope(value, "Imported deployment");
 
 	if (!Object.hasOwn(value, "deployment") || value.deployment === undefined) {
 		throw new BadRequestError("Imported deployment payload is required");
