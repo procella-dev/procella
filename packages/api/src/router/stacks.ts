@@ -1,8 +1,7 @@
 // @procella/api — stacks tRPC procedures (list, detail, resources, resource).
 
 import { checkpoints, updateEvents, updates } from "@procella/db";
-import type { DeploymentV3, ResourceV3, UntypedDeployment } from "@procella/types";
-import { type RepairMutation, repairCheckpoint } from "@procella/updates";
+import type { DeploymentV3, ResourceV3 } from "@procella/types";
 import { and, desc, eq, max, sql } from "drizzle-orm";
 import { z } from "zod/v4";
 import { protectedProcedure, router } from "../trpc.js";
@@ -301,28 +300,8 @@ export const stacksRouter = router({
 			input.stack,
 		);
 
-		const checkpoint = await ctx.updates.exportStack(stackInfo.id);
-
-		const inner = checkpoint.deployment as { resources?: unknown[] };
-		const resources = Array.isArray(inner.resources)
-			? (inner.resources as Parameters<typeof repairCheckpoint>[0])
-			: [];
-
-		const { resources: fixed, mutations } = repairCheckpoint(resources);
-
-		if (mutations.length > 0) {
-			const repaired: UntypedDeployment = {
-				...checkpoint,
-				deployment: {
-					...(checkpoint.deployment as Record<string, unknown>),
-					resources: fixed,
-				},
-			};
-			await ctx.updates.importStack(stackInfo.id, repaired);
-		}
-
-		const typedMutations: RepairMutation[] = mutations;
-		return { mutations: typedMutations, mutationCount: typedMutations.length };
+		const mutations = await ctx.updates.repairStack(stackInfo.id);
+		return { mutations, mutationCount: mutations.length };
 	}),
 
 	resources: protectedProcedure.input(stackInput).query(async ({ ctx, input }) => {

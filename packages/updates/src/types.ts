@@ -19,6 +19,7 @@ import type {
 	UpdateResults,
 } from "@procella/types";
 import { UpdateConflictError } from "@procella/types";
+import type { RepairMutation } from "./repair.js";
 
 // ============================================================================
 // UpdatesService Interface
@@ -77,6 +78,8 @@ export interface UpdatesService {
 	exportStack(stackId: string, version?: number): Promise<UntypedDeployment>;
 
 	importStack(stackId: string, deployment: UntypedDeployment): Promise<ImportStackResponse>;
+
+	repairStack(stackId: string): Promise<RepairMutation[]>;
 
 	encryptValue(stack: StackCryptoInput, plaintext: Uint8Array): Promise<Uint8Array>;
 

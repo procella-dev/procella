@@ -109,6 +109,7 @@ function mockUpdatesService(): UpdatesService {
 		getHistory: async () => ({ updates: [] }),
 		exportStack: async () => ({ version: 3, deployment: {} }),
 		importStack: async () => ({ updateId: "imp-1" }),
+		repairStack: async () => [],
 		encryptValue: async () => new Uint8Array([1, 2, 3]),
 		decryptValue: async () => new Uint8Array([4, 5, 6]),
 		batchEncrypt: async () => [new Uint8Array([1])],
