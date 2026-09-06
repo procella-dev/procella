@@ -247,6 +247,12 @@ export function createApp(deps: {
 		if (!caller) {
 			return c.json({ error: "Unauthorized" }, 401);
 		}
+		if (caller.principalType !== "user") {
+			return c.json(
+				{ error: "CLI tokens can only be created from an interactive user session" },
+				403,
+			);
+		}
 		const body = await c.req.json<{ name?: string }>().catch(() => ({}));
 		const keyName =
 			"name" in body && body.name ? body.name : `procella-cli-${caller.login}-${Date.now()}`;
