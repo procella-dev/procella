@@ -33,4 +33,13 @@ describe("stacks.delete", () => {
 
 		expect(deleteStack).toHaveBeenCalledWith("tenant-1", "org-1", "project-1", "dev", true);
 	});
+
+	test("keeps deletion guarded when force is omitted", async () => {
+		const deleteStack = mock(async () => {});
+		const caller = stacksRouter.createCaller(mockContext(deleteStack));
+
+		await caller.delete({ org: "org-1", project: "project-1", stack: "dev" });
+
+		expect(deleteStack).toHaveBeenCalledWith("tenant-1", "org-1", "project-1", "dev", undefined);
+	});
 });
