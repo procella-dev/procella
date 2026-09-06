@@ -150,8 +150,9 @@ export function checkManifest(manifest: DeploymentManifest, text: string): strin
 }
 
 export function checkProxyConfig(text: string): string[] {
-	return ["/api/*", "/trpc/*", "/healthz", "/github/setup", "/cron/gc"]
-		.filter((route) => !text.includes(route))
+	const active = activeText(text);
+	return ["/api/*", "/trpc/*", "/healthz", "/github/setup"]
+		.filter((route) => !active.includes(route))
 		.map((route) => `Caddyfile: missing server route ${route}`);
 }
 

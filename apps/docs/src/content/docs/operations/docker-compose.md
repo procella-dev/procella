@@ -67,7 +67,7 @@ The `caddy` service mounts the repo-root `Caddyfile` read-only. It routes by pat
     handle /healthz {
         reverse_proxy procella-cluster:9090
     }
-    @server_root_routes path /github/setup /cron/gc
+    @server_root_routes path /github/setup
     handle @server_root_routes {
         reverse_proxy procella-cluster:9090
     }
@@ -77,7 +77,7 @@ The `caddy` service mounts the repo-root `Caddyfile` read-only. It routes by pat
 }
 ```
 
-`/api/*` (Pulumi CLI protocol), `/trpc/*` (dashboard API), `/healthz`, `/github/setup` (GitHub App callback), and `/cron/gc` route to the Procella server replicas. All other paths route to the UI container, which serves the React SPA with client-side routing fallback.
+`/api/*` (Pulumi CLI protocol), `/trpc/*` (dashboard API), `/healthz`, and `/github/setup` (GitHub App callback) route to the Procella server replicas. `/cron/gc` stays private because the Compose server runs its own GC worker. All other paths route to the UI container, which serves the React SPA with client-side routing fallback.
 
 ## Healthcheck
 

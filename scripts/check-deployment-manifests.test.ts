@@ -112,11 +112,10 @@ envVarGroups:
 		);
 	});
 
-	test("the cluster proxy retains every server-only route", () => {
-		expect(checkProxyConfig("/api/* /trpc/* /healthz /github/setup /cron/gc")).toEqual([]);
-		expect(checkProxyConfig("/api/* /trpc/* /healthz")).toEqual([
+	test("the cluster proxy retains every public server route", () => {
+		expect(checkProxyConfig("/api/* /trpc/* /healthz /github/setup")).toEqual([]);
+		expect(checkProxyConfig("/api/* /trpc/* /healthz\n# /github/setup")).toEqual([
 			"Caddyfile: missing server route /github/setup",
-			"Caddyfile: missing server route /cron/gc",
 		]);
 	});
 });
