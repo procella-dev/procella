@@ -4,7 +4,7 @@ import { BadRequestError } from "@procella/types";
 import { PostgresUpdatesService } from "./postgres.js";
 
 describe("PostgresUpdatesService.completeUpdate status validation", () => {
-	test("rejects every non-terminal status before mutating state or metrics", async () => {
+	test("rejects non-terminal and unknown statuses before mutating state or metrics", async () => {
 		const transaction = mock(async () => {
 			throw new Error("transaction must not run");
 		});
@@ -18,7 +18,7 @@ describe("PostgresUpdatesService.completeUpdate status validation", () => {
 			crypto: {} as never,
 		});
 
-		for (const status of ["not started", "requested", "running"]) {
+		for (const status of ["not started", "requested", "running", "paused"]) {
 			try {
 				await service.completeUpdate("update-1", { status });
 				expect.unreachable("non-terminal status must be rejected");

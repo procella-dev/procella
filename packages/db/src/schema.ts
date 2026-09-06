@@ -105,7 +105,7 @@ export const updates = pgTable(
 		),
 		check(
 			"chk_updates_completed_terminal",
-			sql`NOT (${table.completedAt} IS NOT NULL AND ${table.status} IN ('not started', 'requested', 'running'))`,
+			sql`${table.completedAt} IS NULL OR ${table.status} IN ('succeeded', 'failed', 'cancelled')`,
 		),
 		uniqueIndex("idx_updates_active")
 			.on(table.stackId)

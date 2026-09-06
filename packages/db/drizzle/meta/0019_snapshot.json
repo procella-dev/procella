@@ -1870,7 +1870,7 @@
         },
         "chk_updates_completed_terminal": {
           "name": "chk_updates_completed_terminal",
-          "value": "NOT (\"updates\".\"completed_at\" IS NOT NULL AND \"updates\".\"status\" IN ('not started', 'requested', 'running'))"
+          "value": "\"updates\".\"completed_at\" IS NULL OR \"updates\".\"status\" IN ('succeeded', 'failed', 'cancelled')"
         }
       },
       "isRLSEnabled": false

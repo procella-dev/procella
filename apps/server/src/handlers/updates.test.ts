@@ -209,7 +209,7 @@ describe("updateHandlers", () => {
 		expect(updates.completeUpdate).toHaveBeenCalledWith("upd-1", reqBody);
 	});
 
-	test("completeUpdate rejects every non-terminal status without calling the service", async () => {
+	test("completeUpdate rejects non-terminal and unknown statuses without calling the service", async () => {
 		const updates = mockUpdatesService();
 		const stacks = mockStacksService();
 		const app = new Hono<Env>();
@@ -220,7 +220,7 @@ describe("updateHandlers", () => {
 		const h = updateHandlers(updates, stacks);
 		app.post("/updates/:updateId/complete", h.completeUpdate);
 
-		for (const status of ["not started", "requested", "running"]) {
+		for (const status of ["not started", "requested", "running", "paused"]) {
 			const res = await app.request("/updates/upd-1/complete", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },

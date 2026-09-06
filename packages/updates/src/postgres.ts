@@ -45,6 +45,7 @@ import type {
 import {
 	BadRequestError,
 	CheckpointNotFoundError,
+	isTerminalUpdateStatus,
 	JournalEntryBegin,
 	JournalEntryFailure,
 	JournalEntryOutputs,
@@ -91,10 +92,6 @@ import {
 
 const MAX_JOURNAL_ENTRIES = 10_000;
 const MAX_EVENT_BATCH_SIZE = 1_000;
-
-function isTerminalUpdateStatus(status: string): status is "succeeded" | "failed" | "cancelled" {
-	return status === "succeeded" || status === "failed" || status === "cancelled";
-}
 
 type DbTransaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 

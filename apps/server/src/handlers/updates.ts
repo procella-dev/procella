@@ -3,6 +3,7 @@
 import type { StacksService } from "@procella/stacks";
 import {
 	type CompleteUpdateRequest,
+	isTerminalUpdateStatus,
 	isValidUpdateKind,
 	type StartUpdateRequest,
 	type UpdateProgramRequest,
@@ -12,10 +13,6 @@ import type { WebhooksService } from "@procella/webhooks";
 import type { Context } from "hono";
 import type { Env } from "../types.js";
 import { param, updateContext } from "./params.js";
-
-function isTerminalUpdateStatus(status: unknown): status is "succeeded" | "failed" | "cancelled" {
-	return status === "succeeded" || status === "failed" || status === "cancelled";
-}
 
 // ============================================================================
 // Update Handlers
