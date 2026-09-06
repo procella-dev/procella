@@ -38,6 +38,7 @@ export interface S3StorageConfig {
 	region?: string;
 	accessKeyId?: string;
 	secretAccessKey?: string;
+	sessionToken?: string;
 }
 
 export type StorageConfig = LocalStorageConfig | S3StorageConfig;
@@ -192,6 +193,7 @@ export class S3BlobStorage implements BlobStorage {
 						credentials: {
 							accessKeyId: config.accessKeyId,
 							secretAccessKey: config.secretAccessKey,
+							sessionToken: config.sessionToken,
 						},
 					}
 				: {}),
@@ -375,6 +377,7 @@ export function createBlobStorage(config: StorageConfig): BlobStorage {
 				region: config.region,
 				accessKeyId: config.accessKeyId,
 				secretAccessKey: config.secretAccessKey,
+				sessionToken: config.sessionToken,
 			});
 	}
 }

@@ -112,8 +112,13 @@ async function bootstrapServices() {
 					bucket: config.blobS3Bucket as string,
 					endpoint: config.blobS3Endpoint,
 					region: config.blobS3Region,
-					accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-					secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+					...(config.blobS3Endpoint
+						? {
+								accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+								secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+								sessionToken: process.env.AWS_SESSION_TOKEN,
+							}
+						: {}),
 				},
 	);
 
