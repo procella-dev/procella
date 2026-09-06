@@ -102,23 +102,30 @@ function isSecretEnvelope(value: unknown): value is Record<string, unknown> {
 	return isPlainObject(value) && value[SECRET_SIGNATURE_KEY] === SECRET_SIGNATURE;
 }
 
+// Unforgeable markers for this module's own internal wrapper values. Symbol keys can never
+// appear in JSON.parse output, so no value parsed from deployment content (however it is
+// shaped, e.g. `{__resolvedSecret: true, value: "x", extra: "y"}`) can impersonate a sentinel
+// and smuggle an unexamined sibling field (like `extra` above) past the comparison below.
+const RESOLVED_SECRET = Symbol("resolvedSecret");
+const UNVERIFIABLE_SECRET = Symbol("unverifiableSecret");
+
 /** Sentinel wrapping a resolved (decrypted or already-plaintext) secret's logical value. */
 interface ResolvedSecret {
-	__resolvedSecret: true;
+	[RESOLVED_SECRET]: true;
 	value: unknown;
 }
 
 /** Sentinel marking a secret this comparator could not conclusively verify. */
 interface UnverifiableSecret {
-	__unverifiableSecret: true;
+	[UNVERIFIABLE_SECRET]: true;
 }
 
 function isResolvedSecret(value: unknown): value is ResolvedSecret {
-	return isPlainObject(value) && value.__resolvedSecret === true;
+	return isPlainObject(value) && Reflect.get(value, RESOLVED_SECRET) === true;
 }
 
 function isUnverifiableSecret(value: unknown): value is UnverifiableSecret {
-	return isPlainObject(value) && value.__unverifiableSecret === true;
+	return isPlainObject(value) && Reflect.get(value, UNVERIFIABLE_SECRET) === true;
 }
 
 /** Parse a Pulumi secret's JSON-encoded logical value, falling back to the raw string. */
@@ -161,7 +168,7 @@ function resolveSecrets(value: unknown, decrypted: ReadonlyMap<string, string>):
 	if (isSecretEnvelope(value)) {
 		if (typeof value.plaintext === "string") {
 			const resolved: ResolvedSecret = {
-				__resolvedSecret: true,
+				[RESOLVED_SECRET]: true,
 				value: resolveSecrets(parseLogicalValue(value.plaintext), decrypted),
 			};
 			return resolved;
@@ -169,21 +176,25 @@ function resolveSecrets(value: unknown, decrypted: ReadonlyMap<string, string>):
 		if (typeof value.ciphertext === "string") {
 			const plaintext = decrypted.get(value.ciphertext);
 			if (plaintext === undefined) {
-				const unverifiable: UnverifiableSecret = { __unverifiableSecret: true };
+				const unverifiable: UnverifiableSecret = { [UNVERIFIABLE_SECRET]: true };
 				return unverifiable;
 			}
 			const resolved: ResolvedSecret = {
-				__resolvedSecret: true,
+				[RESOLVED_SECRET]: true,
 				value: resolveSecrets(parseLogicalValue(plaintext), decrypted),
 			};
 			return resolved;
 		}
 		// Envelope carries neither `ciphertext` nor `plaintext` — malformed; cannot verify.
-		const unverifiable: UnverifiableSecret = { __unverifiableSecret: true };
+		const unverifiable: UnverifiableSecret = { [UNVERIFIABLE_SECRET]: true };
 		return unverifiable;
 	}
 
-	const out: Record<string, unknown> = {};
+	// `Object.create(null)`, not `{}`: an own key literally named `__proto__` in parsed
+	// deployment or decrypted secret JSON would otherwise set this object's prototype
+	// instead of becoming a comparable data key, letting two different `__proto__` values
+	// both collapse to the same empty-looking object.
+	const out: Record<string, unknown> = Object.create(null);
 	for (const key of Object.keys(value)) out[key] = resolveSecrets(value[key], decrypted);
 	return out;
 }
@@ -238,9 +249,13 @@ function isEmptyJsonValue(value: unknown): boolean {
 }
 
 /**
- * Structural diff of two already secret-resolved values. `sensitive` is true once the
- * walk has descended into a resolved secret's logical value — mismatches found there are
- * reported without the actual value, per the "never log secret material" requirement.
+ * Structural diff of two already secret-resolved values. `sensitiveRootPath`, once set,
+ * marks that the walk has descended into a resolved secret's logical value — mismatches
+ * found there are reported at that fixed root path with no descendant path or key names,
+ * per the "never log secret material" requirement (a decrypted structured secret's own
+ * field names, e.g. `{"private-token": ...}`, are still material to keep out of logs).
+ * `sensitiveRootPath` is captured once, on entry into a resolved secret, and held fixed
+ * for every deeper recursive call — it never reflects the descendant path being compared.
  *
  * `normalizeEmptyOnce` applies the `omitempty`-vs-explicit-empty equivalence (see
  * `isEmptyJsonValue`) for exactly the direct keys of `a`/`b` at this call — it is never
@@ -252,31 +267,33 @@ function diffValues(
 	path: string,
 	a: unknown,
 	b: unknown,
-	sensitive: boolean,
+	sensitiveRootPath: string | undefined,
 	urn: string | undefined,
 	out: DeploymentMismatch[],
 	normalizeEmptyOnce = false,
 ): void {
+	const reportPath = sensitiveRootPath ?? path;
+
 	if (isUnverifiableSecret(a) || isUnverifiableSecret(b)) {
 		out.push({
 			urn,
 			kind: "unverifiable-secret",
-			path,
-			detail: `secret value at ${path || "<root>"} could not be verified (decryption unavailable or failed)`,
+			path: reportPath,
+			detail: `secret value at ${reportPath || "<root>"} could not be verified (decryption unavailable or failed)`,
 		});
 		return;
 	}
 
 	if (isResolvedSecret(a) && isResolvedSecret(b)) {
-		diffValues(path, a.value, b.value, true, urn, out);
+		diffValues(path, a.value, b.value, sensitiveRootPath ?? path, urn, out);
 		return;
 	}
 	if (isResolvedSecret(a) || isResolvedSecret(b)) {
 		out.push({
 			urn,
 			kind: "field-mismatch",
-			path,
-			detail: `${path || "<root>"}: one side is a secret and the other is not`,
+			path: reportPath,
+			detail: `${reportPath || "<root>"}: one side is a secret and the other is not`,
 		});
 		return;
 	}
@@ -286,15 +303,16 @@ function diffValues(
 			out.push({
 				urn,
 				kind: "field-mismatch",
-				path,
-				detail: sensitive
-					? `${path}: secret array length differs (redacted)`
-					: `${path}: array length differs (source=${a.length}, target=${b.length})`,
+				path: reportPath,
+				detail:
+					sensitiveRootPath !== undefined
+						? `${reportPath}: secret array length differs (redacted)`
+						: `${path}: array length differs (source=${a.length}, target=${b.length})`,
 			});
 			return;
 		}
 		for (let i = 0; i < a.length; i++) {
-			diffValues(`${path}[${i}]`, a[i], b[i], sensitive, urn, out);
+			diffValues(`${path}[${i}]`, a[i], b[i], sensitiveRootPath, urn, out);
 		}
 		return;
 	}
@@ -302,8 +320,11 @@ function diffValues(
 		out.push({
 			urn,
 			kind: "field-mismatch",
-			path,
-			detail: `${path || "<root>"}: type differs (array vs non-array)`,
+			path: reportPath,
+			detail:
+				sensitiveRootPath !== undefined
+					? `${reportPath}: secret value differs in shape (redacted)`
+					: `${path || "<root>"}: type differs (array vs non-array)`,
 		});
 		return;
 	}
@@ -315,7 +336,7 @@ function diffValues(
 			const hasA = Object.hasOwn(a, key);
 			const hasB = Object.hasOwn(b, key);
 			if (hasA && hasB) {
-				diffValues(childPath, a[key], b[key], sensitive, urn, out);
+				diffValues(childPath, a[key], b[key], sensitiveRootPath, urn, out);
 			} else if (normalizeEmptyOnce && isEmptyJsonValue(hasA ? a[key] : b[key])) {
 				// One side omits a wire-format `,omitempty` field the other spells out as
 				// its zero value — not a material difference.
@@ -323,10 +344,11 @@ function diffValues(
 				out.push({
 					urn,
 					kind: "field-mismatch",
-					path: childPath,
-					detail: sensitive
-						? `${childPath}: present on ${hasA ? "source" : "target"} only (redacted)`
-						: `${childPath}: present on ${hasA ? "source" : "target"} only`,
+					path: reportPath,
+					detail:
+						sensitiveRootPath !== undefined
+							? `${reportPath}: secret value differs (redacted)`
+							: `${childPath}: present on ${hasA ? "source" : "target"} only`,
 				});
 			}
 		}
@@ -336,8 +358,11 @@ function diffValues(
 		out.push({
 			urn,
 			kind: "field-mismatch",
-			path,
-			detail: `${path || "<root>"}: type differs (object vs scalar)`,
+			path: reportPath,
+			detail:
+				sensitiveRootPath !== undefined
+					? `${reportPath}: secret value differs in shape (redacted)`
+					: `${path || "<root>"}: type differs (object vs scalar)`,
 		});
 		return;
 	}
@@ -346,10 +371,11 @@ function diffValues(
 		out.push({
 			urn,
 			kind: "field-mismatch",
-			path,
-			detail: sensitive
-				? `${path || "<root>"}: secret value differs (redacted)`
-				: `${path || "<root>"}: expected ${describeScalar(a)}, got ${describeScalar(b)}`,
+			path: reportPath,
+			detail:
+				sensitiveRootPath !== undefined
+					? `${reportPath || "<root>"}: secret value differs (redacted)`
+					: `${path || "<root>"}: expected ${describeScalar(a)}, got ${describeScalar(b)}`,
 		});
 	}
 }
@@ -362,6 +388,23 @@ function canonicalSignature(value: unknown): string {
 		return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalSignature(value[k])}`).join(",")}}`;
 	}
 	return JSON.stringify(value);
+}
+
+/**
+ * Strip resource-level fields whose value is a JSON zero value before computing a
+ * duplicate-URN pairing signature, mirroring the `,omitempty` equivalence `diffValues`
+ * itself applies via `normalizeEmptyOnce`. Without this, `{id:"x", delete:false}` and
+ * `{id:"x"}` (the `,omitempty`-elided equivalent) sort into different positions, pairing
+ * unrelated entries within a duplicate-URN group and reporting spurious drift.
+ */
+function normalizeResourceForSignature(value: unknown): unknown {
+	if (!isPlainObject(value)) return value;
+	const out: Record<string, unknown> = Object.create(null);
+	for (const key of Object.keys(value)) {
+		if (isEmptyJsonValue(value[key])) continue;
+		out[key] = value[key];
+	}
+	return out;
 }
 
 function groupByUrn(resources: unknown[]): Map<string, unknown[]> {
@@ -419,13 +462,17 @@ function compareResources(
 		}
 
 		const sortedSource = [...sourceGroup].sort((a, b) =>
-			canonicalSignature(a).localeCompare(canonicalSignature(b)),
+			canonicalSignature(normalizeResourceForSignature(a)).localeCompare(
+				canonicalSignature(normalizeResourceForSignature(b)),
+			),
 		);
 		const sortedTarget = [...targetGroup].sort((a, b) =>
-			canonicalSignature(a).localeCompare(canonicalSignature(b)),
+			canonicalSignature(normalizeResourceForSignature(a)).localeCompare(
+				canonicalSignature(normalizeResourceForSignature(b)),
+			),
 		);
 		for (let i = 0; i < sortedSource.length; i++) {
-			diffValues("", sortedSource[i], sortedTarget[i], false, urn, out, true);
+			diffValues("", sortedSource[i], sortedTarget[i], undefined, urn, out, true);
 		}
 	}
 }
@@ -521,7 +568,7 @@ export async function compareDeploymentState(
 		? targetFields.metadata.integrity_error
 		: undefined;
 
-	diffValues("", sourceFields, targetFields, false, undefined, mismatches, true);
+	diffValues("", sourceFields, targetFields, undefined, undefined, mismatches, true);
 
 	compareResources(sourceDeployment.resources, targetDeployment.resources, mismatches);
 

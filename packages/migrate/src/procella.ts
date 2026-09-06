@@ -146,6 +146,11 @@ export async function exportState(
  * Returns a map from ciphertext to decrypted plaintext (UTF-8 decoded). Ciphertexts this
  * stack's provider cannot decrypt are simply absent from the result.
  */
+// apps/server/src/handlers/schemas.ts MAX_BATCH_CRYPT_ITEMS — the server rejects a single
+// batch-decrypt request larger than this with 400, so a deployment with more distinct
+// secrets than this must be split across multiple requests.
+const MAX_BATCH_DECRYPT_ITEMS = 1000;
+
 export async function batchDecrypt(
 	opts: RequestOptions,
 	org: string,
@@ -153,22 +158,26 @@ export async function batchDecrypt(
 	stack: string,
 	ciphertexts: string[],
 ): Promise<Map<string, string>> {
-	if (ciphertexts.length === 0) return new Map();
-
-	const res = await request("POST", `/api/stacks/${org}/${project}/${stack}/batch-decrypt`, opts, {
-		ciphertexts,
-	});
-	if (!res.ok) {
-		const text = await res.text();
-		throw new Error(
-			`Failed to batch-decrypt secrets for ${org}/${project}/${stack} (${res.status}): ${text}`,
-		);
-	}
-
-	const body = (await res.json()) as { plaintexts?: Record<string, string> };
 	const result = new Map<string, string>();
-	for (const [ciphertext, plaintextBase64] of Object.entries(body.plaintexts ?? {})) {
-		result.set(ciphertext, Buffer.from(plaintextBase64, "base64").toString("utf-8"));
+	for (let i = 0; i < ciphertexts.length; i += MAX_BATCH_DECRYPT_ITEMS) {
+		const chunk = ciphertexts.slice(i, i + MAX_BATCH_DECRYPT_ITEMS);
+		const res = await request(
+			"POST",
+			`/api/stacks/${org}/${project}/${stack}/batch-decrypt`,
+			opts,
+			{ ciphertexts: chunk },
+		);
+		if (!res.ok) {
+			const text = await res.text();
+			throw new Error(
+				`Failed to batch-decrypt secrets for ${org}/${project}/${stack} (${res.status}): ${text}`,
+			);
+		}
+
+		const body = (await res.json()) as { plaintexts?: Record<string, string> };
+		for (const [ciphertext, plaintextBase64] of Object.entries(body.plaintexts ?? {})) {
+			result.set(ciphertext, Buffer.from(plaintextBase64, "base64").toString("utf-8"));
+		}
 	}
 	return result;
 }

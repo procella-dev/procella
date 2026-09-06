@@ -1,7 +1,10 @@
 import { expect, test } from "bun:test";
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { SECRET_SIGNATURE, SECRET_SIGNATURE_KEY } from "./compare.js";
 import type { DiscoveredStack, UntypedDeployment, ValidateOptions } from "./types.js";
-import { validate } from "./validate.js";
+import { exportFromBackend, validate } from "./validate.js";
 
 // Regression tests for M2b: standalone `validate()` used to compare resource *URN sets*
 // only, so same-count/same-URN states with corrupted ids/outputs/dependencies/secrets were
@@ -178,4 +181,63 @@ test("validate succeeds across legitimate secret re-encryption via each backend'
 	});
 
 	expect(result.status).toBe("match");
+});
+
+test("exportFromBackend falls back to the CLI for a non-service secrets provider", async () => {
+	const tempDir = await mkdtemp(join(tmpdir(), "procella-validate-export-fallback-"));
+	const binDir = join(tempDir, "bin");
+	const url = "https://source.example.test";
+	const token = "source-token";
+	const ref = { org: "org-a", project: "api", stack: "prod" };
+
+	// The raw HTTP export reports a passphrase-encrypted stack — its ciphertext cannot be
+	// decrypted through this backend's own /batch-decrypt (passphrase keys are client-side
+	// only), so exportFromBackend must fall through to the CLI rather than trust it.
+	const httpDeployment: UntypedDeployment = {
+		version: 3,
+		deployment: {
+			secrets_providers: { type: "passphrase", state: { salt: "s" } },
+			resources: [{ urn: "urn:pulumi:prod::api::pkg:type::http", type: "pkg:type" }],
+		},
+	};
+	const cliDeployment: UntypedDeployment = {
+		version: 3,
+		deployment: {
+			secrets_providers: { type: "passphrase", state: { salt: "s" } },
+			resources: [{ urn: "urn:pulumi:prod::api::pkg:type::cli", type: "pkg:type" }],
+		},
+	};
+
+	const fakePulumi = `#!/usr/bin/env node
+const fs = require("node:fs");
+const args = process.argv.slice(2);
+const fileIndex = args.indexOf("--file");
+if (args[1] === "stack" && args[2] === "export" && args.includes("--show-secrets")) {
+	fs.writeFileSync(args[fileIndex + 1], ${JSON.stringify(JSON.stringify(cliDeployment))});
+	process.exit(0);
+}
+process.exit(11);
+`;
+	await mkdir(binDir);
+	const pulumiPath = join(binDir, "pulumi");
+	await writeFile(pulumiPath, fakePulumi);
+	await chmod(pulumiPath, 0o755);
+
+	const previousPath = process.env.PATH;
+	const previousFetch = globalThis.fetch;
+	process.env.PATH = `${binDir}:${previousPath ?? ""}`;
+	const fakeFetch = async () => new Response(JSON.stringify(httpDeployment), { status: 200 });
+	// Bun's `fetch` type also declares `preconnect`, which a plain async function lacks;
+	// this stub is never called through that member.
+	globalThis.fetch = fakeFetch as unknown as typeof fetch;
+
+	try {
+		const result = await exportFromBackend(url, token, ref);
+		expect(result).toEqual(cliDeployment);
+	} finally {
+		if (previousPath === undefined) delete process.env.PATH;
+		else process.env.PATH = previousPath;
+		globalThis.fetch = previousFetch;
+		await rm(tempDir, { recursive: true, force: true });
+	}
 });

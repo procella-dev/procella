@@ -362,14 +362,21 @@ function isHttpUrl(url: string): boolean {
 }
 
 /** Export state from a backend — tries Procella API first, falls back to CLI temp file. */
-async function exportFromBackend(
+export async function exportFromBackend(
 	url: string,
 	token: string,
 	ref: { org: string; project: string; stack: string },
 ): Promise<UntypedDeployment> {
 	if (isHttpUrl(url)) {
 		try {
-			return await exportState({ url, token }, ref.org, ref.project, ref.stack);
+			const deployment = await exportState({ url, token }, ref.org, ref.project, ref.stack);
+			// Only a "service" secrets provider can be decrypted through this backend's own
+			// /batch-decrypt: passphrase and cloud-KMS providers are client-side-only, and
+			// the service never holds their key. For anything else, fall through to the CLI
+			// below, which decrypts correctly for any provider via `--show-secrets`.
+			if (deployment.deployment.secrets_providers?.type === "service") {
+				return deployment;
+			}
 		} catch {
 			// Fall through to CLI
 		}

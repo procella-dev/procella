@@ -374,6 +374,124 @@ describe("compareDeploymentState — unverifiable states never certify a match",
 	});
 });
 
+describe("compareDeploymentState — hardening against adversarial/coincidental JSON shapes", () => {
+	test("secret value containing a __proto__ key is compared, not swallowed by prototype pollution", async () => {
+		// Raw JSON text with a literal "__proto__" own key, as it would arrive over the
+		// wire — bypasses the plaintextSecret() helper, which JSON.stringifies a string
+		// and could never itself produce this shape.
+		const source = baseDeployment({
+			resources: [
+				{
+					urn: "urn:pulumi:prod::api::pulumi:pulumi:Stack::api-prod",
+					type: "pulumi:pulumi:Stack",
+					outputs: {
+						password: {
+							[SECRET_SIGNATURE_KEY]: SECRET_SIGNATURE,
+							plaintext: '{"__proto__":{"v":1}}',
+						},
+					},
+				},
+			],
+		});
+		const target = baseDeployment({
+			resources: [
+				{
+					urn: "urn:pulumi:prod::api::pulumi:pulumi:Stack::api-prod",
+					type: "pulumi:pulumi:Stack",
+					outputs: {
+						password: {
+							[SECRET_SIGNATURE_KEY]: SECRET_SIGNATURE,
+							plaintext: '{"__proto__":{"v":2}}',
+						},
+					},
+				},
+			],
+		});
+
+		const result = await compareDeploymentState(source, target);
+		expect(result.match).toBe(false);
+	});
+
+	test("ordinary JSON shaped like the internal secret marker cannot bypass comparison", async () => {
+		// Not a real Pulumi secret envelope (no SECRET_SIGNATURE_KEY) — plain resource
+		// output data that happens to have a string key matching the comparator's old,
+		// unbranded internal wrapper shape.
+		const source = baseDeployment({
+			resources: [
+				{
+					urn: "urn:pulumi:prod::api::pulumi:pulumi:Stack::api-prod",
+					type: "pulumi:pulumi:Stack",
+					outputs: { config: { __resolvedSecret: true, value: "same", extra: "before" } },
+				},
+			],
+		});
+		const target = cloneDeployment(source);
+		firstResource(target).outputs = {
+			config: { __resolvedSecret: true, value: "same", extra: "after" },
+		};
+
+		const result = await compareDeploymentState(source, target);
+		expect(result.match).toBe(false);
+	});
+
+	test("mismatch diagnostics never reveal a decrypted structured secret's own key names", async () => {
+		const source = baseDeployment({
+			resources: [
+				{
+					urn: "urn:pulumi:prod::api::pulumi:pulumi:Stack::api-prod",
+					type: "pulumi:pulumi:Stack",
+					outputs: {
+						credentials: {
+							[SECRET_SIGNATURE_KEY]: SECRET_SIGNATURE,
+							plaintext: JSON.stringify({ "private-token": "aaa" }),
+						},
+					},
+				},
+			],
+		});
+		const target = cloneDeployment(source);
+		firstResource(target).outputs = {
+			credentials: {
+				[SECRET_SIGNATURE_KEY]: SECRET_SIGNATURE,
+				plaintext: JSON.stringify({ "private-token": "bbb" }),
+			},
+		};
+
+		const result = await compareDeploymentState(source, target);
+		expect(result.match).toBe(false);
+		const serialized = JSON.stringify(result.mismatches);
+		expect(serialized).not.toContain("private-token");
+		expect(serialized).not.toContain("aaa");
+		expect(serialized).not.toContain("bbb");
+		// Points at the outer secret's own path, never a descendant key inside it.
+		expect(result.mismatches.some((m) => m.path === "outputs.credentials")).toBe(true);
+	});
+
+	test("duplicate-URN pairing normalizes omitempty-equivalent fields before sorting", async () => {
+		const base = baseDeployment();
+		const dupUrn = "urn:pulumi:prod::api::pkg:type::replaced";
+		const source = baseDeployment({
+			resources: [
+				...(base.deployment.resources ?? []),
+				{ urn: dupUrn, type: "pkg:type", id: "new", delete: false },
+				{ urn: dupUrn, type: "pkg:type", id: "old", delete: true },
+			],
+		});
+		const target = baseDeployment({
+			resources: [
+				...(base.deployment.resources ?? []),
+				// The live resource's `delete: false` is dropped, exactly as the real wire
+				// format (`,omitempty`) would — logically identical to the source.
+				{ urn: dupUrn, type: "pkg:type", id: "new" },
+				{ urn: dupUrn, type: "pkg:type", id: "old", delete: true },
+			],
+		});
+
+		const result = await compareDeploymentState(source, target);
+		expect(result.match).toBe(true);
+	});
+});
+
 describe("describeFirstMismatch", () => {
 	test("reports the first mismatch and a count of the rest", async () => {
 		const source = baseDeployment();
