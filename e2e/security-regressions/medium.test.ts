@@ -231,8 +231,7 @@ function makeRouteTestApp(opts?: { corsOrigins?: string[]; cronSecret?: string }
 			}),
 			deleteWebhook: async () => {},
 			listDeliveries: async () => [],
-			emit: () => {},
-			emitAndWait: async () => {},
+			enqueue: async () => {},
 			ping: async () => ({
 				id: "delivery-1",
 				event: "webhook.ping",

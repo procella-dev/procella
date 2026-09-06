@@ -11,7 +11,6 @@ import {
 	updates,
 } from "@procella/db";
 import type { BlobStorage } from "@procella/storage";
-
 import {
 	activeUpdatesGauge,
 	checkpointSizeHistogram,
@@ -59,6 +58,7 @@ import {
 	UpdateConflictError,
 	UpdateNotFoundError,
 } from "@procella/types";
+import { enqueueWebhookEvent } from "@procella/webhooks";
 import { and, desc, eq, gt, isNull, lt, max, ne, or, sql } from "drizzle-orm";
 import {
 	applyDeploymentDelta,
@@ -83,6 +83,7 @@ import type {
 	DeltaCheckpointSave,
 	GitHubUpdateTarget,
 	UpdatesService,
+	UpdateWebhookContext,
 	VerbatimCheckpointSave,
 } from "./types.js";
 import {
@@ -109,6 +110,7 @@ interface LockedUpdateRow {
 	leaseToken: string | null;
 	leaseExpiresAt: Date | null;
 	githubTarget: GitHubUpdateTarget | null;
+	webhookContext: UpdateWebhookContext | null;
 }
 interface StackLockRow {
 	activeUpdateId: string | null;
@@ -120,6 +122,10 @@ interface StackLockRow {
 
 interface RawStackLockRow extends Omit<StackLockRow, "tags"> {
 	tags: unknown;
+}
+
+interface RawLockedUpdateRow extends Omit<LockedUpdateRow, "webhookContext"> {
+	webhookContext: unknown;
 }
 
 /**
@@ -244,6 +250,12 @@ export class PostgresUpdatesService implements UpdatesService {
 								? (caller.workload as unknown as Record<string, unknown>)
 								: null,
 							githubTarget,
+							webhookContext: {
+								tenantId: stackLock.tenantId,
+								org: caller?.orgSlug ?? stackLock.tenantId,
+								project: stackLock.project,
+								stack: stackLock.stack,
+							},
 						})
 						.returning();
 
@@ -306,6 +318,7 @@ export class PostgresUpdatesService implements UpdatesService {
 					await this.enqueueGitHubPublication(tx, updateId, "started");
 				}
 
+				await this.enqueueWebhookLifecycle(tx, row, updateId, "update.started");
 				const journalVersion = (request.journalVersion ?? 0) >= 1 ? 1 : 0;
 
 				return {
@@ -400,6 +413,18 @@ export class PostgresUpdatesService implements UpdatesService {
 					if (row.githubTarget) {
 						await this.enqueueGitHubPublication(tx, updateId, "terminal");
 					}
+
+					await this.enqueueWebhookLifecycle(
+						tx,
+						row,
+						updateId,
+						request.status === "succeeded"
+							? "update.succeeded"
+							: request.status === "failed"
+								? "update.failed"
+								: "update.cancelled",
+						request.status,
+					);
 				}),
 		);
 
@@ -449,6 +474,7 @@ export class PostgresUpdatesService implements UpdatesService {
 					await this.enqueueGitHubPublication(tx, updateId, "terminal");
 				}
 
+				await this.enqueueWebhookLifecycle(tx, row, updateId, "update.cancelled", "cancelled");
 				return previouslyRunning;
 			}),
 		);
@@ -1242,25 +1268,52 @@ export class PostgresUpdatesService implements UpdatesService {
 		return this.lockUpdateForWrite(tx, updateId, options);
 	}
 
+	private async enqueueWebhookLifecycle(
+		tx: DbTransaction,
+		row: LockedUpdateRow,
+		updateId: string,
+		event: "update.started" | "update.succeeded" | "update.failed" | "update.cancelled",
+		status?: string,
+	): Promise<void> {
+		if (!row.webhookContext) return;
+		await enqueueWebhookEvent(tx, {
+			tenantId: row.webhookContext.tenantId,
+			event,
+			data: {
+				org: row.webhookContext.org,
+				project: row.webhookContext.project,
+				stack: row.webhookContext.stack,
+				updateId,
+				...(status ? { status } : {}),
+			},
+		});
+	}
+
 	private async lockUpdateForWrite(
 		tx: DbTransaction,
 		updateId: string,
 		options?: { requireRunningLease?: boolean },
 	): Promise<LockedUpdateRow> {
-		const [row] = this.readExecuteRows<LockedUpdateRow>(
+		const [raw] = this.readExecuteRows<RawLockedUpdateRow>(
 			await tx.execute(sql`
 				SELECT stack_id AS "stackId", status, version,
 					lease_token AS "leaseToken", lease_expires_at AS "leaseExpiresAt",
-					github_target AS "githubTarget"
+					github_target AS "githubTarget", webhook_context AS "webhookContext"
 				FROM updates
 				WHERE id = ${updateId}
 				FOR UPDATE
 			`),
 		);
 
-		if (!row) {
+		if (!raw) {
 			throw new UpdateNotFoundError(updateId);
 		}
+
+		// `tx.execute` returns driver-native values: jsonb arrives as text under Bun's driver.
+		const row: LockedUpdateRow = {
+			...raw,
+			webhookContext: parseWebhookContext(raw.webhookContext),
+		};
 
 		if (options?.requireRunningLease === false) {
 			return row;
@@ -1409,6 +1462,21 @@ function parseStringRecord(value: unknown): Record<string, string> {
 			(entry): entry is [string, string] => typeof entry[1] === "string",
 		),
 	);
+}
+
+function parseWebhookContext(value: unknown): UpdateWebhookContext | null {
+	const parsed = typeof value === "string" ? (JSON.parse(value) as unknown) : value;
+	if (!isPlainObject(parsed)) return null;
+	const { tenantId, org, project, stack } = parsed;
+	if (
+		typeof tenantId !== "string" ||
+		typeof org !== "string" ||
+		typeof project !== "string" ||
+		typeof stack !== "string"
+	) {
+		return null;
+	}
+	return { tenantId, org, project, stack };
 }
 export function deriveGitHubUpdateTarget({
 	caller,

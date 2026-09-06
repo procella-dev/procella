@@ -258,6 +258,7 @@
         "@procella/storage": "workspace:*",
         "@procella/telemetry": "workspace:*",
         "@procella/types": "workspace:*",
+        "@procella/webhooks": "workspace:*",
         "drizzle-orm": "catalog:",
       },
     },

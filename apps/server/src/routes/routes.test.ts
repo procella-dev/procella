@@ -175,12 +175,7 @@ function mockWebhooksService(): WebhooksService {
 		}),
 		deleteWebhook: async () => {},
 		listDeliveries: async (_tenantId: string, _webhookId: string, _limit?: number) => [],
-		emit: (_event: {
-			tenantId: string;
-			event: WebhookEventValue;
-			data: Record<string, unknown>;
-		}) => {},
-		emitAndWait: async (_event: {
+		enqueue: async (_intent: {
 			tenantId: string;
 			event: WebhookEventValue;
 			data: Record<string, unknown>;
@@ -440,7 +435,7 @@ describe("@procella/server routes", () => {
 			expect(res.status).toBe(200);
 		});
 
-		test("keeps successful GC response when GitHub outbox drain fails", async () => {
+		test("keeps successful GC response when outbox drains fail", async () => {
 			let transactions = 0;
 			const db = {
 				transaction: async (callback: (tx: unknown) => unknown) => {
@@ -462,7 +457,8 @@ describe("@procella/server routes", () => {
 				headers: { Authorization: "Bearer correct-secret" },
 			});
 			expect(res.status).toBe(200);
-			expect(transactions).toBe(3);
+			// GC cycle, GitHub outbox claim (fails), webhook outbox claim, blob cleanup claim.
+			expect(transactions).toBe(4);
 		});
 
 		test("continues the cron tick when blob cleanup claim fails", async () => {
@@ -473,7 +469,7 @@ describe("@procella/server routes", () => {
 					if (transactions === 1) {
 						return callback({ execute: async () => ({ rows: [{ acquired: false }] }) });
 					}
-					if (transactions === 2) {
+					if (transactions === 2 || transactions === 3) {
 						return callback({ execute: async () => ({ rows: [] }) });
 					}
 					throw new Error("cleanup queue unavailable");
@@ -489,7 +485,8 @@ describe("@procella/server routes", () => {
 				headers: { Authorization: "Bearer correct-secret" },
 			});
 			expect(res.status).toBe(200);
-			expect(transactions).toBe(3);
+			// GC cycle, GitHub outbox claim, webhook outbox claim, blob cleanup claim (fails).
+			expect(transactions).toBe(4);
 		});
 
 		test("reserves the shared deadline for GitHub before blob cleanup", async () => {
@@ -501,10 +498,10 @@ describe("@procella/server routes", () => {
 					if (transactions === 1) {
 						return callback({ execute: async () => ({ rows: [{ acquired: false }] }) });
 					}
-					if (transactions === 2) {
+					if (transactions === 2 || transactions === 3) {
 						return callback({ execute: async () => ({ rows: [] }) });
 					}
-					if (transactions === 3) {
+					if (transactions === 4) {
 						return callback({
 							execute: async () => ({
 								rows: [{ id: "cleanup-1", blobKey: "checkpoints/stack/update/1", attempts: 1 }],
@@ -536,7 +533,8 @@ describe("@procella/server routes", () => {
 				headers: { Authorization: "Bearer correct-secret" },
 			});
 			expect(res.status).toBe(200);
-			expect(transactions).toBe(4);
+			// GC cycle, GitHub outbox claim, webhook outbox claim, blob cleanup claims then re-checks.
+			expect(transactions).toBe(5);
 			expect(deleted).toEqual(["checkpoints/stack/update/1"]);
 		});
 	});

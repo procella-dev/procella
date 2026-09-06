@@ -3,7 +3,6 @@
 import type { StackInfo, StacksService } from "@procella/stacks";
 import type { Stack, StackRenameRequest, StackSummary } from "@procella/types";
 import { BadRequestError } from "@procella/types";
-import type { WebhooksService } from "@procella/webhooks";
 import type { Context } from "hono";
 import type { Env } from "../types.js";
 import { param } from "./params.js";
@@ -12,7 +11,7 @@ import { param } from "./params.js";
 // Stack Handlers
 // ============================================================================
 
-export function stackHandlers(stacks: StacksService, webhooks?: WebhooksService) {
+export function stackHandlers(stacks: StacksService) {
 	return {
 		/** POST /api/stacks/:org/:project/:stack OR POST /api/stacks/:org/:project (stack in body) */
 		createStack: async (c: Context<Env>) => {
@@ -27,11 +26,6 @@ export function stackHandlers(stacks: StacksService, webhooks?: WebhooksService)
 				throw new BadRequestError("Missing stack name in URL or body");
 			}
 			const result = await stacks.createStack(caller.tenantId, org, project, stack, typedBody.tags);
-			void webhooks?.emit({
-				tenantId: caller.tenantId,
-				event: "stack.created",
-				data: { org, project, stack },
-			});
 			return c.json(mapToStack(result, caller.orgSlug));
 		},
 
@@ -51,11 +45,6 @@ export function stackHandlers(stacks: StacksService, webhooks?: WebhooksService)
 			const stack = param(c, "stack");
 			const force = c.req.query("force") === "true";
 			await stacks.deleteStack(caller.tenantId, org, project, stack, force);
-			void webhooks?.emit({
-				tenantId: caller.tenantId,
-				event: "stack.deleted",
-				data: { org, project, stack },
-			});
 			return c.body(null, 204);
 		},
 

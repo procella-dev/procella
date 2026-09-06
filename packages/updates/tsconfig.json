@@ -10,6 +10,7 @@
 		{ "path": "../db" },
 		{ "path": "../storage" },
 		{ "path": "../crypto" },
-		{ "path": "../telemetry" }
+		{ "path": "../telemetry" },
+		{ "path": "../webhooks" }
 	]
 }

@@ -1,5 +1,6 @@
 import { formatConfigErrors } from "@procella/config";
 import { GitHubOutboxWorker } from "@procella/github";
+import { WebhookOutboxWorker } from "@procella/webhooks";
 import { ZodError } from "zod";
 import { logger } from "./logger.js";
 
@@ -71,6 +72,8 @@ if (process.argv.includes("--healthz")) {
 		void blobCleanup.start();
 		const githubOutbox = github ? new GitHubOutboxWorker({ db, github }) : null;
 		if (githubOutbox) void githubOutbox.start();
+		const webhookOutbox = new WebhookOutboxWorker({ db });
+		void webhookOutbox.start();
 
 		const DRAIN_TIMEOUT_MS = 10_000;
 		const shutdown = async () => {
@@ -85,6 +88,7 @@ if (process.argv.includes("--healthz")) {
 			await gc.stop();
 			await blobCleanup.stop();
 			if (githubOutbox) await githubOutbox.stop();
+			await webhookOutbox.stop();
 			await shutdownTelemetry();
 			auth.dispose?.();
 			await client.close();

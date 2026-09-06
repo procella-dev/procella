@@ -47,6 +47,7 @@ bun run e2e:cluster       # Run full E2E tests against the cluster
 | Checkpoints | S3 (MinIO) | Shared — all replicas read/write the same bucket |
 | GC worker | One active | Advisory lock ensures only one runs at a time |
 | GitHub publication worker | PostgreSQL outbox | Leased `SKIP LOCKED` claims prevent duplicate concurrent delivery |
+| Webhook delivery worker | PostgreSQL outbox | Leased `SKIP LOCKED` claims prevent duplicate concurrent delivery |
 
 ## Cluster-Safe GC
 
@@ -61,6 +62,11 @@ SELECT pg_try_advisory_xact_lock(0x5472617461_4743);  -- GC lock (historic value
 - PostgreSQL releases the lock when the transaction commits, rolls back, or its connection closes
 
 GitHub update publications use a separate transactional outbox. Replicas claim non-overlapping rows with `FOR UPDATE SKIP LOCKED`, perform GitHub network calls after committing the claim, and acknowledge only the claimed revision. Expired claims use bounded retries before dead-lettering, and scheduled drains stop before the Lambda invocation deadline.
+
+Outbound webhooks use the same pattern in their own `webhook_outbox` table. Every replica runs a
+delivery worker; the intent is written in the transaction that changed the update, each claim is
+fenced on `claimed_by`, and a delivered intent is removed. Deliveries are at-least-once, so
+subscribers deduplicate on the `X-Webhook-Delivery` header.
 
 ## Load Balancer Configuration
 

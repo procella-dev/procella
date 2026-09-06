@@ -4,6 +4,7 @@ import type { Database } from "@procella/db";
 import { githubUpdateOutbox, stacks, updates } from "@procella/db";
 import { activeUpdatesGauge, gcCycleCount, gcOrphansCleanedCount } from "@procella/telemetry";
 import { projectError } from "@procella/types";
+import { enqueueWebhookEvent } from "@procella/webhooks";
 import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
 import {
 	GC_ADVISORY_LOCK_ID,
@@ -138,6 +139,7 @@ export class GCWorker {
 						id: updates.id,
 						stackId: updates.stackId,
 						githubTarget: updates.githubTarget,
+						webhookContext: updates.webhookContext,
 					});
 
 				const staleUpdates = await tx
@@ -173,6 +175,23 @@ export class GCWorker {
 								})),
 							)
 							.onConflictDoNothing();
+					}
+
+					// Only leases that were actually running had a start event; a never-started
+					// update was never announced, so cancelling it announces nothing either.
+					for (const update of expiredLeaseUpdates) {
+						if (!update.webhookContext) continue;
+						await enqueueWebhookEvent(tx, {
+							tenantId: update.webhookContext.tenantId,
+							event: "update.cancelled",
+							data: {
+								org: update.webhookContext.org,
+								project: update.webhookContext.project,
+								stack: update.webhookContext.stack,
+								updateId: update.id,
+								status: "cancelled",
+							},
+						});
 					}
 
 					const affectedStackIds = [...new Set(allOrphans.map((update) => update.stackId))];

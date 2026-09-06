@@ -65,7 +65,8 @@ Every request includes these headers:
 
 | Header | Value |
 |---|---|
-| `X-Webhook-Id` | Unique delivery ID (use for deduplication) |
+| `X-Webhook-Id` | The webhook you registered |
+| `X-Webhook-Delivery` | Unique delivery ID, stable across retries (use for deduplication) |
 | `X-Webhook-Event` | The event type, e.g. `update.succeeded` |
 | `X-Webhook-Signature` | `sha256=<hex>` HMAC-SHA256 signature (see below) |
 | `User-Agent` | `Procella-Webhooks/1.0` |
@@ -113,18 +114,31 @@ app.post("/webhook", (req, res) => {
 
 Use `timingSafeEqual` to prevent timing attacks. Reject any request where the signature doesn't match.
 
+## Delivery Semantics
+
+Procella records a delivery intent in the same database transaction as the change that caused
+it. A crash between that commit and the outbound request loses nothing: any replica picks the
+intent up and sends it. The consequence is **at-least-once** delivery, so your endpoint may see
+the same event more than once, for example when it returns `200` but the connection drops
+before Procella reads the response.
+
+Deduplicate on `X-Webhook-Delivery`. It identifies one delivery intent and stays the same
+across every retry of that intent, while the request body stays byte-for-byte identical (the
+`timestamp` field is the time the event was recorded, not the time of the attempt), so the
+signature of a retry matches the signature of the original attempt.
+
 ## Retry Behavior
 
-Procella considers a delivery successful when your endpoint returns any `2xx` status code within 10 seconds.
+Procella considers a delivery successful when your endpoint returns any `2xx` status code
+within 10 seconds.
 
-If the delivery fails (non-2xx response, timeout, or connection error), Procella retries up to 3 attempts with exponential backoff and a 10-second timeout per attempt:
+A failed attempt (5xx, `408`, `429`, timeout, or connection error) is retried with exponential
+backoff of 5s, 10s, 20s and so on, capped at 15 minutes, for up to 8 attempts. Retries survive
+restarts and deploys because the queue lives in PostgreSQL, not in process memory.
 
-| Attempt | Delay |
-|---|---|
-| 2nd attempt | 1 second |
-| 3rd attempt | 2 seconds |
-
-After 3 failed attempts, the delivery is marked as `failed` and no further retries occur. You can manually re-deliver from the delivery history view.
+Procella stops immediately, without further attempts, when the endpoint returns a `4xx` other
+than `408` or `429`, or when the URL fails SSRF validation: no retry can change that outcome.
+The delivery is then marked failed and kept for inspection in the delivery history view.
 
 ## Managing Webhooks
 
