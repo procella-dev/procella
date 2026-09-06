@@ -1,7 +1,7 @@
 // @procella/stacks — Stack management domain (projects, stacks, tags)
 
 import type { Database } from "@procella/db";
-import { projects, stacks } from "@procella/db";
+import { checkpoints, projects, stacks } from "@procella/db";
 import { withDbSpan, withSpan } from "@procella/telemetry";
 import {
 	BadRequestError,
@@ -9,6 +9,7 @@ import {
 	InvalidNameError,
 	parseStackFQN,
 	StackAlreadyExistsError,
+	StackHasResourcesError,
 	StackNotFoundByIdError,
 	StackNotFoundError,
 } from "@procella/types";
@@ -114,7 +115,13 @@ export interface StacksService {
 
 	searchStacks?(tenantId: string, params: SearchStacksParams): Promise<StackPage>;
 
-	deleteStack(tenantId: string, org: string, project: string, stack: string): Promise<void>;
+	deleteStack(
+		tenantId: string,
+		org: string,
+		project: string,
+		stack: string,
+		force?: boolean,
+	): Promise<void>;
 
 	renameStack(
 		tenantId: string,
@@ -265,6 +272,17 @@ function toStackInfo(row: {
 		createdAt: row.stack_created_at,
 		updatedAt: row.stack_updated_at,
 	};
+}
+
+function checkpointHasResources(data: unknown, blobKey: string | null): boolean {
+	// Blob-backed deployments exceed 1 MiB. Without a storage dependency here,
+	// conservatively require force rather than risk deleting a populated stack.
+	if (blobKey) return true;
+	if (typeof data !== "object" || data === null) return true;
+
+	const resources = (data as Record<string, unknown>).resources;
+	if (resources === undefined || resources === null) return false;
+	return !Array.isArray(resources) || resources.length > 0;
 }
 
 // ============================================================================
@@ -520,7 +538,13 @@ export class PostgresStacksService implements StacksService {
 		};
 	}
 
-	async deleteStack(tenantId: string, _org: string, project: string, stack: string): Promise<void> {
+	async deleteStack(
+		tenantId: string,
+		_org: string,
+		project: string,
+		stack: string,
+		force = false,
+	): Promise<void> {
 		return withDbSpan(
 			"deleteStack",
 			{
@@ -528,26 +552,47 @@ export class PostgresStacksService implements StacksService {
 				"org.name": _org,
 				"project.name": project,
 				"stack.name": stack,
+				"stack.delete.force": force,
 			},
 			async () => {
-				// Find the stack first to verify ownership
-				const rows = await this.db
-					.select({ stackId: stacks.id })
-					.from(stacks)
-					.innerJoin(projects, eq(stacks.projectId, projects.id))
-					.where(
-						and(
-							eq(projects.tenantId, tenantId),
-							eq(projects.name, project),
-							eq(stacks.name, stack),
-						),
-					);
+				await this.db.transaction(async (tx) => {
+					const [locked] = await tx
+						.select({ stackId: stacks.id, activeUpdateId: stacks.activeUpdateId })
+						.from(stacks)
+						.innerJoin(projects, eq(stacks.projectId, projects.id))
+						.where(
+							and(
+								eq(projects.tenantId, tenantId),
+								eq(projects.name, project),
+								eq(stacks.name, stack),
+							),
+						)
+						.limit(1)
+						.for("update", { of: stacks });
 
-				if (rows.length === 0) {
-					throw new StackNotFoundError(tenantId, project, stack);
-				}
+					if (!locked) {
+						throw new StackNotFoundError(tenantId, project, stack);
+					}
 
-				await this.db.delete(stacks).where(eq(stacks.id, rows[0].stackId));
+					if (!force) {
+						if (locked.activeUpdateId) {
+							throw new ConflictError(`Stack has an active update: ${_org}/${project}/${stack}`);
+						}
+
+						const [checkpoint] = await tx
+							.select({ data: checkpoints.data, blobKey: checkpoints.blobKey })
+							.from(checkpoints)
+							.where(and(eq(checkpoints.stackId, locked.stackId), eq(checkpoints.isDelta, false)))
+							.orderBy(desc(checkpoints.createdAt))
+							.limit(1);
+
+						if (checkpoint && checkpointHasResources(checkpoint.data, checkpoint.blobKey)) {
+							throw new StackHasResourcesError();
+						}
+					}
+
+					await tx.delete(stacks).where(eq(stacks.id, locked.stackId));
+				});
 			},
 		);
 	}

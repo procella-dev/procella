@@ -90,9 +90,19 @@ export class StackAlreadyExistsError extends ConflictError {
 	}
 }
 
-export class StackHasResourcesError extends ConflictError {
-	constructor(org: string, project: string, stack: string) {
-		super(`Stack has resources and cannot be deleted without --force: ${org}/${project}/${stack}`);
+/**
+ * Rejection for `DELETE /api/stacks/:org/:project/:stack` without `?force=true`
+ * on a stack that still holds resources.
+ *
+ * The status/message pair is a wire contract, not a cosmetic string: the Pulumi
+ * CLI only prints its "still has resources; removal rejected; pass --force to
+ * override" hint when the response is exactly HTTP 400 with this message
+ * (`isStackHasResourcesError` in pkg/backend/httpstate/client/client.go).
+ * Do not reword.
+ */
+export class StackHasResourcesError extends BadRequestError {
+	constructor() {
+		super("Bad Request: Stack still contains resources.");
 		this.name = "StackHasResourcesError";
 	}
 }

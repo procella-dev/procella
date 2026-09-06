@@ -47,6 +47,15 @@ describe("@procella/types errors", () => {
 		});
 	});
 
+	describe("StackHasResourcesError", () => {
+		test("matches the Pulumi CLI's deletion rejection contract", () => {
+			const err = new StackHasResourcesError();
+			expect(err).toBeInstanceOf(BadRequestError);
+			expect(err.statusCode).toBe(400);
+			expect(err.message).toBe("Bad Request: Stack still contains resources.");
+		});
+	});
+
 	describe("LeaseExpiredError", () => {
 		test("is instance of UnauthorizedError", () => {
 			expect(new LeaseExpiredError()).toBeInstanceOf(UnauthorizedError);
@@ -64,7 +73,7 @@ describe("@procella/types errors", () => {
 				new ForbiddenError(),
 				new StackNotFoundError("o", "p", "s"),
 				new StackAlreadyExistsError("o", "p", "s"),
-				new StackHasResourcesError("o", "p", "s"),
+				new StackHasResourcesError(),
 				new UpdateNotFoundError("u"),
 				new UpdateConflictError("x"),
 				new LeaseExpiredError(),

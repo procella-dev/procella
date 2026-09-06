@@ -1,12 +1,16 @@
 import { afterEach, beforeAll, describe, expect, test } from "bun:test";
-import type { Database } from "@procella/db";
+import { SQL } from "bun";
+import { checkpoints, type Database, stacks as stackRows, updates } from "@procella/db";
 import { PostgresStacksService, type StackInfo } from "@procella/stacks";
 import {
+	ConflictError,
 	StackAlreadyExistsError,
+	StackHasResourcesError,
 	StackNotFoundByIdError,
 	StackNotFoundError,
 } from "@procella/types";
-import { getTestDb, truncateTables } from "./setup.js";
+import { eq } from "drizzle-orm";
+import { getTestDb, getTestDbUrl, truncateTables } from "./setup.js";
 
 let db: Database;
 let stacks: PostgresStacksService;
@@ -133,6 +137,135 @@ describe("PostgresStacksService — integration", () => {
 			await expect(
 				stacks.getStack("tenant-1", "org-1", "proj-1", "dev"),
 			).rejects.toBeInstanceOf(StackNotFoundError);
+		});
+
+		test("rejects a populated stack unless force is set", async () => {
+			const stack = await stacks.createStack("tenant-1", "org-1", "proj-1", "dev");
+			const [update] = await db
+				.insert(updates)
+				.values({ stackId: stack.id, kind: "update", status: "succeeded" })
+				.returning({ id: updates.id });
+			await db.insert(checkpoints).values({
+				updateId: update.id,
+				stackId: stack.id,
+				version: 1,
+				data: { resources: [{ type: "aws:s3/bucket:Bucket" }] },
+			});
+
+			await expect(
+				stacks.deleteStack("tenant-1", "org-1", "proj-1", "dev"),
+			).rejects.toBeInstanceOf(StackHasResourcesError);
+			expect(await stacks.getStack("tenant-1", "org-1", "proj-1", "dev")).toBeDefined();
+
+			await stacks.deleteStack("tenant-1", "org-1", "proj-1", "dev", true);
+			await expect(
+				stacks.getStack("tenant-1", "org-1", "proj-1", "dev"),
+			).rejects.toBeInstanceOf(StackNotFoundError);
+		});
+
+		test("allows deletion when an empty deployment omits resources", async () => {
+			const stack = await stacks.createStack("tenant-1", "org-1", "proj-1", "dev");
+			const [update] = await db
+				.insert(updates)
+				.values({ stackId: stack.id, kind: "destroy", status: "succeeded" })
+				.returning({ id: updates.id });
+			await db.insert(checkpoints).values({
+				updateId: update.id,
+				stackId: stack.id,
+				version: 1,
+				data: { manifest: {} },
+			});
+
+			await stacks.deleteStack("tenant-1", "org-1", "proj-1", "dev");
+			await expect(
+				stacks.getStack("tenant-1", "org-1", "proj-1", "dev"),
+			).rejects.toBeInstanceOf(StackNotFoundError);
+		});
+
+		test("rejects a stack with an active update unless force is set", async () => {
+			const stack = await stacks.createStack("tenant-1", "org-1", "proj-1", "dev");
+			const [update] = await db
+				.insert(updates)
+				.values({ stackId: stack.id, kind: "update", status: "running" })
+				.returning({ id: updates.id });
+			await db
+				.update(stackRows)
+				.set({ activeUpdateId: update.id })
+				.where(eq(stackRows.id, stack.id));
+
+			await expect(
+				stacks.deleteStack("tenant-1", "org-1", "proj-1", "dev"),
+			).rejects.toBeInstanceOf(ConflictError);
+			expect(await stacks.getStack("tenant-1", "org-1", "proj-1", "dev")).toBeDefined();
+
+			await stacks.deleteStack("tenant-1", "org-1", "proj-1", "dev", true);
+			await expect(
+				stacks.getStack("tenant-1", "org-1", "proj-1", "dev"),
+			).rejects.toBeInstanceOf(StackNotFoundError);
+		});
+
+		test("row lock makes concurrent deletes resolve one winner", async () => {
+			const stack = await stacks.createStack("tenant-1", "org-1", "proj-1", "dev");
+			const lockPool = new SQL({ url: getTestDbUrl(), max: 2 });
+			const holder = await lockPool.reserve();
+			const observer = await lockPool.reserve();
+			let lockHeld = false;
+			let deletions: Promise<void>[] = [];
+
+			try {
+				await holder.unsafe("BEGIN");
+				lockHeld = true;
+				const holderRows = (await holder.unsafe(
+					"SELECT pg_backend_pid()::int AS pid",
+				)) as unknown as Array<{ pid: number }>;
+				const holderPid = holderRows[0]?.pid;
+				expect(holderPid).toBeNumber();
+				await holder.unsafe("SELECT id FROM stacks WHERE id = $1 FOR UPDATE", [stack.id]);
+
+				deletions = [
+					stacks.deleteStack("tenant-1", "org-1", "proj-1", "dev"),
+					stacks.deleteStack("tenant-1", "org-1", "proj-1", "dev"),
+				];
+
+				let blockedPids = new Set<number>();
+				const deadline = Date.now() + 5_000;
+				while (blockedPids.size < 2 && Date.now() < deadline) {
+					const rows = (await observer.unsafe(
+						`WITH RECURSIVE blocked(pid) AS (
+							SELECT pid
+							FROM pg_stat_activity
+							WHERE $1::int = ANY(pg_blocking_pids(pid))
+							UNION
+							SELECT activity.pid
+							FROM pg_stat_activity AS activity
+							JOIN blocked AS blocker
+								ON blocker.pid = ANY(pg_blocking_pids(activity.pid))
+						)
+						SELECT DISTINCT pid::int AS pid FROM blocked`,
+						[holderPid],
+					)) as unknown as Array<{ pid: number }>;
+					blockedPids = new Set(rows.map((row) => row.pid));
+				}
+
+				// Both delete transactions have reached the locked row before it is released.
+				// With FOR UPDATE they block during lookup; without it they both pass lookup
+				// and block later during DELETE, making the mutation deterministically visible.
+				expect(blockedPids.size).toBe(2);
+
+				await holder.unsafe("COMMIT");
+				lockHeld = false;
+
+				const results = await Promise.allSettled(deletions);
+				expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+				const [rejected] = results.filter((result) => result.status === "rejected");
+				expect((rejected as PromiseRejectedResult).reason).toBeInstanceOf(StackNotFoundError);
+			} finally {
+				if (lockHeld) await holder.unsafe("ROLLBACK");
+				await Promise.allSettled(deletions);
+				holder.release();
+				observer.release();
+				await lockPool.close();
+			}
 		});
 
 		test("throws StackNotFoundError for missing stack", async () => {

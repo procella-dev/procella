@@ -625,7 +625,7 @@ function SettingsTab({ org, project, stack, tags }: SettingsTabProps) {
 							</button>
 							<button
 								type="button"
-								onClick={() => deleteMut.mutate({ org, project, stack })}
+								onClick={() => deleteMut.mutate({ org, project, stack, force: true })}
 								disabled={deleteConfirm !== stack || deleteMut.isPending}
 								className={`${btnDanger} disabled:opacity-40`}
 							>

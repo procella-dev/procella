@@ -225,7 +225,7 @@ describeCompatibility("Pulumi CLI compatibility smoke", () => {
 				projectName,
 				stackName: "dev",
 			});
-			await runPulumi(["stack", "rm", "--yes", stackPath], opts);
+			await runPulumi(["stack", "rm", "--yes", "--force", stackPath], opts);
 		},
 	);
 
@@ -287,7 +287,7 @@ describeCompatibility("Pulumi CLI compatibility smoke", () => {
 			});
 			expectApiStatus(cancelUpdate, 204);
 
-			await runPulumi(["stack", "rm", "--yes", stackPath], opts);
+			await runPulumi(["stack", "rm", "--yes", "--force", stackPath], opts);
 		},
 	);
 
