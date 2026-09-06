@@ -5,13 +5,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type MigrationOperations, migrateOne } from "../packages/migrate/src/migrate.js";
 import { createStack, exportState } from "../packages/migrate/src/procella.js";
+import { importStack } from "../packages/migrate/src/pulumi.js";
 import type { RunOptions, UntypedDeployment } from "../packages/migrate/src/types.js";
 import {
 	apiRequest,
 	BACKEND_URL,
 	cleanupDir,
 	createPulumiHome,
-	pulumi,
 	TEST_TOKEN,
 	truncateTables,
 } from "./helpers.js";
@@ -34,11 +34,10 @@ test("H5 migration stores secrets as target-provider ciphertext", async () => {
 	const targetStack = `target-${randomUUID().slice(0, 8)}`;
 	const targetFqn = `dev-org/${project}/${targetStack}`;
 	const secretValues = Array.from({ length: 4 }, () => `secret-${randomUUID()}`);
+	const previousPulumiHome = process.env.PULUMI_HOME;
+	process.env.PULUMI_HOME = pulumiHome;
 
 	try {
-		const login = await pulumi(["login", "--cloud-url", BACKEND_URL], { pulumiHome });
-		expect(login.exitCode).toBe(0);
-
 		const seedCreate = await apiRequest(`/stacks/dev-org/${project}/${seedStack}`, {
 			method: "POST",
 		});
@@ -70,15 +69,7 @@ test("H5 migration stores secrets as target-provider ciphertext", async () => {
 				await writeFile(filePath, JSON.stringify(sourceDeployment));
 			},
 			createStack,
-			importStack: async (stackFqn, filePath) => {
-				const imported = await pulumi(
-					["stack", "import", "--force", "--stack", stackFqn, "--file", filePath],
-					{ pulumiHome },
-				);
-				if (imported.exitCode !== 0) {
-					throw new Error(`pulumi stack import failed: ${imported.stderr}`);
-				}
-			},
+			importStack,
 			exportState,
 		};
 		const options: RunOptions = {
@@ -128,6 +119,8 @@ test("H5 migration stores secrets as target-provider ciphertext", async () => {
 		}
 		expect(serializedTarget.match(/"ciphertext"/g)).toHaveLength(secretValues.length);
 	} finally {
+		if (previousPulumiHome === undefined) delete process.env.PULUMI_HOME;
+		else process.env.PULUMI_HOME = previousPulumiHome;
 		await cleanupDir(pulumiHome);
 		await rm(outputDir, { recursive: true, force: true });
 		await truncateTables();

@@ -148,7 +148,7 @@ The tool follows this sequence for each stack:
 5. Import     → pulumi stack import --force re-encrypts every plaintext secret through the target provider
 6. Verify     → Compare resource count and reject any plaintext secret envelope in target state
 7. Report     → Log result to audit trail
-8. Cleanup    → Delete temp export file (unless --keep-exports)
+8. Cleanup    → Delete scratch payload (warning on failure) and temp export (unless --keep-exports)
 ```
 
 In `--dry-run` mode, steps 3–5 are skipped — the tool exports and validates without modifying the target.
@@ -218,7 +218,7 @@ procella-migrate run --exclude "*/*/production" ...
 | **Source is never modified** | Export is read-only; the tool never writes to the source backend |
 | **Atomic per-stack** | Each stack migrates completely or fails — no partial state |
 | **Idempotent** | Re-running migration on an already-migrated stack overwrites cleanly |
-| **Secrets handled safely** | `--show-secrets` decrypts on the source, a scratch payload is re-encrypted through the target provider by `pulumi stack import`, and target state is rejected if any plaintext secret envelope remains; plaintext files are deleted unless the source export is explicitly retained with `--keep-exports` |
+| **Secrets handled safely** | `--show-secrets` decrypts on the source, a scratch payload is re-encrypted through the target provider by `pulumi stack import`, and target state is rejected if any plaintext secret envelope remains; scratch deletion failures are warned, while source exports are deleted unless explicitly retained with `--keep-exports` |
 | **Validation before completion** | Resource count + URN comparison ensures state integrity |
 | **Audit trail** | Full JSON log of every action for compliance and debugging |
 | **Dry-run first** | Always run `--dry-run` before real migration to catch issues |

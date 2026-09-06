@@ -72,6 +72,7 @@ if (args[0] !== "--non-interactive" || args[1] !== "stack" || args[2] !== "impor
 if (args[stackIndex + 1] !== "target-org/api/prod") process.exit(12);
 if (process.env.PULUMI_BACKEND_URL !== process.env.EXPECTED_TARGET_BACKEND) process.exit(13);
 if (process.env.PULUMI_ACCESS_TOKEN !== process.env.EXPECTED_TARGET_TOKEN) process.exit(14);
+if (!args[fileIndex + 1].endsWith("/.import/prod.json")) process.exit(15);
 fs.copyFileSync(args[fileIndex + 1], process.env.CAPTURED_IMPORT_FILE);
 `;
 
@@ -145,7 +146,7 @@ fs.copyFileSync(args[fileIndex + 1], process.env.CAPTURED_IMPORT_FILE);
 		expect(hasPlaintextSecret(importDeployment)).toBe(true);
 		expect(JSON.parse(await readFile(result.exportFile ?? "", "utf8"))).toEqual(sourceDeployment);
 		expect(
-			await Bun.file(join(options.outputDir, "target-org/api/prod.import.json")).exists(),
+			await Bun.file(join(options.outputDir, "target-org/api/.import/prod.json")).exists(),
 		).toBe(false);
 	} finally {
 		if (previousPath === undefined) delete process.env.PATH;
@@ -164,4 +165,112 @@ test("hasPlaintextSecret detects only signed Pulumi plaintext envelopes", () => 
 	expect(hasPlaintextSecret({ nested: [plaintextSecret(randomUUID())] })).toBe(true);
 	expect(hasPlaintextSecret({ plaintext: randomUUID() })).toBe(false);
 	expect(hasPlaintextSecret(ciphertextSecret(randomUUID()))).toBe(false);
+});
+
+test("migrateOne fails when target state still contains plaintext secrets", async () => {
+	const tempDir = await mkdtemp(join(tmpdir(), "procella-migrate-plaintext-target-"));
+	const values = Array.from({ length: 4 }, () => randomUUID());
+	const deployment = deploymentWithSecrets(values.map(plaintextSecret), {
+		type: "passphrase",
+		state: { salt: randomUUID() },
+	});
+	try {
+		const result = await migrateOne(
+			{
+				fqn: "target-org/api/prod",
+				ref: { org: "target-org", project: "api", stack: "prod" },
+				resourceCount: 1,
+				lastUpdate: null,
+			},
+			1,
+			1,
+			{
+				sourceUrl: "https://source.example.test",
+				sourceToken: randomUUID(),
+				targetUrl: "https://target.example.test",
+				targetToken: randomUUID(),
+				filter: "*",
+				exclude: "",
+				dryRun: false,
+				concurrency: 1,
+				continueOnError: false,
+				keepExports: false,
+				outputDir: tempDir,
+			},
+			{
+				exportStack: async (_stackFqn, filePath) => {
+					await writeFile(filePath, JSON.stringify(deployment));
+				},
+				createStack: async () => ({ created: true }),
+				importStack: async () => {},
+				exportState: async () => deployment,
+			},
+		);
+
+		expect(result.status).toBe("failed");
+		expect(result.error).toBe(
+			"Target state contains plaintext Pulumi secret envelopes after import",
+		);
+	} finally {
+		await rm(tempDir, { recursive: true, force: true });
+	}
+});
+
+test("migrateOne verifies a successful import when scratch cleanup fails", async () => {
+	const tempDir = await mkdtemp(join(tmpdir(), "procella-migrate-scratch-cleanup-"));
+	const values = Array.from({ length: 4 }, () => randomUUID());
+	const source = deploymentWithSecrets(values.map(plaintextSecret), {
+		type: "passphrase",
+		state: { salt: randomUUID() },
+	});
+	const target = deploymentWithSecrets(values.map(ciphertextSecret), {
+		type: "service",
+		state: {
+			url: "https://target.example.test",
+			owner: "target-org",
+			project: "api",
+			stack: "prod",
+		},
+	});
+	try {
+		const result = await migrateOne(
+			{
+				fqn: "target-org/api/prod",
+				ref: { org: "target-org", project: "api", stack: "prod" },
+				resourceCount: 1,
+				lastUpdate: null,
+			},
+			1,
+			1,
+			{
+				sourceUrl: "https://source.example.test",
+				sourceToken: randomUUID(),
+				targetUrl: "https://target.example.test",
+				targetToken: randomUUID(),
+				filter: "*",
+				exclude: "",
+				dryRun: false,
+				concurrency: 1,
+				continueOnError: false,
+				keepExports: false,
+				outputDir: tempDir,
+			},
+			{
+				exportStack: async (_stackFqn, filePath) => {
+					await writeFile(filePath, JSON.stringify(source));
+				},
+				createStack: async () => ({ created: true }),
+				importStack: async () => {},
+				exportState: async () => target,
+				removeScratchFile: async () => {
+					throw new Error("scratch file is busy");
+				},
+			},
+		);
+
+		expect(result.status).toBe("succeeded");
+		expect(result.targetResourceCount).toBe(1);
+	} finally {
+		await rm(tempDir, { recursive: true, force: true });
+	}
 });

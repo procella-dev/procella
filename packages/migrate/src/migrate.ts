@@ -17,6 +17,7 @@ export interface MigrationOperations {
 	createStack: typeof createStack;
 	importStack: typeof pulumi.importStack;
 	exportState: typeof exportState;
+	removeScratchFile?: (filePath: string) => Promise<void>;
 }
 
 const defaultMigrationOperations: MigrationOperations = {
@@ -230,10 +231,18 @@ export async function migrateOne(
 	const stackDir = join(opts.outputDir, org, project);
 	assertWithin(opts.outputDir, stackDir, stack.fqn);
 	await mkdir(stackDir, { recursive: true });
+	const scratchDir = join(stackDir, ".import");
+	assertWithin(opts.outputDir, scratchDir, stack.fqn);
 	const exportFile = join(stackDir, `${stackName}.json`);
 	assertWithin(opts.outputDir, exportFile, stack.fqn);
-	const importFile = join(stackDir, `${stackName}.import.json`);
+	const importFile = join(scratchDir, `${stackName}.json`);
 	assertWithin(opts.outputDir, importFile, stack.fqn);
+	const removeScratchFile = operations.removeScratchFile ?? ((path) => rm(path, { force: true }));
+	const cleanupScratchFile = async (): Promise<void> => {
+		await removeScratchFile(importFile).catch((err) => {
+			log.warn(`           Failed to delete scratch import payload ${importFile}: ${err}`);
+		});
+	};
 
 	log.info(`  [${index}/${total}] ${stack.fqn}`);
 
@@ -292,6 +301,7 @@ export async function migrateOne(
 				stack: stackName,
 			},
 		};
+		await mkdir(scratchDir, { recursive: true });
 		await writeFile(importFile, JSON.stringify(deployment));
 
 		log.dim("           Importing state through target secret provider...");
@@ -299,7 +309,7 @@ export async function migrateOne(
 			backendUrl: targetUrl,
 			token: opts.targetToken,
 		});
-		await rm(importFile, { force: true });
+		await cleanupScratchFile();
 		log.dim("           Imported");
 
 		// Phase 4: Verify resource count
@@ -343,8 +353,7 @@ export async function migrateOne(
 		const message = err instanceof Error ? err.message : String(err);
 		log.error(`         ${stack.fqn} — ${message}`);
 
-		await rm(importFile, { force: true }).catch(() => {});
-		// Clean up export file on failure — contains plaintext secrets
+		await cleanupScratchFile();
 		if (!opts.keepExports) {
 			await rm(exportFile, { force: true }).catch(() => {});
 		}
