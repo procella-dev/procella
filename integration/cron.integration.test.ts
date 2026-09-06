@@ -37,8 +37,12 @@ const baseDeps = {
 	oidcPolicies: null as TrustPolicyRepository | null,
 };
 
-function makeApp(cronSecret?: string, db: Database = baseDeps.db) {
-	return createApp({ ...baseDeps, cronSecret, db });
+function makeApp(
+	cronSecret?: string,
+	db: Database = baseDeps.db,
+	github: GitHubService | null = baseDeps.github,
+) {
+	return createApp({ ...baseDeps, cronSecret, db, github });
 }
 
 describe("/cron/gc integration", () => {
@@ -68,15 +72,24 @@ describe("/cron/gc integration", () => {
 		expect(await res.json()).toEqual({ ok: true });
 	});
 
-	test("returns non-2xx when the database fails", async () => {
+	test("returns non-2xx after attempting the outbox when the database fails", async () => {
+		let transactions = 0;
 		const failingDb = {
-			transaction: () => Promise.reject(new Error("database unavailable")),
+			transaction: () => {
+				transactions += 1;
+				return Promise.reject(new Error("database unavailable"));
+			},
 		} as unknown as Database;
 
-		const res = await makeApp("correct-secret", failingDb).request("/cron/gc", {
+		const res = await makeApp(
+			"correct-secret",
+			failingDb,
+			{} as GitHubService,
+		).request("/cron/gc", {
 			headers: { Authorization: "Bearer correct-secret" },
 		});
 
 		expect(res.status).toBeGreaterThanOrEqual(500);
+		expect(transactions).toBe(2);
 	});
 });

@@ -1,6 +1,7 @@
 import type { ScheduledEvent } from "aws-lambda";
 
 const LAMBDA_WORK_DEADLINE_MS = 52_000;
+const TELEMETRY_FLUSH_TIMEOUT_MS = 3_000;
 
 interface GcWorkerLike {
 	runOnce(): Promise<void>;
@@ -23,10 +24,14 @@ interface GcInvocationDependencies {
 }
 
 async function flushSafely(flushTelemetry: () => Promise<void>): Promise<void> {
+	const { promise: timedOut, resolve: finishTimeout } = Promise.withResolvers<void>();
+	const timeout = setTimeout(finishTimeout, TELEMETRY_FLUSH_TIMEOUT_MS);
 	try {
-		await flushTelemetry();
+		await Promise.race([flushTelemetry(), timedOut]);
 	} catch (error) {
 		console.error("[gc] telemetry flush failed:", error);
+	} finally {
+		clearTimeout(timeout);
 	}
 }
 
@@ -40,24 +45,36 @@ export async function runGcInvocation({
 	runtimeFetch = fetch,
 }: GcInvocationDependencies): Promise<void> {
 	const invocationStartedAt = Date.now();
+	let invocationError: unknown;
+	let failed = false;
 
 	try {
 		await gcWorker.runOnce();
-		if (githubOutbox) {
+	} catch (error) {
+		failed = true;
+		invocationError = error;
+	}
+	if (githubOutbox) {
+		try {
 			await githubOutbox.runOnce({
 				deadlineMs: invocationStartedAt + LAMBDA_WORK_DEADLINE_MS,
 			});
+		} catch (error) {
+			failed = true;
+			invocationError ??= error;
 		}
+	}
+	try {
 		await escGcSweep();
-		await flushSafely(flushTelemetry);
-		await runtimeFetch(`${baseUrl}/invocation/${requestId}/response`, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ status: "ok" }),
-		});
-	} catch (err: unknown) {
-		const error = err instanceof Error ? err : new Error(String(err));
-		await flushSafely(flushTelemetry);
+	} catch (error) {
+		failed = true;
+		invocationError ??= error;
+	}
+
+	await flushSafely(flushTelemetry);
+	if (failed) {
+		const error =
+			invocationError instanceof Error ? invocationError : new Error(String(invocationError));
 		await runtimeFetch(`${baseUrl}/invocation/${requestId}/error`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
@@ -67,7 +84,14 @@ export async function runGcInvocation({
 				stackTrace: error.stack?.split("\n") || [],
 			}),
 		});
+		return;
 	}
+
+	await runtimeFetch(`${baseUrl}/invocation/${requestId}/response`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ status: "ok" }),
+	});
 }
 
 async function main(): Promise<void> {

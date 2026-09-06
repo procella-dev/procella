@@ -46,8 +46,8 @@ describe("@procella/updates GCWorker", () => {
 
 				expect(attempts).toBe(2);
 			} finally {
-				await worker.stop();
 				jest.useRealTimers();
+				await worker.stop();
 			}
 		});
 	});
