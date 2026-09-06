@@ -7,10 +7,10 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
-	"github.com/tektum/procella/esc-eval/providers/internal/awsutil"
-	"github.com/tektum/procella/esc-eval/providers/internal/escutil"
 	"github.com/pulumi/esc"
 	"github.com/pulumi/esc/schema"
+	"github.com/tektum/procella/esc-eval/providers/internal/awsutil"
+	"github.com/tektum/procella/esc-eval/providers/internal/escutil"
 )
 
 type secretsAPI interface {
@@ -64,7 +64,7 @@ func (*provider) Schema() (*schema.Schema, *schema.Schema) {
 				},
 			},
 		},
-		Required: []string{"region", "secretId"},
+		Required: []string{"region", "secretId", "login"},
 	}
 	outputs := schema.OneOf(
 		&schema.Schema{Type: "object", Properties: map[string]*schema.Schema{"plaintext": {Type: "string", Secret: true}}, Required: []string{"plaintext"}},
@@ -90,7 +90,7 @@ func (p *provider) Open(ctx context.Context, inputs map[string]esc.Value, _ esc.
 	if err != nil {
 		return esc.Value{}, err
 	}
-	login, err := awsutil.OptionalLogin(inputs)
+	login, err := awsutil.RequiredLogin(inputs)
 	if err != nil {
 		return esc.Value{}, err
 	}

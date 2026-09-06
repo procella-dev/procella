@@ -7,10 +7,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	ssmtypes "github.com/aws/aws-sdk-go-v2/service/ssm/types"
-	"github.com/tektum/procella/esc-eval/providers/internal/awsutil"
-	"github.com/tektum/procella/esc-eval/providers/internal/escutil"
 	"github.com/pulumi/esc"
 	"github.com/pulumi/esc/schema"
+	"github.com/tektum/procella/esc-eval/providers/internal/awsutil"
+	"github.com/tektum/procella/esc-eval/providers/internal/escutil"
 )
 
 type ssmAPI interface {
@@ -63,7 +63,7 @@ func (*provider) Schema() (*schema.Schema, *schema.Schema) {
 				},
 			},
 		},
-		Required: []string{"region", "name"},
+		Required: []string{"region", "name", "login"},
 	}
 	outputs := &schema.Schema{
 		Type: "object",
@@ -95,7 +95,7 @@ func (p *provider) Open(ctx context.Context, inputs map[string]esc.Value, _ esc.
 			withDecryption = decrypt
 		}
 	}
-	login, err := awsutil.OptionalLogin(inputs)
+	login, err := awsutil.RequiredLogin(inputs)
 	if err != nil {
 		return esc.Value{}, err
 	}
