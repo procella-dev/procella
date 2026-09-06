@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, tes
 import DescopeSdk from "@descope/node-sdk";
 import { OidcClaims } from "@procella/oidc";
 import { ForbiddenError, UnauthorizedError } from "@procella/types";
-import { exportJWK, generateKeyPair, SignJWT } from "jose";
+import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from "jose";
 import {
 	type AuthService,
 	createAuthService,
@@ -59,24 +59,15 @@ async function createJwtTestHarness() {
 	publicJwk.alg = "RS256";
 	publicJwk.use = "sig";
 	publicJwk.kid = "descope-test-key";
-
-	const jwks = { keys: [publicJwk] };
-	const server = Bun.serve({
-		port: 0,
-		fetch(request) {
-			const { pathname } = new URL(request.url);
-			if (pathname === "/.well-known/jwks.json") {
-				return Response.json(jwks);
-			}
-			return new Response("not found", { status: 404 });
-		},
-	});
+	const audience = "P3Aaha02iJvkGVbPDAF78KWuAxe6";
+	const jwksJson = { keys: [publicJwk] };
 
 	return {
-		issuer: `http://localhost:${server.port}`,
-		audience: "P3Aaha02iJvkGVbPDAF78KWuAxe6",
+		issuer: "https://descope.test.local",
+		audience,
 		privateKey,
-		server,
+		jwks: createLocalJWKSet(jwksJson),
+		jwksJson,
 	};
 }
 
@@ -243,12 +234,12 @@ describe("DescopeAuthService", () => {
 		svc = new DescopeAuthService({
 			sdk: DescopeSdk({ projectId: harness.audience }),
 			config: { projectId: harness.audience, issuer: harness.issuer },
+			jwks: harness.jwks,
 		});
 	});
 
 	afterAll(() => {
 		svc.dispose();
-		harness.server.stop();
 	});
 
 	test("rejects session JWT on 'token' prefix (CLI path)", async () => {
@@ -265,6 +256,43 @@ describe("DescopeAuthService", () => {
 		);
 	});
 
+	test("default remote JWKS resolver preserves the configured issuer path", async () => {
+		const issuer = `${harness.issuer}/project`;
+		const token = await signDescopeJwt(
+			harness.privateKey,
+			{
+				sub: "user-1",
+				dct: "tenant-1",
+				tenants: { "tenant-1": { roles: ["admin"] } },
+				amr: ["pwd"],
+			},
+			{ issuer, audience: harness.audience },
+		);
+		const requestedUrls: string[] = [];
+		const originalFetch = globalThis.fetch;
+		const remoteService = new DescopeAuthService({
+			sdk: DescopeSdk({ projectId: harness.audience }),
+			config: { projectId: harness.audience, issuer },
+		});
+		globalThis.fetch = Object.assign(
+			async (input: RequestInfo | URL) => {
+				requestedUrls.push(input instanceof Request ? input.url : String(input));
+				return Response.json(harness.jwksJson);
+			},
+			{ preconnect: originalFetch.preconnect },
+		);
+
+		try {
+			const caller = await remoteService.authenticate(reqWithAuth(`Bearer ${token}`));
+
+			expect(caller.principalType).toBe("user");
+			expect(requestedUrls).toEqual([`${issuer}/.well-known/jwks.json`]);
+		} finally {
+			remoteService.dispose();
+			globalThis.fetch = originalFetch;
+		}
+	});
+
 	test("standard human JWT returns principalType user without workload", async () => {
 		const claims = {
 			sub: "user-1",
@@ -272,7 +300,7 @@ describe("DescopeAuthService", () => {
 			procellaLogin: "omer",
 			tenant_name: "Omer Corp",
 			tenants: { "tenant-1": { roles: ["admin"] } },
-			[OidcClaims.principalType]: "user",
+			amr: ["pwd"],
 			exp: Math.floor(Date.now() / 1000) + 3600,
 		};
 		const token = await signDescopeJwt(harness.privateKey, claims, {
@@ -304,6 +332,26 @@ describe("DescopeAuthService", () => {
 		const caller = await svc.authenticate(reqWithAuth(`Bearer ${token}`));
 
 		expect(caller.userId).toBe("K3-unprefixed-access-key");
+		expect(caller.principalType).toBe("token");
+	});
+
+	test("classifies a raw legacy access-key JWT replayed as Bearer as token", async () => {
+		const claims = {
+			sub: "K3-legacy-access-key",
+			dct: "tenant-1",
+			procellaLogin: "legacy-key",
+			tenant_name: "Omer Corp",
+			tenants: { "tenant-1": { roles: ["admin"] } },
+			exp: Math.floor(Date.now() / 1000) + 3600,
+		};
+		const token = await signDescopeJwt(harness.privateKey, claims, {
+			issuer: harness.issuer,
+			audience: harness.audience,
+		});
+
+		const caller = await svc.authenticate(reqWithAuth(`Bearer ${token}`));
+
+		expect(caller.userId).toBe("K3-legacy-access-key");
 		expect(caller.principalType).toBe("token");
 	});
 
@@ -454,6 +502,7 @@ describe("DescopeAuthService — session cookie fallback", () => {
 	let svc: DescopeAuthService;
 
 	const VALID_CLAIMS = {
+		amr: ["pwd"],
 		sub: "user-1",
 		dct: "tenant-1",
 		procellaLogin: "omer",
@@ -477,12 +526,12 @@ describe("DescopeAuthService — session cookie fallback", () => {
 				issuer: harness.issuer,
 				authBaseUrl: "https://auth.example.com",
 			},
+			jwks: harness.jwks,
 		});
 	});
 
 	afterAll(() => {
 		svc.dispose();
-		harness.server.stop();
 	});
 
 	test("valid DS cookie authenticates without Authorization header", async () => {
