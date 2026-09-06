@@ -1222,6 +1222,18 @@ describe("extractOrgSlug", () => {
 		expect(resolveOrgSlugMetadata(claims, "T3id")).toEqual({ status: "conflicting" });
 	});
 
+	test("uses the server-minted legacy claim across routing alias changes", () => {
+		const claims = {
+			procellaLegacyOrgSlug: "original-org",
+			procellaOrgSlug: "current-org",
+			tenant_name: "Current Org",
+		};
+		expect(resolveOrgSlugMetadata(claims, "T3id")).toEqual({
+			status: "resolved",
+			slug: "original-org",
+		});
+	});
+
 	test("falls through to tenant_name when procellaOrgSlug is absent", () => {
 		const claims = { tenant_name: "My Org" };
 		expect(extractOrgSlug(claims, "T3id")).toBe("my-org");

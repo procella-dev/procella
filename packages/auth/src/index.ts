@@ -834,11 +834,12 @@ export function resolveOrgSlugMetadata(
 	claims: Record<string, unknown>,
 	tenantId: string,
 ): OrgSlugMetadataResolution {
-	let canonical: string | undefined;
-
 	const legacy = claims[LEGACY_ORG_SLUG_CLAIM];
-	if (typeof legacy === "string" && legacy) canonical = legacy;
+	if (typeof legacy === "string" && legacy) {
+		return { status: "resolved", slug: legacy };
+	}
 
+	let canonical: string | undefined;
 	const explicit = claims[OidcClaims.orgSlug];
 	if (typeof explicit === "string" && explicit) {
 		if (canonical && canonical !== explicit) return { status: "conflicting" };
