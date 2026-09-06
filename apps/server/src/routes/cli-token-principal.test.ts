@@ -3,9 +3,9 @@
 // credentials (access keys, workload OIDC identities) must be rejected on BOTH
 // route assemblies, which register the handler independently.
 
-import { describe, expect, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import type { AuditService } from "@procella/audit";
-import type { AuthConfig, AuthService } from "@procella/auth";
+import { type AuthConfig, type AuthService, DescopeAuthService } from "@procella/auth";
 import type { Database } from "@procella/db";
 import type { EscService } from "@procella/esc";
 import type { StacksService } from "@procella/stacks";
@@ -14,6 +14,7 @@ import { UnauthorizedError } from "@procella/types";
 import type { UpdatesService } from "@procella/updates";
 import type { WebhooksService } from "@procella/webhooks";
 import type { Hono } from "hono";
+import { createLocalJWKSet, exportJWK, generateKeyPair, type JWTVerifyGetKey, SignJWT } from "jose";
 import type { Env } from "../types.js";
 import { createApp } from "./index.js";
 import { createWebApp } from "./web.js";
@@ -83,9 +84,12 @@ function mockAuthService(mintedKeyNames: string[]): AuthService {
 	};
 }
 
-function makeApiApp(mintedKeyNames: string[]): Hono<Env> {
+function makeApiApp(
+	mintedKeyNames: string[],
+	auth: AuthService = mockAuthService(mintedKeyNames),
+): Hono<Env> {
 	return createApp({
-		auth: mockAuthService(mintedKeyNames),
+		auth,
 		authConfig,
 		audit: {} as AuditService,
 		db: {} as Database,
@@ -98,9 +102,12 @@ function makeApiApp(mintedKeyNames: string[]): Hono<Env> {
 	});
 }
 
-function makeWebApp(mintedKeyNames: string[]): Hono<Env> {
+function makeWebApp(
+	mintedKeyNames: string[],
+	auth: AuthService = mockAuthService(mintedKeyNames),
+): Hono<Env> {
 	return createWebApp({
-		auth: mockAuthService(mintedKeyNames),
+		auth,
 		authConfig,
 		audit: {} as AuditService,
 		db: {} as Database,
@@ -124,7 +131,75 @@ function cliTokenRequest(authorization: string): [string, RequestInit] {
 	];
 }
 
-const assemblies: Array<{ name: string; make: (minted: string[]) => Hono<Env> }> = [
+interface JwtHarness {
+	issuer: string;
+	projectId: string;
+	privateKey: CryptoKey;
+	jwks: JWTVerifyGetKey;
+}
+
+async function createJwtHarness(): Promise<JwtHarness> {
+	const { publicKey, privateKey } = await generateKeyPair("RS256");
+	const publicJwk = await exportJWK(publicKey);
+	publicJwk.alg = "RS256";
+	publicJwk.use = "sig";
+	publicJwk.kid = "descope-route-test-key";
+
+	return {
+		issuer: "https://descope-route.test.local",
+		projectId: "P3routeTest",
+		privateKey,
+		jwks: createLocalJWKSet({ keys: [publicJwk] }),
+	};
+}
+
+let jwtHarness: JwtHarness;
+beforeAll(async () => {
+	jwtHarness = await createJwtHarness();
+});
+
+async function signJwt(claims: Record<string, unknown>): Promise<string> {
+	return new SignJWT(claims)
+		.setProtectedHeader({ alg: "RS256", kid: "descope-route-test-key" })
+		.setIssuer(jwtHarness.issuer)
+		.setAudience(jwtHarness.projectId)
+		.setIssuedAt()
+		.setExpirationTime("1h")
+		.sign(jwtHarness.privateKey);
+}
+
+function descopeAuthService(mintedKeyNames: string[]): DescopeAuthService {
+	const sdk = {
+		management: {
+			user: {
+				loadByUserId: () => Promise.resolve({ ok: true, data: { email: "alice@example.com" } }),
+			},
+			accessKey: {
+				create: (name: string) => {
+					mintedKeyNames.push(name);
+					return Promise.resolve({ ok: true, data: { cleartext: `cli-access-key:${name}` } });
+				},
+			},
+		},
+	} as never;
+
+	return new DescopeAuthService({
+		sdk,
+		config: { projectId: jwtHarness.projectId, issuer: jwtHarness.issuer },
+		jwks: jwtHarness.jwks,
+	});
+}
+
+const jwtClaims = {
+	dct: "t-1",
+	tenant_name: "My Org",
+	tenants: { "t-1": { roles: ["admin"] } },
+};
+
+const assemblies: Array<{
+	name: string;
+	make: (minted: string[], auth?: AuthService) => Hono<Env>;
+}> = [
 	{ name: "createApp", make: makeApiApp },
 	{ name: "createWebApp", make: makeWebApp },
 ];
@@ -142,6 +217,68 @@ for (const assembly of assemblies) {
 				error: "CLI tokens can only be created from an interactive user session",
 			});
 			expect(minted).toEqual([]);
+		});
+
+		test("rejects a raw legacy access-key JWT replayed as Bearer", async () => {
+			const minted: string[] = [];
+			const auth = descopeAuthService(minted);
+			const exchangedJwt = await signJwt({
+				...jwtClaims,
+				sub: "K3-legacy-access-key",
+				procellaLogin: "legacy-key",
+			});
+			const app = assembly.make(minted, auth);
+
+			const res = await app.request(...cliTokenRequest(`Bearer ${exchangedJwt}`));
+			auth.dispose();
+
+			expect(res.status).toBe(403);
+			expect(await res.json()).toEqual({
+				error: "CLI tokens can only be created from an interactive user session",
+			});
+			expect(minted).toEqual([]);
+		});
+
+		test("still mints for a documented interactive Bearer session", async () => {
+			const minted: string[] = [];
+			const auth = descopeAuthService(minted);
+			const sessionJwt = await signJwt({
+				...jwtClaims,
+				sub: "user-1",
+				procellaLogin: "alice",
+				amr: ["pwd"],
+			});
+			const app = assembly.make(minted, auth);
+
+			const res = await app.request(...cliTokenRequest(`Bearer ${sessionJwt}`));
+			auth.dispose();
+
+			expect(res.status).toBe(200);
+			expect(await res.json()).toEqual({ token: "cli-access-key:attacker-minted-key" });
+			expect(minted).toEqual(["attacker-minted-key"]);
+		});
+
+		test("still mints for a documented interactive cookie session", async () => {
+			const minted: string[] = [];
+			const auth = descopeAuthService(minted);
+			const sessionJwt = await signJwt({
+				...jwtClaims,
+				sub: "user-1",
+				procellaLogin: "alice",
+				amr: ["pwd"],
+			});
+			const app = assembly.make(minted, auth);
+
+			const res = await app.request("/api/auth/cli-token", {
+				method: "POST",
+				headers: { Cookie: `DS=${sessionJwt}`, "Content-Type": "application/json" },
+				body: JSON.stringify({ name: "attacker-minted-key" }),
+			});
+			auth.dispose();
+
+			expect(res.status).toBe(200);
+			expect(await res.json()).toEqual({ token: "cli-access-key:attacker-minted-key" });
+			expect(minted).toEqual(["attacker-minted-key"]);
 		});
 
 		test("rejects workload callers without minting a key", async () => {

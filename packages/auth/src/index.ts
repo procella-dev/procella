@@ -9,7 +9,7 @@ import { OidcClaims } from "@procella/oidc";
 import { authAuthenticateDuration, authFailureCount, withSpan } from "@procella/telemetry";
 import type { Caller, Role, WorkloadIdentity } from "@procella/types";
 import { ForbiddenError, UnauthorizedError } from "@procella/types";
-import { createRemoteJWKSet, jwtVerify } from "jose";
+import { createRemoteJWKSet, type JWTVerifyGetKey, jwtVerify } from "jose";
 
 // ============================================================================
 // Auth Service Interface
@@ -214,10 +214,10 @@ export class DescopeAuthService implements AuthService {
 	private readonly issuer: string;
 	/** Accepted `iss` values — the default api.descope.com issuer plus the custom auth domain (if any). */
 	private readonly issuers: string[];
-	private readonly jwks: ReturnType<typeof createRemoteJWKSet>;
+	private readonly jwks: JWTVerifyGetKey;
 	private sweepTimer: ReturnType<typeof setInterval> | null = null;
 
-	constructor(options: { sdk: DescopeClient; config: DescopeAuthConfig }) {
+	constructor(options: { sdk: DescopeClient; config: DescopeAuthConfig; jwks?: JWTVerifyGetKey }) {
 		this.sdk = options.sdk;
 		this.projectId = options.config.projectId;
 		this.issuer = options.config.issuer ?? buildDescopeIssuer(options.config.projectId);
@@ -231,9 +231,14 @@ export class DescopeAuthService implements AuthService {
 		this.issuers = customIssuer
 			? [this.issuer, this.projectId, customIssuer]
 			: [this.issuer, this.projectId];
-		this.jwks = createRemoteJWKSet(
-			new URL(".well-known/jwks.json", this.issuer.endsWith("/") ? this.issuer : `${this.issuer}/`),
-		);
+		this.jwks =
+			options.jwks ??
+			createRemoteJWKSet(
+				new URL(
+					".well-known/jwks.json",
+					this.issuer.endsWith("/") ? this.issuer : `${this.issuer}/`,
+				),
+			);
 		this.sweepTimer = setInterval(() => this.sweep(), 60_000);
 		if (this.sweepTimer.unref) this.sweepTimer.unref();
 	}
@@ -284,7 +289,18 @@ export class DescopeAuthService implements AuthService {
 		if (payload.aud && !audienceIncludes(payload.aud, this.projectId)) {
 			throw new UnauthorizedError("JWT audience does not match project");
 		}
-		return this.extractCaller(payload as Record<string, unknown>, "user");
+		const claims = payload as Record<string, unknown>;
+		const amr = claims.amr;
+		// Descope documents `amr` as always present on user session tokens and
+		// inapplicable to access-key JWTs. Missing or malformed provenance fails
+		// closed as a machine principal, including raw exchanged JWT replay.
+		const authenticatedPrincipalType =
+			Array.isArray(amr) &&
+			amr.length > 0 &&
+			amr.every((method) => typeof method === "string" && method.length > 0)
+				? "user"
+				: "token";
+		return this.extractCaller(claims, authenticatedPrincipalType);
 	}
 
 	/**
