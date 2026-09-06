@@ -7,7 +7,7 @@ import type {
 	EscService,
 	UpdateEnvironmentInput,
 } from "@procella/esc";
-import { EscEvaluationError } from "@procella/esc";
+import { EscEvaluationError, EscPreconditionFailedError } from "@procella/esc";
 import { BadRequestError, NotFoundError } from "@procella/types";
 import type { Context } from "hono";
 import { z } from "zod/v4";
@@ -100,6 +100,17 @@ function formatDraftEtag(updatedAt: Date | string): string {
 
 function normalizeTag(header: string | undefined): string | null {
 	return header?.trim() || null;
+}
+
+function parseEtagValue(header: string | undefined, pattern: RegExp): number | undefined {
+	const tag = normalizeTag(header);
+	if (!tag) return undefined;
+	const match = pattern.exec(tag);
+	const value = match ? Number(match[1]) : Number.NaN;
+	if (!Number.isSafeInteger(value) || value < 1) {
+		throw new EscPreconditionFailedError();
+	}
+	return value;
 }
 
 function toCliDiagnostics(
@@ -312,15 +323,10 @@ export function escHandlers(deps: {
 			const caller = c.get("caller");
 			const projectName = param(c, "project");
 			const envName = param(c, "envName");
-			const providedTag = normalizeTag(c.req.header("If-Match") ?? c.req.header("ETag"));
-
-			const env = await deps.esc.getEnvironment(tenantId, projectName, envName);
-			if (!env) {
-				throw new NotFoundError("Environment", `${projectName}/${envName}`);
-			}
-			if (providedTag && providedTag !== formatEnvironmentEtag(env.currentRevisionNumber)) {
-				return c.json({ code: 412, message: "Precondition Failed" }, 412);
-			}
+			const expectedRevisionNumber = parseEtagValue(
+				c.req.header("If-Match") ?? c.req.header("ETag"),
+				/^W\/"r(\d+)"$/,
+			);
 
 			const yamlBody = await c.req.text();
 			const validation = await deps.esc.validateYaml(yamlBody);
@@ -339,7 +345,7 @@ export function escHandlers(deps: {
 				tenantId,
 				projectName,
 				envName,
-				{ yamlBody } satisfies UpdateEnvironmentInput,
+				{ yamlBody, expectedRevisionNumber } satisfies UpdateEnvironmentInput,
 				caller.userId,
 			);
 			return c.newResponse(null, {
@@ -602,14 +608,7 @@ export function escHandlers(deps: {
 			const projectName = param(c, "project");
 			const envName = param(c, "envName");
 			const draftId = param(c, "draftId");
-			const draft = await deps.esc.getDraft(tenantId, projectName, envName, draftId);
-			if (!draft) {
-				throw new NotFoundError("Draft", draftId);
-			}
-			const providedTag = normalizeTag(c.req.header("If-Match"));
-			if (providedTag && providedTag !== formatDraftEtag(draft.updatedAt)) {
-				return c.json({ code: 412, message: "Precondition Failed" }, 412);
-			}
+			const expectedUpdatedAtMs = parseEtagValue(c.req.header("If-Match"), /^W\/"d(\d+)"$/);
 			const yamlBody = await c.req.text();
 			const validation = await deps.esc.validateYaml(yamlBody);
 			if (validation.diagnostics.length > 0) {
@@ -622,7 +621,14 @@ export function escHandlers(deps: {
 					400,
 				);
 			}
-			const updated = await deps.esc.updateDraft(tenantId, projectName, envName, draftId, yamlBody);
+			const updated = await deps.esc.updateDraft(
+				tenantId,
+				projectName,
+				envName,
+				draftId,
+				yamlBody,
+				expectedUpdatedAtMs,
+			);
 			const env = await deps.esc.getEnvironment(tenantId, projectName, envName);
 			if (!env) {
 				throw new NotFoundError("Environment", `${projectName}/${envName}`);

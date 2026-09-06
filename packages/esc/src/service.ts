@@ -146,6 +146,7 @@ export interface EscService {
 		envName: string,
 		draftId: string,
 		yamlBody: string,
+		expectedUpdatedAtMs?: number,
 	): Promise<EscDraft>;
 	getDraft(
 		tenantId: string,
@@ -191,6 +192,13 @@ export class EscEvaluationError extends ProcellaError {
 		super(`Evaluation failed: ${summaries}`, "ESC_EVALUATION_ERROR", 422);
 		this.name = "EscEvaluationError";
 		this.diagnostics = diagnostics;
+	}
+}
+
+export class EscPreconditionFailedError extends ProcellaError {
+	constructor() {
+		super("Precondition Failed", "PRECONDITION_FAILED", 412);
+		this.name = "EscPreconditionFailedError";
 	}
 }
 
@@ -658,7 +666,7 @@ export class PostgresEscService implements EscService {
 						throw new NotFoundError("Environment", `${projectName}/${envName}`);
 					}
 					const row = locked.env;
-
+					const expectedRevision = input.expectedRevisionNumber ?? row.currentRevisionNumber;
 					const nextRevision = row.currentRevisionNumber + 1;
 					const now = new Date();
 
@@ -669,8 +677,17 @@ export class PostgresEscService implements EscService {
 							currentRevisionNumber: nextRevision,
 							updatedAt: now,
 						})
-						.where(eq(escEnvironments.id, row.id))
+						.where(
+							and(
+								eq(escEnvironments.id, row.id),
+								eq(escEnvironments.currentRevisionNumber, expectedRevision),
+							),
+						)
 						.returning();
+
+					if (!updated) {
+						throw new EscPreconditionFailedError();
+					}
 
 					await tx.insert(escEnvironmentRevisions).values({
 						environmentId: row.id,
@@ -1145,6 +1162,7 @@ export class PostgresEscService implements EscService {
 		envName: string,
 		draftId: string,
 		yamlBody: string,
+		expectedUpdatedAtMs?: number,
 	): Promise<EscDraft> {
 		if (typeof yamlBody !== "string") {
 			throw new BadRequestError("yamlBody must be a string");
@@ -1154,30 +1172,41 @@ export class PostgresEscService implements EscService {
 			"procella.esc",
 			"esc.updateDraft",
 			{ "draft.id": draftId, "env.name": envName },
-			async () => {
-				const env = await findEnvRow(this.db, tenantId, projectName, envName);
-				if (!env) {
-					throw new NotFoundError("Environment", `${projectName}/${envName}`);
-				}
-				const [draft] = await this.db
-					.select()
-					.from(escDrafts)
-					.where(and(eq(escDrafts.id, draftId), eq(escDrafts.environmentId, env.id)))
-					.limit(1);
-				if (!draft) {
-					throw new NotFoundError("Draft", draftId);
-				}
-				if (draft.status !== "open") {
-					throw new BadRequestError(`Draft is already ${draft.status}`);
-				}
+			() =>
+				this.db.transaction(async (tx) => {
+					const env = await findEnvRow(tx, tenantId, projectName, envName);
+					if (!env) {
+						throw new NotFoundError("Environment", `${projectName}/${envName}`);
+					}
+					const [draft] = await tx
+						.select()
+						.from(escDrafts)
+						.where(and(eq(escDrafts.id, draftId), eq(escDrafts.environmentId, env.id)))
+						.limit(1)
+						.for("update", { of: escDrafts });
+					if (!draft) {
+						throw new NotFoundError("Draft", draftId);
+					}
+					if (draft.status !== "open") {
+						throw new BadRequestError(`Draft is already ${draft.status}`);
+					}
+					if (
+						expectedUpdatedAtMs !== undefined &&
+						draft.updatedAt.getTime() !== expectedUpdatedAtMs
+					) {
+						throw new EscPreconditionFailedError();
+					}
 
-				const [updated] = await this.db
-					.update(escDrafts)
-					.set({ yamlBody, updatedAt: new Date() })
-					.where(eq(escDrafts.id, draftId))
-					.returning();
-				return toDraftInfo(updated);
-			},
+					const [updated] = await tx
+						.update(escDrafts)
+						.set({ yamlBody, updatedAt: new Date() })
+						.where(and(eq(escDrafts.id, draftId), eq(escDrafts.status, "open")))
+						.returning();
+					if (!updated) {
+						throw new BadRequestError("Draft is no longer open");
+					}
+					return toDraftInfo(updated);
+				}),
 		);
 	}
 
@@ -1236,7 +1265,8 @@ export class PostgresEscService implements EscService {
 						.select()
 						.from(escDrafts)
 						.where(and(eq(escDrafts.id, draftId), eq(escDrafts.environmentId, envRow.id)))
-						.limit(1);
+						.limit(1)
+						.for("update", { of: escDrafts });
 
 					if (!draft) {
 						throw new NotFoundError("Draft", draftId);
@@ -1275,8 +1305,12 @@ export class PostgresEscService implements EscService {
 							appliedAt: now,
 							updatedAt: now,
 						})
-						.where(eq(escDrafts.id, draftId))
+						.where(and(eq(escDrafts.id, draftId), eq(escDrafts.status, "open")))
 						.returning();
+
+					if (!updated) {
+						throw new BadRequestError("Draft is no longer open");
+					}
 
 					return toDraftInfo(updated);
 				}),
@@ -1293,27 +1327,33 @@ export class PostgresEscService implements EscService {
 			"procella.esc",
 			"esc.discardDraft",
 			{ "tenant.id": tenantId, "env.name": envName, "draft.id": draftId },
-			async () => {
-				const env = await findEnvRow(this.db, tenantId, projectName, envName);
-				if (!env) {
-					throw new NotFoundError("Environment", `${projectName}/${envName}`);
-				}
-				const [draft] = await this.db
-					.select()
-					.from(escDrafts)
-					.where(and(eq(escDrafts.id, draftId), eq(escDrafts.environmentId, env.id)))
-					.limit(1);
-				if (!draft) {
-					throw new NotFoundError("Draft", draftId);
-				}
-				if (draft.status !== "open") {
-					throw new BadRequestError(`Draft is already ${draft.status}`);
-				}
-				await this.db
-					.update(escDrafts)
-					.set({ status: "discarded", updatedAt: new Date() })
-					.where(eq(escDrafts.id, draftId));
-			},
+			() =>
+				this.db.transaction(async (tx) => {
+					const env = await findEnvRow(tx, tenantId, projectName, envName);
+					if (!env) {
+						throw new NotFoundError("Environment", `${projectName}/${envName}`);
+					}
+					const [draft] = await tx
+						.select()
+						.from(escDrafts)
+						.where(and(eq(escDrafts.id, draftId), eq(escDrafts.environmentId, env.id)))
+						.limit(1)
+						.for("update", { of: escDrafts });
+					if (!draft) {
+						throw new NotFoundError("Draft", draftId);
+					}
+					if (draft.status !== "open") {
+						throw new BadRequestError(`Draft is already ${draft.status}`);
+					}
+					const [updated] = await tx
+						.update(escDrafts)
+						.set({ status: "discarded", updatedAt: new Date() })
+						.where(and(eq(escDrafts.id, draftId), eq(escDrafts.status, "open")))
+						.returning({ id: escDrafts.id });
+					if (!updated) {
+						throw new BadRequestError("Draft is no longer open");
+					}
+				}),
 		);
 	}
 
