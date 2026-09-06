@@ -1,11 +1,14 @@
 import { afterEach, beforeAll, describe, expect, test } from "bun:test";
-import type { Database } from "@procella/db";
+import { checkpoints, type Database, stacks as stackRows, updates } from "@procella/db";
 import { PostgresStacksService, type StackInfo } from "@procella/stacks";
 import {
+	ConflictError,
 	StackAlreadyExistsError,
+	StackHasResourcesError,
 	StackNotFoundByIdError,
 	StackNotFoundError,
 } from "@procella/types";
+import { eq } from "drizzle-orm";
 import { getTestDb, truncateTables } from "./setup.js";
 
 let db: Database;
@@ -133,6 +136,67 @@ describe("PostgresStacksService — integration", () => {
 			await expect(
 				stacks.getStack("tenant-1", "org-1", "proj-1", "dev"),
 			).rejects.toBeInstanceOf(StackNotFoundError);
+		});
+
+		test("rejects a populated stack unless force is set", async () => {
+			const stack = await stacks.createStack("tenant-1", "org-1", "proj-1", "dev");
+			const [update] = await db
+				.insert(updates)
+				.values({ stackId: stack.id, kind: "update", status: "succeeded" })
+				.returning({ id: updates.id });
+			await db.insert(checkpoints).values({
+				updateId: update.id,
+				stackId: stack.id,
+				version: 1,
+				data: { resources: [{ type: "aws:s3/bucket:Bucket" }] },
+			});
+
+			await expect(
+				stacks.deleteStack("tenant-1", "org-1", "proj-1", "dev"),
+			).rejects.toBeInstanceOf(StackHasResourcesError);
+			expect(await stacks.getStack("tenant-1", "org-1", "proj-1", "dev")).toBeDefined();
+
+			await stacks.deleteStack("tenant-1", "org-1", "proj-1", "dev", true);
+			await expect(
+				stacks.getStack("tenant-1", "org-1", "proj-1", "dev"),
+			).rejects.toBeInstanceOf(StackNotFoundError);
+		});
+
+		test("rejects a stack with an active update unless force is set", async () => {
+			const stack = await stacks.createStack("tenant-1", "org-1", "proj-1", "dev");
+			const [update] = await db
+				.insert(updates)
+				.values({ stackId: stack.id, kind: "update", status: "running" })
+				.returning({ id: updates.id });
+			await db
+				.update(stackRows)
+				.set({ activeUpdateId: update.id })
+				.where(eq(stackRows.id, stack.id));
+
+			await expect(
+				stacks.deleteStack("tenant-1", "org-1", "proj-1", "dev"),
+			).rejects.toBeInstanceOf(ConflictError);
+			expect(await stacks.getStack("tenant-1", "org-1", "proj-1", "dev")).toBeDefined();
+
+			await stacks.deleteStack("tenant-1", "org-1", "proj-1", "dev", true);
+			await expect(
+				stacks.getStack("tenant-1", "org-1", "proj-1", "dev"),
+			).rejects.toBeInstanceOf(StackNotFoundError);
+		});
+
+		test("row lock makes concurrent deletes resolve one winner", async () => {
+			await stacks.createStack("tenant-1", "org-1", "proj-1", "dev");
+
+			const results = await Promise.allSettled([
+				stacks.deleteStack("tenant-1", "org-1", "proj-1", "dev"),
+				stacks.deleteStack("tenant-1", "org-1", "proj-1", "dev"),
+			]);
+
+			// Without FOR UPDATE both callers read the row, both report success, and
+			// one of them silently deletes nothing.
+			expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+			const [rejected] = results.filter((r) => r.status === "rejected");
+			expect((rejected as PromiseRejectedResult).reason).toBeInstanceOf(StackNotFoundError);
 		});
 
 		test("throws StackNotFoundError for missing stack", async () => {

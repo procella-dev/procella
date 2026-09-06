@@ -49,7 +49,8 @@ export function stackHandlers(stacks: StacksService, webhooks?: WebhooksService)
 			const org = param(c, "org");
 			const project = param(c, "project");
 			const stack = param(c, "stack");
-			await stacks.deleteStack(caller.tenantId, org, project, stack);
+			const force = c.req.query("force") === "true";
+			await stacks.deleteStack(caller.tenantId, org, project, stack, force);
 			void webhooks?.emit({
 				tenantId: caller.tenantId,
 				event: "stack.deleted",

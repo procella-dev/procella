@@ -402,16 +402,29 @@ describe("@procella/server handlers", () => {
 			expect(body.stackName).toBe("dev");
 		});
 
-		test("deleteStack returns 204", async () => {
+		test("deleteStack forwards force and returns 204", async () => {
+			const forceValues: Array<boolean | undefined> = [];
 			const app = new Hono<Env>();
 			app.use("*", injectCaller(validCaller));
-			const stackH = stackHandlers(mockStacksService());
+			const stackH = stackHandlers(
+				mockStacksService({
+					deleteStack: async (_tenantId, _org, _project, _stack, force) => {
+						forceValues.push(force);
+					},
+				}),
+			);
 			app.delete("/stacks/:org/:project/:stack", stackH.deleteStack);
 
-			const res = await app.request("/stacks/myorg/myproj/dev", {
+			const guarded = await app.request("/stacks/myorg/myproj/dev", {
 				method: "DELETE",
 			});
-			expect(res.status).toBe(204);
+			expect(guarded.status).toBe(204);
+
+			const forced = await app.request("/stacks/myorg/myproj/dev?force=true", {
+				method: "DELETE",
+			});
+			expect(forced.status).toBe(204);
+			expect(forceValues).toEqual([false, true]);
 		});
 
 		test("listStacks returns array of stacks", async () => {
