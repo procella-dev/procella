@@ -3,7 +3,8 @@ import { randomUUID } from "node:crypto";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
-import { createBlobStorage, LocalBlobStorage } from "./index";
+import { S3Client } from "@aws-sdk/client-s3";
+import { createBlobStorage, LocalBlobStorage, S3BlobStorage } from "./index";
 
 describe("LocalBlobStorage", () => {
 	let basePath: string;
@@ -129,6 +130,43 @@ describe("LocalBlobStorage with relative basePath", () => {
 	test("path traversal is still rejected", async () => {
 		await expect(storage.get("../../etc/passwd")).rejects.toThrow("path traversal detected");
 	});
+});
+
+describe("S3BlobStorage credentials", () => {
+	test("forwards the session token with explicit credentials", async () => {
+		const storage = new S3BlobStorage({
+			bucket: "test-bucket",
+			region: "us-east-1",
+			accessKeyId: "test-access-key",
+			secretAccessKey: "test-secret-key",
+			sessionToken: "test-session-token",
+		});
+		const client = Reflect.get(storage, "client");
+		expect(client).toBeInstanceOf(S3Client);
+		if (!(client instanceof S3Client)) {
+			throw new Error("S3BlobStorage did not initialize an S3Client");
+		}
+
+		await expect(client.config.credentials()).resolves.toMatchObject({
+			accessKeyId: "test-access-key",
+			secretAccessKey: "test-secret-key",
+			sessionToken: "test-session-token",
+		});
+	});
+
+	test.each([{}, { accessKeyId: "test-access-key" }, { secretAccessKey: "test-secret-key" }])(
+		"rejects incomplete credentials for a custom endpoint",
+		(credentials) => {
+			expect(
+				() =>
+					new S3BlobStorage({
+						bucket: "test-bucket",
+						endpoint: "https://storage.example.com",
+						...credentials,
+					}),
+			).toThrow("accessKeyId + secretAccessKey");
+		},
+	);
 });
 
 describe("createBlobStorage factory", () => {
