@@ -19,9 +19,14 @@ function mockGitHubService(overrides?: Partial<GitHubService>): GitHubService {
 		handleWebhookEvent: mock(async () => {}),
 		issueInstallationUrl: mock(async () => "https://github.com/apps/procella/installations/new"),
 		completeAuthorization: mock(async () => mockInstallation),
-		completeInstallation: mock(
-			async () => "https://github.com/login/oauth/authorize?state=authorization-state",
-		),
+		completeInstallation: mock(async () => ({
+			url: "https://github.com/login/oauth/authorize?state=authorization-state",
+			authorizationState: "authorization-state",
+		})),
+		resumeAuthorization: mock(async () => ({
+			url: "https://github.com/login/oauth/authorize?state=authorization-state",
+			accountLogin: "acme",
+		})),
 		listInstallations: mock(async () => [mockInstallation]),
 		resolveInstallation: mock(async () => mockInstallation),
 		removeInstallation: mock(async () => {}),
@@ -60,10 +65,50 @@ function mockContext(overrides?: Partial<TRPCContext>): TRPCContext {
 describe("githubRouter", () => {
 	test("status distinguishes server configuration from tenant installations", async () => {
 		const configured = await githubRouter.createCaller(mockContext()).status();
-		expect(configured).toEqual({ configured: true, installations: [mockInstallation] });
+		expect(configured).toEqual({
+			configured: true,
+			installations: [mockInstallation],
+			pendingAuthorization: null,
+		});
 
 		const unavailable = await githubRouter.createCaller(mockContext({ github: null })).status();
-		expect(unavailable).toEqual({ configured: false, installations: [] });
+		expect(unavailable).toEqual({
+			configured: false,
+			installations: [],
+			pendingAuthorization: null,
+		});
+	});
+
+	test("status reports a resumable authorization for the initiating admin browser", async () => {
+		const ctx = mockContext({
+			githubSetupCookies: { nonce: "a".repeat(43), authorizationState: "authorization-state" },
+		});
+		const status = await githubRouter.createCaller(ctx).status();
+		expect(status.pendingAuthorization).toEqual({
+			url: "https://github.com/login/oauth/authorize?state=authorization-state",
+			accountLogin: "acme",
+		});
+		expect(ctx.github?.resumeAuthorization).toHaveBeenCalledWith(
+			"authorization-state",
+			"a".repeat(43),
+			{ tenantId: "t-1", userId: "u-1" },
+		);
+	});
+
+	test("status hides resumable authorization from non-admin callers", async () => {
+		const ctx = mockContext({
+			caller: {
+				tenantId: "t-1",
+				orgSlug: "my-org",
+				userId: "u-2",
+				login: "viewer",
+				roles: ["viewer"],
+				principalType: "user",
+			},
+			githubSetupCookies: { nonce: "a".repeat(43), authorizationState: "authorization-state" },
+		});
+		expect((await githubRouter.createCaller(ctx).status()).pendingAuthorization).toBeNull();
+		expect(ctx.github?.resumeAuthorization).not.toHaveBeenCalled();
 	});
 
 	test("status is available to non-admin members", async () => {

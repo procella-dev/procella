@@ -1,4 +1,5 @@
 import {
+	GITHUB_AUTHORIZATION_COOKIE_NAME,
 	GITHUB_SETUP_COOKIE_NAME,
 	GITHUB_SETUP_STATE_TTL_SECONDS,
 	type GitHubService,
@@ -44,13 +45,17 @@ async function readGitHubWebhookBody(body: ReadableStream<Uint8Array> | null): P
 	return Buffer.concat(chunks, bytesRead);
 }
 
+/**
+ * `__Host-` requires Secure, Path=/, and no Domain, so browsers reject the cookie on plaintext
+ * origins and refuse sibling-subdomain shadowing regardless of the scheme this process observes
+ * behind a TLS-terminating proxy.
+ */
 export function githubSetupCookieHeader(
-	browserNonce: string,
-	requestUrl: string,
+	name: string,
+	value: string,
 	maxAge = GITHUB_SETUP_STATE_TTL_SECONDS,
 ): string {
-	const secure = new URL(requestUrl).protocol === "https:" ? "; Secure" : "";
-	return `${GITHUB_SETUP_COOKIE_NAME}=${browserNonce}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
+	return `${name}=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
 }
 
 export function githubHandlers(deps: {
@@ -119,7 +124,10 @@ export function githubHandlers(deps: {
 
 			try {
 				await deps.github.completeAuthorization(state, code, browserNonce);
-				c.header("Set-Cookie", githubSetupCookieHeader("", c.req.url, 0));
+				c.header("Set-Cookie", githubSetupCookieHeader(GITHUB_SETUP_COOKIE_NAME, "", 0));
+				c.header("Set-Cookie", githubSetupCookieHeader(GITHUB_AUTHORIZATION_COOKIE_NAME, "", 0), {
+					append: true,
+				});
 				return c.redirect("/settings?github=connected#github", 303);
 			} catch (error) {
 				const reason = error instanceof GitHubSetupError ? error.code : "github_error";
@@ -158,12 +166,19 @@ export function githubHandlers(deps: {
 			if (!browserNonce) return redirectToGitHubSettings(c, "invalid_state");
 
 			try {
-				const authorizationUrl = await deps.github.completeInstallation(
+				const authorization = await deps.github.completeInstallation(
 					state,
 					installationId,
 					browserNonce,
 				);
-				return c.redirect(authorizationUrl, 303);
+				c.header(
+					"Set-Cookie",
+					githubSetupCookieHeader(
+						GITHUB_AUTHORIZATION_COOKIE_NAME,
+						authorization.authorizationState,
+					),
+				);
+				return c.redirect(authorization.url, 303);
 			} catch (error) {
 				const reason = error instanceof GitHubSetupError ? error.code : "github_error";
 				return redirectToGitHubSettings(c, reason);

@@ -45,7 +45,14 @@ function mockGitHubService(): GitHubService {
 	return {
 		handleWebhookEvent: mock(async () => {}),
 		issueInstallationUrl: mock(async () => "https://github.com/apps/procella/installations/new"),
-		completeInstallation: mock(async () => "https://github.com/login/oauth/authorize"),
+		completeInstallation: mock(async () => ({
+			url: "https://github.com/login/oauth/authorize",
+			authorizationState: "authorization-state",
+		})),
+		resumeAuthorization: mock(async () => ({
+			url: "https://github.com/login/oauth/authorize",
+			accountLogin: "acme",
+		})),
 		completeAuthorization: mock(async () => ({
 			id: "row-1",
 			tenantId: validCaller.tenantId,

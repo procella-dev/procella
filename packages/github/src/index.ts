@@ -100,7 +100,12 @@ export interface GitHubService extends GitHubDeliveryService {
 		state: string,
 		installationId: number,
 		browserNonce: string,
-	): Promise<string>;
+	): Promise<{ url: string; authorizationState: string }>;
+	resumeAuthorization(
+		state: string,
+		browserNonce: string,
+		initiator: { tenantId: string; userId: string },
+	): Promise<{ url: string; accountLogin: string }>;
 	completeAuthorization(
 		state: string,
 		code: string,
@@ -111,7 +116,8 @@ export interface GitHubService extends GitHubDeliveryService {
 }
 
 export const GITHUB_SETUP_STATE_TTL_SECONDS = 10 * 60;
-export const GITHUB_SETUP_COOKIE_NAME = "procella_github_setup";
+export const GITHUB_SETUP_COOKIE_NAME = "__Host-procella_github_setup";
+export const GITHUB_AUTHORIZATION_COOKIE_NAME = "__Host-procella_github_authorization";
 const GITHUB_SETUP_STATE_ISSUER = "procella";
 const GITHUB_SETUP_STATE_AUDIENCE = "procella:github-app-installation";
 const GITHUB_REQUEST_TIMEOUT_MS = 8_000;
@@ -613,18 +619,21 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 		return url.toString();
 	}
 
+	private authorizationUrl(state: string): string {
+		const url = new URL("https://github.com/login/oauth/authorize");
+		url.searchParams.set("client_id", this.config.clientId);
+		url.searchParams.set("state", state);
+		return url.toString();
+	}
+
 	async completeInstallation(
 		state: string,
 		installationId: number,
 		browserNonce: string,
-	): Promise<string> {
+	): Promise<{ url: string; authorizationState: string }> {
 		const claims = await this.setupStates.verify(state);
 		this.verifyBrowserBinding(browserNonce, claims.browserBinding);
 		if (claims.phase !== "install") throw new GitHubSetupError("invalid_state");
-		const installation = await this.loadInstallation(installationId);
-		if (installation.accountLogin.toLowerCase() !== claims.accountLogin.toLowerCase()) {
-			throw new GitHubSetupError("unauthorized_account");
-		}
 
 		const next = await this.setupStates.issue({
 			tenantId: claims.tenantId,
@@ -643,10 +652,31 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 			});
 		});
 
-		const url = new URL("https://github.com/login/oauth/authorize");
-		url.searchParams.set("client_id", this.config.clientId);
-		url.searchParams.set("state", next.state);
-		return url.toString();
+		const installation = await this.loadInstallation(installationId);
+		if (installation.accountLogin.toLowerCase() !== claims.accountLogin.toLowerCase()) {
+			throw new GitHubSetupError("unauthorized_account");
+		}
+		return {
+			url: this.authorizationUrl(next.state),
+			authorizationState: next.state,
+		};
+	}
+
+	async resumeAuthorization(
+		state: string,
+		browserNonce: string,
+		initiator: { tenantId: string; userId: string },
+	): Promise<{ url: string; accountLogin: string }> {
+		const claims = await this.setupStates.verify(state);
+		this.verifyBrowserBinding(browserNonce, claims.browserBinding);
+		if (
+			claims.phase !== "authorize" ||
+			claims.tenantId !== initiator.tenantId ||
+			claims.initiatorUserId !== initiator.userId
+		) {
+			throw new GitHubSetupError("invalid_state");
+		}
+		return { url: this.authorizationUrl(state), accountLogin: claims.accountLogin };
 	}
 
 	async completeAuthorization(

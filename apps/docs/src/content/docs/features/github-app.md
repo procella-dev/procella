@@ -80,7 +80,9 @@ For Vercel or similar platforms, use the environment variable UI. The private ke
 
 Sign in to Procella as a tenant administrator, open **Settings** > **GitHub**, enter the exact GitHub user or organization login to connect, and select **Install & Verify GitHub App**. Procella first sends the initiating browser to GitHub to install the App. After GitHub returns the new installation ID, Procella rotates the signed one-time state and authorizes the GitHub user in the same browser. The user token must expose that installation and prove that the user owns the requested personal account or is an active administrator of the requested organization. The requested login is untrusted until GitHub confirms that authority. Procella revokes the short-lived user token immediately after this check and only then saves the tenant binding.
 
-Both redirects must return to the browser that started setup. Procella binds the signed state to a short-lived HttpOnly, SameSite cookie, so forwarding either callback URL to another browser cannot transfer the tenant binding.
+Both redirects must return to the browser that started setup. Procella binds the signed state to short-lived `__Host-` prefixed HttpOnly, Secure, SameSite cookies, so forwarding either callback URL to another browser or tenant cannot transfer the tenant binding.
+
+If verification is interrupted after installation — a GitHub outage, an expired link, or a closed tab — the App stays installed with no tenant binding. **Settings** > **GitHub** then shows the pending account with **Resume GitHub verification** for the same administrator and browser, so recovery never requires uninstalling the App on GitHub.
 
 
 Webhook events can update or remove an existing binding, but cannot create one.

@@ -125,12 +125,12 @@ async function issueAuthorizationState(
 	);
 	const installationState = installationUrl.searchParams.get("state");
 	if (!installationState) throw new Error("Installation URL did not include state");
-	const authorizationUrl = new URL(
-		await service.completeInstallation(installationState, installationId, BROWSER_NONCE),
+	const authorization = await service.completeInstallation(
+		installationState,
+		installationId,
+		BROWSER_NONCE,
 	);
-	const authorizationState = authorizationUrl.searchParams.get("state");
-	if (!authorizationState) throw new Error("Authorization URL did not include state");
-	return authorizationState;
+	return authorization.authorizationState;
 }
 
 async function bind(service: OctokitGitHubService, tenantId: string, installationId: number) {

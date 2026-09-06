@@ -8,6 +8,8 @@ import { type AuthConfig, type AuthService, METHOD_ROLE_MAP } from "@procella/au
 import type { Database } from "@procella/db";
 import type { EscService } from "@procella/esc";
 import {
+	GITHUB_AUTHORIZATION_COOKIE_NAME,
+	GITHUB_SETUP_COOKIE_NAME,
 	GitHubOutboxWorker,
 	type GitHubService,
 	verifyGitHubWebhookSignature,
@@ -20,6 +22,7 @@ import { GCWorker, type UpdatesService } from "@procella/updates";
 import type { WebhooksService } from "@procella/webhooks";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { Hono, type MiddlewareHandler } from "hono";
+import { getCookie } from "hono/cookie";
 import { cors } from "hono/cors";
 import {
 	auditHandlers,
@@ -177,8 +180,15 @@ export function createApp(deps: {
 				router: appRouter,
 				createContext: ({ resHeaders }) => ({
 					...ctx,
+					githubSetupCookies: {
+						nonce: getCookie(c, GITHUB_SETUP_COOKIE_NAME),
+						authorizationState: getCookie(c, GITHUB_AUTHORIZATION_COOKIE_NAME),
+					},
 					setGitHubSetupCookie(nonce: string) {
-						resHeaders.append("Set-Cookie", githubSetupCookieHeader(nonce, c.req.url));
+						resHeaders.append(
+							"Set-Cookie",
+							githubSetupCookieHeader(GITHUB_SETUP_COOKIE_NAME, nonce),
+						);
 						resHeaders.set("Cache-Control", "no-store");
 					},
 				}),

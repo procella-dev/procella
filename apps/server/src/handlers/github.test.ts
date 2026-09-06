@@ -1,5 +1,10 @@
 import { describe, expect, mock, test } from "bun:test";
-import { GITHUB_SETUP_COOKIE_NAME, type GitHubService, GitHubSetupError } from "@procella/github";
+import {
+	GITHUB_AUTHORIZATION_COOKIE_NAME,
+	GITHUB_SETUP_COOKIE_NAME,
+	type GitHubService,
+	GitHubSetupError,
+} from "@procella/github";
 import type { Caller } from "@procella/types";
 import { Hono } from "hono";
 import type { Env } from "../types.js";
@@ -41,9 +46,14 @@ function mockGitHubService(overrides?: Partial<GitHubService>): GitHubService {
 		handleWebhookEvent: mock(async () => {}),
 		issueInstallationUrl: mock(async () => "https://github.com/apps/procella/installations/new"),
 		completeAuthorization: mock(async () => mockInstallation),
-		completeInstallation: mock(
-			async () => "https://github.com/login/oauth/authorize?state=authorization-state",
-		),
+		completeInstallation: mock(async () => ({
+			url: "https://github.com/login/oauth/authorize?state=authorization-state",
+			authorizationState: "authorization-state",
+		})),
+		resumeAuthorization: mock(async () => ({
+			url: "https://github.com/login/oauth/authorize?state=authorization-state",
+			accountLogin: "acme",
+		})),
 		listInstallations: mock(async () => [mockInstallation]),
 		resolveInstallation: mock(async () => mockInstallation),
 		createPRComment: mock(async () => 1),
@@ -229,7 +239,10 @@ describe("githubHandlers", () => {
 			);
 			expect(res.status).toBe(303);
 			expect(res.headers.get("location")).toBe("/settings?github=connected#github");
-			expect(res.headers.get("set-cookie")).toContain("Max-Age=0");
+			expect(res.headers.getSetCookie()).toEqual([
+				expect.stringContaining(`${GITHUB_SETUP_COOKIE_NAME}=;`),
+				expect.stringContaining(`${GITHUB_AUTHORIZATION_COOKIE_NAME}=;`),
+			]);
 			expect(github.completeAuthorization).toHaveBeenCalledWith(
 				"authorization-state",
 				"oauth-code",
@@ -285,6 +298,12 @@ describe("githubHandlers", () => {
 				12345,
 				BROWSER_NONCE,
 			);
+			expect(res.headers.get("set-cookie")).toContain(
+				`${GITHUB_AUTHORIZATION_COOKIE_NAME}=authorization-state`,
+			);
+			expect(res.headers.get("set-cookie")).toContain("; Secure;");
+			expect(res.headers.get("set-cookie")).toContain("Path=/");
+			expect(res.headers.get("set-cookie")).not.toContain("Domain=");
 		});
 
 		test("rejects missing or malformed callback parameters before persistence", async () => {

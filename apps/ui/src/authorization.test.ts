@@ -34,6 +34,7 @@ let githubStatusQuery: {
 			createdAt: Date;
 			updatedAt: Date;
 		}>;
+		pendingAuthorization?: { url: string; accountLogin: string } | null;
 	};
 	isLoading: boolean;
 	error: Error | null;
@@ -263,6 +264,31 @@ describe("Settings authorization", () => {
 		await waitFor(() =>
 			expect(createInstallationUrl).toHaveBeenCalledWith({ accountLogin: "acme" }),
 		);
+	});
+
+	test("offers to resume an interrupted GitHub authorization", () => {
+		currentCallerQuery = {
+			data: { tenantId: "tenant-from-server", roles: ["admin"] },
+			isLoading: false,
+			error: null,
+		};
+		githubStatusQuery = {
+			data: {
+				configured: true,
+				installations: [],
+				pendingAuthorization: {
+					url: "https://github.com/login/oauth/authorize?state=authorization-state",
+					accountLogin: "acme",
+				},
+			},
+			isLoading: false,
+			error: null,
+		};
+		dom.location.hash = "github";
+
+		const page = render(createElement(Settings));
+		expect(page.getByText(/administrator verification is incomplete/)).toBeTruthy();
+		expect(page.getByRole("button", { name: "Resume GitHub verification" })).toBeTruthy();
 	});
 
 	test("shows an expired callback state error", () => {

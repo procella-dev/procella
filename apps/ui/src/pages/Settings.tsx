@@ -199,6 +199,23 @@ function GitHubSettingsTab() {
 				</div>
 			)}
 
+			{status.pendingAuthorization && (
+				<div className="bg-lightning/10 border border-lightning/30 text-cloud p-4 rounded-xl text-sm flex items-center justify-between gap-4">
+					<p>
+						The GitHub App is installed for{" "}
+						<strong>{status.pendingAuthorization.accountLogin}</strong>, but administrator
+						verification is incomplete.
+					</p>
+					<button
+						type="button"
+						onClick={() => window.location.assign(status.pendingAuthorization.url)}
+						className="btn-primary shrink-0"
+					>
+						Resume GitHub verification
+					</button>
+				</div>
+			)}
+
 			{status.installations.length === 0 ? (
 				<GitHubAccountConnect
 					title="GitHub App is not installed"

@@ -10,7 +10,12 @@ import type { AuditService } from "@procella/audit";
 import type { AuthConfig, AuthService } from "@procella/auth";
 import type { Database } from "@procella/db";
 import type { EscService } from "@procella/esc";
-import { type GitHubService, verifyGitHubWebhookSignature } from "@procella/github";
+import {
+	GITHUB_AUTHORIZATION_COOKIE_NAME,
+	GITHUB_SETUP_COOKIE_NAME,
+	type GitHubService,
+	verifyGitHubWebhookSignature,
+} from "@procella/github";
 import type { OidcService, TrustPolicyRepository } from "@procella/oidc";
 import type { StacksService } from "@procella/stacks";
 import { tracingMiddleware } from "@procella/telemetry";
@@ -19,6 +24,7 @@ import type { UpdatesService } from "@procella/updates";
 import type { WebhooksService } from "@procella/webhooks";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { Hono } from "hono";
+import { getCookie } from "hono/cookie";
 import {
 	githubHandlers,
 	githubSetupCookieHeader,
@@ -163,8 +169,15 @@ export function createWebApp(deps: WebAppDeps): Hono<Env> {
 				router: appRouter,
 				createContext: ({ resHeaders }) => ({
 					...ctx,
+					githubSetupCookies: {
+						nonce: getCookie(c, GITHUB_SETUP_COOKIE_NAME),
+						authorizationState: getCookie(c, GITHUB_AUTHORIZATION_COOKIE_NAME),
+					},
 					setGitHubSetupCookie(nonce: string) {
-						resHeaders.append("Set-Cookie", githubSetupCookieHeader(nonce, c.req.url));
+						resHeaders.append(
+							"Set-Cookie",
+							githubSetupCookieHeader(GITHUB_SETUP_COOKIE_NAME, nonce),
+						);
 						resHeaders.set("Cache-Control", "no-store");
 					},
 				}),

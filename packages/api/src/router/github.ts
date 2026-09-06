@@ -1,16 +1,22 @@
 import { createGitHubSetupNonce } from "@procella/github";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod/v4";
-import { adminProcedure, protectedProcedure, router } from "../trpc.js";
+import {
+	adminProcedure,
+	protectedProcedure,
+	resolvePendingAuthorization,
+	router,
+} from "../trpc.js";
 
 export const githubRouter = router({
 	status: protectedProcedure.query(async ({ ctx }) => {
 		if (!ctx.github) {
-			return { configured: false as const, installations: [] };
+			return { configured: false as const, installations: [], pendingAuthorization: null };
 		}
 		return {
 			configured: true as const,
 			installations: await ctx.github.listInstallations(ctx.caller.tenantId),
+			pendingAuthorization: await resolvePendingAuthorization(ctx),
 		};
 	}),
 
