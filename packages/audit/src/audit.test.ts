@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
 	AuditAction,
+	DescopeAuditService,
 	extractResourceId,
 	extractResourceType,
 	mapActionToType,
@@ -150,5 +151,56 @@ describe("NoopAuditService", () => {
 
 		const exported = await audit.export("tenant-a", { action: AuditAction.STACK_CREATE });
 		expect(exported).toHaveLength(3);
+	});
+});
+
+describe("DescopeAuditService", () => {
+	test("round-trips an unprefixed token actor type through Descope event data", async () => {
+		type StoredEvent = {
+			id?: string;
+			action?: string;
+			actorId?: string;
+			tenantId?: string;
+			userId?: string;
+			createdTime?: number;
+			data?: Record<string, unknown>;
+		};
+		const stored: StoredEvent[] = [];
+		const sdk = {
+			management: {
+				audit: {
+					createEvent: (event: StoredEvent) => {
+						stored.push(event);
+						return Promise.resolve();
+					},
+					search: () =>
+						Promise.resolve({
+							data: stored.map((event, index) => ({
+								...event,
+								id: `event-${index}`,
+								createdTime: 1_700_000_000,
+							})),
+						}),
+				},
+			},
+		} as never;
+		const audit = new DescopeAuditService(sdk);
+
+		audit.log("tenant-a", {
+			actorId: "K3-unprefixed-access-key",
+			actorType: "token",
+			action: AuditAction.STACK_CREATE,
+			resourceType: "stack",
+			resourceId: "my-org/project/dev",
+			metadata: { actorType: "user", traceId: "trace-1" },
+		});
+
+		expect(stored[0]?.data).toMatchObject({ actorType: "token", traceId: "trace-1" });
+		const result = await audit.query("tenant-a", {});
+		expect(result.entries[0]).toMatchObject({
+			actorId: "K3-unprefixed-access-key",
+			actorType: "token",
+			metadata: { traceId: "trace-1" },
+		});
 	});
 });
