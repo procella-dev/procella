@@ -18,7 +18,15 @@ function mockGitHubService(overrides?: Partial<GitHubService>): GitHubService {
 	return {
 		handleWebhookEvent: mock(async () => {}),
 		issueInstallationUrl: mock(async () => "https://github.com/apps/procella/installations/new"),
-		completeInstallation: mock(async () => mockInstallation),
+		completeAuthorization: mock(async () => mockInstallation),
+		completeInstallation: mock(async () => ({
+			url: "https://github.com/login/oauth/authorize?state=authorization-state",
+			authorizationState: "authorization-state",
+		})),
+		resumeAuthorization: mock(async () => ({
+			url: "https://github.com/login/oauth/authorize?state=authorization-state",
+			accountLogin: "acme",
+		})),
 		listInstallations: mock(async () => [mockInstallation]),
 		resolveInstallation: mock(async () => mockInstallation),
 		removeInstallation: mock(async () => {}),
@@ -40,6 +48,7 @@ function mockContext(overrides?: Partial<TRPCContext>): TRPCContext {
 			roles: ["admin"],
 			principalType: "user",
 		},
+		setGitHubSetupCookie: mock(() => {}),
 		resolveUserDisplayName: (subject) => Promise.resolve(subject),
 		db: {} as never,
 		dbUrl: "",
@@ -56,10 +65,50 @@ function mockContext(overrides?: Partial<TRPCContext>): TRPCContext {
 describe("githubRouter", () => {
 	test("status distinguishes server configuration from tenant installations", async () => {
 		const configured = await githubRouter.createCaller(mockContext()).status();
-		expect(configured).toEqual({ configured: true, installations: [mockInstallation] });
+		expect(configured).toEqual({
+			configured: true,
+			installations: [mockInstallation],
+			pendingAuthorization: null,
+		});
 
 		const unavailable = await githubRouter.createCaller(mockContext({ github: null })).status();
-		expect(unavailable).toEqual({ configured: false, installations: [] });
+		expect(unavailable).toEqual({
+			configured: false,
+			installations: [],
+			pendingAuthorization: null,
+		});
+	});
+
+	test("status reports a resumable authorization for the initiating admin browser", async () => {
+		const ctx = mockContext({
+			githubSetupCookies: { nonce: "a".repeat(43), authorizationState: "authorization-state" },
+		});
+		const status = await githubRouter.createCaller(ctx).status();
+		expect(status.pendingAuthorization).toEqual({
+			url: "https://github.com/login/oauth/authorize?state=authorization-state",
+			accountLogin: "acme",
+		});
+		expect(ctx.github?.resumeAuthorization).toHaveBeenCalledWith(
+			"authorization-state",
+			"a".repeat(43),
+			{ tenantId: "t-1", userId: "u-1" },
+		);
+	});
+
+	test("status hides resumable authorization from non-admin callers", async () => {
+		const ctx = mockContext({
+			caller: {
+				tenantId: "t-1",
+				orgSlug: "my-org",
+				userId: "u-2",
+				login: "viewer",
+				roles: ["viewer"],
+				principalType: "user",
+			},
+			githubSetupCookies: { nonce: "a".repeat(43), authorizationState: "authorization-state" },
+		});
+		expect((await githubRouter.createCaller(ctx).status()).pendingAuthorization).toBeNull();
+		expect(ctx.github?.resumeAuthorization).not.toHaveBeenCalled();
 	});
 
 	test("status is available to non-admin members", async () => {
@@ -76,11 +125,20 @@ describe("githubRouter", () => {
 		expect((await githubRouter.createCaller(ctx).status()).configured).toBe(true);
 	});
 
-	test("createInstallationUrl issues tenant-bound URL for admins", async () => {
-		const ctx = mockContext();
-		const result = await githubRouter.createCaller(ctx).createInstallationUrl();
+	test("createInstallationUrl binds state to the initiating admin and browser", async () => {
+		const issueInstallationUrl = mock(
+			async (_tenantId: string, _accountLogin: string, _userId: string, _nonce: string) =>
+				"https://github.com/apps/procella/installations/new",
+		);
+		const ctx = mockContext({ github: mockGitHubService({ issueInstallationUrl }) });
+		const result = await githubRouter
+			.createCaller(ctx)
+			.createInstallationUrl({ accountLogin: "acme" });
 		expect(result.url).toContain("github.com/apps/procella/installations/new");
-		expect(ctx.github?.issueInstallationUrl).toHaveBeenCalledWith("t-1");
+		const issueCall = issueInstallationUrl.mock.calls[0];
+		expect(issueCall?.slice(0, 3)).toEqual(["t-1", "acme", "u-1"]);
+		expect(issueCall?.[3]).toMatch(/^[a-zA-Z0-9_-]{43}$/);
+		expect(ctx.setGitHubSetupCookie).toHaveBeenCalledWith(issueCall?.[3]);
 	});
 
 	test("createInstallationUrl rejects non-admin callers", async () => {
@@ -94,17 +152,34 @@ describe("githubRouter", () => {
 				principalType: "user",
 			},
 		});
-		await expect(githubRouter.createCaller(ctx).createInstallationUrl()).rejects.toThrow(
-			"Admin role required",
-		);
+		await expect(
+			githubRouter.createCaller(ctx).createInstallationUrl({ accountLogin: "acme" }),
+		).rejects.toThrow("Admin role required");
 	});
 
 	test("createInstallationUrl reports disabled server configuration", async () => {
 		await expect(
-			githubRouter.createCaller(mockContext({ github: null })).createInstallationUrl(),
+			githubRouter
+				.createCaller(mockContext({ github: null }))
+				.createInstallationUrl({ accountLogin: "acme" }),
 		).rejects.toThrow("GitHub App is not configured");
 	});
 
+	test("createInstallationUrl rejects malformed GitHub account logins", async () => {
+		const ctx = mockContext();
+		await expect(
+			githubRouter.createCaller(ctx).createInstallationUrl({ accountLogin: "../attacker" }),
+		).rejects.toThrow();
+		expect(ctx.github?.issueInstallationUrl).not.toHaveBeenCalled();
+	});
+
+	test("createInstallationUrl fails closed when browser cookie support is unavailable", async () => {
+		const ctx = mockContext({ setGitHubSetupCookie: undefined });
+		await expect(
+			githubRouter.createCaller(ctx).createInstallationUrl({ accountLogin: "acme" }),
+		).rejects.toThrow("GitHub setup cookie support is unavailable");
+		expect(ctx.github?.issueInstallationUrl).not.toHaveBeenCalled();
+	});
 	test("removeInstallation is tenant scoped and admin only", async () => {
 		const ctx = mockContext();
 		expect(

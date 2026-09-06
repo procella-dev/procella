@@ -141,10 +141,10 @@ function GitHubSettingsTab() {
 	const callback = new URLSearchParams(window.location.search).get("github");
 	const callbackReason = new URLSearchParams(window.location.search).get("reason");
 
-	const handleConnect = async () => {
+	const handleConnect = async (accountLogin: string) => {
 		setActionError(null);
 		try {
-			const { url } = await createUrlMutation.mutateAsync();
+			const { url } = await createUrlMutation.mutateAsync({ accountLogin });
 			window.location.assign(url);
 		} catch (error) {
 			setActionError(error instanceof Error ? error.message : "Unable to start GitHub setup");
@@ -199,8 +199,29 @@ function GitHubSettingsTab() {
 				</div>
 			)}
 
+			{status.pendingAuthorization && (
+				<div className="bg-lightning/10 border border-lightning/30 text-cloud p-4 rounded-xl text-sm flex items-center justify-between gap-4">
+					<p>
+						The GitHub App is installed for{" "}
+						<strong>{status.pendingAuthorization.accountLogin}</strong>, but administrator
+						verification is incomplete.
+					</p>
+					<button
+						type="button"
+						onClick={() => window.location.assign(status.pendingAuthorization.url)}
+						className="btn-primary shrink-0"
+					>
+						Resume GitHub verification
+					</button>
+				</div>
+			)}
+
 			{status.installations.length === 0 ? (
-				<GitHubNotConnected onConnect={handleConnect} pending={createUrlMutation.isPending} />
+				<GitHubAccountConnect
+					title="GitHub App is not installed"
+					onConnect={handleConnect}
+					pending={createUrlMutation.isPending}
+				/>
 			) : (
 				<>
 					<div className="flex items-center justify-between gap-4">
@@ -210,14 +231,6 @@ function GitHubSettingsTab() {
 								Procella verifies repository access before publishing each notification.
 							</p>
 						</div>
-						<button
-							type="button"
-							onClick={handleConnect}
-							disabled={createUrlMutation.isPending}
-							className="btn-primary shrink-0"
-						>
-							{createUrlMutation.isPending ? "Opening GitHub…" : "Connect or Configure"}
-						</button>
 					</div>
 
 					{status.installations.map((installation) => (
@@ -247,16 +260,31 @@ function GitHubSettingsTab() {
 										</p>
 									</div>
 								</div>
-								<button
-									type="button"
-									onClick={() => setDisconnectId(installation.installationId)}
-									className="btn-danger"
-								>
-									Disconnect
-								</button>
+								<div className="flex gap-2">
+									<button
+										type="button"
+										onClick={() => handleConnect(installation.accountLogin)}
+										disabled={createUrlMutation.isPending}
+										className="btn-primary"
+									>
+										{createUrlMutation.isPending ? "Opening GitHub…" : "Configure & Verify"}
+									</button>
+									<button
+										type="button"
+										onClick={() => setDisconnectId(installation.installationId)}
+										className="btn-danger"
+									>
+										Disconnect
+									</button>
+								</div>
 							</div>
 						</div>
 					))}
+					<GitHubAccountConnect
+						title="Connect another GitHub account"
+						onConnect={handleConnect}
+						pending={createUrlMutation.isPending}
+					/>
 				</>
 			)}
 
@@ -298,6 +326,12 @@ function githubCallbackError(reason: string | null): string {
 			return "This GitHub installation is already connected to another tenant.";
 		case "invalid_installation":
 			return "GitHub did not return a valid installation for this app.";
+		case "authorization_failed":
+			return "GitHub user authorization failed. Start the connection again.";
+		case "unauthorized_account":
+			return "Your GitHub user must own the account or be an active organization administrator.";
+		case "unsupported_setup_action":
+			return "GitHub returned an update callback. Start a new installation from Procella Settings.";
 		case "not_configured":
 			return "The GitHub App is not configured on this server.";
 		default:
@@ -310,10 +344,13 @@ function GitHubNotConfigured() {
 		<div className="bg-slate-brand/30 border border-slate-brand/60 rounded-xl p-8">
 			<h3 className="text-sm font-semibold text-cloud mb-1.5">GitHub App is not configured</h3>
 			<p className="text-sm text-cloud/60 leading-relaxed mb-4">
-				A server administrator must configure the GitHub App before tenants can connect it.
+				A server administrator must configure the GitHub App, including OAuth credentials, before
+				tenants can connect it.
 			</p>
 			<div className="bg-deep-sky border border-cloud/15 rounded-lg px-3 py-2.5 font-mono text-xs text-cloud overflow-x-auto whitespace-pre leading-relaxed">
 				{`PROCELLA_GITHUB_APP_ID=<your-app-id>
+PROCELLA_GITHUB_APP_CLIENT_ID=<your-client-id>
+PROCELLA_GITHUB_APP_CLIENT_SECRET=<your-client-secret>
 PROCELLA_GITHUB_APP_PRIVATE_KEY=<your-private-key>
 PROCELLA_GITHUB_APP_WEBHOOK_SECRET=<your-webhook-secret>`}
 			</div>
@@ -321,16 +358,49 @@ PROCELLA_GITHUB_APP_WEBHOOK_SECRET=<your-webhook-secret>`}
 	);
 }
 
-function GitHubNotConnected({ onConnect, pending }: { onConnect: () => void; pending: boolean }) {
+function GitHubAccountConnect({
+	title,
+	onConnect,
+	pending,
+}: {
+	title: string;
+	onConnect: (accountLogin: string) => void;
+	pending: boolean;
+}) {
 	return (
 		<div className="bg-slate-brand/30 border border-slate-brand/60 rounded-xl p-8">
-			<h3 className="text-sm font-semibold text-mist mb-1.5">GitHub App is not installed</h3>
+			<h3 className="text-sm font-semibold text-mist mb-1.5">{title}</h3>
 			<p className="text-sm text-cloud leading-relaxed mb-5">
-				The server is configured, but this tenant has no connected GitHub installation.
+				Enter the GitHub user or organization account to connect. Install the App first, then
+				Procella asks GitHub to verify that your user owns the account or is an active organization
+				administrator.
 			</p>
-			<button type="button" onClick={onConnect} disabled={pending} className="btn-primary">
-				{pending ? "Opening GitHub…" : "Connect GitHub App"}
-			</button>
+			<form
+				aria-label="Connect GitHub App"
+				onSubmit={(event) => {
+					event.preventDefault();
+					const accountLogin = new FormData(event.currentTarget).get("accountLogin");
+					if (typeof accountLogin === "string" && accountLogin.trim()) {
+						onConnect(accountLogin.trim());
+					}
+				}}
+			>
+				<label className="block text-sm text-cloud mb-4 max-w-sm">
+					GitHub account
+					<input
+						type="text"
+						name="accountLogin"
+						required
+						maxLength={100}
+						placeholder="acme"
+						autoComplete="off"
+						className="mt-1 w-full bg-deep-sky border border-cloud/20 rounded-lg px-3 py-2 text-mist"
+					/>
+				</label>
+				<button type="submit" disabled={pending} className="btn-primary">
+					{pending ? "Opening GitHub…" : "Install & Verify GitHub App"}
+				</button>
+			</form>
 		</div>
 	);
 }

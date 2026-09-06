@@ -34,6 +34,7 @@ let githubStatusQuery: {
 			createdAt: Date;
 			updatedAt: Date;
 		}>;
+		pendingAuthorization?: { url: string; accountLogin: string } | null;
 	};
 	isLoading: boolean;
 	error: Error | null;
@@ -97,6 +98,7 @@ beforeEach(() => {
 	globalThis.localStorage = dom.localStorage;
 	globalThis.HTMLElement = dom.HTMLElement;
 	globalThis.Event = dom.Event as unknown as typeof globalThis.Event;
+	globalThis.FormData = dom.FormData as unknown as typeof FormData;
 	globalThis.MouseEvent = dom.MouseEvent as unknown as typeof globalThis.MouseEvent;
 	currentCallerQuery = { data: undefined, isLoading: false, error: null };
 	sessionState = {
@@ -200,7 +202,7 @@ describe("Settings authorization", () => {
 		expect(page.getByText("Admin access required")).toBeTruthy();
 	});
 
-	test("distinguishes server configuration from an uninstalled tenant", () => {
+	test("requires an explicit GitHub account before starting authorization", async () => {
 		currentCallerQuery = {
 			data: { tenantId: "tenant-from-server", roles: ["admin"] },
 			isLoading: false,
@@ -218,8 +220,13 @@ describe("Settings authorization", () => {
 			error: null,
 		};
 		page = render(createElement(Settings));
-		expect(page.getByText("GitHub App is not installed")).toBeTruthy();
-		expect(page.getByRole("button", { name: "Connect GitHub App" })).toBeTruthy();
+		const account = page.getByLabelText("GitHub account") as HTMLInputElement;
+		expect(account.required).toBe(true);
+		account.value = "acme";
+		fireEvent.submit(page.getByRole("form", { name: "Connect GitHub App" }));
+		await waitFor(() =>
+			expect(createInstallationUrl).toHaveBeenCalledWith({ accountLogin: "acme" }),
+		);
 	});
 
 	test("shows callback success and configured installation actions", async () => {
@@ -252,8 +259,36 @@ describe("Settings authorization", () => {
 		const page = render(createElement(Settings));
 		expect(page.getByText("GitHub App installation connected successfully.")).toBeTruthy();
 		expect(page.getByText("Selected repositories")).toBeTruthy();
-		fireEvent.click(page.getByRole("button", { name: "Connect or Configure" }));
-		await waitFor(() => expect(createInstallationUrl).toHaveBeenCalledTimes(1));
+		expect(page.getByText("Connect another GitHub account")).toBeTruthy();
+		fireEvent.click(page.getByRole("button", { name: "Configure & Verify" }));
+		await waitFor(() =>
+			expect(createInstallationUrl).toHaveBeenCalledWith({ accountLogin: "acme" }),
+		);
+	});
+
+	test("offers to resume an interrupted GitHub authorization", () => {
+		currentCallerQuery = {
+			data: { tenantId: "tenant-from-server", roles: ["admin"] },
+			isLoading: false,
+			error: null,
+		};
+		githubStatusQuery = {
+			data: {
+				configured: true,
+				installations: [],
+				pendingAuthorization: {
+					url: "https://github.com/login/oauth/authorize?state=authorization-state",
+					accountLogin: "acme",
+				},
+			},
+			isLoading: false,
+			error: null,
+		};
+		dom.location.hash = "github";
+
+		const page = render(createElement(Settings));
+		expect(page.getByText(/administrator verification is incomplete/)).toBeTruthy();
+		expect(page.getByRole("button", { name: "Resume GitHub verification" })).toBeTruthy();
 	});
 
 	test("shows an expired callback state error", () => {
@@ -272,6 +307,49 @@ describe("Settings authorization", () => {
 		const page = render(createElement(Settings));
 		expect(
 			page.getByText("The GitHub setup link expired. Start the connection again."),
+		).toBeTruthy();
+	});
+
+	test("explains rejected GitHub update callbacks", () => {
+		currentCallerQuery = {
+			data: { tenantId: "tenant-from-server", roles: ["admin"] },
+			isLoading: false,
+			error: null,
+		};
+		githubStatusQuery = {
+			data: { configured: true, installations: [] },
+			isLoading: false,
+			error: null,
+		};
+		dom.location.href =
+			"http://localhost/settings?github=error&reason=unsupported_setup_action#github";
+
+		const page = render(createElement(Settings));
+		expect(
+			page.getByText(
+				"GitHub returned an update callback. Start a new installation from Procella Settings.",
+			),
+		).toBeTruthy();
+	});
+
+	test("explains rejected GitHub account authorization", () => {
+		currentCallerQuery = {
+			data: { tenantId: "tenant-from-server", roles: ["admin"] },
+			isLoading: false,
+			error: null,
+		};
+		githubStatusQuery = {
+			data: { configured: true, installations: [] },
+			isLoading: false,
+			error: null,
+		};
+		dom.location.href = "http://localhost/settings?github=error&reason=unauthorized_account#github";
+
+		const page = render(createElement(Settings));
+		expect(
+			page.getByText(
+				"Your GitHub user must own the account or be an active organization administrator.",
+			),
 		).toBeTruthy();
 	});
 });

@@ -21,6 +21,8 @@ import superjson from "superjson";
 export interface TRPCContext {
 	caller: Caller | null;
 	issueSubscriptionTicket?: (caller: Caller) => Promise<string>;
+	setGitHubSetupCookie?: (nonce: string) => void;
+	githubSetupCookies?: { nonce?: string; authorizationState?: string };
 	resolveUserDisplayName: (subject: string) => Promise<string | null>;
 	db: Database;
 	dbUrl: string;
@@ -105,6 +107,8 @@ const protectedMiddleware = t.middleware(async ({ ctx, next }) => {
 		ctx: {
 			...ctx,
 			caller: ctx.caller,
+			setGitHubSetupCookie: ctx.setGitHubSetupCookie,
+			githubSetupCookies: ctx.githubSetupCookies,
 		},
 	});
 });
@@ -122,6 +126,8 @@ const memberMiddleware = t.middleware(async ({ ctx, next }) => {
 		ctx: {
 			...ctx,
 			caller: ctx.caller,
+			setGitHubSetupCookie: ctx.setGitHubSetupCookie,
+			githubSetupCookies: ctx.githubSetupCookies,
 		},
 	});
 });
@@ -139,10 +145,26 @@ const adminMiddleware = t.middleware(async ({ ctx, next }) => {
 		ctx: {
 			...ctx,
 			caller: ctx.caller,
+			setGitHubSetupCookie: ctx.setGitHubSetupCookie,
+			githubSetupCookies: ctx.githubSetupCookies,
 		},
 	});
 });
 
+/** Callers cannot read the HttpOnly setup cookies, so status reports any resumable authorization. */
+export async function resolvePendingAuthorization(
+	ctx: TRPCContext & { caller: Caller },
+): Promise<{ url: string; accountLogin: string } | null> {
+	const state = ctx.githubSetupCookies?.authorizationState;
+	const nonce = ctx.githubSetupCookies?.nonce;
+	if (!ctx.github || !state || !nonce || !ctx.caller.roles.includes("admin")) return null;
+	return ctx.github
+		.resumeAuthorization(state, nonce, {
+			tenantId: ctx.caller.tenantId,
+			userId: ctx.caller.userId,
+		})
+		.catch(() => null);
+}
 // Keep bare t.procedure usage confined to this file.
 const instrumentedProcedure = t.procedure.use(tracingMiddleware);
 

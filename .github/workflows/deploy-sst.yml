@@ -21,6 +21,10 @@ on:
         required: true
       PROCELLA_GITHUB_APP_ID:
         required: false
+      PROCELLA_GITHUB_APP_CLIENT_ID:
+        required: false
+      PROCELLA_GITHUB_APP_CLIENT_SECRET:
+        required: false
       PROCELLA_GITHUB_APP_PRIVATE_KEY:
         required: false
       PROCELLA_GITHUB_APP_WEBHOOK_SECRET:
@@ -102,6 +106,8 @@ jobs:
           SST_SECRET_ProcellaDevAuthToken: ${{ secrets.PROCELLA_DEV_AUTH_TOKEN }}
           SST_SECRET_ProcellaDescopeManagementKey: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
           SST_SECRET_ProcellaGitHubAppId: ${{ secrets.PROCELLA_GITHUB_APP_ID }}
+          SST_SECRET_ProcellaGitHubAppClientId: ${{ secrets.PROCELLA_GITHUB_APP_CLIENT_ID }}
+          SST_SECRET_ProcellaGitHubAppClientSecret: ${{ secrets.PROCELLA_GITHUB_APP_CLIENT_SECRET }}
           SST_SECRET_ProcellaGitHubAppPrivateKey: ${{ secrets.PROCELLA_GITHUB_APP_PRIVATE_KEY }}
           SST_SECRET_ProcellaGitHubAppWebhookSecret: ${{ secrets.PROCELLA_GITHUB_APP_WEBHOOK_SECRET }}
           SST_SECRET_ProcellaOtelEndpoint: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT }}

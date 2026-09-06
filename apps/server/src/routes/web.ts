@@ -10,7 +10,12 @@ import type { AuditService } from "@procella/audit";
 import type { AuthConfig, AuthService } from "@procella/auth";
 import type { Database } from "@procella/db";
 import type { EscService } from "@procella/esc";
-import { type GitHubService, verifyGitHubWebhookSignature } from "@procella/github";
+import {
+	GITHUB_AUTHORIZATION_COOKIE_NAME,
+	GITHUB_SETUP_COOKIE_NAME,
+	type GitHubService,
+	verifyGitHubWebhookSignature,
+} from "@procella/github";
 import type { OidcService, TrustPolicyRepository } from "@procella/oidc";
 import type { StacksService } from "@procella/stacks";
 import { tracingMiddleware } from "@procella/telemetry";
@@ -19,7 +24,13 @@ import type { UpdatesService } from "@procella/updates";
 import type { WebhooksService } from "@procella/webhooks";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { Hono } from "hono";
-import { githubHandlers, healthHandlers, oauthHandlers } from "../handlers/index.js";
+import { getCookie } from "hono/cookie";
+import {
+	githubHandlers,
+	githubSetupCookieHeader,
+	healthHandlers,
+	oauthHandlers,
+} from "../handlers/index.js";
 import {
 	createIpRateLimiter,
 	createSecurityHeadersMiddleware,
@@ -72,6 +83,7 @@ export function createWebApp(deps: WebAppDeps): Hono<Env> {
 		github: deps.github,
 		verifySignature: verifyGitHubWebhookSignature,
 	});
+	app.get("/github/oauth/callback", github.completeAuthorization);
 	app.get("/github/setup", github.completeInstallation);
 	app.get("/healthz", health.health);
 
@@ -155,7 +167,20 @@ export function createWebApp(deps: WebAppDeps): Hono<Env> {
 				endpoint: "/trpc",
 				req: c.req.raw,
 				router: appRouter,
-				createContext: () => ctx,
+				createContext: ({ resHeaders }) => ({
+					...ctx,
+					githubSetupCookies: {
+						nonce: getCookie(c, GITHUB_SETUP_COOKIE_NAME),
+						authorizationState: getCookie(c, GITHUB_AUTHORIZATION_COOKIE_NAME),
+					},
+					setGitHubSetupCookie(nonce: string) {
+						resHeaders.append(
+							"Set-Cookie",
+							githubSetupCookieHeader(GITHUB_SETUP_COOKIE_NAME, nonce),
+						);
+						resHeaders.set("Cache-Control", "no-store");
+					},
+				}),
 				onError({ error }) {
 					if (error.code !== "UNAUTHORIZED") {
 						console.error("[trpc]", projectError(error));

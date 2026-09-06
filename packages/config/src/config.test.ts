@@ -26,6 +26,8 @@ function setMinimalEnv() {
 
 function setValidGitHubEnv() {
 	Bun.env.PROCELLA_GITHUB_APP_ID = "12345";
+	Bun.env.PROCELLA_GITHUB_APP_CLIENT_ID = "Iv1.test-client-id";
+	Bun.env.PROCELLA_GITHUB_APP_CLIENT_SECRET = "oauth-client-secret";
 	Bun.env.PROCELLA_GITHUB_APP_PRIVATE_KEY = TEST_GITHUB_APP_PRIVATE_KEY.replace(/\n/g, "\\n");
 	Bun.env.PROCELLA_GITHUB_APP_WEBHOOK_SECRET = "webhook-secret";
 }
@@ -276,6 +278,8 @@ describe("@procella/config", () => {
 
 			const config = loadConfig();
 			expect(config.githubAppId).toBeUndefined();
+			expect(config.githubAppClientId).toBeUndefined();
+			expect(config.githubAppClientSecret).toBeUndefined();
 			expect(config.githubAppPrivateKey).toBeUndefined();
 			expect(config.githubAppWebhookSecret).toBeUndefined();
 		});
@@ -287,6 +291,8 @@ describe("@procella/config", () => {
 
 			const config = loadConfig();
 			expect(config.githubAppId).toBe("12345");
+			expect(config.githubAppClientId).toBe("Iv1.test-client-id");
+			expect(config.githubAppClientSecret).toBe("oauth-client-secret");
 			expect(config.githubAppPrivateKey).toBe(TEST_GITHUB_APP_PRIVATE_KEY);
 			expect(config.githubAppWebhookSecret).toBe("webhook-secret");
 		});
@@ -304,6 +310,8 @@ describe("@procella/config", () => {
 			clearProcellaEnv();
 			setMinimalEnv();
 			Bun.env.PROCELLA_GITHUB_APP_ID = "";
+			Bun.env.PROCELLA_GITHUB_APP_CLIENT_ID = "";
+			Bun.env.PROCELLA_GITHUB_APP_CLIENT_SECRET = "";
 			Bun.env.PROCELLA_GITHUB_APP_PRIVATE_KEY = "";
 			Bun.env.PROCELLA_GITHUB_APP_WEBHOOK_SECRET = "";
 

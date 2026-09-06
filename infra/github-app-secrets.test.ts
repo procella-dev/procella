@@ -15,6 +15,8 @@ const TEST_EC_PRIVATE_KEY = generateKeyPairSync("ec", {
 
 const credentialValues = {
 	SST_SECRET_ProcellaGitHubAppId: "12345",
+	SST_SECRET_ProcellaGitHubAppClientId: "Iv1.test-client-id",
+	SST_SECRET_ProcellaGitHubAppClientSecret: "oauth-client-secret",
 	SST_SECRET_ProcellaGitHubAppPrivateKey: TEST_GITHUB_APP_PRIVATE_KEY,
 	SST_SECRET_ProcellaGitHubAppWebhookSecret: "webhook-secret",
 };
@@ -29,6 +31,8 @@ describe("GitHub App SST secrets", () => {
 		expect(
 			resolveGitHubAppSecretNames({
 				SST_SECRET_ProcellaGitHubAppId: "",
+				SST_SECRET_ProcellaGitHubAppClientId: "",
+				SST_SECRET_ProcellaGitHubAppClientSecret: "",
 				SST_SECRET_ProcellaGitHubAppPrivateKey: "",
 				SST_SECRET_ProcellaGitHubAppWebhookSecret: "",
 			}),
@@ -43,6 +47,8 @@ describe("GitHub App SST secrets", () => {
 		const retainedValues = {
 			PROCELLA_GITHUB_APP_ENABLED: "",
 			SST_SECRET_ProcellaGitHubAppId: "Iv1.0123456789abcdef",
+			SST_SECRET_ProcellaGitHubAppClientId: "Iv1.retained-client-id",
+			SST_SECRET_ProcellaGitHubAppClientSecret: "retained-client-secret",
 			SST_SECRET_ProcellaGitHubAppPrivateKey: TEST_GITHUB_APP_PRIVATE_KEY,
 			SST_SECRET_ProcellaGitHubAppWebhookSecret: "0123456789abcdef",
 		};
@@ -59,6 +65,8 @@ describe("GitHub App SST secrets", () => {
 	test("links every secret when the integration is explicitly enabled and valid", () => {
 		expect(resolveGitHubAppSecretNames(enabledSecrets)).toEqual({
 			appId: "ProcellaGitHubAppId",
+			clientId: "ProcellaGitHubAppClientId",
+			clientSecret: "ProcellaGitHubAppClientSecret",
 			privateKey: "ProcellaGitHubAppPrivateKey",
 			webhookSecret: "ProcellaGitHubAppWebhookSecret",
 		});

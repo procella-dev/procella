@@ -1,6 +1,13 @@
-import { type GitHubService, GitHubSetupError } from "@procella/github";
+import {
+	GITHUB_AUTHORIZATION_COOKIE_NAME,
+	GITHUB_SETUP_COOKIE_NAME,
+	GITHUB_SETUP_STATE_TTL_SECONDS,
+	type GitHubService,
+	GitHubSetupError,
+} from "@procella/github";
 import { BadRequestError } from "@procella/types";
 import type { Context } from "hono";
+import { getCookie } from "hono/cookie";
 import type { Env } from "../types.js";
 import { param } from "./params.js";
 
@@ -36,6 +43,19 @@ async function readGitHubWebhookBody(body: ReadableStream<Uint8Array> | null): P
 	}
 
 	return Buffer.concat(chunks, bytesRead);
+}
+
+/**
+ * `__Host-` requires Secure, Path=/, and no Domain, so browsers reject the cookie on plaintext
+ * origins and refuse sibling-subdomain shadowing regardless of the scheme this process observes
+ * behind a TLS-terminating proxy.
+ */
+export function githubSetupCookieHeader(
+	name: string,
+	value: string,
+	maxAge = GITHUB_SETUP_STATE_TTL_SECONDS,
+): string {
+	return `${name}=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
 }
 
 export function githubHandlers(deps: {
@@ -88,6 +108,33 @@ export function githubHandlers(deps: {
 			return c.body(null, 200);
 		},
 
+		completeAuthorization: async (c: Context<Env>) => {
+			c.header("Cache-Control", "no-store");
+			if (!deps.github) {
+				return redirectToGitHubSettings(c, "not_configured");
+			}
+
+			const state = c.req.query("state");
+			const code = c.req.query("code");
+			if (!state || state.length > 4096 || !code || code.length > 1024) {
+				return redirectToGitHubSettings(c, "invalid_callback");
+			}
+			const browserNonce = getCookie(c, GITHUB_SETUP_COOKIE_NAME);
+			if (!browserNonce) return redirectToGitHubSettings(c, "invalid_state");
+
+			try {
+				await deps.github.completeAuthorization(state, code, browserNonce);
+				c.header("Set-Cookie", githubSetupCookieHeader(GITHUB_SETUP_COOKIE_NAME, "", 0));
+				c.header("Set-Cookie", githubSetupCookieHeader(GITHUB_AUTHORIZATION_COOKIE_NAME, "", 0), {
+					append: true,
+				});
+				return c.redirect("/settings?github=connected#github", 303);
+			} catch (error) {
+				const reason = error instanceof GitHubSetupError ? error.code : "github_error";
+				return redirectToGitHubSettings(c, reason);
+			}
+		},
+
 		completeInstallation: async (c: Context<Env>) => {
 			c.header("Cache-Control", "no-store");
 			if (!deps.github) {
@@ -97,12 +144,15 @@ export function githubHandlers(deps: {
 			const state = c.req.query("state");
 			const installationIdValue = c.req.query("installation_id");
 			const setupAction = c.req.query("setup_action");
+			if (setupAction && setupAction !== "install") {
+				return redirectToGitHubSettings(c, "unsupported_setup_action");
+			}
 			if (
 				!state ||
 				state.length > 4096 ||
 				!installationIdValue ||
 				!/^[1-9]\d*$/.test(installationIdValue) ||
-				(setupAction !== "install" && setupAction !== "update")
+				!setupAction
 			) {
 				return redirectToGitHubSettings(c, "invalid_callback");
 			}
@@ -112,9 +162,25 @@ export function githubHandlers(deps: {
 				return redirectToGitHubSettings(c, "invalid_callback");
 			}
 
+			const browserNonce = getCookie(c, GITHUB_SETUP_COOKIE_NAME);
+			if (!browserNonce) return redirectToGitHubSettings(c, "invalid_state");
+
 			try {
-				await deps.github.completeInstallation(state, installationId);
-				return c.redirect("/settings?github=connected#github", 303);
+				const authorization = await deps.github.completeInstallation(
+					state,
+					installationId,
+					browserNonce,
+				);
+				c.header("Set-Cookie", githubSetupCookieHeader(GITHUB_SETUP_COOKIE_NAME, browserNonce));
+				c.header(
+					"Set-Cookie",
+					githubSetupCookieHeader(
+						GITHUB_AUTHORIZATION_COOKIE_NAME,
+						authorization.authorizationState,
+					),
+					{ append: true },
+				);
+				return c.redirect(authorization.url, 303);
 			} catch (error) {
 				const reason = error instanceof GitHubSetupError ? error.code : "github_error";
 				return redirectToGitHubSettings(c, reason);

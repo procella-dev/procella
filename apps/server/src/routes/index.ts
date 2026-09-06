@@ -8,6 +8,8 @@ import { type AuthConfig, type AuthService, METHOD_ROLE_MAP } from "@procella/au
 import type { Database } from "@procella/db";
 import type { EscService } from "@procella/esc";
 import {
+	GITHUB_AUTHORIZATION_COOKIE_NAME,
+	GITHUB_SETUP_COOKIE_NAME,
 	GitHubOutboxWorker,
 	type GitHubService,
 	verifyGitHubWebhookSignature,
@@ -20,6 +22,7 @@ import { GCWorker, type UpdatesService } from "@procella/updates";
 import type { WebhooksService } from "@procella/webhooks";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { Hono, type MiddlewareHandler } from "hono";
+import { getCookie } from "hono/cookie";
 import { cors } from "hono/cors";
 import {
 	auditHandlers,
@@ -28,6 +31,7 @@ import {
 	escHandlers,
 	eventHandlers,
 	githubHandlers,
+	githubSetupCookieHeader,
 	healthHandlers,
 	oauthHandlers,
 	stackHandlers,
@@ -174,7 +178,20 @@ export function createApp(deps: {
 				endpoint: "/trpc",
 				req: c.req.raw,
 				router: appRouter,
-				createContext: () => ctx,
+				createContext: ({ resHeaders }) => ({
+					...ctx,
+					githubSetupCookies: {
+						nonce: getCookie(c, GITHUB_SETUP_COOKIE_NAME),
+						authorizationState: getCookie(c, GITHUB_AUTHORIZATION_COOKIE_NAME),
+					},
+					setGitHubSetupCookie(nonce: string) {
+						resHeaders.append(
+							"Set-Cookie",
+							githubSetupCookieHeader(GITHUB_SETUP_COOKIE_NAME, nonce),
+						);
+						resHeaders.set("Cache-Control", "no-store");
+					},
+				}),
 				onError({ error }) {
 					if (error.code !== "UNAUTHORIZED") {
 						console.error("[trpc]", projectError(error));
@@ -267,6 +284,7 @@ export function createApp(deps: {
 	app.post("/api/oauth/token", withOauthTokenRateLimit, withApiDecompress, oauth.tokenExchange);
 
 	app.post("/api/webhooks/github", githubH.handleGitHubWebhook);
+	app.get("/github/oauth/callback", githubH.completeAuthorization);
 	app.get("/github/setup", githubH.completeInstallation);
 
 	// ========================================================================

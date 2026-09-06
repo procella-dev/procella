@@ -132,6 +132,14 @@ const configSchema = z
 		// Optional as one atomic group. Empty values remain invalid; deployment
 		// adapters must omit the group when the integration is not configured.
 		githubAppId: z.string().refine(isValidGitHubAppId, GITHUB_APP_ID_ERROR).optional(),
+		githubAppClientId: z
+			.string()
+			.regex(/^\S+$/, "Must not be empty or contain whitespace")
+			.optional(),
+		githubAppClientSecret: z
+			.string()
+			.regex(/^\S+$/, "Must not be empty or contain whitespace")
+			.optional(),
 		githubAppPrivateKey: z
 			.string()
 			.transform((key, ctx) => {
@@ -189,13 +197,19 @@ const configSchema = z
 		}
 		// OIDC enabled by default; dev mode silently disables it in bootstrap
 
-		const githubFields = [data.githubAppId, data.githubAppPrivateKey, data.githubAppWebhookSecret];
+		const githubFields = [
+			data.githubAppId,
+			data.githubAppClientId,
+			data.githubAppClientSecret,
+			data.githubAppPrivateKey,
+			data.githubAppWebhookSecret,
+		];
 		const githubProvided = githubFields.filter((value) => Boolean(value)).length;
 		if (githubProvided > 0 && githubProvided < githubFields.length) {
 			ctx.addIssue({
 				code: z.ZodIssueCode.custom,
 				message:
-					"GitHub App integration requires PROCELLA_GITHUB_APP_ID, PROCELLA_GITHUB_APP_PRIVATE_KEY, and PROCELLA_GITHUB_APP_WEBHOOK_SECRET together.",
+					"GitHub App integration requires PROCELLA_GITHUB_APP_ID, PROCELLA_GITHUB_APP_CLIENT_ID, PROCELLA_GITHUB_APP_CLIENT_SECRET, PROCELLA_GITHUB_APP_PRIVATE_KEY, and PROCELLA_GITHUB_APP_WEBHOOK_SECRET together.",
 				path: ["githubAppId"],
 			});
 		}
@@ -248,6 +262,8 @@ const envMapping = {
 	oidcEnabled: "PROCELLA_OIDC_ENABLED",
 	deltaCheckpointsEnabled: "PROCELLA_DELTA_CHECKPOINTS_ENABLED",
 	githubAppId: "PROCELLA_GITHUB_APP_ID",
+	githubAppClientId: "PROCELLA_GITHUB_APP_CLIENT_ID",
+	githubAppClientSecret: "PROCELLA_GITHUB_APP_CLIENT_SECRET",
 	githubAppPrivateKey: "PROCELLA_GITHUB_APP_PRIVATE_KEY",
 	githubAppWebhookSecret: "PROCELLA_GITHUB_APP_WEBHOOK_SECRET",
 	escEvaluatorFnName: "PROCELLA_ESC_EVALUATOR_FN_NAME",
