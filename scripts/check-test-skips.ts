@@ -31,14 +31,28 @@ function readAttribute(attributes: string, name: string): string | undefined {
 
 export function collectSkippedTests(xml: string): SkippedTest[] {
 	const skipped: SkippedTest[] = [];
-	const openingTagPattern = /<testcase\b([^>]*)>/g;
+	const openingTagPattern = /<testcase\b((?:[^>"']|"[^"]*"|'[^']*')*)>/y;
+	let searchFrom = 0;
 
-	for (const match of xml.matchAll(openingTagPattern)) {
+	while (true) {
+		const openingTagStart = xml.indexOf("<testcase", searchFrom);
+		if (openingTagStart === -1) break;
+		openingTagPattern.lastIndex = openingTagStart;
+		const match = openingTagPattern.exec(xml);
+		if (!match) {
+			throw new Error(
+				`Malformed JUnit XML: incomplete <testcase> tag at offset ${openingTagStart}`,
+			);
+		}
+
+		searchFrom = openingTagPattern.lastIndex;
 		if (match[0].endsWith("/>")) continue;
-		const bodyStart = (match.index ?? 0) + match[0].length;
-		const bodyEnd = xml.indexOf("</testcase>", bodyStart);
-		if (bodyEnd === -1) continue;
-		const body = xml.slice(bodyStart, bodyEnd);
+		const bodyEnd = xml.indexOf("</testcase>", searchFrom);
+		if (bodyEnd === -1) {
+			throw new Error(`Malformed JUnit XML: unclosed <testcase> tag at offset ${openingTagStart}`);
+		}
+		const body = xml.slice(searchFrom, bodyEnd);
+		searchFrom = bodyEnd + "</testcase>".length;
 		if (!/<skipped(?:\s[^>]*)?\s*\/?>/.test(body)) continue;
 		skipped.push({
 			file: readAttribute(match[1], "file") ?? "(missing file)",
@@ -56,9 +70,41 @@ export function findUnexpectedSkips(
 	return collectSkippedTests(xml).filter(({ file }) => expectedSkipFiles[file] === undefined);
 }
 
-export async function checkTestSkips(reportPaths: string[]): Promise<number> {
+export interface SkipGuardArguments {
+	reportPaths: string[];
+	expectedSkipFiles: Record<string, string>;
+}
+
+const REQUIRE_SUITE_PREFIX = "--require-suite=";
+
+export function parseSkipGuardArguments(args: string[]): SkipGuardArguments {
+	const reportPaths: string[] = [];
+	const expectedSkipFiles = { ...EXPECTED_SKIP_FILES };
+
+	for (const arg of args) {
+		if (!arg.startsWith(REQUIRE_SUITE_PREFIX)) {
+			reportPaths.push(arg);
+			continue;
+		}
+
+		const requiredSuite = arg.slice(REQUIRE_SUITE_PREFIX.length);
+		if (!Object.hasOwn(EXPECTED_SKIP_FILES, requiredSuite)) {
+			throw new Error(`Unknown required suite: ${requiredSuite || "(empty)"}`);
+		}
+		delete expectedSkipFiles[requiredSuite];
+	}
+
+	return { reportPaths, expectedSkipFiles };
+}
+
+export async function checkTestSkips(
+	reportPaths: string[],
+	expectedSkipFiles: Readonly<Record<string, string>> = EXPECTED_SKIP_FILES,
+): Promise<number> {
 	if (reportPaths.length === 0) {
-		console.error("Usage: bun run scripts/check-test-skips.ts <junit-report> [...]");
+		console.error(
+			"Usage: bun run scripts/check-test-skips.ts [--require-suite=<file>] <junit-report> [...]",
+		);
 		return 2;
 	}
 
@@ -68,7 +114,7 @@ export async function checkTestSkips(reportPaths: string[]): Promise<number> {
 		const xml = await Bun.file(reportPath).text();
 		const reportSkips = collectSkippedTests(xml);
 		skipped.push(...reportSkips);
-		unexpected.push(...reportSkips.filter(({ file }) => EXPECTED_SKIP_FILES[file] === undefined));
+		unexpected.push(...reportSkips.filter(({ file }) => expectedSkipFiles[file] === undefined));
 	}
 
 	if (unexpected.length > 0) {
@@ -84,13 +130,14 @@ export async function checkTestSkips(reportPaths: string[]): Promise<number> {
 	}
 
 	for (const file of new Set(skipped.map(({ file }) => file))) {
-		console.log(`Allowed skips in ${file}: ${EXPECTED_SKIP_FILES[file]}`);
+		console.log(`Allowed skips in ${file}: ${expectedSkipFiles[file]}`);
 	}
 	console.log(`Verified ${skipped.length} skipped test(s) against the explicit allowlist.`);
 	return 0;
 }
 
 if (import.meta.main) {
-	const exitCode = await checkTestSkips(process.argv.slice(2));
+	const { reportPaths, expectedSkipFiles } = parseSkipGuardArguments(process.argv.slice(2));
+	const exitCode = await checkTestSkips(reportPaths, expectedSkipFiles);
 	if (exitCode !== 0) process.exit(exitCode);
 }

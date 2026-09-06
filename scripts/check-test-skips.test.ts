@@ -7,6 +7,7 @@ import {
 	collectSkippedTests,
 	EXPECTED_SKIP_FILES,
 	findUnexpectedSkips,
+	parseSkipGuardArguments,
 } from "./check-test-skips.ts";
 
 function report(testCases: string): string {
@@ -59,12 +60,41 @@ describe("CI skipped-test guard", () => {
 		expect(collectSkippedTests(xml)).toEqual([{ file: "e2e/oidc.test.ts", name: "secret-gated" }]);
 	});
 
+	test("parses greater-than characters inside quoted attributes", () => {
+		const xml = report(
+			'<testcase name="passes > threshold" file="test.ts" />' +
+				skippedTest("e2e/oidc.test.ts", "secret-gated"),
+		);
+
+		expect(collectSkippedTests(xml)).toEqual([{ file: "e2e/oidc.test.ts", name: "secret-gated" }]);
+	});
+
+	test("rejects incomplete and unclosed testcase elements", () => {
+		expect(() => collectSkippedTests('<testcase name="incomplete"')).toThrow(
+			"Malformed JUnit XML: incomplete <testcase> tag",
+		);
+		expect(() => collectSkippedTests(report('<testcase name="unclosed"><skipped />'))).toThrow(
+			"Malformed JUnit XML: unclosed <testcase> tag",
+		);
+	});
+
+	test("removes lane-owned suites from the expected-skip allowlist", () => {
+		const parsed = parseSkipGuardArguments(["--require-suite=e2e/esc-cli.test.ts", "results.xml"]);
+
+		expect(parsed.reportPaths).toEqual(["results.xml"]);
+		expect(parsed.expectedSkipFiles["e2e/esc-cli.test.ts"]).toBeUndefined();
+		expect(parsed.expectedSkipFiles["e2e/oidc.test.ts"]).toBe("requires Descope credentials");
+		expect(() => parseSkipGuardArguments(["--require-suite=unknown.test.ts"])).toThrow(
+			"Unknown required suite: unknown.test.ts",
+		);
+	});
+
 	test("requires at least one JUnit report", async () => {
 		const error = spyOn(console, "error").mockImplementation(() => {});
 		try {
 			expect(await checkTestSkips([])).toBe(2);
 			expect(error).toHaveBeenCalledWith(
-				"Usage: bun run scripts/check-test-skips.ts <junit-report> [...]",
+				"Usage: bun run scripts/check-test-skips.ts [--require-suite=<file>] <junit-report> [...]",
 			);
 		} finally {
 			error.mockRestore();
@@ -93,6 +123,21 @@ describe("CI skipped-test guard", () => {
 			);
 		} finally {
 			log.mockRestore();
+			await rm(path, { force: true });
+		}
+	});
+
+	test("fails an allowlisted skip when its owning lane requires the suite", async () => {
+		const path = await writeReport(skippedTest("e2e/oidc.test.ts", "secret-gated"));
+		const error = spyOn(console, "error").mockImplementation(() => {});
+		const { expectedSkipFiles } = parseSkipGuardArguments(["--require-suite=e2e/oidc.test.ts"]);
+		try {
+			expect(await checkTestSkips([path], expectedSkipFiles)).toBe(1);
+			expect(error).toHaveBeenCalledWith(
+				"::error file=e2e/oidc.test.ts::Unexpected skipped test: secret-gated",
+			);
+		} finally {
+			error.mockRestore();
 			await rm(path, { force: true });
 		}
 	});

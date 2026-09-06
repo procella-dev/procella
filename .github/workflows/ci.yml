@@ -254,7 +254,10 @@ jobs:
       - name: Run ESC CLI E2E test
         env:
           PROCELLA_DATABASE_URL: postgres://procella:procella@localhost:5432/procella?sslmode=disable
-        run: bun test --timeout 60000 --preload ./e2e/setup.ts e2e/esc-cli.test.ts
+        run: |
+          mkdir -p test-results
+          bun test --timeout 60000 --preload ./e2e/setup.ts --reporter=junit --reporter-outfile=test-results/esc-cli-e2e.junit.xml e2e/esc-cli.test.ts
+          bun run scripts/check-test-skips.ts --require-suite=e2e/esc-cli.test.ts test-results/esc-cli-e2e.junit.xml
 
   pulumi-versions:
     name: Resolve Pulumi CLI Versions
@@ -480,7 +483,10 @@ jobs:
         run: |
           mkdir -p test-results
           bun test --timeout 60000 --preload ./e2e/setup.ts --reporter=junit --reporter-outfile=test-results/security-e2e.junit.xml e2e/security-regressions/ e2e/encrypt-decrypt.test.ts e2e/lease-token-binding.test.ts
-          bun run scripts/check-test-skips.ts test-results/security-e2e.junit.xml
+          bun run scripts/check-test-skips.ts \
+            --require-suite=e2e/security-regressions/critical-and-high.test.ts \
+            --require-suite=e2e/security-regressions/low-and-versions.test.ts \
+            test-results/security-e2e.junit.xml
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
         uses: codecov/test-results-action@0fa95f0e1eeaafde2c782583b36b28ad0d8c77d3 # v1
@@ -885,7 +891,10 @@ jobs:
           PROCELLA_DESCOPE_PROJECT_ID: ${{ needs.preview-deploy.outputs.descope_project_id }}
           PROCELLA_DESCOPE_MANAGEMENT_KEY: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
           PROCELLA_E2E_ORG_SLUG: procella-pr-${{ github.event.number }}
-        run: bun run e2e:descope
+        run: |
+          mkdir -p test-results
+          bun test --timeout 120000 --reporter=junit --reporter-outfile=test-results/descope-auth.junit.xml e2e/descope-auth.test.ts
+          bun run scripts/check-test-skips.ts --require-suite=e2e/descope-auth.test.ts test-results/descope-auth.junit.xml
 
   preview-oidc-e2e:
     name: OIDC Pulumi Deploy (real end-to-end)
