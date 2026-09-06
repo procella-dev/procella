@@ -11,12 +11,18 @@ test("GC Lambda reports an injected database failure and flushes telemetry", asy
 	const requests: Array<{ url: string; body: string }> = [];
 	let flushes = 0;
 	let outboxRuns = 0;
+	let blobCleanupRuns = 0;
 	let escSweeps = 0;
 
 	await runGcInvocation({
 		baseUrl: "http://runtime.test/2018-06-01/runtime",
 		requestId: "request-1",
 		gcWorker,
+		blobCleanup: {
+			runOnce: async () => {
+				blobCleanupRuns += 1;
+			},
+		},
 		githubOutbox: {
 			runOnce: async () => {
 				outboxRuns += 1;
@@ -41,6 +47,7 @@ test("GC Lambda reports an injected database failure and flushes telemetry", asy
 		errorType: "Error",
 	});
 	expect(flushes).toBe(1);
+	expect(blobCleanupRuns).toBe(1);
 	expect(outboxRuns).toBe(1);
 	expect(escSweeps).toBe(1);
 });
@@ -55,6 +62,7 @@ test("GC Lambda bounds a stalled telemetry flush", async () => {
 			baseUrl: "http://runtime.test/2018-06-01/runtime",
 			requestId: "request-2",
 			gcWorker: { runOnce: async () => {} },
+			blobCleanup: { runOnce: async () => {} },
 			githubOutbox: null,
 			escGcSweep: async () => {},
 			flushTelemetry: () => {

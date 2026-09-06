@@ -1,4 +1,4 @@
--- Migration order: apply reserved 0019 before this migration; apply 0021 and 0022 after it.
+-- Migration order: follows 0019_terminal_update_completion on main; sibling H11b owns 0021.
 CREATE TABLE "blob_cleanup_queue" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"blob_key" text NOT NULL,

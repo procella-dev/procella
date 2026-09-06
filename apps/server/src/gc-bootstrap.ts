@@ -1,4 +1,3 @@
-
 import type { ScheduledEvent } from "aws-lambda";
 
 const LAMBDA_WORK_DEADLINE_MS = 52_000;
