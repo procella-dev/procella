@@ -171,12 +171,14 @@ export function githubHandlers(deps: {
 					installationId,
 					browserNonce,
 				);
+				c.header("Set-Cookie", githubSetupCookieHeader(GITHUB_SETUP_COOKIE_NAME, browserNonce));
 				c.header(
 					"Set-Cookie",
 					githubSetupCookieHeader(
 						GITHUB_AUTHORIZATION_COOKIE_NAME,
 						authorization.authorizationState,
 					),
+					{ append: true },
 				);
 				return c.redirect(authorization.url, 303);
 			} catch (error) {

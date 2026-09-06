@@ -298,12 +298,16 @@ describe("githubHandlers", () => {
 				12345,
 				BROWSER_NONCE,
 			);
-			expect(res.headers.get("set-cookie")).toContain(
-				`${GITHUB_AUTHORIZATION_COOKIE_NAME}=authorization-state`,
-			);
-			expect(res.headers.get("set-cookie")).toContain("; Secure;");
-			expect(res.headers.get("set-cookie")).toContain("Path=/");
-			expect(res.headers.get("set-cookie")).not.toContain("Domain=");
+			const cookies = res.headers.getSetCookie();
+			expect(cookies).toHaveLength(2);
+			expect(cookies[0]).toContain(`${GITHUB_SETUP_COOKIE_NAME}=${BROWSER_NONCE}`);
+			expect(cookies[1]).toContain(`${GITHUB_AUTHORIZATION_COOKIE_NAME}=authorization-state`);
+			for (const cookie of cookies) {
+				expect(cookie).toContain("Max-Age=600");
+				expect(cookie).toContain("; Secure;");
+				expect(cookie).toContain("Path=/");
+				expect(cookie).not.toContain("Domain=");
+			}
 		});
 
 		test("rejects missing or malformed callback parameters before persistence", async () => {
