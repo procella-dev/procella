@@ -1,23 +1,16 @@
+# syntax=docker/dockerfile:1
 # Stage 1: deps — install workspace dependencies
 FROM oven/bun:1.4-alpine AS deps
 WORKDIR /app
 COPY package.json bun.lock ./
-COPY packages/types/package.json packages/types/
-COPY packages/config/package.json packages/config/
-COPY packages/db/package.json packages/db/
-COPY packages/crypto/package.json packages/crypto/
-COPY packages/storage/package.json packages/storage/
-COPY packages/auth/package.json packages/auth/
-COPY packages/stacks/package.json packages/stacks/
-COPY packages/updates/package.json packages/updates/
-COPY packages/api/package.json packages/api/
-COPY apps/ui/package.json apps/ui/
-RUN mkdir -p apps/server && echo '{"name":"@procella/server","private":true}' > apps/server/package.json
-RUN bun install
+# Every workspace manifest: @procella/api pulls in audit, esc, github, oidc,
+# telemetry and webhooks, so a hand-picked subset breaks workspace resolution.
+COPY --parents ./*/*/package.json ./
+RUN bun install --frozen-lockfile
 
 # Stage 2: build — compile UI static assets
 FROM deps AS build
-COPY tsconfig.json ./
+COPY tsconfig.json tsconfig.base.json ./
 COPY packages/ packages/
 COPY apps/ui/ apps/ui/
 WORKDIR /app/apps/ui

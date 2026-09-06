@@ -1,8 +1,11 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
+import { LATEST_MIGRATION_TIMESTAMP } from "@procella/db";
 import type { StackInfo, StacksService } from "@procella/stacks";
 import type { Caller, CapabilitiesResponse } from "@procella/types";
 import { BadRequestError } from "@procella/types";
 import { BLOB_THRESHOLD } from "@procella/updates";
+import type { SQLWrapper } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { Hono } from "hono";
 import type { Env } from "../types.js";
 import { healthHandlers } from "./health.js";
@@ -129,17 +132,105 @@ describe("@procella/server handlers", () => {
 	// ========================================================================
 
 	describe("healthHandlers", () => {
-		const mockDb = { execute: async () => [{ "?column?": 1 }] } as never;
+		const MIGRATED_ROW = {
+			relation_0: "projects",
+			relation_1: "stacks",
+			relation_2: "updates",
+			relation_3: "checkpoints",
+			relation_4: "__drizzle_migrations",
+			migrated: true,
+		};
+		const mockDb = { execute: async () => [MIGRATED_ROW] } as never;
 
-		test("health returns { status: ok } when db is reachable", async () => {
+		test("health returns { status: ok } when the schema is current", async () => {
 			const app = new Hono<Env>();
 			const health = healthHandlers({ db: mockDb });
 			app.get("/healthz", health.health);
 
 			const res = await app.request("/healthz");
 			expect(res.status).toBe(200);
-			const body = await res.json();
-			expect(body.status).toBe("ok");
+			expect(await res.json()).toEqual({ status: "ok" });
+		});
+
+		test("health probes required relations and the latest migration marker", async () => {
+			const execute = mock(async (_query: unknown) => [MIGRATED_ROW]);
+			const app = new Hono<Env>();
+			app.get("/healthz", healthHandlers({ db: { execute } as never }).health);
+
+			await app.request("/healthz");
+
+			const dialect = new PgDialect();
+			const relationQuery = execute.mock.calls[0]?.[0] as SQLWrapper;
+			const relationSql = dialect.sqlToQuery(relationQuery.getSQL()).sql;
+			for (const relation of [
+				"public.projects",
+				"public.stacks",
+				"public.updates",
+				"public.checkpoints",
+				"drizzle.__drizzle_migrations",
+			]) {
+				expect(relationSql).toContain(`to_regclass('${relation}')`);
+			}
+
+			const migrationQuery = execute.mock.calls[1]?.[0] as SQLWrapper;
+			const migration = dialect.sqlToQuery(migrationQuery.getSQL());
+			expect(migration.sql).toContain('FROM "drizzle"."__drizzle_migrations"');
+			expect(migration.params).toEqual([LATEST_MIGRATION_TIMESTAMP]);
+		});
+
+		test("health reads the neon driver's { rows } result shape", async () => {
+			const neonDb = { execute: async () => ({ rows: [MIGRATED_ROW] }) } as never;
+			const app = new Hono<Env>();
+			app.get("/healthz", healthHandlers({ db: neonDb }).health);
+
+			const res = await app.request("/healthz");
+			expect(res.status).toBe(200);
+			expect(await res.json()).toEqual({ status: "ok" });
+		});
+
+		test("health returns 503 when any required relation is missing", async () => {
+			for (const missing of Object.keys(MIGRATED_ROW).filter((key) =>
+				key.startsWith("relation_"),
+			)) {
+				const unmigratedDb = {
+					execute: async () => [{ ...MIGRATED_ROW, [missing]: null }],
+				} as never;
+				const app = new Hono<Env>();
+				app.get("/healthz", healthHandlers({ db: unmigratedDb }).health);
+
+				const res = await app.request("/healthz");
+				expect(res.status).toBe(503);
+				expect(await res.json()).toEqual({
+					status: "error",
+					message: "database schema not migrated",
+				});
+			}
+		});
+
+		test("health returns 503 when the database returns no readiness row", async () => {
+			const emptyDb = { execute: async () => [] } as never;
+			const app = new Hono<Env>();
+			app.get("/healthz", healthHandlers({ db: emptyDb }).health);
+
+			const res = await app.request("/healthz");
+			expect(res.status).toBe(503);
+			expect((await res.json()).message).toBe("database schema not migrated");
+		});
+
+		test("health returns 503 when the latest migration is missing", async () => {
+			let call = 0;
+			const staleDb = {
+				execute: async () => (call++ === 0 ? [MIGRATED_ROW] : [{ migrated: false }]),
+			} as never;
+			const app = new Hono<Env>();
+			app.get("/healthz", healthHandlers({ db: staleDb }).health);
+
+			const res = await app.request("/healthz");
+			expect(res.status).toBe(503);
+			expect(await res.json()).toEqual({
+				status: "error",
+				message: "database schema not migrated",
+			});
 		});
 
 		test("health returns 503 when db is unreachable", async () => {
@@ -154,8 +245,10 @@ describe("@procella/server handlers", () => {
 
 			const res = await app.request("/healthz");
 			expect(res.status).toBe(503);
-			const body = await res.json();
-			expect(body.status).toBe("error");
+			expect(await res.json()).toEqual({
+				status: "error",
+				message: "database unreachable",
+			});
 		});
 
 		test("capabilities returns the exact expected wire shape when delta checkpoints are disabled (default)", async () => {

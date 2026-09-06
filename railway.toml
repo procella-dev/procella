@@ -31,6 +31,7 @@
 #   railway variables --set 'PROCELLA_DESCOPE_PROJECT_ID=<your-project-id>'
 #   railway variables --set 'PROCELLA_DESCOPE_MANAGEMENT_KEY=<your-key>'
 #   railway variables --set 'PROCELLA_ENCRYPTION_KEY=<64-hex-chars>'
+#   railway variables --set 'PROCELLA_TICKET_SIGNING_KEY=<32+ chars>'
 #
 # Blob storage (S3-compatible — use Railway's built-in object store or external):
 #   railway variables --set 'PROCELLA_BLOB_BACKEND=s3'

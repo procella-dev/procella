@@ -22,7 +22,8 @@ All Procella configuration is via environment variables. Variables prefixed with
 | `PROCELLA_BLOB_S3_BUCKET` | — | If s3 | S3 bucket name |
 | `PROCELLA_BLOB_S3_ENDPOINT` | — | No | Custom S3 endpoint |
 | `PROCELLA_BLOB_S3_REGION` | `us-east-1` | No | S3 region |
-| `PROCELLA_ENCRYPTION_KEY` | *(auto in dev)* | If non-dev | 64 hex chars (32 bytes) |
+| `PROCELLA_ENCRYPTION_KEY` | *(required)* | **Yes** | 64 hex chars (32 bytes) |
+| `PROCELLA_TICKET_SIGNING_KEY` | *(required)* | **Yes** | 32+ chars, signs dashboard subscription tickets |
 | `PROCELLA_LEGACY_DECRYPTION_ENABLED` | `true` | No | Allow v1 FQN-keyed ciphertext reads during migration |
 | `PROCELLA_LEGACY_ORG_MAPPINGS` | `{}` | For Descope v1 reads | JSON tenant-ID → original org-slug map; values must be unique |
 | `PROCELLA_DELTA_CHECKPOINTS_ENABLED` | `false` | No | Advertise `delta-checkpoint-uploads-v2` with a 1 MiB cutoff |
@@ -146,9 +147,17 @@ Generate one:
 openssl rand -hex 32
 ```
 
-If not set and `PROCELLA_AUTH_MODE=dev`, a deterministic key is derived from `sha256("procella-dev-encryption-key")`. This is not safe for production.
+The server refuses to start without it, in every auth mode, and rejects the well-known dev value `sha256("procella-dev-encryption-key")`.
 
-When `PROCELLA_AUTH_MODE=descope` (production), this variable is **required**. The server will refuse to start without it.
+### PROCELLA_TICKET_SIGNING_KEY
+
+A string of at least 32 characters used to sign dashboard subscription tickets (and GitHub App OAuth state). Generate one the same way:
+
+```bash
+openssl rand -hex 32
+```
+
+Startup fails without it, so every deployment manifest must supply it.
 
 ### PROCELLA_LEGACY_ORG_MAPPINGS
 

@@ -38,6 +38,8 @@ services:
       PROCELLA_DATABASE_URL: "${PROCELLA_DATABASE_URL}"
       PROCELLA_DEV_AUTH_TOKEN: "${PROCELLA_DEV_AUTH_TOKEN}"
       PROCELLA_ENCRYPTION_KEY: "${PROCELLA_ENCRYPTION_KEY}"
+      # 32+ chars; the server refuses to start without it.
+      PROCELLA_TICKET_SIGNING_KEY: "${PROCELLA_TICKET_SIGNING_KEY}"
       PROCELLA_DESCOPE_PROJECT_ID: "${PROCELLA_DESCOPE_PROJECT_ID}"
       PROCELLA_DESCOPE_MANAGEMENT_KEY: "${PROCELLA_DESCOPE_MANAGEMENT_KEY}"
       PROCELLA_BLOB_S3_BUCKET: "${PROCELLA_BLOB_S3_BUCKET}"
@@ -56,6 +58,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
     restart: unless-stopped
 
@@ -66,14 +70,30 @@ services:
       retries: 3
       start_period: 20s
 
+  # One-shot migration gate: the server image ships /migrations, so the same
+  # image applies the schema before any replica starts serving.
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["--migrate", "/migrations"]
+    environment:
+      PROCELLA_DATABASE_URL: "${PROCELLA_DATABASE_URL}"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
   db:
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_DB: procella
       POSTGRES_USER: procella
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
     volumes:
-      - procella_pgdata:/var/lib/postgresql/data
+      # postgres:18 keeps PGDATA at /var/lib/postgresql/18/docker and declares
+      # the volume one level up, so the mount must be /var/lib/postgresql.
+      - procella_pgdata:/var/lib/postgresql
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U procella -d procella"]
@@ -122,6 +142,7 @@ In the Coolify UI → your service → **Environment Variables**:
 | `PROCELLA_DATABASE_URL` | `postgresql://procella:${POSTGRES_PASSWORD}@db:5432/procella` |
 | `POSTGRES_PASSWORD` | `openssl rand -hex 24` output |
 | `PROCELLA_ENCRYPTION_KEY` | `openssl rand -hex 32` output |
+| `PROCELLA_TICKET_SIGNING_KEY` | `openssl rand -hex 32` output (32+ chars) |
 | `PROCELLA_DEV_AUTH_TOKEN` | your auth token |
 | `PROCELLA_DESCOPE_PROJECT_ID` | from Descope console |
 | `PROCELLA_DESCOPE_MANAGEMENT_KEY` | from Descope console |

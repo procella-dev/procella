@@ -15,7 +15,15 @@ primary_region = "iad"
 [deploy]
   release_command = "/procella --migrate"
 
-# Non-sensitive runtime config (secrets go via `fly secrets set`)
+# Secrets: the app will not boot until these are set:
+#   fly secrets set PROCELLA_DATABASE_URL=<postgres-url> \
+#     PROCELLA_ENCRYPTION_KEY=<64-hex-chars> \
+#     PROCELLA_TICKET_SIGNING_KEY=<32+ chars> \
+#     PROCELLA_DEV_AUTH_TOKEN=<token> \
+#     PROCELLA_BLOB_S3_BUCKET=<bucket> \
+#     AWS_ACCESS_KEY_ID=<key> AWS_SECRET_ACCESS_KEY=<secret>
+#
+# Non-sensitive runtime config
 [env]
   PROCELLA_LISTEN_ADDR    = ":9090"
   PROCELLA_AUTH_MODE      = "dev"

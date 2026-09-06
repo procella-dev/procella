@@ -15,22 +15,6 @@ databases:
     user: procella
     postgresMajorVersion: "17"
 
-envVarGroups:
-  - name: procella-secrets
-    envVars:
-      - key: PROCELLA_DEV_AUTH_TOKEN
-        sync: false
-      - key: PROCELLA_ENCRYPTION_KEY
-        sync: false
-      - key: PROCELLA_DESCOPE_PROJECT_ID
-        sync: false
-      - key: PROCELLA_DESCOPE_MANAGEMENT_KEY
-        sync: false
-      - key: AWS_ACCESS_KEY_ID
-        sync: false
-      - key: AWS_SECRET_ACCESS_KEY
-        sync: false
-
 services:
   - name: procella
     type: web
@@ -56,7 +40,28 @@ services:
         fromDatabase:
           name: procella-db
           property: connectionString
-      - fromGroup: procella-secrets
+
+      # Secrets. `sync: false` is only valid on a service, never inside an
+      # envVarGroup, so these stay here and Render prompts for them on the
+      # first Blueprint sync.
+      - key: PROCELLA_DEV_AUTH_TOKEN
+        sync: false
+      - key: PROCELLA_ENCRYPTION_KEY        # openssl rand -hex 32
+        sync: false
+      - key: PROCELLA_TICKET_SIGNING_KEY    # openssl rand -hex 32 (32+ chars)
+        sync: false
+      - key: PROCELLA_DESCOPE_PROJECT_ID
+        sync: false
+      - key: PROCELLA_DESCOPE_MANAGEMENT_KEY
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+
+    # Applies the schema before the new image serves traffic. The image ships
+    # its migrations at /migrations and has no shell, so this is a single exec.
+    preDeployCommand: "/procella --migrate /migrations"
 
     healthCheckPath: /healthz
     autoDeploy: true

@@ -5,6 +5,15 @@ description: Development and cluster deployment profiles.
 
 The `docker-compose.yml` uses [Docker Compose profiles](https://docs.docker.com/compose/profiles/) to serve multiple deployment configurations from a single file.
 
+## Required secrets
+
+Every profile interpolates two secrets from your environment (or `.env`) and refuses to start without them:
+
+```bash
+export PROCELLA_ENCRYPTION_KEY="$(openssl rand -hex 32)"
+export PROCELLA_TICKET_SIGNING_KEY="$(openssl rand -hex 32)"
+```
+
 ## Profiles
 
 ### Default (no profile) — Dependencies Only
@@ -14,8 +23,8 @@ docker compose up -d
 ```
 
 Starts only the shared infrastructure:
-- **PostgreSQL 17** — database on port 5432
-- **MinIO** — S3-compatible blob storage on ports 9000 (API) and 9001 (console)
+- **PostgreSQL 18**: database on port 5432, persisting to the `postgres-data` volume mounted at `/var/lib/postgresql` (postgres:18 keeps `PGDATA` at `/var/lib/postgresql/18/docker`)
+- **MinIO**: S3-compatible blob storage on ports 9000 (API) and 9001 (console), root credentials `minioadmin` / `minioadmin`, which are the same credentials the server sends as `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`
 - **MinIO Init** — one-shot container that creates the `procella-checkpoints` bucket
 
 Use this when running the Procella server directly on your machine (e.g., via `bun run dev`).
@@ -45,7 +54,7 @@ Starts the dependencies plus:
 
 ## Caddy Configuration
 
-Caddy routes requests based on path:
+The `caddy` service mounts the repo-root `Caddyfile` read-only. It routes by path:
 
 ```
 :9090 {
@@ -55,22 +64,27 @@ Caddy routes requests based on path:
     handle /trpc/* {
         reverse_proxy procella-cluster:9090
     }
+    handle /healthz {
+        reverse_proxy procella-cluster:9090
+    }
     handle {
         reverse_proxy procella-ui:80
     }
 }
 ```
 
-`/api/*` (Pulumi CLI protocol) and `/trpc/*` (dashboard API) route to the Procella server replicas. All other paths route to the UI container, which serves the React SPA with client-side routing fallback.
+`/api/*` (Pulumi CLI protocol), `/trpc/*` (dashboard API), and `/healthz` route to the Procella server replicas. All other paths route to the UI container, which serves the React SPA with client-side routing fallback.
 
 ## Healthcheck
 
-All Procella containers expose a health endpoint that checks both the server and database connectivity:
+All Procella containers expose a health endpoint that checks the database connection **and** that the schema has been migrated:
 
 ```
-GET /healthz → 200 OK (server + database healthy)
-GET /healthz → 503 Service Unavailable (database unreachable)
+GET /healthz → 200 OK        (server reachable, schema migrated)
+GET /healthz → 503           (database unreachable, or schema not migrated)
 ```
+
+A database that answers queries but has no Procella tables reports 503, so an unmigrated deployment never advertises itself as ready.
 
 Docker Compose uses the built-in `--healthz` flag to check health:
 

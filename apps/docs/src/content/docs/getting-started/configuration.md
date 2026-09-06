@@ -85,9 +85,10 @@ To roll back, set `PROCELLA_DELTA_CHECKPOINTS_ENABLED=false` and restart. This r
 
 | Variable | Default | Description |
 |---|---|---|
-| `PROCELLA_ENCRYPTION_KEY` | *(auto in dev)* | 64 hex characters (32 bytes) for AES-256-GCM master key |
+| `PROCELLA_ENCRYPTION_KEY` | *(required)* | 64 hex characters (32 bytes) for AES-256-GCM master key |
+| `PROCELLA_TICKET_SIGNING_KEY` | *(required)* | 32+ characters, signs dashboard subscription tickets |
 
-In dev mode, if `PROCELLA_ENCRYPTION_KEY` is not set, a deterministic key is generated from `sha256("procella-dev-encryption-key")`. This is convenient for development but **must not be used in production**.
+Both are required in every auth mode. The server exits at startup if either is missing, and rejects the well-known dev encryption key derived from `sha256("procella-dev-encryption-key")`.
 
 ### Generating a Production Key
 
@@ -123,8 +124,8 @@ The server enforces these constraints at startup:
 - `PROCELLA_AUTH_MODE` must be `dev` or `descope`
 - `PROCELLA_DESCOPE_PROJECT_ID` is required when `PROCELLA_AUTH_MODE=descope`
 - `PROCELLA_DEV_AUTH_TOKEN` is required when `PROCELLA_AUTH_MODE=dev`
-- `PROCELLA_ENCRYPTION_KEY`, if set, must be exactly 64 hex characters (32 bytes)
-- `PROCELLA_ENCRYPTION_KEY` is required when `PROCELLA_AUTH_MODE=descope` (production)
+- `PROCELLA_ENCRYPTION_KEY` must be exactly 64 hex characters (32 bytes), and is always required
+- `PROCELLA_TICKET_SIGNING_KEY` must be at least 32 characters, and is always required
 
 ## Example: Minimal Production Config
 
@@ -136,5 +137,6 @@ export PROCELLA_DESCOPE_PROJECT_ID="P3Aaha02iJvkGVbPDAF78KWuAxe6"
 export PROCELLA_BLOB_BACKEND="s3"
 export PROCELLA_BLOB_S3_BUCKET="my-procella-checkpoints"
 export PROCELLA_ENCRYPTION_KEY="$(openssl rand -hex 32)"
+export PROCELLA_TICKET_SIGNING_KEY="$(openssl rand -hex 32)"
 export PROCELLA_CORS_ORIGINS="https://procella.example.com"
 ```
