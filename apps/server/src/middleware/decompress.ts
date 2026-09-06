@@ -107,13 +107,17 @@ async function inflateGzip(
 	compressed.on("error", (error) => output.destroy(error));
 	const chunks: Buffer[] = [];
 	let bytesWritten = 0;
-	for await (const chunk of output) {
-		const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-		bytesWritten += buffer.byteLength;
-		if (bytesWritten > maxDecompressedBytes) {
-			throw new PayloadTooLargeError("Decompressed payload exceeds size limit");
+	try {
+		for await (const chunk of output) {
+			const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+			bytesWritten += buffer.byteLength;
+			if (bytesWritten > maxDecompressedBytes) {
+				throw new PayloadTooLargeError("Decompressed payload exceeds size limit");
+			}
+			chunks.push(buffer);
 		}
-		chunks.push(buffer);
+	} finally {
+		compressed.destroy();
 	}
 	return Buffer.concat(chunks, bytesWritten);
 }
