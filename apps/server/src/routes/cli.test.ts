@@ -141,8 +141,6 @@ function mockWebhooksService(): WebhooksService {
 		},
 		deleteWebhook: async () => {},
 		listDeliveries: async () => [],
-		emit: () => {},
-		emitAndWait: async () => {},
 		ping: async () => {
 			throw new Error("not exercised by CLI route parity tests");
 		},
@@ -283,15 +281,15 @@ describe("@procella/server createCliApp", () => {
 		}
 	}, 30_000);
 
-	test("update-token completion emits a terminal webhook", async () => {
+	test("update-token completion reaches the lifecycle service", async () => {
 		const deps = baseDeps();
 		deps.auth = new DevAuthService({
 			token: "valid-token",
 			userLogin: "test-user",
 			orgLogin: "my-org",
 		});
-		const emitAndWait = mock(async () => {});
-		deps.webhooks = { ...deps.webhooks, emitAndWait };
+		const completeUpdate = mock(async () => {});
+		deps.updates = { ...deps.updates, completeUpdate };
 		const updateToken = `update:upd-1:stack-uuid-1:${"a".repeat(64)}`;
 
 		const res = await createCliApp(deps).request(
@@ -307,17 +305,7 @@ describe("@procella/server createCliApp", () => {
 		);
 
 		expect(res.status).toBe(204);
-		expect(emitAndWait).toHaveBeenCalledWith({
-			tenantId: "t-1",
-			event: "update.succeeded",
-			data: {
-				org: "myorg",
-				project: "myproj",
-				stack: "dev",
-				updateId: "upd-1",
-				status: "succeeded",
-			},
-		});
+		expect(completeUpdate).toHaveBeenCalledWith("upd-1", { status: "succeeded" });
 	});
 	describe("delta-checkpoint capability advertisement", () => {
 		test("createApp and createCliApp return identical capability bodies when disabled (default)", async () => {

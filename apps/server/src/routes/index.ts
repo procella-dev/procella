@@ -21,6 +21,7 @@ import { tracingMiddleware } from "@procella/telemetry";
 import { PulumiRoutes, projectError } from "@procella/types";
 import { BlobCleanupWorker, GCWorker, type UpdatesService } from "@procella/updates";
 import type { WebhooksService } from "@procella/webhooks";
+import { WebhookOutboxWorker } from "@procella/webhooks";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { Hono, type MiddlewareHandler } from "hono";
 import { getCookie } from "hono/cookie";
@@ -117,9 +118,9 @@ export function createApp(deps: {
 		deltaCheckpointsEnabled: deps.deltaCheckpointsEnabled,
 	});
 	const user = userHandlers(deps.stacks);
-	const stackH = stackHandlers(deps.stacks, deps.webhooks);
+	const stackH = stackHandlers(deps.stacks);
 	const auditH = auditHandlers({ audit: deps.audit });
-	const updateH = updateHandlers(deps.updates, deps.stacks, deps.webhooks);
+	const updateH = updateHandlers(deps.updates, deps.stacks);
 	const webhookH = webhookHandlers({ webhooks: deps.webhooks });
 	const githubH = githubHandlers({
 		github: deps.github,
@@ -241,11 +242,18 @@ export function createApp(deps: {
 			gcFailed = true;
 			gcError = error;
 		}
-		if (deps.github) {
-			await new GitHubOutboxWorker({ db: deps.db, github: deps.github, maxPerRun: 5 })
+		await Promise.all([
+			deps.github
+				? new GitHubOutboxWorker({ db: deps.db, github: deps.github, maxPerRun: 5 })
+						.runOnce({ deadlineMs: startedAt + CRON_WORK_DEADLINE_MS })
+						.catch((error) =>
+							console.error("[cron] GitHub outbox drain failed", projectError(error)),
+						)
+				: undefined,
+			new WebhookOutboxWorker({ db: deps.db, maxPerRun: 5 })
 				.runOnce({ deadlineMs: startedAt + CRON_WORK_DEADLINE_MS })
-				.catch((error) => console.error("[cron] GitHub outbox drain failed", projectError(error)));
-		}
+				.catch((error) => console.error("[cron] webhook outbox drain failed", projectError(error))),
+		]);
 		await new BlobCleanupWorker({ db: deps.db, storage: deps.storage, maxPerRun: 100 })
 			.runOnce({ deadlineMs: startedAt + CRON_WORK_DEADLINE_MS })
 			.catch((error) => console.error("[cron] blob cleanup drain failed", projectError(error)));

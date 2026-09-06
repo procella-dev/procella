@@ -36,6 +36,17 @@ export interface GitHubUpdateTarget {
 	stack: string;
 }
 
+/**
+ * Addressing captured when the update is created. Terminal transitions happen under a lease
+ * token that carries no org slug, so the webhook payload identity is snapshotted up front.
+ */
+export interface UpdateWebhookContext {
+	tenantId: string;
+	org: string;
+	project: string;
+	stack: string;
+}
+
 export interface UpdatesService {
 	createUpdate(
 		stackId: string,

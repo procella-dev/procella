@@ -60,8 +60,6 @@ function mockContext(overrides?: Partial<TRPCContext>): TRPCContext {
 			updateWebhook: mock(async () => mockWebhook),
 			deleteWebhook: mock(async () => {}),
 			listDeliveries: mock(async () => [mockDelivery]),
-			emit: mock(() => {}),
-			emitAndWait: mock(async () => {}),
 			ping: mock(async () => mockDelivery),
 		},
 		github: null,

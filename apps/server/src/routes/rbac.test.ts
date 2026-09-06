@@ -203,10 +203,21 @@ function dependenciesFor(role: Role): { deps: CliAppDeps; tracker: ServiceTracke
 		query: mock(async () => ({ entries: [], total: 0 })),
 		export: mock(async () => []),
 	} as unknown as AuditService;
-	const webhooks = {
-		emit: mock(() => {}),
-		emitAndWait: mock(async () => {}),
-	} as unknown as WebhooksService;
+	const webhooks: WebhooksService = {
+		createWebhook: mock(async () => {
+			throw new Error("not exercised by RBAC tests");
+		}),
+		listWebhooks: mock(async () => []),
+		getWebhook: mock(async () => null),
+		updateWebhook: mock(async () => {
+			throw new Error("not exercised by RBAC tests");
+		}),
+		deleteWebhook: mock(async () => {}),
+		listDeliveries: mock(async () => []),
+		ping: mock(async () => {
+			throw new Error("not exercised by RBAC tests");
+		}),
+	};
 
 	return {
 		deps: {
@@ -521,7 +532,7 @@ describe("REST mutation RBAC", () => {
 						return;
 					}
 
-					expect(response.status).not.toBe(403);
+					expect(response.status).toBeLessThan(400);
 					if (mutation.expectedCall) {
 						expect(tracker.calls).toContain(mutation.expectedCall);
 					}

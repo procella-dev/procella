@@ -250,6 +250,28 @@ describe("@procella/db schema", () => {
 		});
 	});
 
+	describe("migration journal", () => {
+		test("keeps portfolio migrations 0019, 0020, and 0021 in order", async () => {
+			const journal = (await Bun.file(
+				new URL("../drizzle/meta/_journal.json", import.meta.url),
+			).json()) as { entries: Array<{ idx: number; tag: string }> };
+			const expected = [
+				{ idx: 19, tag: "0019_terminal_update_completion" },
+				{ idx: 20, tag: "0020_durable_blob_cleanup" },
+				{ idx: 21, tag: "0021_webhook_delivery_outbox" },
+			];
+
+			expect(journal.entries.slice(-3)).toEqual(
+				expected.map(({ idx, tag }) => expect.objectContaining({ idx, tag })),
+			);
+			for (const { tag } of expected) {
+				expect(await Bun.file(new URL(`../drizzle/${tag}.sql`, import.meta.url)).exists()).toBe(
+					true,
+				);
+			}
+		});
+	});
+
 	describe("all tables", () => {
 		test("all tables are defined", () => {
 			expect(getTableName(projects)).toBe("projects");

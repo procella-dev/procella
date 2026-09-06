@@ -37,6 +37,7 @@ export {
 	updateEvents,
 	updates,
 	webhookDeliveries,
+	webhookOutbox,
 	webhooks,
 } from "./schema.js";
 

@@ -96,6 +96,12 @@ export const updates = pgTable(
 			project: string;
 			stack: string;
 		}>(),
+		webhookContext: jsonb("webhook_context").$type<{
+			tenantId: string;
+			org: string;
+			project: string;
+			stack: string;
+		}>(),
 		githubCommentId: text("github_comment_id"),
 		summarySequence: integer("summary_sequence"),
 		summary: jsonb().$type<Record<string, unknown>>(),
@@ -214,6 +220,42 @@ export const githubUpdateOutbox = pgTable(
 		),
 		uniqueIndex("idx_github_update_outbox_update_phase").on(table.updateId, table.phase),
 		index("idx_github_update_outbox_available").on(table.availableAt, table.claimedUntil),
+	],
+);
+
+// ============================================================================
+// webhook_outbox — Transactional outbound webhook delivery queue. Rows are written in the
+// same transaction as the change they describe and deleted once delivered, so the queue only
+// ever holds intents that are still owed to a subscriber.
+// ============================================================================
+export const webhookOutbox = pgTable(
+	"webhook_outbox",
+	{
+		id: uuid().primaryKey().defaultRandom(),
+		webhookId: uuid("webhook_id")
+			.notNull()
+			.references(() => webhooks.id, { onDelete: "cascade" }),
+		tenantId: text("tenant_id").notNull(),
+		url: text().notNull(),
+		secret: text(),
+		event: text().notNull(),
+		body: text().notNull(),
+		attempts: integer().notNull().default(0),
+		availableAt: timestamp("available_at").notNull().defaultNow(),
+		claimedBy: uuid("claimed_by"),
+		claimedUntil: timestamp("claimed_until"),
+		failedAt: timestamp("failed_at"),
+		lastError: text("last_error"),
+		createdAt: timestamp("created_at").notNull().defaultNow(),
+		updatedAt: timestamp("updated_at").notNull().defaultNow(),
+	},
+	(table) => [
+		check(
+			"chk_webhook_outbox_live_secret",
+			sql`${table.secret} IS NOT NULL OR ${table.failedAt} IS NOT NULL`,
+		),
+		index("idx_webhook_outbox_available").on(table.availableAt, table.claimedUntil),
+		index("idx_webhook_outbox_webhook").on(table.webhookId),
 	],
 );
 
@@ -506,6 +548,7 @@ export const schema = {
 	blobCleanupQueue,
 	updateEvents,
 	githubUpdateOutbox,
+	webhookOutbox,
 	journalEntries,
 	webhooks,
 	webhookDeliveries,

@@ -79,7 +79,7 @@ describe("/cron/gc integration", () => {
 		expect(await res.json()).toEqual({ ok: true });
 	});
 
-	test("returns non-2xx after attempting blob cleanup and the outbox when the database fails", async () => {
+	test("returns non-2xx after attempting every durable drain when the database fails", async () => {
 		let transactions = 0;
 		const failingDb = {
 			transaction: () => {
@@ -97,6 +97,7 @@ describe("/cron/gc integration", () => {
 		});
 
 		expect(res.status).toBeGreaterThanOrEqual(500);
-		expect(transactions).toBe(3);
+		// GC cycle, GitHub outbox claim, webhook outbox claim, blob cleanup claim.
+		expect(transactions).toBe(4);
 	});
 });

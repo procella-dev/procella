@@ -79,9 +79,9 @@ export function createCliApp(deps: CliAppDeps): Hono<Env> {
 		deltaCheckpointsEnabled: deps.deltaCheckpointsEnabled,
 	});
 	const user = userHandlers(deps.stacks);
-	const stackH = stackHandlers(deps.stacks, deps.webhooks);
+	const stackH = stackHandlers(deps.stacks);
 	const auditH = auditHandlers({ audit: deps.audit });
-	const updateH = updateHandlers(deps.updates, deps.stacks, deps.webhooks);
+	const updateH = updateHandlers(deps.updates, deps.stacks);
 	const webhookH = webhookHandlers({ webhooks: deps.webhooks });
 	const githubH = githubHandlers({
 		github: deps.github,

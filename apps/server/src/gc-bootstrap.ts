@@ -7,7 +7,7 @@ interface GcWorkerLike {
 	runOnce(): Promise<void>;
 }
 
-interface GitHubOutboxLike {
+interface OutboxLike {
 	runOnce(options: { deadlineMs: number }): Promise<unknown>;
 }
 
@@ -22,7 +22,8 @@ interface GcInvocationDependencies {
 	requestId: string;
 	gcWorker: GcWorkerLike;
 	blobCleanup: BlobCleanupLike;
-	githubOutbox: GitHubOutboxLike | null;
+	githubOutbox: OutboxLike | null;
+	webhookOutbox: OutboxLike;
 	escGcSweep: () => Promise<unknown>;
 	flushTelemetry: () => Promise<void>;
 	runtimeFetch?: RuntimeFetch;
@@ -46,6 +47,7 @@ export async function runGcInvocation({
 	gcWorker,
 	blobCleanup,
 	githubOutbox,
+	webhookOutbox,
 	escGcSweep,
 	flushTelemetry,
 	runtimeFetch = fetch,
@@ -69,6 +71,14 @@ export async function runGcInvocation({
 			failed = true;
 			invocationError ??= error;
 		}
+	}
+	try {
+		await webhookOutbox.runOnce({
+			deadlineMs: invocationStartedAt + LAMBDA_WORK_DEADLINE_MS,
+		});
+	} catch (error) {
+		failed = true;
+		invocationError ??= error;
 	}
 	try {
 		await blobCleanup.runOnce({
@@ -124,12 +134,14 @@ async function main(): Promise<void> {
 		{ escGcSweep },
 		{ GitHubOutboxWorker, OctokitGitHubDeliveryService },
 		{ createBlobStorage },
+		{ WebhookOutboxWorker },
 		{ BlobCleanupWorker, GCWorker },
 	] = await Promise.all([
 		import("@procella/db"),
 		import("@procella/esc"),
 		import("@procella/github"),
 		import("@procella/storage"),
+		import("@procella/webhooks"),
 		import("@procella/updates"),
 	]);
 	const { db } = await createDb({ url: config.databaseUrl, max: config.databasePoolMax });
@@ -163,6 +175,7 @@ async function main(): Promise<void> {
 					maxPerRun: 5,
 				})
 			: null;
+	const webhookOutbox = new WebhookOutboxWorker({ db, maxPerRun: 5 });
 
 	while (true) {
 		const res = await fetch(`${baseUrl}/invocation/next`);
@@ -175,6 +188,7 @@ async function main(): Promise<void> {
 			gcWorker,
 			blobCleanup,
 			githubOutbox,
+			webhookOutbox,
 			escGcSweep: () => escGcSweep(db),
 			flushTelemetry,
 		});
