@@ -6,7 +6,7 @@ import type { Database } from "@procella/db";
 import type { EscService } from "@procella/esc";
 import { GITHUB_SETUP_COOKIE_NAME, type GitHubService } from "@procella/github";
 import type { StacksService } from "@procella/stacks";
-import type { Caller } from "@procella/types";
+import type { Caller, SubscriptionTicketScope } from "@procella/types";
 import { UnauthorizedError } from "@procella/types";
 import type { UpdatesService } from "@procella/updates";
 import type { WebhooksService } from "@procella/webhooks";
@@ -23,6 +23,16 @@ const validCaller: Caller = {
 	login: "alice",
 	roles: ["admin"],
 	principalType: "user",
+};
+
+const subscriptionScope: SubscriptionTicketScope = {
+	procedure: "updates.onEvents",
+	resource: {
+		org: "my-org",
+		project: "myproj",
+		stack: "dev",
+		updateId: "upd-1",
+	},
 };
 
 function mockAuthService(): AuthService {
@@ -74,8 +84,8 @@ function mockGitHubService(): GitHubService {
 }
 
 function makeApp(overrides?: {
-	issueSubscriptionTicket?: (caller: Caller) => Promise<string>;
-	verifySubscriptionTicket?: (ticket: string) => Promise<Caller>;
+	issueSubscriptionTicket?: (caller: Caller, scope: SubscriptionTicketScope) => Promise<string>;
+	verifySubscriptionTicket?: (ticket: string, scope: SubscriptionTicketScope) => Promise<Caller>;
 	auth?: AuthService;
 	authConfig?: AuthConfig;
 	github?: GitHubService | null;
@@ -100,10 +110,12 @@ function makeApp(overrides?: {
 		github: overrides?.github ?? null,
 		issueSubscriptionTicket:
 			overrides?.issueSubscriptionTicket ??
-			((caller: Caller) => subscriptionTickets.issueTicket(caller)),
+			((caller: Caller, scope: SubscriptionTicketScope) =>
+				subscriptionTickets.issueTicket(caller, scope)),
 		verifySubscriptionTicket:
 			overrides?.verifySubscriptionTicket ??
-			((ticket: string) => subscriptionTickets.verifyTicket(ticket)),
+			((ticket: string, scope: SubscriptionTicketScope) =>
+				subscriptionTickets.verifyTicket(ticket, scope)),
 	});
 }
 
@@ -113,7 +125,7 @@ describe("createWebApp tRPC auth", () => {
 		const res = await app.request("/trpc/subscriptions.createTicket?batch=1", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: "{}",
+			body: JSON.stringify({ 0: { json: subscriptionScope.resource } }),
 		});
 
 		expect(res.status).toBe(401);
@@ -156,7 +168,7 @@ describe("createWebApp tRPC auth", () => {
 				Authorization: "token valid-token",
 				"Content-Type": "application/json",
 			},
-			body: "{}",
+			body: JSON.stringify({ 0: { json: subscriptionScope.resource } }),
 		});
 		const body = (await res.json()) as Array<{
 			result?: { data?: { json?: { ticket?: string } } };
@@ -222,7 +234,7 @@ describe("createWebApp tRPC auth", () => {
 		const app = makeApp();
 		const badTicket = await createSubscriptionTicketService(
 			"wrong-ticket-signing-key-wrong-key",
-		).issueTicket(validCaller);
+		).issueTicket(validCaller, subscriptionScope);
 		const res = await app.request(
 			`/trpc/updates.onEvents?ticket=${encodeURIComponent(badTicket)}&input=%7B%22org%22%3A%22my-org%22%2C%22project%22%3A%22myproj%22%2C%22stack%22%3A%22dev%22%2C%22updateId%22%3A%22upd-1%22%7D`,
 		);

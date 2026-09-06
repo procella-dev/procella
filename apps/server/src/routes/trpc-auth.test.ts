@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { AuthService } from "@procella/auth";
-import type { Caller } from "@procella/types";
+import type { Caller, SubscriptionTicketScope } from "@procella/types";
 import { SignJWT } from "jose";
 import { createSubscriptionTicketService } from "../subscription-tickets.js";
 import { authenticateTrpcCaller } from "./trpc-auth.js";
@@ -16,6 +16,26 @@ const caller: Caller = {
 	roles: ["admin"],
 	principalType: "user",
 };
+
+const scope: SubscriptionTicketScope = {
+	procedure: "updates.onEvents",
+	resource: {
+		org: "my-org",
+		project: "myproj",
+		stack: "dev",
+		updateId: "upd-1",
+	},
+};
+
+function subscriptionRequest(
+	procedure: string = scope.procedure,
+	resource: SubscriptionTicketScope["resource"] = scope.resource,
+): Request {
+	return new Request(
+		`https://procella.dev/trpc/${procedure}?input=${encodeURIComponent(JSON.stringify(resource))}`,
+		{ method: "GET" },
+	);
+}
 
 function mockAuthService(returnCaller: Caller | null): AuthService {
 	return {
@@ -52,6 +72,7 @@ describe("authenticateTrpcCaller", () => {
 			login: caller.login,
 			roles: [...caller.roles],
 			principalType: caller.principalType,
+			...scope,
 		})
 			.setProtectedHeader({ alg: "HS256", typ: "JWT" })
 			.setIssuer("procella")
@@ -60,40 +81,57 @@ describe("authenticateTrpcCaller", () => {
 			.setExpirationTime(Math.floor(Date.now() / 1000) - 60)
 			.sign(new TextEncoder().encode(SIGNING_KEY));
 
-		const result = await authenticateTrpcCaller(
-			new Request("https://procella.dev/trpc/updates.onEvents", { method: "GET" }),
-			expiredTicket,
-			{
-				auth: mockAuthService(null),
-				verifySubscriptionTicket: createSubscriptionTicketService(SIGNING_KEY).verifyTicket,
-			},
-		);
+		const result = await authenticateTrpcCaller(subscriptionRequest(), expiredTicket, {
+			auth: mockAuthService(null),
+			verifySubscriptionTicket: createSubscriptionTicketService(SIGNING_KEY).verifyTicket,
+		});
 
 		expect(result).toEqual({ caller: null, invalidTicket: true });
 	});
 
 	test("rejects a wrong-signature ticket", async () => {
-		const wrongSignatureTicket =
-			await createSubscriptionTicketService(WRONG_SIGNING_KEY).issueTicket(caller);
+		const wrongSignatureTicket = await createSubscriptionTicketService(
+			WRONG_SIGNING_KEY,
+		).issueTicket(caller, scope);
 
-		const result = await authenticateTrpcCaller(
-			new Request("https://procella.dev/trpc/updates.onEvents", { method: "GET" }),
-			wrongSignatureTicket,
-			{
-				auth: mockAuthService(null),
-				verifySubscriptionTicket: createSubscriptionTicketService(SIGNING_KEY).verifyTicket,
-			},
-		);
+		const result = await authenticateTrpcCaller(subscriptionRequest(), wrongSignatureTicket, {
+			auth: mockAuthService(null),
+			verifySubscriptionTicket: createSubscriptionTicketService(SIGNING_KEY).verifyTicket,
+		});
 
 		expect(result).toEqual({ caller: null, invalidTicket: true });
 	});
 
 	test("accepts a valid ticket and reconstructs the caller from claims", async () => {
 		const service = createSubscriptionTicketService(SIGNING_KEY);
-		const ticket = await service.issueTicket(caller);
+		const ticket = await service.issueTicket(caller, scope);
+
+		const result = await authenticateTrpcCaller(subscriptionRequest(), ticket, {
+			auth: mockAuthService(null),
+			verifySubscriptionTicket: service.verifyTicket,
+		});
+
+		expect(result).toEqual({ caller, invalidTicket: false });
+	});
+
+	test("rejects a ticket used for a different procedure", async () => {
+		const service = createSubscriptionTicketService(SIGNING_KEY);
+		const ticket = await service.issueTicket(caller, scope);
+
+		const result = await authenticateTrpcCaller(subscriptionRequest("events.list"), ticket, {
+			auth: mockAuthService(null),
+			verifySubscriptionTicket: service.verifyTicket,
+		});
+
+		expect(result).toEqual({ caller: null, invalidTicket: true });
+	});
+
+	test("rejects a ticket used for a different resource", async () => {
+		const service = createSubscriptionTicketService(SIGNING_KEY);
+		const ticket = await service.issueTicket(caller, scope);
 
 		const result = await authenticateTrpcCaller(
-			new Request("https://procella.dev/trpc/updates.onEvents", { method: "GET" }),
+			subscriptionRequest(scope.procedure, { ...scope.resource, updateId: "upd-2" }),
 			ticket,
 			{
 				auth: mockAuthService(null),
@@ -101,6 +139,6 @@ describe("authenticateTrpcCaller", () => {
 			},
 		);
 
-		expect(result).toEqual({ caller, invalidTicket: false });
+		expect(result).toEqual({ caller: null, invalidTicket: true });
 	});
 });

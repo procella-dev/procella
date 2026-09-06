@@ -1,11 +1,19 @@
 import type { AuthService } from "@procella/auth";
-import type { Caller } from "@procella/types";
+import type { Caller, SubscriptionTicketScope } from "@procella/types";
 import type { MiddlewareHandler } from "hono";
+import { z } from "zod/v4";
 import type { Env } from "../types.js";
+
+const subscriptionResourceSchema = z.object({
+	org: z.string().min(1),
+	project: z.string().min(1),
+	stack: z.string().min(1),
+	updateId: z.string().min(1),
+});
 
 export interface TrpcAuthDeps {
 	auth: AuthService;
-	verifySubscriptionTicket?: (ticket: string) => Promise<Caller>;
+	verifySubscriptionTicket?: (ticket: string, scope: SubscriptionTicketScope) => Promise<Caller>;
 }
 
 export async function authenticateTrpcCaller(
@@ -18,8 +26,12 @@ export async function authenticateTrpcCaller(
 			return { caller: null, invalidTicket: false };
 		}
 		try {
+			const scope = subscriptionScopeFromRequest(req);
+			if (!scope) {
+				return { caller: null, invalidTicket: true };
+			}
 			return {
-				caller: await deps.verifySubscriptionTicket(ticket),
+				caller: await deps.verifySubscriptionTicket(ticket, scope),
 				invalidTicket: false,
 			};
 		} catch {
@@ -48,5 +60,31 @@ export function trpcAuth(deps: TrpcAuthDeps): MiddlewareHandler<Env> {
 		}
 		c.set("caller", caller);
 		await next();
+	};
+}
+
+function subscriptionScopeFromRequest(req: Request): SubscriptionTicketScope | null {
+	const url = new URL(req.url);
+	const trpcPathIndex = url.pathname.lastIndexOf("/trpc/");
+	const procedure =
+		trpcPathIndex === -1 ? "" : decodeURIComponent(url.pathname.slice(trpcPathIndex + 6));
+	if (procedure !== "updates.onEvents") {
+		return null;
+	}
+
+	const input = url.searchParams.get("input");
+	if (!input) {
+		return null;
+	}
+
+	const parsed: unknown = JSON.parse(input);
+	const resourceInput =
+		typeof parsed === "object" && parsed !== null && "json" in parsed
+			? (parsed as { json: unknown }).json
+			: parsed;
+
+	return {
+		procedure,
+		resource: subscriptionResourceSchema.parse(resourceInput),
 	};
 }

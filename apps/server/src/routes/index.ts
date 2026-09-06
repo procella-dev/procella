@@ -75,10 +75,16 @@ export function createApp(deps: {
 	esc: EscService;
 	github: GitHubService | null;
 	githubWebhookSecret?: string;
-	issueSubscriptionTicket?: (caller: import("@procella/types").Caller) => Promise<string>;
+	issueSubscriptionTicket?: (
+		caller: import("@procella/types").Caller,
+		scope: import("@procella/types").SubscriptionTicketScope,
+	) => Promise<string>;
 	oidc?: OidcService | null;
 	oidcPolicies?: TrustPolicyRepository | null;
-	verifySubscriptionTicket?: (ticket: string) => Promise<import("@procella/types").Caller>;
+	verifySubscriptionTicket?: (
+		ticket: string,
+		scope: import("@procella/types").SubscriptionTicketScope,
+	) => Promise<import("@procella/types").Caller>;
 	deltaCheckpointsEnabled?: boolean;
 }): Hono<Env> {
 	const app = new Hono<Env>();

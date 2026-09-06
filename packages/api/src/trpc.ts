@@ -7,7 +7,7 @@ import type { GitHubService } from "@procella/github";
 import type { TrustPolicyRepository } from "@procella/oidc";
 import type { StacksService } from "@procella/stacks";
 import { trpcProcedureDuration, withSpan } from "@procella/telemetry";
-import { type Caller, ProcellaError } from "@procella/types";
+import { type Caller, ProcellaError, type SubscriptionTicketScope } from "@procella/types";
 import type { UpdatesService } from "@procella/updates";
 import type { WebhooksService } from "@procella/webhooks";
 import { initTRPC, type TRPC_ERROR_CODE_KEY, TRPCError } from "@trpc/server";
@@ -20,7 +20,7 @@ import superjson from "superjson";
 
 export interface TRPCContext {
 	caller: Caller | null;
-	issueSubscriptionTicket?: (caller: Caller) => Promise<string>;
+	issueSubscriptionTicket?: (caller: Caller, scope: SubscriptionTicketScope) => Promise<string>;
 	setGitHubSetupCookie?: (nonce: string) => void;
 	githubSetupCookies?: { nonce?: string; authorizationState?: string };
 	resolveUserDisplayName: (subject: string) => Promise<string | null>;

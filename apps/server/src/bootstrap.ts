@@ -171,11 +171,16 @@ async function bootstrapServices() {
 		esc: escService,
 		github: githubService,
 		githubWebhookSecret: githubConfig?.webhookSecret,
-		issueSubscriptionTicket: (caller: import("@procella/types").Caller) =>
-			subscriptionTickets.issueTicket(caller),
+		issueSubscriptionTicket: (
+			caller: import("@procella/types").Caller,
+			scope: import("@procella/types").SubscriptionTicketScope,
+		) => subscriptionTickets.issueTicket(caller, scope),
 		oidc: oidcService,
 		oidcPolicies,
-		verifySubscriptionTicket: (ticket: string) => subscriptionTickets.verifyTicket(ticket),
+		verifySubscriptionTicket: (
+			ticket: string,
+			scope: import("@procella/types").SubscriptionTicketScope,
+		) => subscriptionTickets.verifyTicket(ticket, scope),
 	};
 }
 

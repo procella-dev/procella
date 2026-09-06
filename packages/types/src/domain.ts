@@ -48,6 +48,16 @@ export interface WorkloadIdentity {
 	jti?: string;
 }
 
+export interface SubscriptionTicketScope {
+	readonly procedure: "updates.onEvents";
+	readonly resource: {
+		readonly org: string;
+		readonly project: string;
+		readonly stack: string;
+		readonly updateId: string;
+	};
+}
+
 /** Check if a caller has a specific role. */
 export function hasRole(caller: Caller, role: Role): boolean {
 	return caller.roles.includes(role);
