@@ -13,17 +13,28 @@ export const githubRouter = router({
 		};
 	}),
 
-	createInstallationUrl: adminProcedure.mutation(async ({ ctx }) => {
-		if (!ctx.github) {
-			throw new TRPCError({
-				code: "PRECONDITION_FAILED",
-				message: "GitHub App is not configured on this server",
-			});
-		}
-		return {
-			url: await ctx.github.issueAuthorizationUrl(ctx.caller.tenantId, ctx.caller.orgSlug),
-		};
-	}),
+	createInstallationUrl: adminProcedure
+		.input(
+			z.object({
+				accountLogin: z
+					.string()
+					.trim()
+					.min(1)
+					.max(100)
+					.regex(/^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$/),
+			}),
+		)
+		.mutation(async ({ ctx, input }) => {
+			if (!ctx.github) {
+				throw new TRPCError({
+					code: "PRECONDITION_FAILED",
+					message: "GitHub App is not configured on this server",
+				});
+			}
+			return {
+				url: await ctx.github.issueAuthorizationUrl(ctx.caller.tenantId, input.accountLogin),
+			};
+		}),
 
 	removeInstallation: adminProcedure
 		.input(z.object({ installationId: z.number().int().positive() }))

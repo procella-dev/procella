@@ -76,9 +76,8 @@ PROCELLA_GITHUB_APP_WEBHOOK_SECRET=my-random-secret
 
 For Vercel or similar platforms, use the environment variable UI. The private key value should be the raw multiline PEM string.
 
-### 3. Connect the App to a Tenant
+Sign in to Procella as a tenant administrator, open **Settings** > **GitHub**, enter the exact GitHub user or organization login to connect, and select **Verify & Connect GitHub App**. Procella authorizes your GitHub user and requires that user to own the requested personal account or be an active administrator of the requested GitHub organization. The requested login is untrusted until GitHub confirms that authority. The short-lived user token is revoked immediately after this check. Procella then sends you to install the App with new signed, one-time state bound to that tenant and verified account. The `/github/setup` callback accepts only new-install callbacks and independently loads the installation details from GitHub before saving the binding.
 
-Sign in to Procella as a tenant administrator, open **Settings** > **GitHub**, and select **Verify & Connect GitHub App**. Procella first authorizes your GitHub user and requires that user to own the tenant account or be an active administrator of the matching GitHub organization. The short-lived user token is revoked immediately after this check. Procella then sends you to install the App with new signed, one-time state bound to that tenant and verified account. The `/github/setup` callback accepts only new-install callbacks and independently loads the installation details from GitHub before saving the binding.
 
 Webhook events can update or remove an existing binding, but cannot create one.
 

@@ -576,9 +576,11 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 		const token = await this.exchangeUserToken(code);
 		try {
 			await this.verifyAccountAdministrator(token, claims.accountLogin);
-		} finally {
-			await this.revokeUserToken(token);
+		} catch (error) {
+			await this.revokeUserToken(token).catch(() => undefined);
+			throw error;
 		}
+		await this.revokeUserToken(token);
 
 		const next = await this.setupStates.issue(claims.tenantId, claims.accountLogin, "install");
 		await this.db.transaction(async (tx) => {
@@ -715,18 +717,26 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 
 	private async verifyAccountAdministrator(token: string, accountLogin: string): Promise<void> {
 		const client = this.userClientFactory(token);
+		const request = { request: { signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS) } };
+		let userLogin: string;
 		try {
-			const request = { request: { signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS) } };
 			const { data: user } = await client.request("GET /user", request);
-			if (user.login.toLowerCase() === accountLogin.toLowerCase()) return;
+			userLogin = user.login;
+		} catch {
+			throw new GitHubSetupError("authorization_failed");
+		}
+		if (userLogin.toLowerCase() === accountLogin.toLowerCase()) return;
 
+		try {
 			const { data: membership } = await client.request("GET /user/memberships/orgs/{org}", {
 				org: accountLogin,
 				...request,
 			});
 			if (membership.state === "active" && membership.role === "admin") return;
 		} catch (error) {
-			if (error instanceof GitHubSetupError) throw error;
+			if (githubErrorStatus(error) !== 404) {
+				throw new GitHubSetupError("authorization_failed");
+			}
 		}
 		throw new GitHubSetupError("unauthorized_account");
 	}

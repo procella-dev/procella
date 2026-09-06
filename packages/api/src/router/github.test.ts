@@ -77,11 +77,13 @@ describe("githubRouter", () => {
 		expect((await githubRouter.createCaller(ctx).status()).configured).toBe(true);
 	});
 
-	test("createInstallationUrl issues tenant-bound URL for admins", async () => {
+	test("createInstallationUrl issues account-bound URL for admins", async () => {
 		const ctx = mockContext();
-		const result = await githubRouter.createCaller(ctx).createInstallationUrl();
+		const result = await githubRouter
+			.createCaller(ctx)
+			.createInstallationUrl({ accountLogin: "acme" });
 		expect(result.url).toContain("github.com/apps/procella/installations/new");
-		expect(ctx.github?.issueAuthorizationUrl).toHaveBeenCalledWith("t-1", "my-org");
+		expect(ctx.github?.issueAuthorizationUrl).toHaveBeenCalledWith("t-1", "acme");
 	});
 
 	test("createInstallationUrl rejects non-admin callers", async () => {
@@ -95,17 +97,26 @@ describe("githubRouter", () => {
 				principalType: "user",
 			},
 		});
-		await expect(githubRouter.createCaller(ctx).createInstallationUrl()).rejects.toThrow(
-			"Admin role required",
-		);
+		await expect(
+			githubRouter.createCaller(ctx).createInstallationUrl({ accountLogin: "acme" }),
+		).rejects.toThrow("Admin role required");
 	});
 
 	test("createInstallationUrl reports disabled server configuration", async () => {
 		await expect(
-			githubRouter.createCaller(mockContext({ github: null })).createInstallationUrl(),
+			githubRouter
+				.createCaller(mockContext({ github: null }))
+				.createInstallationUrl({ accountLogin: "acme" }),
 		).rejects.toThrow("GitHub App is not configured");
 	});
 
+	test("createInstallationUrl rejects malformed GitHub account logins", async () => {
+		const ctx = mockContext();
+		await expect(
+			githubRouter.createCaller(ctx).createInstallationUrl({ accountLogin: "../attacker" }),
+		).rejects.toThrow();
+		expect(ctx.github?.issueAuthorizationUrl).not.toHaveBeenCalled();
+	});
 	test("removeInstallation is tenant scoped and admin only", async () => {
 		const ctx = mockContext();
 		expect(

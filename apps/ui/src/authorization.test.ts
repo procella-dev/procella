@@ -97,6 +97,7 @@ beforeEach(() => {
 	globalThis.localStorage = dom.localStorage;
 	globalThis.HTMLElement = dom.HTMLElement;
 	globalThis.Event = dom.Event as unknown as typeof globalThis.Event;
+	globalThis.FormData = dom.FormData as unknown as typeof FormData;
 	globalThis.MouseEvent = dom.MouseEvent as unknown as typeof globalThis.MouseEvent;
 	currentCallerQuery = { data: undefined, isLoading: false, error: null };
 	sessionState = {
@@ -200,7 +201,7 @@ describe("Settings authorization", () => {
 		expect(page.getByText("Admin access required")).toBeTruthy();
 	});
 
-	test("distinguishes server configuration from an uninstalled tenant", () => {
+	test("requires an explicit GitHub account before starting authorization", async () => {
 		currentCallerQuery = {
 			data: { tenantId: "tenant-from-server", roles: ["admin"] },
 			isLoading: false,
@@ -218,8 +219,13 @@ describe("Settings authorization", () => {
 			error: null,
 		};
 		page = render(createElement(Settings));
-		expect(page.getByText("GitHub App is not installed")).toBeTruthy();
-		expect(page.getByRole("button", { name: "Verify & Connect GitHub App" })).toBeTruthy();
+		const account = page.getByLabelText("GitHub account") as HTMLInputElement;
+		expect(account.required).toBe(true);
+		account.value = "acme";
+		fireEvent.submit(page.getByRole("form", { name: "Connect GitHub App" }));
+		await waitFor(() =>
+			expect(createInstallationUrl).toHaveBeenCalledWith({ accountLogin: "acme" }),
+		);
 	});
 
 	test("shows callback success and configured installation actions", async () => {
@@ -252,8 +258,10 @@ describe("Settings authorization", () => {
 		const page = render(createElement(Settings));
 		expect(page.getByText("GitHub App installation connected successfully.")).toBeTruthy();
 		expect(page.getByText("Selected repositories")).toBeTruthy();
-		fireEvent.click(page.getByRole("button", { name: "Verify or Configure" }));
-		await waitFor(() => expect(createInstallationUrl).toHaveBeenCalledTimes(1));
+		fireEvent.click(page.getByRole("button", { name: "Verify & Configure" }));
+		await waitFor(() =>
+			expect(createInstallationUrl).toHaveBeenCalledWith({ accountLogin: "acme" }),
+		);
 	});
 
 	test("shows an expired callback state error", () => {
@@ -272,6 +280,28 @@ describe("Settings authorization", () => {
 		const page = render(createElement(Settings));
 		expect(
 			page.getByText("The GitHub setup link expired. Start the connection again."),
+		).toBeTruthy();
+	});
+
+	test("explains rejected GitHub update callbacks", () => {
+		currentCallerQuery = {
+			data: { tenantId: "tenant-from-server", roles: ["admin"] },
+			isLoading: false,
+			error: null,
+		};
+		githubStatusQuery = {
+			data: { configured: true, installations: [] },
+			isLoading: false,
+			error: null,
+		};
+		dom.location.href =
+			"http://localhost/settings?github=error&reason=unsupported_setup_action#github";
+
+		const page = render(createElement(Settings));
+		expect(
+			page.getByText(
+				"GitHub returned an update callback. Start a new installation from Procella Settings.",
+			),
 		).toBeTruthy();
 	});
 

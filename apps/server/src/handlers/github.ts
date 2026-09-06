@@ -118,12 +118,15 @@ export function githubHandlers(deps: {
 			const state = c.req.query("state");
 			const installationIdValue = c.req.query("installation_id");
 			const setupAction = c.req.query("setup_action");
+			if (setupAction && setupAction !== "install") {
+				return redirectToGitHubSettings(c, "unsupported_setup_action");
+			}
 			if (
 				!state ||
 				state.length > 4096 ||
 				!installationIdValue ||
 				!/^[1-9]\d*$/.test(installationIdValue) ||
-				setupAction !== "install"
+				!setupAction
 			) {
 				return redirectToGitHubSettings(c, "invalid_callback");
 			}

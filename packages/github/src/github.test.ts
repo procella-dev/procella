@@ -309,7 +309,7 @@ describe("OctokitGitHubService user authorization", () => {
 		const oauthFetch = mock(async (input: string | URL | Request) =>
 			String(input).includes("login/oauth/access_token")
 				? new Response(JSON.stringify({ access_token: "user-token", token_type: "bearer" }))
-				: new Response(null, { status: 204 }),
+				: new Response(null, { status: 503 }),
 		);
 		const userRequest = mock(async (route: string) =>
 			route === "GET /user"
@@ -329,6 +329,39 @@ describe("OctokitGitHubService user authorization", () => {
 
 		await expect(service.completeAuthorization(state, "oauth-code")).rejects.toMatchObject({
 			code: "unauthorized_account",
+		});
+		expect(transaction).not.toHaveBeenCalled();
+		expect(oauthFetch).toHaveBeenCalledTimes(2);
+	});
+
+	test("reports GitHub membership request failures separately from denied membership", async () => {
+		const setupStates = createGitHubSetupStateService(testConfig.stateSigningKey);
+		const { state } = await setupStates.issue("tenant-a", "acme", "authorize");
+		const transaction = mock(() => {
+			throw new Error("must not consume or insert state");
+		});
+		const oauthFetch = mock(async (input: string | URL | Request) =>
+			String(input).includes("login/oauth/access_token")
+				? new Response(JSON.stringify({ access_token: "user-token", token_type: "bearer" }))
+				: new Response(null, { status: 204 }),
+		);
+		const userRequest = mock(async (route: string) => {
+			if (route === "GET /user") return { data: { login: "alice" } };
+			throw Object.assign(new Error("GitHub unavailable"), { status: 503 });
+		});
+		const service = new OctokitGitHubService({
+			db: { transaction } as unknown as Database,
+			config: testConfig,
+			appClient: {
+				request: mock(async () => ({ data: { id: 123, slug: "procella" } })),
+			} as unknown as Octokit,
+			setupStates,
+			userClientFactory: () => ({ request: userRequest }) as unknown as Octokit,
+			oauthFetch: oauthFetch as unknown as typeof fetch,
+		});
+
+		await expect(service.completeAuthorization(state, "oauth-code")).rejects.toMatchObject({
+			code: "authorization_failed",
 		});
 		expect(transaction).not.toHaveBeenCalled();
 		expect(oauthFetch).toHaveBeenCalledTimes(2);

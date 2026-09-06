@@ -272,7 +272,6 @@ describe("githubHandlers", () => {
 			for (const query of [
 				"installation_id=123&setup_action=install",
 				"installation_id=not-a-number&setup_action=install&state=state",
-				"installation_id=123&setup_action=other&state=state",
 				`installation_id=123&setup_action=install&state=${"x".repeat(4097)}`,
 			]) {
 				const res = await app.request(`/github/setup?${query}`);
@@ -292,7 +291,7 @@ describe("githubHandlers", () => {
 				"/github/setup?installation_id=123&setup_action=update&state=signed-state",
 			);
 			expect(res.status).toBe(303);
-			expect(res.headers.get("location")).toContain("reason=invalid_callback");
+			expect(res.headers.get("location")).toContain("reason=unsupported_setup_action");
 			expect(github.completeInstallation).not.toHaveBeenCalled();
 		});
 
