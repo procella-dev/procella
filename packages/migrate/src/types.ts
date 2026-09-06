@@ -56,6 +56,10 @@ export interface MigrationResult {
 	duration: number;
 	error?: string;
 	exportFile?: string;
+	/** Retained plaintext scratch payload when cleanup fails. */
+	scratchFile?: string;
+	/** Filesystem error that prevented scratch payload deletion. */
+	scratchCleanupError?: string;
 }
 
 /** Complete audit log for a migration run */

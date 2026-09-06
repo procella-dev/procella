@@ -1,15 +1,8 @@
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
 import { createAuditLog, finalizeAuditLog, recordResult, writeAuditLog } from "./audit.js";
 import * as log from "./log.js";
-import {
-	createStack,
-	discoverStacks,
-	exportState,
-	filterStacks,
-	healthCheck,
-	importState,
-} from "./procella.js";
+import { createStack, discoverStacks, exportState, filterStacks, healthCheck } from "./procella.js";
 import * as pulumi from "./pulumi.js";
 import type {
 	AuditLog,
@@ -18,6 +11,21 @@ import type {
 	RunOptions,
 	UntypedDeployment,
 } from "./types.js";
+
+export interface MigrationOperations {
+	exportStack: typeof pulumi.exportStack;
+	createStack: typeof createStack;
+	importStack: typeof pulumi.importStack;
+	exportState: typeof exportState;
+	removeScratchFile?: (filePath: string) => Promise<void>;
+}
+
+const defaultMigrationOperations: MigrationOperations = {
+	exportStack: pulumi.exportStack,
+	createStack,
+	importStack: pulumi.importStack,
+	exportState,
+};
 
 export async function run(opts: RunOptions): Promise<AuditLog> {
 	const audit = createAuditLog(opts.sourceUrl, opts.targetUrl);
@@ -58,7 +66,7 @@ export async function run(opts: RunOptions): Promise<AuditLog> {
 	let lastProcessed = filtered.length;
 	if (opts.concurrency <= 1) {
 		for (let i = 0; i < filtered.length; i++) {
-			const result = await migrateStack(filtered[i], i + 1, filtered.length, opts);
+			const result = await migrateOne(filtered[i], i + 1, filtered.length, opts);
 			recordResult(audit, result);
 
 			if (result.status === "failed" && !opts.continueOnError) {
@@ -78,7 +86,7 @@ export async function run(opts: RunOptions): Promise<AuditLog> {
 				const index = cursor++;
 				if (index >= filtered.length) break;
 				const stack = filtered[index];
-				const result = await migrateStack(stack, index + 1, filtered.length, opts);
+				const result = await migrateOne(stack, index + 1, filtered.length, opts);
 				recordResult(audit, result);
 				processedIndices.add(index);
 
@@ -182,11 +190,26 @@ export function assertWithin(parent: string, child: string, ref: string): void {
 	}
 }
 
-async function migrateStack(
+const secretSignatureKey = "4dabf18193072939515e22adb298388d";
+const secretSignature = "1b47061264138c4ac30d75fd1eb44270";
+
+export function hasPlaintextSecret(value: unknown): boolean {
+	if (Array.isArray(value)) return value.some(hasPlaintextSecret);
+	if (value === null || typeof value !== "object") return false;
+
+	const object = value as Record<string, unknown>;
+	if (object[secretSignatureKey] === secretSignature && Object.hasOwn(object, "plaintext")) {
+		return true;
+	}
+	return Object.values(object).some(hasPlaintextSecret);
+}
+
+export async function migrateOne(
 	stack: DiscoveredStack,
 	index: number,
 	total: number,
 	opts: RunOptions,
+	operations: MigrationOperations = defaultMigrationOperations,
 ): Promise<MigrationResult> {
 	const start = Date.now();
 	// Use directory hierarchy to avoid filename collisions.
@@ -194,6 +217,7 @@ async function migrateStack(
 	const org = stack.ref.org || "imported";
 	const project = stack.ref.project || stack.ref.stack || "default";
 	const stackName = stack.ref.stack || stack.fqn;
+	const targetUrl = opts.targetUrl.replace(/\/$/, "");
 
 	// Path-traversal guard: source-backend stack names may legitimately contain
 	// dots (Procella allows it), so a stack literally named `..` is possible.
@@ -207,8 +231,26 @@ async function migrateStack(
 	const stackDir = join(opts.outputDir, org, project);
 	assertWithin(opts.outputDir, stackDir, stack.fqn);
 	await mkdir(stackDir, { recursive: true });
+	const scratchDir = join(stackDir, ".import");
+	assertWithin(opts.outputDir, scratchDir, stack.fqn);
 	const exportFile = join(stackDir, `${stackName}.json`);
 	assertWithin(opts.outputDir, exportFile, stack.fqn);
+	const importFile = join(scratchDir, `${stackName}.json`);
+	assertWithin(opts.outputDir, importFile, stack.fqn);
+	const removeScratchFile = operations.removeScratchFile ?? ((path) => rm(path, { force: true }));
+	let scratchCleanupDone = false;
+	let scratchCleanupError: string | undefined;
+	const cleanupScratchFile = async (): Promise<void> => {
+		if (scratchCleanupDone) return;
+		try {
+			await removeScratchFile(importFile);
+			scratchCleanupDone = true;
+			scratchCleanupError = undefined;
+		} catch (err) {
+			scratchCleanupError = err instanceof Error ? err.message : String(err);
+			log.warn(`           Failed to delete scratch import payload ${importFile}: ${err}`);
+		}
+	};
 
 	log.info(`  [${index}/${total}] ${stack.fqn}`);
 
@@ -216,7 +258,7 @@ async function migrateStack(
 	try {
 		// Phase 1: Export from source
 		log.dim(`           Exporting from source...`);
-		await pulumi.exportStack(stack.fqn, exportFile, {
+		await operations.exportStack(stack.fqn, exportFile, {
 			backendUrl: opts.sourceUrl,
 			token: opts.sourceToken,
 		});
@@ -248,34 +290,49 @@ async function migrateStack(
 		// org, project, stackName already computed above with DIY fallbacks
 
 		log.dim("           Creating stack on target...");
-		const { created } = await createStack(
-			{ url: opts.targetUrl, token: opts.targetToken },
+		const { created } = await operations.createStack(
+			{ url: targetUrl, token: opts.targetToken },
 			org,
 			project,
 			stackName,
 		);
 		log.dim(`           Stack ${created ? "created" : "already exists"}`);
 
-		// Phase 3: Import state
-		log.dim("           Importing state...");
-		const { updateId } = await importState(
-			{ url: opts.targetUrl, token: opts.targetToken },
-			org,
-			project,
-			stackName,
-			deployment,
-		);
-		log.dim(`           Imported (update ${updateId})`);
+		// Phase 3: Replace source-provider metadata, then let Pulumi deserialize
+		// the plaintext export and serialize it with the target service provider.
+		deployment.deployment.secrets_providers = {
+			type: "service",
+			state: {
+				url: targetUrl,
+				owner: org,
+				project,
+				stack: stackName,
+			},
+		};
+		await mkdir(scratchDir, { recursive: true });
+		await writeFile(importFile, JSON.stringify(deployment));
+
+		log.dim("           Importing state through target secret provider...");
+		await operations.importStack(`${org}/${project}/${stackName}`, importFile, {
+			backendUrl: targetUrl,
+			token: opts.targetToken,
+		});
+		await cleanupScratchFile();
+		log.dim("           Imported");
 
 		// Phase 4: Verify resource count
 		log.dim("           Verifying...");
-		const targetState = await exportState(
-			{ url: opts.targetUrl, token: opts.targetToken },
+		const targetState = await operations.exportState(
+			{ url: targetUrl, token: opts.targetToken },
 			org,
 			project,
 			stackName,
 		);
 		const targetResourceCount = targetState.deployment.resources?.length ?? 0;
+
+		if (hasPlaintextSecret(targetState)) {
+			throw new Error("Target state contains plaintext Pulumi secret envelopes after import");
+		}
 
 		if (targetResourceCount !== sourceResourceCount) {
 			throw new Error(
@@ -298,13 +355,14 @@ async function migrateStack(
 			targetResourceCount,
 			duration,
 			exportFile: opts.keepExports ? exportFile : undefined,
+			...(scratchCleanupError ? { scratchFile: importFile, scratchCleanupError } : {}),
 		};
 	} catch (err) {
 		const duration = Date.now() - start;
 		const message = err instanceof Error ? err.message : String(err);
 		log.error(`         ${stack.fqn} — ${message}`);
 
-		// Clean up export file on failure — contains plaintext secrets
+		await cleanupScratchFile();
 		if (!opts.keepExports) {
 			await rm(exportFile, { force: true }).catch(() => {});
 		}
@@ -317,6 +375,7 @@ async function migrateStack(
 			duration,
 			error: message,
 			exportFile: opts.keepExports ? exportFile : undefined,
+			...(scratchCleanupError ? { scratchFile: importFile, scratchCleanupError } : {}),
 		};
 	}
 }
