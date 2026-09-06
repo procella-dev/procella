@@ -72,6 +72,15 @@ describe("@procella/db schema", () => {
 			expect(columns.stackId.notNull).toBe(true);
 		});
 
+		test("indexes stack_id for bounded cascade lookup", () => {
+			const stackIndex = getTableConfig(updates).indexes.find(
+				(candidate) => candidate.config.name === "idx_updates_stack_id",
+			);
+			expect(
+				stackIndex?.config.columns.map((column) => ("name" in column ? column.name : null)),
+			).toEqual(["stack_id"]);
+		});
+
 		test("has lifecycle columns", () => {
 			const columns = getTableColumns(updates);
 			const columnNames = Object.values(columns).map((c) => c.name);

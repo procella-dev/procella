@@ -53,7 +53,9 @@ describe("BlobCleanupWorker — integration", () => {
 			get: (key) => storage.get(key),
 			put: (key, data) => storage.put(key, data),
 			delete: async () => {
-				throw new Error("storage unavailable");
+				throw new Error(
+					"request to https://user:pass@s3.example, token=abc123, authorization=Bearer secret",
+				);
 			},
 			exists: (key) => storage.exists(key),
 		};
@@ -63,7 +65,9 @@ describe("BlobCleanupWorker — integration", () => {
 		const [failed] = await db.select().from(blobCleanupQueue).where(eq(blobCleanupQueue.blobKey, blobKey));
 		expect(failed.attempts).toBe(1);
 		expect(failed.claimedBy).toBeNull();
-		expect(failed.lastError).toBe("storage unavailable");
+		expect(failed.lastError).toBe(
+			"Error: request to https://[redacted]@s3.example, token=[redacted], authorization=[redacted]",
+		);
 		expect(await storage.exists(blobKey)).toBe(true);
 
 		await db

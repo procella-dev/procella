@@ -292,6 +292,27 @@ describe("PostgresStacksService — integration", () => {
 			expect(await stacks.getStack("tenant-2", "org-2", "proj-1", "dev")).toBeDefined();
 		});
 
+		test("database cascade removes descendants for an out-of-band stack delete", async () => {
+			const target = await stacks.createStack("tenant-1", "org-1", "proj-1", "dev");
+			const [update] = await db
+				.insert(updates)
+				.values({ stackId: target.id, kind: "update", status: "succeeded" })
+				.returning({ id: updates.id });
+			await db.insert(checkpoints).values({
+				updateId: update.id,
+				stackId: target.id,
+				version: 1,
+				data: { resources: [] },
+			});
+
+			await db.delete(stackRows).where(eq(stackRows.id, target.id));
+
+			expect(await db.select().from(updates).where(eq(updates.id, update.id))).toHaveLength(0);
+			expect(
+				await db.select().from(checkpoints).where(eq(checkpoints.updateId, update.id)),
+			).toHaveLength(0);
+		});
+
 		test("does not queue a blob key still referenced by another stack", async () => {
 			const target = await stacks.createStack("tenant-1", "org-1", "proj-1", "dev");
 			const retained = await stacks.createStack("tenant-2", "org-2", "proj-1", "dev");

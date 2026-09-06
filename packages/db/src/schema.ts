@@ -2,7 +2,7 @@
 //
 // This is a multi-tenant SaaS. Auth is Descope (no users/orgs tables).
 // tenant_id is TEXT from Descope JWT — never a FK, always a soft reference.
-// Cross-domain references (stack_id in updates) are soft references (no FK).
+// Cross-domain update rows reference their owning stack with cascading deletion.
 
 import { sql } from "drizzle-orm";
 import {
@@ -109,6 +109,7 @@ export const updates = pgTable(
 			"chk_updates_completed_terminal",
 			sql`${table.completedAt} IS NULL OR ${table.status} IN ('succeeded', 'failed', 'cancelled')`,
 		),
+		index("idx_updates_stack_id").on(table.stackId),
 		uniqueIndex("idx_updates_active")
 			.on(table.stackId)
 			.where(sql`status IN ('not started', 'requested', 'running')`),

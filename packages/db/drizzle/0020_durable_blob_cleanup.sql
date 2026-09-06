@@ -15,6 +15,8 @@ CREATE UNIQUE INDEX "idx_blob_cleanup_queue_blob_key" ON "blob_cleanup_queue" US
 --> statement-breakpoint
 CREATE INDEX "idx_blob_cleanup_queue_available" ON "blob_cleanup_queue" USING btree ("available_at", "claimed_until");
 --> statement-breakpoint
+CREATE INDEX "idx_updates_stack_id" ON "updates" USING btree ("stack_id");
+--> statement-breakpoint
 INSERT INTO "blob_cleanup_queue" ("blob_key")
 SELECT DISTINCT checkpoint."blob_key"
 FROM "checkpoints" checkpoint
@@ -41,4 +43,6 @@ WHERE NOT EXISTS (
 	WHERE stack."id" = orphan_update."stack_id"
 );
 --> statement-breakpoint
-ALTER TABLE "updates" ADD CONSTRAINT "updates_stack_id_stacks_id_fk" FOREIGN KEY ("stack_id") REFERENCES "public"."stacks"("id") ON DELETE cascade ON UPDATE no action;
+ALTER TABLE "updates" ADD CONSTRAINT "updates_stack_id_stacks_id_fk" FOREIGN KEY ("stack_id") REFERENCES "public"."stacks"("id") ON DELETE cascade ON UPDATE no action NOT VALID;
+--> statement-breakpoint
+ALTER TABLE "updates" VALIDATE CONSTRAINT "updates_stack_id_stacks_id_fk";

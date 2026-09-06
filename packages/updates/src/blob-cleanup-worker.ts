@@ -8,8 +8,8 @@ const DEFAULT_INTERVAL_MS = 60_000;
 const DEFAULT_MAX_PER_RUN = 100;
 const CLAIM_SECONDS = 300;
 const MIN_WORK_BUDGET_MS = 1_000;
-const MAX_RETRY_DELAY_SECONDS = 3_600;
-const MAX_ERROR_LENGTH = 2_000;
+const MAX_RETRY_DELAY_SECONDS = 1_024;
+const MAX_ERROR_LENGTH = 500;
 
 interface BlobCleanupClaim {
 	id: string;
@@ -138,16 +138,25 @@ export class BlobCleanupWorker {
 			MAX_RETRY_DELAY_SECONDS,
 			2 ** Math.min(Math.max(claim.attempts - 1, 0), 10),
 		);
-		const message = error instanceof Error ? error.message : String(error);
+		const message = sanitizeBlobCleanupError(error);
 		await this.db
 			.update(blobCleanupQueue)
 			.set({
 				claimedBy: null,
 				claimedUntil: null,
 				availableAt: sql`now() + (${delaySeconds} * interval '1 second')`,
-				lastError: message.slice(0, MAX_ERROR_LENGTH),
+				lastError: message,
 				updatedAt: sql`now()`,
 			})
 			.where(and(eq(blobCleanupQueue.id, claim.id), eq(blobCleanupQueue.claimedBy, this.workerId)));
 	}
+}
+
+function sanitizeBlobCleanupError(error: unknown): string {
+	const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+	return message
+		.replace(/authorization["']?\s*[:=]\s*[^\r\n,}]+/gi, "authorization=[redacted]")
+		.replace(/(token|secret|private[-_ ]?key)["']?\s*[:=]\s*["']?[^"',\s}]+/gi, "$1=[redacted]")
+		.replace(/(https?:\/\/)[^@\s/]+@/gi, "$1[redacted]@")
+		.slice(0, MAX_ERROR_LENGTH);
 }

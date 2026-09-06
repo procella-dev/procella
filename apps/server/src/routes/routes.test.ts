@@ -464,6 +464,31 @@ describe("@procella/server routes", () => {
 			expect(res.status).toBe(200);
 			expect(transactions).toBe(3);
 		});
+
+		test("continues the cron tick when blob cleanup claim fails", async () => {
+			let transactions = 0;
+			const db = {
+				transaction: async (callback: (tx: unknown) => unknown) => {
+					transactions += 1;
+					if (transactions === 1) {
+						return callback({ execute: async () => ({ rows: [{ acquired: false }] }) });
+					}
+					if (transactions === 2) throw new Error("cleanup queue unavailable");
+					return callback({ execute: async () => ({ rows: [] }) });
+				},
+			} as unknown as Database;
+			const app = makeApp(undefined, {
+				cronSecret: "correct-secret",
+				db,
+				github: {} as GitHubService,
+			});
+
+			const res = await app.request("/cron/gc", {
+				headers: { Authorization: "Bearer correct-secret" },
+			});
+			expect(res.status).toBe(200);
+			expect(transactions).toBe(3);
+		});
 	});
 
 	describe("CORS middleware", () => {
