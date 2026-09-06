@@ -17,6 +17,13 @@ describe("migration advisory lock", () => {
 		).toBe(
 			"postgresql://user:password@ep-example.us-east-2.aws.neon.tech/procella?sslmode=require",
 		);
+		expect(
+			getDirectNeonMigrationUrl(
+				"postgresql://user:password@EP-EXAMPLE-POOLER.US-EAST-2.AWS.NEON.TECH/procella?sslmode=require",
+			),
+		).toBe(
+			"postgresql://user:password@ep-example.us-east-2.aws.neon.tech/procella?sslmode=require",
+		);
 	});
 
 	test("suppresses unlock errors and always releases the connection", async () => {

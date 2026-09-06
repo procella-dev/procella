@@ -3,7 +3,7 @@ export const MIGRATIONS_ADVISORY_LOCK_ID = 5_796_818_143_073_299_553n; // "Proce
 /** Use Neon's direct endpoint so a session advisory lock remains connection-affine. */
 export function getDirectNeonMigrationUrl(url: string): string {
 	const parsed = new URL(url);
-	const labels = parsed.hostname.split(".");
+	const labels = parsed.hostname.toLowerCase().split(".");
 	const endpoint = labels[0];
 	if (!endpoint?.endsWith("-pooler")) return url;
 
