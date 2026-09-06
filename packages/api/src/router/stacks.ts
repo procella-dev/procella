@@ -1,7 +1,7 @@
 // @procella/api — stacks tRPC procedures (list, detail, resources, resource).
 
 import { checkpoints, updateEvents, updates } from "@procella/db";
-import type { DeploymentV3, ResourceV3, UntypedDeployment } from "@procella/types";
+import type { DeploymentV3, ResourceV3 } from "@procella/types";
 import { and, desc, eq, max, sql } from "drizzle-orm";
 import { z } from "zod/v4";
 import { adminProcedure, memberProcedure, protectedProcedure, router } from "../trpc.js";
@@ -296,8 +296,7 @@ export const stacksRouter = router({
 				input.project,
 				input.stack,
 			);
-			const deployment = input.deployment as UntypedDeployment;
-			return ctx.updates.importStack(stackInfo.id, deployment);
+			return ctx.updates.importStack(stackInfo.id, input.deployment);
 		}),
 
 	repair: memberProcedure.input(stackInput).mutation(async ({ ctx, input }) => {

@@ -277,6 +277,108 @@ export function assertSupportedDeploymentEnvelope(
 	}
 }
 
+export const MAX_JSON_DEPTH = 32;
+export const MAX_STRING_LENGTH = 1024 * 1024;
+export const MAX_FEATURE_COUNT = 100;
+
+/** Enforce the JSON limits shared by wire schemas and persisted deployment imports. */
+export function assertBoundedJson(value: unknown, depth = 1): void {
+	if (depth > MAX_JSON_DEPTH) {
+		throw new BadRequestError(`JSON body exceeds maximum depth of ${MAX_JSON_DEPTH}`);
+	}
+	if (value === null) return;
+	if (typeof value === "string") {
+		if (value.length > MAX_STRING_LENGTH) {
+			throw new BadRequestError(`String field exceeds maximum length of ${MAX_STRING_LENGTH}`);
+		}
+		return;
+	}
+	if (typeof value === "boolean") return;
+	if (typeof value === "number") {
+		if (!Number.isFinite(value)) throw new BadRequestError("JSON numbers must be finite");
+		return;
+	}
+	if (typeof value !== "object") {
+		throw new BadRequestError(`JSON body contains unsupported ${typeof value} value`);
+	}
+
+	if (Array.isArray(value)) {
+		for (const item of value) assertBoundedJson(item, depth + 1);
+		return;
+	}
+	const prototype = Object.getPrototypeOf(value);
+	if (prototype !== Object.prototype && prototype !== null) {
+		throw new BadRequestError("JSON body contains a non-JSON object");
+	}
+
+	for (const [key, nestedValue] of Object.entries(value)) {
+		if (key.length > MAX_STRING_LENGTH) {
+			throw new BadRequestError(
+				`JSON property name exceeds maximum length of ${MAX_STRING_LENGTH}`,
+			);
+		}
+		if (key === "__proto__" || key === "constructor" || key === "prototype") {
+			throw new BadRequestError(`Forbidden JSON key: ${key}`);
+		}
+		assertBoundedJson(nestedValue, depth + 1);
+	}
+}
+
+/** Validate an import envelope before any update or checkpoint rows are written. */
+export function validateImportedDeployment(value: unknown): UntypedDeployment {
+	assertBoundedJson(value);
+	if (!isPlainObject(value)) {
+		throw new BadRequestError("Imported deployment envelope must be an object");
+	}
+	for (const key of Object.keys(value)) {
+		if (key !== "version" && key !== "features" && key !== "deployment") {
+			throw new BadRequestError("Imported deployment envelope contains an unknown key");
+		}
+	}
+
+	const { version, features } = value;
+	if (
+		version !== undefined &&
+		(typeof version !== "number" || !Number.isInteger(version) || version < 1)
+	) {
+		throw new BadRequestError("Imported deployment schema version must be a positive integer");
+	}
+	if (features !== undefined && !Array.isArray(features)) {
+		throw new BadRequestError("Imported deployment features must be an array");
+	}
+	if (Array.isArray(features) && features.length > 0) {
+		throw new BadRequestError(
+			`Imported deployment has ${features.length} unsupported features; ` +
+				`Procella supports up to deployment schema version ${SUPPORTED_DEPLOYMENT_SCHEMA_VERSION}`,
+		);
+	}
+	assertSupportedDeploymentEnvelope(value, "Imported deployment");
+
+	if (!Object.hasOwn(value, "deployment") || value.deployment === undefined) {
+		throw new BadRequestError("Imported deployment payload is required");
+	}
+	if (!isPlainObject(value.deployment)) {
+		throw new BadRequestError("Imported deployment payload must be an object");
+	}
+
+	const { resources } = value.deployment;
+	if (resources !== undefined && resources !== null) {
+		if (!Array.isArray(resources)) {
+			throw new BadRequestError("Imported deployment resources must be an array or null");
+		}
+		if (resources.some((resource) => !isPlainObject(resource))) {
+			throw new BadRequestError("Imported deployment resources must contain only objects");
+		}
+	}
+
+	return value as unknown as UntypedDeployment;
+}
+
+/** Validate and detach an import envelope from caller-owned mutable objects. */
+export function snapshotImportedDeployment(value: unknown): UntypedDeployment {
+	return structuredClone(validateImportedDeployment(value));
+}
+
 /**
  * Parse verbatim/delta deployment text into its inner deployment payload.
  *

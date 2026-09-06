@@ -1,74 +1,33 @@
-import { SUPPORTED_DEPLOYMENT_SCHEMA_VERSION } from "@procella/updates";
+import { BadRequestError } from "@procella/types";
+import {
+	assertBoundedJson,
+	MAX_FEATURE_COUNT,
+	MAX_JSON_DEPTH,
+	MAX_STRING_LENGTH,
+	SUPPORTED_DEPLOYMENT_SCHEMA_VERSION,
+	validateImportedDeployment,
+} from "@procella/updates";
 import { z } from "zod";
 
-export const MAX_JSON_DEPTH = 32;
-export const MAX_STRING_LENGTH = 1024 * 1024;
+export { MAX_FEATURE_COUNT, MAX_JSON_DEPTH, MAX_STRING_LENGTH };
 export const MAX_EVENT_BATCH_SIZE = 1000;
 export const MAX_BATCH_CRYPT_ITEMS = 1000;
-export const MAX_FEATURE_COUNT = 100;
 export const MAX_LEASE_DURATION_SECONDS = 300;
-
-const FORBIDDEN_JSON_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
 export const BoundedString = (max: number) => z.string().max(max);
 export const BoundedJSON = z.unknown();
 
-function addBoundedJsonIssues(
-	value: unknown,
-	ctx: z.RefinementCtx,
-	depth = 1,
-	path: (string | number)[] = [],
-): void {
-	if (depth > MAX_JSON_DEPTH) {
-		ctx.addIssue({
-			code: "custom",
-			path,
-			message: `JSON body exceeds maximum depth of ${MAX_JSON_DEPTH}`,
-		});
-		return;
-	}
-
-	if (typeof value === "string") {
-		if (value.length > MAX_STRING_LENGTH) {
-			ctx.addIssue({
-				code: "too_big",
-				origin: "string",
-				path,
-				maximum: MAX_STRING_LENGTH,
-				inclusive: true,
-				type: "string",
-				message: `String field exceeds maximum length of ${MAX_STRING_LENGTH}`,
-			});
-		}
-		return;
-	}
-
-	if (value === null || typeof value !== "object") {
-		return;
-	}
-
-	if (Array.isArray(value)) {
-		for (const [index, item] of value.entries()) {
-			addBoundedJsonIssues(item, ctx, depth + 1, [...path, index]);
-		}
-		return;
-	}
-
-	for (const [key, nestedValue] of Object.entries(value)) {
-		if (FORBIDDEN_JSON_KEYS.has(key)) {
-			ctx.addIssue({
-				code: "custom",
-				path: [...path, key],
-				message: `Forbidden JSON key: ${key}`,
-			});
-		}
-		addBoundedJsonIssues(nestedValue, ctx, depth + 1, [...path, key]);
-	}
-}
-
 function withJsonBounds<T extends z.ZodTypeAny>(schema: T): T {
 	return schema.superRefine((value, ctx) => {
-		addBoundedJsonIssues(value, ctx);
+		try {
+			assertBoundedJson(value);
+		} catch (error) {
+			if (error instanceof BadRequestError) {
+				ctx.addIssue({ code: "custom", message: error.message });
+				return;
+			}
+			throw error;
+		}
 	}) as T;
 }
 
@@ -185,25 +144,17 @@ export const JournalEntriesSchema = withJsonBounds(
 		.strict(),
 );
 
-const DeploymentEnvelopeSchema = z
-	.unknown()
-	.nonoptional()
-	.superRefine((value, ctx) => addBoundedJsonIssues(value, ctx, 2))
-	.pipe(
-		z
-			.object({
-				resources: z.array(z.object({}).passthrough()).nullish(),
-			})
-			.passthrough(),
-	);
-
-export const UntypedDeploymentSchema = z
-	.object({
-		version: DeploymentSchemaVersion.min(1).optional(),
-		features: FeatureListSchema.optional(),
-		deployment: DeploymentEnvelopeSchema,
-	})
-	.strict();
+export const UntypedDeploymentSchema = z.unknown().transform((value, ctx) => {
+	try {
+		return validateImportedDeployment(value);
+	} catch (error) {
+		if (error instanceof BadRequestError) {
+			ctx.addIssue({ code: "custom", message: error.message });
+			return z.NEVER;
+		}
+		throw error;
+	}
+});
 
 export const RenewUpdateLeaseRequestSchema = withJsonBounds(
 	z

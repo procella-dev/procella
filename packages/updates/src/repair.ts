@@ -70,7 +70,9 @@ export function repairCheckpoint(resources: PulumiResource[]): {
 				urn: resource.urn,
 				detail: `removed parent ref ${resource.parent}`,
 			});
-			return { ...resource, parent: undefined };
+			const repaired = { ...resource };
+			delete repaired.parent;
+			return repaired;
 		}
 		return resource;
 	});

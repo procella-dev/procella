@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import {
 	BadRequestError,
 	type Caller,
@@ -32,6 +32,8 @@ import {
 	requireCheckpointHash,
 	requireSequenceNumber,
 	safeTokenCompare,
+	snapshotImportedDeployment,
+	validateImportedDeployment,
 } from "./helpers.js";
 import {
 	applyJournalEntries,
@@ -546,6 +548,100 @@ describe("@procella/updates helpers", () => {
 			expect(() => assertSupportedDeploymentEnvelope({ version: "3" }, "ctx")).toThrow(
 				BadRequestError,
 			);
+		});
+	});
+
+	describe("validateImportedDeployment", () => {
+		test("preserves supported envelopes and opaque deployment fields", () => {
+			for (const version of [1, 2, 3]) {
+				const envelope = {
+					version,
+					deployment: { resources: version === 1 ? null : [], opaque: { future: true } },
+				};
+				expect(validateImportedDeployment(envelope)).toBe(envelope);
+			}
+			expect(validateImportedDeployment({ deployment: {} })).toEqual({ deployment: {} });
+		});
+
+		test("does not reflect unsupported feature contents in errors", () => {
+			const marker = "sensitive-feature-value";
+			let rejection: unknown;
+			try {
+				validateImportedDeployment({
+					version: 3,
+					features: [marker],
+					deployment: {},
+				});
+			} catch (error) {
+				rejection = error;
+			}
+			expect(rejection).toBeInstanceOf(BadRequestError);
+			expect((rejection as Error).message).not.toContain(marker);
+		});
+
+		test("does not reflect unknown envelope keys in errors", () => {
+			const marker = "sensitive-unknown-key";
+			let rejection: unknown;
+			try {
+				validateImportedDeployment({
+					version: 3,
+					deployment: {},
+					[marker]: true,
+				});
+			} catch (error) {
+				rejection = error;
+			}
+			expect(rejection).toBeInstanceOf(BadRequestError);
+			expect((rejection as Error).message).not.toContain(marker);
+		});
+
+		test("snapshots validated deployments before persistence", () => {
+			const deployment = {
+				version: 3,
+				deployment: { resources: [], opaque: { value: "original" } },
+			};
+			const snapshot = snapshotImportedDeployment(deployment);
+
+			deployment.deployment.opaque.value = "mutated";
+
+			expect(snapshot).toEqual({
+				version: 3,
+				deployment: { resources: [], opaque: { value: "original" } },
+			});
+		});
+
+		test("rejects malformed deployments before persistence starts", async () => {
+			const transaction = mock(async () => {
+				throw new Error("persistence reached");
+			});
+			const service = new PostgresUpdatesService({
+				db: { transaction } as never,
+				storage: {} as never,
+				crypto: {} as never,
+			});
+
+			for (const deployment of [
+				{ version: 3 },
+				{ version: 3, deployment: { resources: "not-an-array" } },
+				{ version: 3, deployment: { resources: [null] } },
+				{ version: 3, deployment: new Date("2026-01-01T00:00:00Z") },
+				{ version: 3, deployment: { resources: [], opaque: new Map([["key", "value"]]) } },
+				{ version: 3, deployment: { resources: [], opaque: undefined } },
+				{ version: 3, deployment: { resources: [], opaque: 1n } },
+				{ version: 3, deployment: { resources: [], opaque: () => undefined } },
+				{ version: 3, deployment: { resources: [], opaque: Symbol("value") } },
+				{ version: 3, deployment: { resources: [], opaque: Number.NaN } },
+				{ version: 3, deployment: { resources: [], opaque: Number.POSITIVE_INFINITY } },
+			]) {
+				let rejection: unknown;
+				try {
+					await service.importStack("stack-1", deployment);
+				} catch (error) {
+					rejection = error;
+				}
+				expect(rejection).toBeInstanceOf(BadRequestError);
+			}
+			expect(transaction).not.toHaveBeenCalled();
 		});
 	});
 
