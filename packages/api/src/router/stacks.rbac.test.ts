@@ -52,6 +52,7 @@ function fixtureFor(role: Role): RbacFixture {
 	const getStack = mock(async () => stackInfo);
 	const exportStack = mock(async () => ({ version: 3, deployment: { resources: [] } }));
 	const importStack = mock(async () => ({ updateID: "update-1" }));
+	const repairStack = mock(async () => []);
 
 	return {
 		ctx: {
@@ -66,12 +67,20 @@ function fixtureFor(role: Role): RbacFixture {
 				getStack,
 			} as unknown as StacksService,
 			audit: {} as never,
-			updates: { exportStack, importStack } as unknown as UpdatesService,
+			updates: { exportStack, importStack, repairStack } as unknown as UpdatesService,
 			webhooks: {} as never,
 			esc: {} as never,
 			github: null,
 		},
-		serviceMocks: [replaceStackTags, renameStack, deleteStack, getStack, exportStack, importStack],
+		serviceMocks: [
+			replaceStackTags,
+			renameStack,
+			deleteStack,
+			getStack,
+			exportStack,
+			importStack,
+			repairStack,
+		],
 	};
 }
 
