@@ -237,12 +237,14 @@ describe("updateHandlers", () => {
 		expect(updates.completeUpdate).not.toHaveBeenCalled();
 	});
 
-	test("cancelUpdate returns 204", async () => {
+	test("cancelUpdate emits a cancelled webhook", async () => {
 		const updates = mockUpdatesService();
 		const stacks = mockStacksService();
+		const webhookEmitAndWait = mock(async () => {});
+		const webhooks = { emit: mock(() => {}), emitAndWait: webhookEmitAndWait } as never;
 		const app = new Hono<Env>();
 		app.use("*", injectCaller(validCaller));
-		const h = updateHandlers(updates, stacks);
+		const h = updateHandlers(updates, stacks, webhooks);
 		app.post("/stacks/:org/:project/:stack/update/:updateId/cancel", h.cancelUpdate);
 
 		const res = await app.request("/stacks/myorg/myproj/dev/update/upd-1/cancel", {
@@ -250,8 +252,19 @@ describe("updateHandlers", () => {
 		});
 		expect(res.status).toBe(204);
 		expect(stacks.getStack).toHaveBeenCalledWith("t-1", "myorg", "myproj", "dev");
-		expect(updates.verifyUpdateOwnership).toHaveBeenCalled();
+		expect(updates.verifyUpdateOwnership).toHaveBeenCalledWith("upd-1", "stack-uuid-1");
 		expect(updates.cancelUpdate).toHaveBeenCalledWith("upd-1");
+		expect(webhookEmitAndWait).toHaveBeenCalledWith({
+			tenantId: "t-1",
+			event: "update.cancelled",
+			data: {
+				org: "myorg",
+				project: "myproj",
+				stack: "dev",
+				updateId: "upd-1",
+				status: "cancelled",
+			},
+		});
 	});
 
 	test("getUpdate returns update results", async () => {
@@ -285,35 +298,6 @@ describe("updateHandlers", () => {
 		expect(body.updates).toBeArray();
 		expect(stacks.getStack).toHaveBeenCalledWith("t-1", "myorg", "myproj", "dev");
 		expect(updates.getHistory).toHaveBeenCalledWith("stack-uuid-1");
-	});
-
-	test("completeUpdate emits webhook on succeeded status", async () => {
-		const updates = mockUpdatesService();
-		const stacks = mockStacksService();
-		const webhookEmitAndWait = mock(async () => {});
-		const webhooks = { emit: mock(() => {}), emitAndWait: webhookEmitAndWait } as never;
-		const app = new Hono<Env>();
-		app.use("*", injectCaller(validCaller));
-		app.use("*", async (c, next) => {
-			c.set("updateContext", { updateId: "upd-1", stackId: "s-1" });
-			await next();
-		});
-		const h = updateHandlers(updates, stacks, webhooks);
-		app.post("/stacks/:org/:project/:stack/update/:updateId/complete", h.completeUpdate);
-
-		const res = await app.request("/stacks/myorg/myproj/dev/update/upd-1/complete", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ status: "succeeded" }),
-		});
-		expect(res.status).toBe(204);
-		// emitAndWait is awaited by the handler before responding 204
-		expect(webhookEmitAndWait).toHaveBeenCalledTimes(1);
-		const call = (webhookEmitAndWait as ReturnType<typeof mock>).mock.calls[0]?.[0] as Record<
-			string,
-			unknown
-		>;
-		expect(call.event).toBe("update.succeeded");
 	});
 
 	test("completeUpdate emits webhook on failed status", async () => {

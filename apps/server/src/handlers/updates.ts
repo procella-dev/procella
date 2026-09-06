@@ -80,19 +80,14 @@ export function updateHandlers(
 			}
 			await updates.completeUpdate(updateId, body);
 
-			const caller = c.get("caller");
 			const org = c.req.param("org");
 			const project = c.req.param("project");
 			const stack = c.req.param("stack");
 
-			if (caller && org && project && stack && webhooks) {
-				let tenantId = org;
+			if (org && project && stack && webhooks) {
 				try {
-					const stackInfo = await stacks.getStack(caller.tenantId, org, project, stack);
-					tenantId = stackInfo.tenantId;
-				} catch (_) {}
-				await webhooks
-					.emitAndWait({
+					const tenantId = (await stacks.getStackById_systemOnly(updateCtx.stackId)).tenantId;
+					await webhooks.emitAndWait({
 						tenantId,
 						event:
 							body.status === "succeeded"
@@ -101,13 +96,10 @@ export function updateHandlers(
 									? "update.failed"
 									: "update.cancelled",
 						data: { org, project, stack, updateId, status: body.status },
-					})
-					.catch((error: unknown) => {
-						console.error(
-							"[updates] Failed to emit webhook for completeUpdate",
-							projectError(error),
-						);
 					});
+				} catch (error) {
+					console.error("[updates] Failed to emit webhook for completeUpdate", projectError(error));
+				}
 			}
 			return c.body(null, 204);
 		},
@@ -121,6 +113,17 @@ export function updateHandlers(
 			const stackInfo = await stacks.getStack(caller.tenantId, org, project, stack);
 			await updates.verifyUpdateOwnership(updateId, stackInfo.id);
 			await updates.cancelUpdate(updateId);
+			if (webhooks) {
+				await webhooks
+					.emitAndWait({
+						tenantId: stackInfo.tenantId,
+						event: "update.cancelled",
+						data: { org, project, stack, updateId, status: "cancelled" },
+					})
+					.catch((error: unknown) => {
+						console.error("[updates] Failed to emit webhook for cancelUpdate", error);
+					});
+			}
 			return c.body(null, 204);
 		},
 
