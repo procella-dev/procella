@@ -409,7 +409,8 @@ export class PostgresUpdatesService implements UpdatesService {
 			this.db.execute(sql`SELECT pg_notify('stack_updates', ${notifyStackId})`).catch(() => {});
 	}
 
-	async cancelUpdate(updateId: string): Promise<void> {
+	async cancelUpdate(updateId: string): Promise<boolean> {
+		let didCancel = false;
 		let notifyStackId: string | undefined;
 		let deltaBaseBlobKey: string | null = null;
 		const wasRunning = await withDbSpan("cancelUpdate", { "update.id": updateId }, () =>
@@ -421,6 +422,7 @@ export class PostgresUpdatesService implements UpdatesService {
 					return false;
 				}
 
+				didCancel = true;
 				notifyStackId = row.stackId;
 				const previouslyRunning = row.status === "running";
 
@@ -455,6 +457,7 @@ export class PostgresUpdatesService implements UpdatesService {
 		await this.deleteSupersededDeltaBase(deltaBaseBlobKey);
 		if (notifyStackId)
 			this.db.execute(sql`SELECT pg_notify('stack_updates', ${notifyStackId})`).catch(() => {});
+		return didCancel;
 	}
 
 	async getUpdate(updateId: string): Promise<UpdateResults> {

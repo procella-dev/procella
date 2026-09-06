@@ -50,7 +50,8 @@ export interface UpdatesService {
 
 	completeUpdate(updateId: string, request: CompleteUpdateRequest): Promise<void>;
 
-	cancelUpdate(updateId: string): Promise<void>;
+	/** Cancel the update. Returns true only when its status transitioned to cancelled. */
+	cancelUpdate(updateId: string): Promise<boolean>;
 
 	patchCheckpoint(updateId: string, request: PatchUpdateCheckpointRequest): Promise<void>;
 

@@ -112,17 +112,13 @@ export function updateHandlers(
 			const updateId = param(c, "updateId");
 			const stackInfo = await stacks.getStack(caller.tenantId, org, project, stack);
 			await updates.verifyUpdateOwnership(updateId, stackInfo.id);
-			await updates.cancelUpdate(updateId);
-			if (webhooks) {
-				await webhooks
-					.emitAndWait({
-						tenantId: stackInfo.tenantId,
-						event: "update.cancelled",
-						data: { org, project, stack, updateId, status: "cancelled" },
-					})
-					.catch((error: unknown) => {
-						console.error("[updates] Failed to emit webhook for cancelUpdate", error);
-					});
+			const cancelled = await updates.cancelUpdate(updateId);
+			if (cancelled && webhooks) {
+				webhooks.emit({
+					tenantId: stackInfo.tenantId,
+					event: "update.cancelled",
+					data: { org, project, stack, updateId, status: "cancelled" },
+				});
 			}
 			return c.body(null, 204);
 		},

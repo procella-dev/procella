@@ -56,7 +56,7 @@ function mockUpdatesService(overrides?: Partial<UpdatesService>): UpdatesService
 		createUpdate: mock(async () => mockCreateResult as never),
 		startUpdate: mock(async () => mockStartResult as never),
 		completeUpdate: mock(async () => {}),
-		cancelUpdate: mock(async () => {}),
+		cancelUpdate: mock(async () => true),
 		patchCheckpoint: mock(async () => {}),
 		patchCheckpointVerbatim: mock(async () => {}),
 		patchCheckpointDelta: mock(async () => {}),
@@ -240,8 +240,8 @@ describe("updateHandlers", () => {
 	test("cancelUpdate emits a cancelled webhook", async () => {
 		const updates = mockUpdatesService();
 		const stacks = mockStacksService();
-		const webhookEmitAndWait = mock(async () => {});
-		const webhooks = { emit: mock(() => {}), emitAndWait: webhookEmitAndWait } as never;
+		const webhookEmit = mock(() => {});
+		const webhooks = { emit: webhookEmit, emitAndWait: mock(async () => {}) } as never;
 		const app = new Hono<Env>();
 		app.use("*", injectCaller(validCaller));
 		const h = updateHandlers(updates, stacks, webhooks);
@@ -254,7 +254,7 @@ describe("updateHandlers", () => {
 		expect(stacks.getStack).toHaveBeenCalledWith("t-1", "myorg", "myproj", "dev");
 		expect(updates.verifyUpdateOwnership).toHaveBeenCalledWith("upd-1", "stack-uuid-1");
 		expect(updates.cancelUpdate).toHaveBeenCalledWith("upd-1");
-		expect(webhookEmitAndWait).toHaveBeenCalledWith({
+		expect(webhookEmit).toHaveBeenCalledWith({
 			tenantId: "t-1",
 			event: "update.cancelled",
 			data: {
@@ -265,6 +265,24 @@ describe("updateHandlers", () => {
 				status: "cancelled",
 			},
 		});
+	});
+
+	test("cancelUpdate does not emit when the update was already terminal", async () => {
+		const updates = mockUpdatesService({ cancelUpdate: mock(async () => false) });
+		const stacks = mockStacksService();
+		const webhookEmit = mock(() => {});
+		const webhooks = { emit: webhookEmit, emitAndWait: mock(async () => {}) } as never;
+		const app = new Hono<Env>();
+		app.use("*", injectCaller(validCaller));
+		const h = updateHandlers(updates, stacks, webhooks);
+		app.post("/stacks/:org/:project/:stack/update/:updateId/cancel", h.cancelUpdate);
+
+		const res = await app.request("/stacks/myorg/myproj/dev/update/upd-1/cancel", {
+			method: "POST",
+		});
+
+		expect(res.status).toBe(204);
+		expect(webhookEmit).not.toHaveBeenCalled();
 	});
 
 	test("getUpdate returns update results", async () => {
