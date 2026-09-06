@@ -14,7 +14,18 @@ export interface CryptoService {
 
 export interface StackCryptoInput {
 	stackId: string;
-	stackFQN: string;
+	stackFQN?: string;
+}
+
+export class LegacyIdentityUnavailableError extends Error {
+	constructor(message = "Canonical legacy stack identity is unavailable") {
+		super(message);
+		this.name = "LegacyIdentityUnavailableError";
+	}
+}
+
+export interface AesCryptoServiceOptions {
+	allowLegacyDecryption?: boolean;
 }
 
 // ============================================================================
@@ -35,8 +46,9 @@ const STACK_ID_LENGTH = 16;
 
 export class AesCryptoService implements CryptoService {
 	private readonly masterKey: Buffer;
+	private readonly allowLegacyDecryption: boolean;
 
-	constructor(masterKeyHex: string) {
+	constructor(masterKeyHex: string, options: AesCryptoServiceOptions = {}) {
 		const keyBytes = Buffer.from(masterKeyHex, "hex");
 		if (keyBytes.length !== KEY_LENGTH) {
 			throw new Error(
@@ -44,6 +56,7 @@ export class AesCryptoService implements CryptoService {
 			);
 		}
 		this.masterKey = keyBytes;
+		this.allowLegacyDecryption = options.allowLegacyDecryption ?? true;
 	}
 
 	async encrypt(input: StackCryptoInput, plaintext: Uint8Array): Promise<Uint8Array> {
@@ -76,7 +89,8 @@ export class AesCryptoService implements CryptoService {
 		) {
 			try {
 				return this.decryptWithKey(ciphertext.slice(1), this.deriveV2Key(input.stackId));
-			} catch {
+			} catch (error) {
+				if (!this.allowLegacyDecryption) throw error;
 				// Fall through to v1 — collision on the marker byte; the auth tag tells us
 				// which format the bytes really are.
 			}
@@ -86,6 +100,13 @@ export class AesCryptoService implements CryptoService {
 			throw new Error(
 				`Ciphertext too short: expected at least ${NONCE_LENGTH + TAG_LENGTH} bytes, got ${ciphertext.length}`,
 			);
+		}
+
+		if (!this.allowLegacyDecryption) {
+			throw new LegacyIdentityUnavailableError("Legacy v1 ciphertext decryption is disabled");
+		}
+		if (!input.stackFQN) {
+			throw new LegacyIdentityUnavailableError();
 		}
 
 		return this.decryptWithKey(ciphertext, this.deriveLegacyKey(input.stackFQN));

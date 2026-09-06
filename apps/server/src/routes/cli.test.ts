@@ -21,6 +21,7 @@ import { createApp } from "./index.js";
 const validCaller: Caller = {
 	tenantId: "t-1",
 	orgSlug: "my-org",
+	canonicalOrgSlug: "myorg",
 	userId: "u-1",
 	login: "test-user",
 	roles: ["admin"],

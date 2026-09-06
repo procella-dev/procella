@@ -112,6 +112,8 @@ All configuration is via `PROCELLA_*` environment variables. Set these as Vercel
 | `PROCELLA_BLOB_S3_ENDPOINT` | | Custom S3 endpoint (MinIO, R2, etc.) |
 | `PROCELLA_BLOB_S3_REGION` | `us-east-1` | S3 region |
 | `PROCELLA_ENCRYPTION_KEY` | *(required)* | 64 hex chars (32 bytes) for AES-256-GCM |
+| `PROCELLA_LEGACY_DECRYPTION_ENABLED` | `true` | Keep v1 reads enabled until the documented per-stack v2 rewrite is complete |
+| `PROCELLA_LEGACY_ORG_MAPPINGS` | `{}` | Unique JSON tenant-ID → original org-slug mappings required for Descope v1 reads |
 | `PROCELLA_DELTA_CHECKPOINTS_ENABLED` | `false` | Advertise `delta-checkpoint-uploads-v2`; disable and restart to return clients to full checkpoints |
 | `PROCELLA_CRON_SECRET` | *(required when `/cron/gc` is enabled)* | Bearer token used to authorize the GC cron endpoint |
 | `PROCELLA_CORS_ORIGINS` | *(optional)* | Comma-separated allowed CORS origins; omit for strict same-origin |

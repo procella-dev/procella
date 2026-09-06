@@ -12,36 +12,61 @@ Procella encrypts Pulumi secrets at rest using AES-256-GCM with per-stack key de
 ```
 Master Key (32 bytes, from PROCELLA_ENCRYPTION_KEY)
     │
-    ├── HKDF(masterKey, salt="org/project/stack", info="procella-encrypt")
-    │   └── Stack-specific key (32 bytes) → AES-256-GCM
+    ├── v2: HKDF(masterKey, salt=stack UUID, info="procella-encrypt")
+    │   └── Immutable stack-specific key (32 bytes) → AES-256-GCM
     │
-    ├── HKDF(masterKey, salt="org/project/other-stack", info="procella-encrypt")
-    │   └── Different stack-specific key (32 bytes) → AES-256-GCM
-    │
-    └── ... one derived key per stack
+    └── v1 read compatibility only: HKDF(masterKey,
+        salt="canonical-org/resolved-project/resolved-stack",
+        info="procella-encrypt")
 ```
 
 A single master key derives unique encryption keys per stack using [HKDF](https://datatracker.ietf.org/doc/html/rfc5869) (HMAC-based Key Derivation Function):
 
 - **Hash**: SHA-256
 - **Input Key Material (IKM)**: The master key (32 bytes)
-- **Salt**: The stack's fully qualified name (`org/project/stack`)
+- **v2 salt**: The stack's immutable UUID
+- **Legacy v1 salt**: The authenticated tenant's canonical org slug plus project and stack names from the resolved database row
 - **Info**: `"procella-encrypt"` (fixed context string)
 - **Output**: 32-byte AES-256 key unique to each stack
 
 ### Encryption (AES-256-GCM)
 
-1. Derive the stack-specific key via HKDF
+1. Derive the stack-specific v2 key from the immutable stack UUID
 2. Generate a random 12-byte nonce
 3. Encrypt plaintext with AES-256-GCM using the derived key and nonce
-4. Return `nonce || ciphertext+tag` as the ciphertext blob
+4. Return `0x02 || nonce || ciphertext || tag` as the ciphertext blob
 
 ### Decryption
 
-1. Derive the same stack-specific key via HKDF
-2. Split the blob: first 12 bytes = nonce, remainder = ciphertext+tag
-3. Decrypt with AES-256-GCM
-4. GCM's authentication tag verifies integrity — tampered ciphertext is rejected
+Procella first attempts the versioned v2 format. Legacy v1 blobs have no version byte, so a v1 nonce can begin with `0x02`; if v2 authentication fails, Procella tries v1 with the canonical legacy identity. GCM authentication rejects ciphertext derived for any other identity.
+
+The request path's `org` segment is never used as legacy key material by itself. In dev mode, the tenant ID and org slug are the same unique value. Descope deployments must register every v1 tenant in `PROCELLA_LEGACY_ORG_MAPPINGS`, a deployment-owned one-to-one map from signed tenant ID to the original canonical org slug. Procella rejects duplicate mapped slugs, mapped slugs equal to mapped tenant IDs, and unmapped tenant-ID fallbacks that collide with a mapped slug. It accepts the configured identity only when JWT tenant metadata is absent or resolves to the same value, then combines it with project and stack names from the tenant-scoped resolved stack row.
+
+Metadata provenance is explicit: missing org metadata may defer to the deployment mapping, but conflicting signed aliases never do. A server-minted `procellaLegacyOrgSlug` remains authoritative only after the signed tenant ID binds it back to the configured mapping.
+
+Without a unique mapping, v2 encryption and decryption continue using the stack UUID, but v1 fallback fails closed with `stack_not_found`. This prevents another tenant with a colliding display-name slug and matching project/stack names from entering the victim's legacy KDF namespace.
+
+A legacy alias is cryptographic key ownership, not a reusable display name. Never move a mapping value to another tenant while any v1 ciphertext under that alias exists. Keep a retired tenant's mapping entry reserved until every affected stack has been rewritten to v2 and validated; only then remove the entry or assign that human-readable slug elsewhere.
+
+### Remediating ambiguous legacy identity
+
+For each Descope tenant with v1 values, add its signed tenant ID and original org slug to `PROCELLA_LEGACY_ORG_MAPPINGS`. Verify no other mapping uses that slug; configuration validation rejects duplicates. Configure issued JWTs so `tenant_name`, `tenants.<tenantId>.name`, and any `procellaOrgSlug` claim either agree with the mapping or are absent. Then restart every replica, sign in again, and rotate CLI access keys so stale embedded aliases are removed. Do not substitute the request URL's org segment; it is untrusted.
+
+If a v1 stack was encrypted under a retired org alias, temporarily change only that tenant's mapping and trusted claim sources back to the exact original slug. The one-to-one mapping must remain valid, and the restoration window must be limited to this stack migration. With a fresh access key and the stack selected, rewrite that stack only:
+
+```bash
+pulumi stack export --file procella-v1-backup.json
+read -rsp "Temporary Pulumi passphrase: " PULUMI_CONFIG_PASSPHRASE && echo
+export PULUMI_CONFIG_PASSPHRASE
+pulumi stack change-secrets-provider passphrase
+pulumi stack change-secrets-provider default
+unset PULUMI_CONFIG_PASSPHRASE
+pulumi preview
+```
+
+The first provider change decrypts legacy values while the restored canonical identity is available; the second writes v2 service ciphertext keyed by stack UUID. Keep the encrypted backup until `pulumi preview` succeeds, then delete it securely. Repeat deliberately per affected stack; Procella does not guess aliases or run a fleet-wide rewrite.
+
+After every stack that can contain v1 values has completed this rewrite and validation, set `PROCELLA_LEGACY_DECRYPTION_ENABLED=false` on every replica and restart Procella. This keeps v2 decryption enabled but removes the v1 fallback. Roll back by setting it to `true` if an unmigrated v1 value is found; do not rotate the master key during this process.
 
 ## API Endpoints
 

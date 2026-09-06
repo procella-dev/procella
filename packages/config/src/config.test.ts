@@ -75,6 +75,8 @@ describe("@procella/config", () => {
 			expect(config.blobBackend).toBe("local");
 			expect(config.blobLocalPath).toBe("./data/blobs");
 			expect(config.deltaCheckpointsEnabled).toBe(false);
+			expect(config.legacyDecryptionEnabled).toBe(true);
+			expect(config.legacyOrgMappings).toEqual({});
 		});
 
 		test("loads full config with all overrides", () => {
@@ -114,6 +116,43 @@ describe("@procella/config", () => {
 
 			Bun.env.PROCELLA_DELTA_CHECKPOINTS_ENABLED = "0";
 			expect(loadConfig().deltaCheckpointsEnabled).toBe(false);
+		});
+
+		test("parses PROCELLA_LEGACY_DECRYPTION_ENABLED and defaults true", () => {
+			clearProcellaEnv();
+			setMinimalEnv();
+			expect(loadConfig().legacyDecryptionEnabled).toBe(true);
+
+			Bun.env.PROCELLA_LEGACY_DECRYPTION_ENABLED = "false";
+			expect(loadConfig().legacyDecryptionEnabled).toBe(false);
+
+			Bun.env.PROCELLA_LEGACY_DECRYPTION_ENABLED = "1";
+			expect(loadConfig().legacyDecryptionEnabled).toBe(true);
+		});
+
+		test("parses unique legacy org mappings and rejects collisions", () => {
+			clearProcellaEnv();
+			setMinimalEnv();
+			Bun.env.PROCELLA_LEGACY_ORG_MAPPINGS = JSON.stringify({
+				"tenant-1": "acme",
+				"tenant-2": "globex",
+			});
+			expect(loadConfig().legacyOrgMappings).toEqual({
+				"tenant-1": "acme",
+				"tenant-2": "globex",
+			});
+
+			Bun.env.PROCELLA_LEGACY_ORG_MAPPINGS = JSON.stringify({
+				"tenant-1": "acme",
+				"tenant-2": "acme",
+			});
+			expect(() => loadConfig()).toThrow(/org slugs must be unique/);
+
+			Bun.env.PROCELLA_LEGACY_ORG_MAPPINGS = JSON.stringify({
+				"tenant-1": "tenant-2",
+				"tenant-2": "globex",
+			});
+			expect(() => loadConfig()).toThrow(/must not equal a mapped tenant ID/);
 		});
 
 		test("throws on missing database URL", () => {

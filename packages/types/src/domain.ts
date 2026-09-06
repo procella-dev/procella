@@ -19,6 +19,8 @@ export interface Caller {
 	readonly tenantId: string;
 	/** URL-safe org slug derived from tenant name; falls back to tenantId. */
 	readonly orgSlug: string;
+	/** Trusted canonical org slug; absent when tenant metadata is missing or contradictory. */
+	readonly canonicalOrgSlug?: string;
 	readonly userId: string;
 	readonly login: string;
 	readonly roles: readonly Role[];

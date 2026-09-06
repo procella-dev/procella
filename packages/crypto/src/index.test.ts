@@ -8,6 +8,7 @@ const TAG_LENGTH = 16;
 const V1_OVERHEAD = NONCE_LENGTH + TAG_LENGTH;
 const V2_OVERHEAD = 1 + NONCE_LENGTH + TAG_LENGTH;
 const HKDF_INFO = "procella-encrypt";
+const LEGACY_FQN = "acme/my-project/production";
 
 function devService(): AesCryptoService {
 	return new AesCryptoService(testMasterKey());
@@ -20,19 +21,19 @@ function testMasterKey(): string {
 function stackInput(overrides?: Partial<StackCryptoInput>): StackCryptoInput {
 	return {
 		stackId: "11111111-1111-1111-1111-111111111111",
-		stackFQN: "acme/my-project/production",
+		stackFQN: LEGACY_FQN,
 		...overrides,
 	};
 }
 
 function legacyEncrypt(
 	masterKeyHex: string,
-	input: StackCryptoInput,
+	stackFQN: string,
 	plaintext: Uint8Array,
 	nonce = Buffer.alloc(NONCE_LENGTH, 7),
 ): Uint8Array {
 	const key = Buffer.from(
-		hkdfSync("sha256", Buffer.from(masterKeyHex, "hex"), input.stackFQN, HKDF_INFO, 32),
+		hkdfSync("sha256", Buffer.from(masterKeyHex, "hex"), stackFQN, HKDF_INFO, 32),
 	);
 	const cipher = createCipheriv("aes-256-gcm", key, nonce);
 	const encrypted = Buffer.concat([cipher.update(plaintext), cipher.final()]);
@@ -68,10 +69,37 @@ describe("@procella/crypto", () => {
 			const plaintext = new TextEncoder().encode("legacy secret");
 			const input = stackInput();
 
-			const encrypted = legacyEncrypt(testMasterKey(), input, plaintext);
+			const encrypted = legacyEncrypt(testMasterKey(), LEGACY_FQN, plaintext);
 			const decrypted = await svc.decrypt(input, encrypted);
 
 			expect(decrypted).toEqual(plaintext);
+		});
+
+		test("requires canonical identity only for v1 fallback", async () => {
+			const svc = devService();
+			const input = stackInput();
+			const legacyPlaintext = new TextEncoder().encode("v1");
+			const currentPlaintext = new TextEncoder().encode("v2");
+			const legacy = legacyEncrypt(testMasterKey(), LEGACY_FQN, legacyPlaintext);
+			const current = await svc.encrypt(input, currentPlaintext);
+			const stackIdOnly = { stackId: input.stackId };
+
+			await expect(svc.decrypt(stackIdOnly, legacy)).rejects.toThrow(
+				"Canonical legacy stack identity is unavailable",
+			);
+			await expect(svc.decrypt(stackIdOnly, current)).resolves.toEqual(currentPlaintext);
+		});
+
+		test("can disable v1 only after operators migrate legacy ciphertext", async () => {
+			const svc = new AesCryptoService(testMasterKey(), { allowLegacyDecryption: false });
+			const input = stackInput();
+			const legacy = legacyEncrypt(testMasterKey(), LEGACY_FQN, new TextEncoder().encode("v1"));
+			const current = await svc.encrypt(input, new TextEncoder().encode("v2"));
+
+			await expect(svc.decrypt(input, legacy)).rejects.toThrow(
+				"Legacy v1 ciphertext decryption is disabled",
+			);
+			await expect(svc.decrypt(input, current)).resolves.toEqual(new TextEncoder().encode("v2"));
 		});
 
 		test("decrypt falls back to v1 even when v1 nonce[0] collides with v2 marker (PR #149 review — 1/256 of v1 ciphertexts have nonce[0]=0x02)", async () => {
@@ -79,7 +107,7 @@ describe("@procella/crypto", () => {
 			const plaintext = new TextEncoder().encode("legacy with 0x02 nonce prefix");
 			const input = stackInput();
 			const collidingNonce = Buffer.alloc(12, 0x02);
-			const encrypted = legacyEncrypt(testMasterKey(), input, plaintext, collidingNonce);
+			const encrypted = legacyEncrypt(testMasterKey(), LEGACY_FQN, plaintext, collidingNonce);
 			expect(encrypted[0]).toBe(VERSION_V2);
 
 			const decrypted = await svc.decrypt(input, encrypted);
@@ -89,8 +117,7 @@ describe("@procella/crypto", () => {
 		test("decrypt with v1 fallback uses stackFQN", async () => {
 			const svc = devService();
 			const plaintext = new TextEncoder().encode("legacy secret");
-			const input = stackInput();
-			const encrypted = legacyEncrypt(testMasterKey(), input, plaintext);
+			const encrypted = legacyEncrypt(testMasterKey(), LEGACY_FQN, plaintext);
 
 			await expect(
 				svc.decrypt(stackInput({ stackId: "22222222-2222-2222-2222-222222222222" }), encrypted),

@@ -121,6 +121,12 @@ describe("OidcExchangeService", () => {
 		expect(verify).toHaveBeenCalledTimes(2);
 		expect(findByOrgSlugAndIssuer).toHaveBeenCalledTimes(1);
 		expect(createCliAccessKey).toHaveBeenCalledTimes(1);
+		const caller = createCliAccessKey.mock.calls[0]?.[0];
+		expect(caller).toMatchObject({
+			tenantId: "tenant-1",
+			orgSlug: "acme",
+			canonicalOrgSlug: "acme",
+		});
 	});
 
 	test("wrong grant_type throws unsupported_grant_type", async () => {

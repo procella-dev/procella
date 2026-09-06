@@ -176,6 +176,7 @@ export interface PostgresEscServiceDeps {
 	db: Database;
 	evaluator: EvaluatorClient;
 	encryptionKeyHex: string;
+	allowLegacyDecryption?: boolean;
 	sessionTtlSeconds?: number;
 }
 
@@ -449,12 +450,16 @@ export class PostgresEscService implements EscService {
 	private readonly db: Database;
 	private readonly evaluator: EvaluatorClient;
 	private readonly encryptionKeyHex: string;
+	private readonly crypto: AesCryptoService;
 	private readonly sessionTtlSeconds: number;
 
 	constructor(deps: PostgresEscServiceDeps) {
 		this.db = deps.db;
 		this.evaluator = deps.evaluator;
 		this.encryptionKeyHex = deps.encryptionKeyHex;
+		this.crypto = new AesCryptoService(deps.encryptionKeyHex, {
+			allowLegacyDecryption: deps.allowLegacyDecryption,
+		});
 		this.sessionTtlSeconds = deps.sessionTtlSeconds ?? 3600;
 	}
 
@@ -819,7 +824,7 @@ export class PostgresEscService implements EscService {
 					"esc.session.store",
 					{ "secrets.count": result.secrets.length },
 					async () => {
-						const cryptoSvc = new AesCryptoService(this.encryptionKeyHex);
+						const cryptoSvc = this.crypto;
 						const envFQN = `${tenantId}/${projectName}/${envName}`;
 						const plaintext = new TextEncoder().encode(JSON.stringify(result.values));
 						const stackInput = {
@@ -883,7 +888,7 @@ export class PostgresEscService implements EscService {
 				return null;
 			}
 
-			const cryptoSvc = new AesCryptoService(this.encryptionKeyHex);
+			const cryptoSvc = this.crypto;
 			const envFQN = `${tenantId}/${projectName}/${envName}`;
 			const cipherBytes = Buffer.from(row.resolvedValuesCiphertext, "base64");
 			const plainBytes = await cryptoSvc.decrypt(
