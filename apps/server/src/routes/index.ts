@@ -225,12 +225,20 @@ export function createApp(deps: {
 		}
 		const startedAt = Date.now();
 		const gc = new GCWorker({ db: deps.db });
-		await gc.runOnce();
+		let gcError: unknown;
+		let gcFailed = false;
+		try {
+			await gc.runOnce();
+		} catch (error) {
+			gcFailed = true;
+			gcError = error;
+		}
 		if (deps.github) {
 			await new GitHubOutboxWorker({ db: deps.db, github: deps.github, maxPerRun: 5 })
 				.runOnce({ deadlineMs: startedAt + CRON_WORK_DEADLINE_MS })
 				.catch((error) => console.error("[cron] GitHub outbox drain failed", projectError(error)));
 		}
+		if (gcFailed) throw gcError;
 		return c.json({ ok: true });
 	});
 

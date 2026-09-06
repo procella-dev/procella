@@ -36,5 +36,5 @@ export {
 } from "./metrics.js";
 export { FetchOtlpMetricExporter } from "./metrics-exporter.js";
 export { activeContext, tracingMiddleware } from "./middleware.js";
-export { initTelemetry, shutdownTelemetry, type TelemetryConfig } from "./sdk.js";
+export { flushTelemetry, initTelemetry, shutdownTelemetry, type TelemetryConfig } from "./sdk.js";
 export { getTracer, withDbSpan, withSpan } from "./spans.js";
