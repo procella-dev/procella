@@ -281,17 +281,6 @@ export const MAX_IMPORT_JSON_DEPTH = 32;
 export const MAX_IMPORT_STRING_LENGTH = 1024 * 1024;
 export const MAX_IMPORT_FEATURE_COUNT = 100;
 
-const IMPORT_ENVELOPE_KEYS: Record<string, boolean> = {
-	version: true,
-	features: true,
-	deployment: true,
-};
-const FORBIDDEN_IMPORT_JSON_KEYS: Record<string, boolean> = {
-	["__proto__"]: true,
-	constructor: true,
-	prototype: true,
-};
-
 function assertImportJsonBounds(value: unknown, depth = 1): void {
 	if (depth > MAX_IMPORT_JSON_DEPTH) {
 		throw new BadRequestError(
@@ -314,7 +303,7 @@ function assertImportJsonBounds(value: unknown, depth = 1): void {
 	}
 
 	for (const [key, nestedValue] of Object.entries(value)) {
-		if (Object.hasOwn(FORBIDDEN_IMPORT_JSON_KEYS, key)) {
+		if (key === "__proto__" || key === "constructor" || key === "prototype") {
 			throw new BadRequestError(`Imported deployment contains forbidden JSON key: ${key}`);
 		}
 		assertImportJsonBounds(nestedValue, depth + 1);
@@ -328,7 +317,7 @@ export function validateImportedDeployment(value: unknown): UntypedDeployment {
 		throw new BadRequestError("Imported deployment envelope must be an object");
 	}
 	for (const key of Object.keys(value)) {
-		if (!Object.hasOwn(IMPORT_ENVELOPE_KEYS, key)) {
+		if (key !== "version" && key !== "features" && key !== "deployment") {
 			throw new BadRequestError(`Imported deployment envelope contains unknown key: ${key}`);
 		}
 	}

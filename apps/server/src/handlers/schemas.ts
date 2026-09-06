@@ -15,12 +15,6 @@ export const MAX_BATCH_CRYPT_ITEMS = 1000;
 export const MAX_FEATURE_COUNT = MAX_IMPORT_FEATURE_COUNT;
 export const MAX_LEASE_DURATION_SECONDS = 300;
 
-const FORBIDDEN_JSON_KEYS: Record<string, boolean> = {
-	["__proto__"]: true,
-	constructor: true,
-	prototype: true,
-};
-
 export const BoundedString = (max: number) => z.string().max(max);
 export const BoundedJSON = z.unknown();
 
@@ -66,7 +60,7 @@ function addBoundedJsonIssues(
 	}
 
 	for (const [key, nestedValue] of Object.entries(value)) {
-		if (Object.hasOwn(FORBIDDEN_JSON_KEYS, key)) {
+		if (key === "__proto__" || key === "constructor" || key === "prototype") {
 			ctx.addIssue({
 				code: "custom",
 				path: [...path, key],
