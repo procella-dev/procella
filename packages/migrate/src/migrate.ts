@@ -238,10 +238,17 @@ export async function migrateOne(
 	const importFile = join(scratchDir, `${stackName}.json`);
 	assertWithin(opts.outputDir, importFile, stack.fqn);
 	const removeScratchFile = operations.removeScratchFile ?? ((path) => rm(path, { force: true }));
+	let scratchCleanupAttempted = false;
+	let scratchCleanupError: string | undefined;
 	const cleanupScratchFile = async (): Promise<void> => {
-		await removeScratchFile(importFile).catch((err) => {
+		if (scratchCleanupAttempted) return;
+		scratchCleanupAttempted = true;
+		try {
+			await removeScratchFile(importFile);
+		} catch (err) {
+			scratchCleanupError = err instanceof Error ? err.message : String(err);
 			log.warn(`           Failed to delete scratch import payload ${importFile}: ${err}`);
-		});
+		}
 	};
 
 	log.info(`  [${index}/${total}] ${stack.fqn}`);
@@ -347,6 +354,7 @@ export async function migrateOne(
 			targetResourceCount,
 			duration,
 			exportFile: opts.keepExports ? exportFile : undefined,
+			...(scratchCleanupError ? { scratchFile: importFile, scratchCleanupError } : {}),
 		};
 	} catch (err) {
 		const duration = Date.now() - start;
@@ -366,6 +374,7 @@ export async function migrateOne(
 			duration,
 			error: message,
 			exportFile: opts.keepExports ? exportFile : undefined,
+			...(scratchCleanupError ? { scratchFile: importFile, scratchCleanupError } : {}),
 		};
 	}
 }

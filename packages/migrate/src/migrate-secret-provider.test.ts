@@ -262,7 +262,7 @@ test("migrateOne verifies a successful import when scratch cleanup fails", async
 				createStack: async () => ({ created: true }),
 				importStack: async () => {},
 				exportState: async () => target,
-				removeScratchFile: async () => {
+				removeScratchFile: () => {
 					throw new Error("scratch file is busy");
 				},
 			},
@@ -270,6 +270,8 @@ test("migrateOne verifies a successful import when scratch cleanup fails", async
 
 		expect(result.status).toBe("succeeded");
 		expect(result.targetResourceCount).toBe(1);
+		expect(result.scratchFile).toBe(join(tempDir, "target-org/api/.import/prod.json"));
+		expect(result.scratchCleanupError).toBe("scratch file is busy");
 	} finally {
 		await rm(tempDir, { recursive: true, force: true });
 	}
