@@ -160,6 +160,8 @@ export PROCELLA_LEGACY_ORG_MAPPINGS='{"T3tenantId":"acme","T3otherId":"globex"}'
 
 Mapping values must be unique and must not equal any mapped tenant ID; Procella refuses to start otherwise. An unmapped tenant whose signed metadata resolves to a configured mapping value is also denied v1 identity at authentication time. Signed tenant metadata must agree with the configured value when it supplies an org name. Tenants omitted from the map retain v2 crypto access, but their v1 fallback fails closed. Configure the same value on every replica.
 
+Never reassign a mapping value to another tenant while v1 ciphertext under that alias survives. Keep retired tenant entries in the map until all affected stacks are rewritten to v2 and validated; the duplicate-value check then prevents accidental ownership transfer during the migration window.
+
 ### PROCELLA_LEGACY_DECRYPTION_ENABLED
 
 Controls read compatibility for unversioned v1 ciphertext in both stack and ESC storage. Keep the default `true` until every stack has been rewritten to v2 using the [legacy migration procedure](../architecture/encryption/#remediating-ambiguous-legacy-identity). Descope v1 reads also require a unique `PROCELLA_LEGACY_ORG_MAPPINGS` entry. After validating every migrated stack, set this to `false` on every replica and restart. V2 encryption and decryption remain available.

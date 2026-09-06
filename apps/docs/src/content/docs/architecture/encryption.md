@@ -44,6 +44,8 @@ The request path's `org` segment is never used as legacy key material by itself.
 
 Without a unique mapping, v2 encryption and decryption continue using the stack UUID, but v1 fallback fails closed with `stack_not_found`. This prevents another tenant with a colliding display-name slug and matching project/stack names from entering the victim's legacy KDF namespace.
 
+A legacy alias is cryptographic key ownership, not a reusable display name. Never move a mapping value to another tenant while any v1 ciphertext under that alias exists. Keep a retired tenant's mapping entry reserved until every affected stack has been rewritten to v2 and validated; only then remove the entry or assign that human-readable slug elsewhere.
+
 ### Remediating ambiguous legacy identity
 
 For each Descope tenant with v1 values, add its signed tenant ID and original org slug to `PROCELLA_LEGACY_ORG_MAPPINGS`. Verify no other mapping uses that slug; configuration validation rejects duplicates. Configure issued JWTs so `tenant_name`, `tenants.<tenantId>.name`, and any `procellaOrgSlug` claim either agree with the mapping or are absent. Then restart every replica, sign in again, and rotate CLI access keys so stale embedded aliases are removed. Do not substitute the request URL's org segment; it is untrusted.
