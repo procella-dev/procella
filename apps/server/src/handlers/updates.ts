@@ -4,6 +4,7 @@ import type { StacksService } from "@procella/stacks";
 import {
 	type CompleteUpdateRequest,
 	isValidUpdateKind,
+	projectError,
 	type StartUpdateRequest,
 	type UpdateProgramRequest,
 } from "@procella/types";
@@ -102,7 +103,10 @@ export function updateHandlers(
 						data: { org, project, stack, updateId, status: body.status },
 					})
 					.catch((error: unknown) => {
-						console.error("[updates] Failed to emit webhook for completeUpdate", error);
+						console.error(
+							"[updates] Failed to emit webhook for completeUpdate",
+							projectError(error),
+						);
 					});
 			}
 			return c.body(null, 204);

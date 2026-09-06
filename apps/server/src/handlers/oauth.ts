@@ -1,5 +1,6 @@
 import type { OidcService, TokenExchangeRequest } from "@procella/oidc";
 import { DEFAULT_EXCHANGE_EXPIRATION, OidcExchangeError } from "@procella/oidc";
+import { projectError } from "@procella/types";
 import type { Context } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { Env } from "../types.js";
@@ -43,7 +44,7 @@ export function oauthHandlers(oidc: OidcService | null) {
 					);
 				}
 				// Log unexpected errors and return server_error to avoid leaking internals
-				console.error("[oauth] token exchange failed:", err);
+				console.error("[oauth] token exchange failed:", projectError(err));
 				return c.json(
 					{
 						error: "server_error",

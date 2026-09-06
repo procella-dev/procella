@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { trace } from "@opentelemetry/api";
+import { InMemorySpanExporter, SimpleSpanProcessor } from "@opentelemetry/sdk-trace-base";
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { getTracer, withDbSpan, withSpan } from "./spans.js";
 
 describe("@procella/telemetry spans", () => {
@@ -32,6 +35,42 @@ describe("@procella/telemetry spans", () => {
 					throw "string-error";
 				}),
 			).rejects.toThrow();
+		});
+
+		test("does not export Drizzle query parameters or cause messages", async () => {
+			const exporter = new InMemorySpanExporter();
+			const provider = new NodeTracerProvider({
+				spanProcessors: [new SimpleSpanProcessor(exporter)],
+			});
+			provider.register();
+			const secret = "m6-canary-span-secret";
+			const error = Object.assign(
+				new Error(`Failed query: select * from credentials where value = $1\nparams: ${secret}`),
+				{
+					query: "select * from credentials where value = $1",
+					params: [secret],
+					cause: new Error(`database rejected ${secret}`),
+				},
+			);
+
+			try {
+				await expect(
+					withSpan("test", "test.db-fail", {}, async () => {
+						throw error;
+					}),
+				).rejects.toBe(error);
+				await provider.forceFlush();
+
+				const [span] = exporter.getFinishedSpans();
+				const serialized = JSON.stringify({ status: span?.status, events: span?.events });
+				expect(serialized).not.toContain(secret);
+				expect(serialized).not.toContain("select * from credentials");
+				expect(span?.status.message).toBe("Database query failed");
+				expect(span?.events[0]?.attributes?.["exception.message"]).toBe("Database query failed");
+			} finally {
+				await provider.shutdown();
+				trace.disable();
+			}
 		});
 	});
 

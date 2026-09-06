@@ -1,5 +1,5 @@
 import { type Database, webhookDeliveries, webhooks } from "@procella/db";
-import { NotFoundError } from "@procella/types";
+import { NotFoundError, projectError } from "@procella/types";
 import { and, desc, eq } from "drizzle-orm";
 import { resolveAndValidateUrl, validateUrl } from "./url-validator.js";
 
@@ -249,7 +249,7 @@ export class PostgresWebhooksService implements WebhooksService {
 			console.error("[webhooks] Failed to emit event", {
 				tenantId: event.tenantId,
 				event: event.event,
-				error,
+				error: projectError(error),
 			});
 		});
 	}

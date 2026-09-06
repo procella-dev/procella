@@ -15,7 +15,7 @@ import {
 import type { OidcService, TrustPolicyRepository } from "@procella/oidc";
 import type { StacksService } from "@procella/stacks";
 import { tracingMiddleware } from "@procella/telemetry";
-import { PulumiRoutes } from "@procella/types";
+import { PulumiRoutes, projectError } from "@procella/types";
 import { GCWorker, type UpdatesService } from "@procella/updates";
 import type { WebhooksService } from "@procella/webhooks";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
@@ -188,7 +188,7 @@ export function createApp(deps: {
 			createContext: () => ctx,
 			onError({ error }) {
 				if (error.code !== "UNAUTHORIZED") {
-					console.error("[trpc]", error);
+					console.error("[trpc]", projectError(error));
 				}
 			},
 		});
@@ -222,7 +222,7 @@ export function createApp(deps: {
 		if (deps.github) {
 			await new GitHubOutboxWorker({ db: deps.db, github: deps.github, maxPerRun: 5 })
 				.runOnce({ deadlineMs: startedAt + CRON_WORK_DEADLINE_MS })
-				.catch((error) => console.error("[cron] GitHub outbox drain failed", error));
+				.catch((error) => console.error("[cron] GitHub outbox drain failed", projectError(error)));
 		}
 		return c.json({ ok: true });
 	});

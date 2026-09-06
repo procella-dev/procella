@@ -14,6 +14,7 @@ import { type GitHubService, verifyGitHubWebhookSignature } from "@procella/gith
 import type { OidcService, TrustPolicyRepository } from "@procella/oidc";
 import type { StacksService } from "@procella/stacks";
 import { tracingMiddleware } from "@procella/telemetry";
+import { projectError } from "@procella/types";
 import type { UpdatesService } from "@procella/updates";
 import type { WebhooksService } from "@procella/webhooks";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
@@ -143,7 +144,7 @@ export function createWebApp(deps: WebAppDeps): Hono<Env> {
 			createContext: () => ctx,
 			onError({ error }) {
 				if (error.code !== "UNAUTHORIZED") {
-					console.error("[trpc]", error);
+					console.error("[trpc]", projectError(error));
 				}
 			},
 		});

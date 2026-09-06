@@ -1,6 +1,6 @@
 import { EscEvaluationError } from "@procella/esc";
 import { pgErrorCode } from "@procella/stacks";
-import { ProcellaError } from "@procella/types";
+import { ProcellaError, projectError } from "@procella/types";
 import type { ErrorHandler } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { logger } from "../logger.js";
@@ -34,7 +34,7 @@ export function errorHandler(): ErrorHandler {
 		const sqlState = pgErrorCode(error);
 		if (sqlState && TRANSIENT_PG_CODES.has(sqlState)) {
 			logger.warn(
-				{ err: error, sqlState, path: c.req.path, method: c.req.method },
+				{ err: projectError(error), sqlState, path: c.req.path, method: c.req.method },
 				"transient PG conflict — returning 503 for client retry",
 			);
 			c.header("Retry-After", String(TRANSIENT_RETRY_AFTER_SECONDS));
@@ -48,7 +48,7 @@ export function errorHandler(): ErrorHandler {
 				503,
 			);
 		}
-		logger.error({ err: error }, "Unhandled error");
+		logger.error({ err: projectError(error) }, "Unhandled error");
 		return c.json({ code: 500, message: "Internal server error" }, 500);
 	};
 }
