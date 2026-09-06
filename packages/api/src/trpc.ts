@@ -50,21 +50,23 @@ const t = initTRPC.context<TRPCContext>().create({
 	transformer: superjson,
 	errorFormatter({ error, shape }) {
 		const domainError = error.cause instanceof ProcellaError ? error.cause : undefined;
-		const code = domainError
-			? (TRPC_CODE_BY_STATUS[domainError.statusCode] ?? "INTERNAL_SERVER_ERROR")
-			: error.code;
-		const httpStatus = domainError ? domainError.statusCode : shape.data.httpStatus;
+		let code: TRPC_ERROR_CODE_KEY = error.code;
+		let httpStatus = shape.data.httpStatus;
 
+		if (domainError) {
+			code = TRPC_CODE_BY_STATUS[domainError.statusCode] ?? "INTERNAL_SERVER_ERROR";
+			httpStatus = code === "INTERNAL_SERVER_ERROR" ? 500 : domainError.statusCode;
+		}
+
+		const { stack: _stack, ...data } = shape.data;
 		if (httpStatus >= 400 && httpStatus < 500) {
 			return {
 				...shape,
 				message: domainError?.message ?? shape.message,
 				code: TRPC_ERROR_CODES_BY_KEY[code],
-				data: { ...shape.data, code, httpStatus },
+				data: { ...data, code, httpStatus },
 			};
 		}
-
-		const { stack: _stack, ...data } = shape.data;
 		return {
 			...shape,
 			message: "Internal server error",

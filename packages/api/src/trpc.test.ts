@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { ConflictError, NotFoundError } from "@procella/types";
+import { ConflictError, NotFoundError, ProcellaError } from "@procella/types";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import {
 	adminProcedure,
@@ -172,8 +172,23 @@ describe("trpc error formatting", () => {
 				code: testCase.jsonRpcCode,
 				data: { code: testCase.code, httpStatus: testCase.status },
 			});
+			expect(body.error.json.data).not.toHaveProperty("stack");
 		});
 	}
+
+	test("falls back to a redacted 500 for unmapped domain statuses", async () => {
+		const secret = "unexpected domain error details";
+		const { response, body } = await formatError(new ProcellaError(secret, "UNKNOWN", 418));
+
+		expect(response.status).toBe(500);
+		expect(body.error.json).toMatchObject({
+			message: "Internal server error",
+			code: -32603,
+			data: { code: "INTERNAL_SERVER_ERROR", httpStatus: 500 },
+		});
+		expect(body.error.json.data).not.toHaveProperty("stack");
+		expect(JSON.stringify(body)).not.toContain(secret);
+	});
 
 	test("redacts non-client error details", async () => {
 		const secret = "postgres://secret-internal-connection";
