@@ -206,7 +206,7 @@ describe("Pulumi request schemas", () => {
 	});
 
 	test("rejects structurally invalid import deployments", () => {
-		for (const resources of [null, "not-an-array", {}, [null], ["not-a-resource"]]) {
+		for (const resources of ["not-an-array", {}, [null], ["not-a-resource"]]) {
 			expect(
 				UntypedDeploymentSchema.safeParse({
 					version: 3,
@@ -216,13 +216,24 @@ describe("Pulumi request schemas", () => {
 		}
 	});
 
-	test("does not enforce resource semantics at the import boundary", () => {
-		expect(
-			UntypedDeploymentSchema.safeParse({
-				version: 3,
-				deployment: { resources: [{}] },
-			}).success,
-		).toBe(true);
+	test("accepts structurally valid legacy-compatible imports", () => {
+		for (const resources of [null, [{}]]) {
+			expect(
+				UntypedDeploymentSchema.safeParse({
+					version: 3,
+					deployment: { resources },
+				}).success,
+			).toBe(true);
+		}
+	});
+
+	test("rejects forbidden keys before passthrough parsing", () => {
+		for (const body of [
+			'{"version":3,"deployment":{"__proto__":{"polluted":true}}}',
+			'{"version":3,"deployment":{"resources":[{"__proto__":{"polluted":true}}]}}',
+		]) {
+			expect(UntypedDeploymentSchema.safeParse(JSON.parse(body)).success).toBe(false);
+		}
 	});
 
 	test("accepts deployment schema v1 through v3", () => {
