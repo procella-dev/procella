@@ -1,7 +1,7 @@
 // @procella/api — stacks tRPC procedures (list, detail, resources, resource).
 
 import { checkpoints, updateEvents, updates } from "@procella/db";
-import type { DeploymentV3, ResourceV3, UntypedDeployment } from "@procella/types";
+import type { DeploymentV3, ResourceV3 } from "@procella/types";
 import { and, desc, eq, max, sql } from "drizzle-orm";
 import { z } from "zod/v4";
 import { adminProcedure, memberProcedure, protectedProcedure, router } from "../trpc.js";
