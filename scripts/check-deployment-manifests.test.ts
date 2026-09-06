@@ -172,4 +172,15 @@ envVarGroups:
 			),
 		).toContain("Caddyfile: invalid server route /github/setup");
 	});
+
+	test("the proxy check accepts nested reverse_proxy directives", () => {
+		expect(
+			checkProxyConfig(
+				VALID_CADDY.replace(
+					"reverse_proxy procella-cluster:9090",
+					"reverse_proxy procella-cluster:9090 { lb_policy round_robin }",
+				),
+			),
+		).toEqual([]);
+	});
 });

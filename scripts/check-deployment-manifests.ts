@@ -221,14 +221,27 @@ export function checkManifest(manifest: DeploymentManifest, text: string): strin
 	return problems;
 }
 
+function caddyHandleBody(text: string, route: string): string | undefined {
+	const escapedRoute = route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+	const opening = new RegExp(`\\bhandle\\s+${escapedRoute}\\s*\\{`, "m").exec(text);
+	if (!opening) return undefined;
+
+	const bodyStart = opening.index + opening[0].length;
+	let depth = 1;
+	for (let index = bodyStart; index < text.length; index++) {
+		if (text[index] === "{") depth++;
+		if (text[index] !== "}") continue;
+		depth--;
+		if (depth === 0) return text.slice(bodyStart, index);
+	}
+	return undefined;
+}
+
 export function checkProxyConfig(text: string): string[] {
 	const active = activeText(text);
 	const backend = /\breverse_proxy\s+procella-cluster:9090\b/;
 	return ["/api/*", "/trpc/*", "/healthz", "/github/setup"].flatMap((route) => {
-		const escapedRoute = route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-		const body = new RegExp(`\\bhandle\\s+${escapedRoute}\\s*\\{([^{}]*)\\}`, "m").exec(
-			active,
-		)?.[1];
+		const body = caddyHandleBody(active, route);
 		return body && backend.test(body) ? [] : [`Caddyfile: invalid server route ${route}`];
 	});
 }
