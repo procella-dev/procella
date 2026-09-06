@@ -118,6 +118,36 @@ services:
 		);
 	});
 
+	test("a string entrypoint cannot fall back to the image entrypoint", () => {
+		const text = `${VALID_ENV}
+services:
+  procella:
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+  migrate:
+    entrypoint: echo
+    command: ["--migrate", "/migrations"]
+`;
+		expect(checkManifest(COMPOSE_WITH_MIGRATION, text)).toContain(
+			"compose.yml -> migrate: expected migration invocation /procella --migrate /migrations",
+		);
+	});
+
+	test("an empty entrypoint clears the image entrypoint and fails", () => {
+		const text = `${VALID_ENV}
+services:
+  procella:
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+  migrate:
+    entrypoint: []
+    command: ["--migrate", "/migrations"]
+`;
+		expect(checkManifest(COMPOSE_WITH_MIGRATION, text)).toContain(
+			"compose.yml -> migrate: expected migration invocation /procella --migrate /migrations",
+		);
+	});
+
 	test("an unrelated migration dependency cannot satisfy the server gate", () => {
 		const text = `${VALID_ENV}
 services:

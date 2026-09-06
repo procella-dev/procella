@@ -127,11 +127,10 @@ function checkComposeMigration(
 		return;
 	}
 
-	const configuredEntrypoint = commandParts(migration.entrypoint);
 	const entrypoint =
-		configuredEntrypoint.length > 0
-			? configuredEntrypoint
-			: [...(contract.defaultEntrypoint ?? [])];
+		migration.entrypoint === undefined || migration.entrypoint === null
+			? [...(contract.defaultEntrypoint ?? [])]
+			: commandParts(migration.entrypoint);
 	const invocation = [...entrypoint, ...commandParts(migration.command)];
 	if (invocation.join("\0") !== contract.expectedInvocation.join("\0")) {
 		problems.push(
