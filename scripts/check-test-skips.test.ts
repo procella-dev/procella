@@ -18,6 +18,10 @@ function skippedTest(file: string, name = "skipped test"): string {
 	return `<testcase name="${name}" file="${file}"><skipped /></testcase>`;
 }
 
+function passedTest(file: string, name: string): string {
+	return `<testcase name="${name}" file="${file}" />`;
+}
+
 async function writeReport(testCases: string): Promise<string> {
 	const path = join(tmpdir(), `procella-test-skips-${crypto.randomUUID()}.xml`);
 	await Bun.write(path, report(testCases));
@@ -78,14 +82,25 @@ describe("CI skipped-test guard", () => {
 		);
 	});
 
-	test("removes lane-owned suites from the expected-skip allowlist", () => {
-		const parsed = parseSkipGuardArguments(["--require-suite=e2e/esc-cli.test.ts", "results.xml"]);
+	test("tracks lane-owned suites and mandatory test identifiers", () => {
+		const parsed = parseSkipGuardArguments([
+			"--require-suite=e2e/descope-auth.test.ts",
+			"--require-test=e2e/descope-auth.test.ts::exchange real GitHub OIDC token",
+			"results.xml",
+		]);
 
 		expect(parsed.reportPaths).toEqual(["results.xml"]);
-		expect(parsed.expectedSkipFiles["e2e/esc-cli.test.ts"]).toBeUndefined();
+		expect(parsed.expectedSkipFiles["e2e/descope-auth.test.ts"]).toBeUndefined();
 		expect(parsed.expectedSkipFiles["e2e/oidc.test.ts"]).toBe("requires Descope credentials");
+		expect(parsed.requiredSuites).toEqual(["e2e/descope-auth.test.ts"]);
+		expect(parsed.requiredTests).toEqual([
+			{ file: "e2e/descope-auth.test.ts", name: "exchange real GitHub OIDC token" },
+		]);
 		expect(() => parseSkipGuardArguments(["--require-suite=unknown.test.ts"])).toThrow(
 			"Unknown required suite: unknown.test.ts",
+		);
+		expect(() => parseSkipGuardArguments(["--require-test=missing-separator"])).toThrow(
+			"Invalid required test identifier: missing-separator",
 		);
 	});
 
@@ -94,7 +109,7 @@ describe("CI skipped-test guard", () => {
 		try {
 			expect(await checkTestSkips([])).toBe(2);
 			expect(error).toHaveBeenCalledWith(
-				"Usage: bun run scripts/check-test-skips.ts [--require-suite=<file>] <junit-report> [...]",
+				"Usage: bun run scripts/check-test-skips.ts [--require-suite=<file>] [--require-test=<file>::<name>] <junit-report> [...]",
 			);
 		} finally {
 			error.mockRestore();
@@ -130,11 +145,85 @@ describe("CI skipped-test guard", () => {
 	test("fails an allowlisted skip when its owning lane requires the suite", async () => {
 		const path = await writeReport(skippedTest("e2e/oidc.test.ts", "secret-gated"));
 		const error = spyOn(console, "error").mockImplementation(() => {});
-		const { expectedSkipFiles } = parseSkipGuardArguments(["--require-suite=e2e/oidc.test.ts"]);
+		const { expectedSkipFiles, requiredSuites, requiredTests } = parseSkipGuardArguments([
+			"--require-suite=e2e/oidc.test.ts",
+		]);
 		try {
-			expect(await checkTestSkips([path], expectedSkipFiles)).toBe(1);
+			expect(await checkTestSkips([path], expectedSkipFiles, requiredSuites, requiredTests)).toBe(
+				1,
+			);
 			expect(error).toHaveBeenCalledWith(
 				"::error file=e2e/oidc.test.ts::Unexpected skipped test: secret-gated",
+			);
+		} finally {
+			error.mockRestore();
+			await rm(path, { force: true });
+		}
+	});
+
+	test("accepts required live OIDC cases when they execute", async () => {
+		const file = "e2e/descope-auth.test.ts";
+		const path = await writeReport(
+			passedTest(file, "exchange real GitHub OIDC token") +
+				passedTest(file, "pulumi login --oidc-token with real GitHub OIDC token"),
+		);
+		const log = spyOn(console, "log").mockImplementation(() => {});
+		const { expectedSkipFiles, requiredSuites, requiredTests } = parseSkipGuardArguments([
+			`--require-suite=${file}`,
+			`--require-test=${file}::exchange real GitHub OIDC token`,
+			`--require-test=${file}::pulumi login --oidc-token with real GitHub OIDC token`,
+		]);
+		try {
+			expect(await checkTestSkips([path], expectedSkipFiles, requiredSuites, requiredTests)).toBe(
+				0,
+			);
+			expect(log).toHaveBeenCalledWith(`Verified required suite executed: ${file}`);
+			expect(log).toHaveBeenCalledWith(
+				`Verified required test executed: ${file}::exchange real GitHub OIDC token`,
+			);
+		} finally {
+			log.mockRestore();
+			await rm(path, { force: true });
+		}
+	});
+
+	test("fails when a required suite is absent from the report", async () => {
+		const path = await writeReport(passedTest("helpers.test.ts", "helper"));
+		const error = spyOn(console, "error").mockImplementation(() => {});
+		const { expectedSkipFiles, requiredSuites, requiredTests } = parseSkipGuardArguments([
+			"--require-suite=e2e/esc-cli.test.ts",
+		]);
+		try {
+			expect(await checkTestSkips([path], expectedSkipFiles, requiredSuites, requiredTests)).toBe(
+				1,
+			);
+			expect(error).toHaveBeenCalledWith(
+				"::error file=e2e/esc-cli.test.ts::Required suite had no executed tests: e2e/esc-cli.test.ts",
+			);
+		} finally {
+			error.mockRestore();
+			await rm(path, { force: true });
+		}
+	});
+
+	test("fails a helper-only Descope report without live OIDC cases", async () => {
+		const file = "e2e/descope-auth.test.ts";
+		const path = await writeReport(passedTest(file, "pulumi login with access key succeeds"));
+		const error = spyOn(console, "error").mockImplementation(() => {});
+		const { expectedSkipFiles, requiredSuites, requiredTests } = parseSkipGuardArguments([
+			`--require-suite=${file}`,
+			`--require-test=${file}::exchange real GitHub OIDC token`,
+			`--require-test=${file}::pulumi login --oidc-token with real GitHub OIDC token`,
+		]);
+		try {
+			expect(await checkTestSkips([path], expectedSkipFiles, requiredSuites, requiredTests)).toBe(
+				1,
+			);
+			expect(error).toHaveBeenCalledWith(
+				`::error file=${file}::Required test did not execute: exchange real GitHub OIDC token`,
+			);
+			expect(error).toHaveBeenCalledWith(
+				`::error file=${file}::Required test did not execute: pulumi login --oidc-token with real GitHub OIDC token`,
 			);
 		} finally {
 			error.mockRestore();

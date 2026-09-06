@@ -15,6 +15,10 @@ export interface SkippedTest {
 	name: string;
 }
 
+export interface TestCaseResult extends SkippedTest {
+	skipped: boolean;
+}
+
 function decodeXmlAttribute(value: string): string {
 	return value
 		.replaceAll("&quot;", '"')
@@ -29,8 +33,8 @@ function readAttribute(attributes: string, name: string): string | undefined {
 	return match ? decodeXmlAttribute(match[1]) : undefined;
 }
 
-export function collectSkippedTests(xml: string): SkippedTest[] {
-	const skipped: SkippedTest[] = [];
+export function collectTestCases(xml: string): TestCaseResult[] {
+	const testCases: TestCaseResult[] = [];
 	const openingTagPattern = /<testcase\b((?:[^>"']|"[^"]*"|'[^']*')*)>/y;
 	let searchFrom = 0;
 
@@ -46,21 +50,33 @@ export function collectSkippedTests(xml: string): SkippedTest[] {
 		}
 
 		searchFrom = openingTagPattern.lastIndex;
-		if (match[0].endsWith("/>")) continue;
-		const bodyEnd = xml.indexOf("</testcase>", searchFrom);
-		if (bodyEnd === -1) {
-			throw new Error(`Malformed JUnit XML: unclosed <testcase> tag at offset ${openingTagStart}`);
+		let skipped = false;
+		if (!match[0].endsWith("/>")) {
+			const bodyEnd = xml.indexOf("</testcase>", searchFrom);
+			if (bodyEnd === -1) {
+				throw new Error(
+					`Malformed JUnit XML: unclosed <testcase> tag at offset ${openingTagStart}`,
+				);
+			}
+			const body = xml.slice(searchFrom, bodyEnd);
+			searchFrom = bodyEnd + "</testcase>".length;
+			skipped = /<skipped(?:\s[^>]*)?\s*\/?>/.test(body);
 		}
-		const body = xml.slice(searchFrom, bodyEnd);
-		searchFrom = bodyEnd + "</testcase>".length;
-		if (!/<skipped(?:\s[^>]*)?\s*\/?>/.test(body)) continue;
-		skipped.push({
+
+		testCases.push({
 			file: readAttribute(match[1], "file") ?? "(missing file)",
 			name: readAttribute(match[1], "name") ?? "(unnamed)",
+			skipped,
 		});
 	}
 
-	return skipped;
+	return testCases;
+}
+
+export function collectSkippedTests(xml: string): SkippedTest[] {
+	return collectTestCases(xml)
+		.filter(({ skipped }) => skipped)
+		.map(({ file, name }) => ({ file, name }));
 }
 
 export function findUnexpectedSkips(
@@ -73,55 +89,95 @@ export function findUnexpectedSkips(
 export interface SkipGuardArguments {
 	reportPaths: string[];
 	expectedSkipFiles: Record<string, string>;
+	requiredSuites: string[];
+	requiredTests: SkippedTest[];
 }
 
 const REQUIRE_SUITE_PREFIX = "--require-suite=";
+const REQUIRE_TEST_PREFIX = "--require-test=";
 
 export function parseSkipGuardArguments(args: string[]): SkipGuardArguments {
 	const reportPaths: string[] = [];
 	const expectedSkipFiles = { ...EXPECTED_SKIP_FILES };
+	const requiredSuites: string[] = [];
+	const requiredTests: SkippedTest[] = [];
 
 	for (const arg of args) {
-		if (!arg.startsWith(REQUIRE_SUITE_PREFIX)) {
-			reportPaths.push(arg);
+		if (arg.startsWith(REQUIRE_SUITE_PREFIX)) {
+			const requiredSuite = arg.slice(REQUIRE_SUITE_PREFIX.length);
+			if (!Object.hasOwn(EXPECTED_SKIP_FILES, requiredSuite)) {
+				throw new Error(`Unknown required suite: ${requiredSuite || "(empty)"}`);
+			}
+			delete expectedSkipFiles[requiredSuite];
+			requiredSuites.push(requiredSuite);
 			continue;
 		}
 
-		const requiredSuite = arg.slice(REQUIRE_SUITE_PREFIX.length);
-		if (!Object.hasOwn(EXPECTED_SKIP_FILES, requiredSuite)) {
-			throw new Error(`Unknown required suite: ${requiredSuite || "(empty)"}`);
+		if (arg.startsWith(REQUIRE_TEST_PREFIX)) {
+			const identifier = arg.slice(REQUIRE_TEST_PREFIX.length);
+			const separator = identifier.indexOf("::");
+			if (separator <= 0 || separator === identifier.length - 2) {
+				throw new Error(`Invalid required test identifier: ${identifier || "(empty)"}`);
+			}
+			requiredTests.push({
+				file: identifier.slice(0, separator),
+				name: identifier.slice(separator + 2),
+			});
+			continue;
 		}
-		delete expectedSkipFiles[requiredSuite];
+
+		reportPaths.push(arg);
 	}
 
-	return { reportPaths, expectedSkipFiles };
+	return { reportPaths, expectedSkipFiles, requiredSuites, requiredTests };
 }
 
 export async function checkTestSkips(
 	reportPaths: string[],
 	expectedSkipFiles: Readonly<Record<string, string>> = EXPECTED_SKIP_FILES,
+	requiredSuites: readonly string[] = [],
+	requiredTests: readonly SkippedTest[] = [],
 ): Promise<number> {
 	if (reportPaths.length === 0) {
 		console.error(
-			"Usage: bun run scripts/check-test-skips.ts [--require-suite=<file>] <junit-report> [...]",
+			"Usage: bun run scripts/check-test-skips.ts [--require-suite=<file>] [--require-test=<file>::<name>] <junit-report> [...]",
 		);
 		return 2;
 	}
 
-	const skipped: SkippedTest[] = [];
-	const unexpected: SkippedTest[] = [];
+	const testCases: TestCaseResult[] = [];
 	for (const reportPath of reportPaths) {
 		const xml = await Bun.file(reportPath).text();
-		const reportSkips = collectSkippedTests(xml);
-		skipped.push(...reportSkips);
-		unexpected.push(...reportSkips.filter(({ file }) => expectedSkipFiles[file] === undefined));
+		testCases.push(...collectTestCases(xml));
 	}
 
-	if (unexpected.length > 0) {
-		for (const test of unexpected) {
-			console.error(`::error file=${test.file}::Unexpected skipped test: ${test.name}`);
-		}
-		return 1;
+	const skipped = testCases.filter((test) => test.skipped);
+	const executed = testCases.filter((test) => !test.skipped);
+	const unexpected = skipped.filter(({ file }) => expectedSkipFiles[file] === undefined);
+	const missingSuites = requiredSuites.filter(
+		(requiredFile) => !executed.some(({ file }) => file === requiredFile),
+	);
+	const missingTests = requiredTests.filter(
+		(required) =>
+			!executed.some(({ file, name }) => file === required.file && name === required.name),
+	);
+
+	for (const test of unexpected) {
+		console.error(`::error file=${test.file}::Unexpected skipped test: ${test.name}`);
+	}
+	for (const file of missingSuites) {
+		console.error(`::error file=${file}::Required suite had no executed tests: ${file}`);
+	}
+	for (const test of missingTests) {
+		console.error(`::error file=${test.file}::Required test did not execute: ${test.name}`);
+	}
+	if (unexpected.length > 0 || missingSuites.length > 0 || missingTests.length > 0) return 1;
+
+	for (const file of requiredSuites) {
+		console.log(`Verified required suite executed: ${file}`);
+	}
+	for (const test of requiredTests) {
+		console.log(`Verified required test executed: ${test.file}::${test.name}`);
 	}
 
 	if (skipped.length === 0) {
@@ -137,7 +193,14 @@ export async function checkTestSkips(
 }
 
 if (import.meta.main) {
-	const { reportPaths, expectedSkipFiles } = parseSkipGuardArguments(process.argv.slice(2));
-	const exitCode = await checkTestSkips(reportPaths, expectedSkipFiles);
+	const { reportPaths, expectedSkipFiles, requiredSuites, requiredTests } = parseSkipGuardArguments(
+		process.argv.slice(2),
+	);
+	const exitCode = await checkTestSkips(
+		reportPaths,
+		expectedSkipFiles,
+		requiredSuites,
+		requiredTests,
+	);
 	if (exitCode !== 0) process.exit(exitCode);
 }
