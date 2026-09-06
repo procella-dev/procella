@@ -1,3 +1,4 @@
+
 import type { ScheduledEvent } from "aws-lambda";
 
 const LAMBDA_WORK_DEADLINE_MS = 52_000;
@@ -11,12 +12,17 @@ interface GitHubOutboxLike {
 	runOnce(options: { deadlineMs: number }): Promise<unknown>;
 }
 
+interface BlobCleanupLike {
+	runOnce(options: { deadlineMs: number }): Promise<unknown>;
+}
+
 type RuntimeFetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
 interface GcInvocationDependencies {
 	baseUrl: string;
 	requestId: string;
 	gcWorker: GcWorkerLike;
+	blobCleanup: BlobCleanupLike;
 	githubOutbox: GitHubOutboxLike | null;
 	escGcSweep: () => Promise<unknown>;
 	flushTelemetry: () => Promise<void>;
@@ -39,6 +45,7 @@ export async function runGcInvocation({
 	baseUrl,
 	requestId,
 	gcWorker,
+	blobCleanup,
 	githubOutbox,
 	escGcSweep,
 	flushTelemetry,
@@ -53,6 +60,14 @@ export async function runGcInvocation({
 	} catch (error) {
 		failed = true;
 		invocationError = error;
+	}
+	try {
+		await blobCleanup.runOnce({
+			deadlineMs: invocationStartedAt + LAMBDA_WORK_DEADLINE_MS,
+		});
+	} catch (error) {
+		failed = true;
+		invocationError ??= error;
 	}
 	if (githubOutbox) {
 		try {
@@ -100,6 +115,7 @@ async function main(): Promise<void> {
 
 	// Initialize telemetry before loading workers that cache metric instruments.
 	const { loadConfig } = await import("@procella/config");
+
 	const config = loadConfig();
 	const { flushTelemetry, initTelemetry } = await import("@procella/telemetry");
 	initTelemetry({ enabled: config.otelEnabled, serviceName: "procella-gc" });
@@ -108,15 +124,30 @@ async function main(): Promise<void> {
 		{ createDb },
 		{ escGcSweep },
 		{ GitHubOutboxWorker, OctokitGitHubDeliveryService },
-		{ GCWorker },
+		{ createBlobStorage },
+		{ BlobCleanupWorker, GCWorker },
 	] = await Promise.all([
 		import("@procella/db"),
 		import("@procella/esc"),
 		import("@procella/github"),
+		import("@procella/storage"),
 		import("@procella/updates"),
 	]);
 	const { db } = await createDb({ url: config.databaseUrl, max: config.databasePoolMax });
 	const gcWorker = new GCWorker({ db });
+	const storage = createBlobStorage(
+		config.blobBackend === "local"
+			? { backend: "local", basePath: config.blobLocalPath }
+			: {
+					backend: "s3",
+					bucket: config.blobS3Bucket as string,
+					endpoint: config.blobS3Endpoint,
+					region: config.blobS3Region,
+					accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+					secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+				},
+	);
+	const blobCleanup = new BlobCleanupWorker({ db, storage, maxPerRun: 100 });
 	const githubAppId = process.env.PROCELLA_GITHUB_DELIVERY_APP_ID;
 	const githubPrivateKey = process.env.PROCELLA_GITHUB_DELIVERY_PRIVATE_KEY?.replace(/\\n/g, "\n");
 	if (Boolean(githubAppId) !== Boolean(githubPrivateKey)) {
@@ -143,6 +174,7 @@ async function main(): Promise<void> {
 			baseUrl,
 			requestId,
 			gcWorker,
+			blobCleanup,
 			githubOutbox,
 			escGcSweep: () => escGcSweep(db),
 			flushTelemetry,

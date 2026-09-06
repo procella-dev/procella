@@ -18,6 +18,7 @@ import { schema } from "./schema.js";
 
 // Re-export schema for consumers
 export {
+	blobCleanupQueue,
 	checkpoints,
 	escDrafts,
 	escEnvironmentRevisions,

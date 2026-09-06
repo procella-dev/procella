@@ -1,7 +1,16 @@
 import { afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { SQL } from "bun";
-import { checkpoints, type Database, stacks as stackRows, updates } from "@procella/db";
-import { PostgresStacksService, type StackInfo } from "@procella/stacks";
+import {
+	blobCleanupQueue,
+	checkpoints,
+	type Database,
+	githubUpdateOutbox,
+	journalEntries,
+	stacks as stackRows,
+	updateEvents,
+	updates,
+} from "@procella/db";
+import { PostgresStacksService } from "@procella/stacks";
 import {
 	ConflictError,
 	StackAlreadyExistsError,
@@ -202,6 +211,141 @@ describe("PostgresStacksService — integration", () => {
 			await expect(
 				stacks.getStack("tenant-1", "org-1", "proj-1", "dev"),
 			).rejects.toBeInstanceOf(StackNotFoundError);
+		});
+
+		test("atomically removes descendants and queues only the deleted stack's blobs", async () => {
+			const target = await stacks.createStack("tenant-1", "org-1", "proj-1", "dev");
+			const retained = await stacks.createStack("tenant-2", "org-2", "proj-1", "dev");
+			const [targetUpdate] = await db
+				.insert(updates)
+				.values({ stackId: target.id, kind: "update", status: "succeeded" })
+				.returning({ id: updates.id });
+			const [retainedUpdate] = await db
+				.insert(updates)
+				.values({ stackId: retained.id, kind: "update", status: "succeeded" })
+				.returning({ id: updates.id });
+			const targetBlobKey = `checkpoints/${target.id}/${targetUpdate.id}/1`;
+			const retainedBlobKey = `checkpoints/${retained.id}/${retainedUpdate.id}/1`;
+
+			await db.insert(checkpoints).values([
+				{
+					updateId: targetUpdate.id,
+					stackId: target.id,
+					version: 1,
+					data: null,
+					blobKey: targetBlobKey,
+				},
+				{
+					updateId: retainedUpdate.id,
+					stackId: retained.id,
+					version: 1,
+					data: null,
+					blobKey: retainedBlobKey,
+				},
+			]);
+			await db.insert(updateEvents).values({
+				updateId: targetUpdate.id,
+				sequence: 1,
+				kind: "stdout",
+			});
+			await db.insert(journalEntries).values({
+				updateId: targetUpdate.id,
+				stackId: target.id,
+				sequenceId: 1n,
+				operationId: 1n,
+				kind: 0,
+			});
+			await db.insert(githubUpdateOutbox).values({
+				updateId: targetUpdate.id,
+				phase: "started",
+			});
+
+			await stacks.deleteStack("tenant-1", "org-1", "proj-1", "dev", true);
+
+			expect(await db.select().from(updates).where(eq(updates.id, targetUpdate.id))).toHaveLength(
+				0,
+			);
+			expect(
+				await db.select().from(checkpoints).where(eq(checkpoints.updateId, targetUpdate.id)),
+			).toHaveLength(0);
+			expect(
+				await db.select().from(updateEvents).where(eq(updateEvents.updateId, targetUpdate.id)),
+			).toHaveLength(0);
+			expect(
+				await db.select().from(journalEntries).where(eq(journalEntries.updateId, targetUpdate.id)),
+			).toHaveLength(0);
+			expect(
+				await db
+					.select()
+					.from(githubUpdateOutbox)
+					.where(eq(githubUpdateOutbox.updateId, targetUpdate.id)),
+			).toHaveLength(0);
+
+			const queued = await db.select({ blobKey: blobCleanupQueue.blobKey }).from(blobCleanupQueue);
+			expect(queued).toEqual([{ blobKey: targetBlobKey }]);
+			expect(await db.select().from(updates).where(eq(updates.id, retainedUpdate.id))).toHaveLength(
+				1,
+			);
+			expect(
+				await db.select().from(checkpoints).where(eq(checkpoints.updateId, retainedUpdate.id)),
+			).toHaveLength(1);
+			expect(await stacks.getStack("tenant-2", "org-2", "proj-1", "dev")).toBeDefined();
+		});
+
+		test("does not queue a blob key still referenced by another stack", async () => {
+			const target = await stacks.createStack("tenant-1", "org-1", "proj-1", "dev");
+			const retained = await stacks.createStack("tenant-2", "org-2", "proj-1", "dev");
+			const [targetUpdate] = await db
+				.insert(updates)
+				.values({ stackId: target.id, kind: "update", status: "succeeded" })
+				.returning({ id: updates.id });
+			const [retainedUpdate] = await db
+				.insert(updates)
+				.values({ stackId: retained.id, kind: "update", status: "succeeded" })
+				.returning({ id: updates.id });
+			const sharedBlobKey = "checkpoints/shared/corrupt-reference";
+			await db.insert(checkpoints).values([
+				{
+					updateId: targetUpdate.id,
+					stackId: target.id,
+					version: 1,
+					blobKey: sharedBlobKey,
+				},
+				{
+					updateId: retainedUpdate.id,
+					stackId: retained.id,
+					version: 1,
+					blobKey: sharedBlobKey,
+				},
+			]);
+
+			await stacks.deleteStack("tenant-1", "org-1", "proj-1", "dev", true);
+
+			expect(await db.select().from(blobCleanupQueue)).toHaveLength(0);
+			expect(
+				await db.select().from(checkpoints).where(eq(checkpoints.updateId, retainedUpdate.id)),
+			).toHaveLength(1);
+		});
+
+		test("wrong-tenant deletion cannot enqueue or remove descendants", async () => {
+			const target = await stacks.createStack("tenant-1", "org-1", "proj-1", "dev");
+			const [update] = await db
+				.insert(updates)
+				.values({ stackId: target.id, kind: "update", status: "succeeded" })
+				.returning({ id: updates.id });
+			await db.insert(checkpoints).values({
+				updateId: update.id,
+				stackId: target.id,
+				version: 1,
+				blobKey: `checkpoints/${target.id}/${update.id}/1`,
+			});
+
+			await expect(
+				stacks.deleteStack("tenant-2", "org-2", "proj-1", "dev", true),
+			).rejects.toBeInstanceOf(StackNotFoundError);
+
+			expect(await db.select().from(updates).where(eq(updates.id, update.id))).toHaveLength(1);
+			expect(await db.select().from(blobCleanupQueue)).toHaveLength(0);
 		});
 
 		test("row lock makes concurrent deletes resolve one winner", async () => {

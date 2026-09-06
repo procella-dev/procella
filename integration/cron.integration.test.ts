@@ -22,9 +22,16 @@ const baseDeps = {
 	authConfig,
 	audit: {} as AuditService,
 	db: {
+		execute: async () => ({ rows: [{ acquired: false }] }),
 		transaction: async (callback: (tx: unknown) => unknown) =>
-			callback({ execute: async () => ({ rows: [{ acquired: false }] }) }),
+			callback({ execute: async () => ({ rows: [] }) }),
 	} as unknown as Database,
+	storage: {
+		get: async () => null,
+		put: async () => {},
+		delete: async () => {},
+		exists: async () => false,
+	},
 	dbUrl: "postgres://test:test@localhost:5432/test",
 	github: null as GitHubService | null,
 	githubWebhookSecret: undefined,

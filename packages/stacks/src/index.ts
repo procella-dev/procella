@@ -1,7 +1,7 @@
 // @procella/stacks — Stack management domain (projects, stacks, tags)
 
 import type { Database } from "@procella/db";
-import { checkpoints, projects, stacks } from "@procella/db";
+import { blobCleanupQueue, checkpoints, projects, stacks, updates } from "@procella/db";
 import { withDbSpan, withSpan } from "@procella/telemetry";
 import {
 	BadRequestError,
@@ -590,6 +590,37 @@ export class PostgresStacksService implements StacksService {
 							throw new StackHasResourcesError();
 						}
 					}
+
+					// Serialize with update writers before snapshotting their exact blob keys.
+					// The stack row lock also prevents service-created updates from appearing
+					// after this point.
+					await tx
+						.select({ id: updates.id })
+						.from(updates)
+						.where(eq(updates.stackId, locked.stackId))
+						.for("update");
+
+					await tx.execute(sql`
+						INSERT INTO ${blobCleanupQueue} (blob_key)
+						SELECT DISTINCT ${checkpoints.blobKey}
+						FROM ${checkpoints}
+						INNER JOIN ${updates} ON ${updates.id} = ${checkpoints.updateId}
+						WHERE ${updates.stackId} = ${locked.stackId}
+							AND ${checkpoints.blobKey} IS NOT NULL
+							AND NOT EXISTS (
+								SELECT 1
+								FROM checkpoints retained_checkpoint
+								INNER JOIN updates retained_update
+									ON retained_update.id = retained_checkpoint.update_id
+								WHERE retained_checkpoint.blob_key = ${checkpoints.blobKey}
+									AND retained_update.stack_id <> ${locked.stackId}
+							)
+						ON CONFLICT (blob_key) DO NOTHING
+					`);
+
+					// Child tables cascade from updates. The explicit delete defines domain
+					// ownership; the updates→stacks FK also blocks out-of-band orphan inserts.
+					await tx.delete(updates).where(eq(updates.stackId, locked.stackId));
 
 					await tx.delete(stacks).where(eq(stacks.id, locked.stackId));
 				});

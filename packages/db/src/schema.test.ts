@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { getTableColumns, getTableName } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import {
+	blobCleanupQueue,
 	checkpoints,
 	githubInstallations,
 	githubSetupStates,
@@ -64,7 +65,7 @@ describe("@procella/db schema", () => {
 			expect(getTableName(updates)).toBe("updates");
 		});
 
-		test("has stack_id as soft reference (not null)", () => {
+		test("has stack_id as a cascading stack reference", () => {
 			const columns = getTableColumns(updates);
 			expect(columns.stackId).toBeDefined();
 			expect(columns.stackId.name).toBe("stack_id");
@@ -88,6 +89,19 @@ describe("@procella/db schema", () => {
 			expect(columnNames).toContain("github_comment_id");
 			expect(columnNames).toContain("summary_sequence");
 			expect(columnNames).toContain("summary");
+		});
+	});
+
+	describe("blob_cleanup_queue table", () => {
+		test("stores durable exact-key claims", () => {
+			expect(getTableName(blobCleanupQueue)).toBe("blob_cleanup_queue");
+			const columns = getTableColumns(blobCleanupQueue);
+			expect(columns.blobKey.name).toBe("blob_key");
+			expect(columns.attempts.name).toBe("attempts");
+			expect(columns.availableAt.name).toBe("available_at");
+			expect(columns.claimedBy.name).toBe("claimed_by");
+			expect(columns.claimedUntil.name).toBe("claimed_until");
+			expect(columns.lastError.name).toBe("last_error");
 		});
 	});
 
@@ -233,6 +247,7 @@ describe("@procella/db schema", () => {
 			expect(getTableName(stacks)).toBe("stacks");
 			expect(getTableName(updates)).toBe("updates");
 			expect(getTableName(checkpoints)).toBe("checkpoints");
+			expect(getTableName(blobCleanupQueue)).toBe("blob_cleanup_queue");
 			expect(getTableName(updateEvents)).toBe("update_events");
 			expect(getTableName(githubUpdateOutbox)).toBe("github_update_outbox");
 			expect(getTableName(githubInstallations)).toBe("github_installations");
@@ -246,6 +261,7 @@ describe("@procella/db schema", () => {
 				stacks,
 				updates,
 				checkpoints,
+				blobCleanupQueue,
 				updateEvents,
 				oidcTrustPolicies,
 			]) {

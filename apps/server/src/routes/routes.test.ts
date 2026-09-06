@@ -229,22 +229,29 @@ describe("@procella/server routes", () => {
 			db:
 				opts?.db ??
 				({
-					execute: async () => ({
-						rows: [
-							{
-								acquired: false,
-								relation_0: "projects",
-								relation_1: "stacks",
-								relation_2: "updates",
-								relation_3: "checkpoints",
-								relation_4: "__drizzle_migrations",
-								migrated: true,
-							},
-						],
+					execute: async (query: unknown) => ({
+						rows: String(query).includes("pg_try_advisory_xact_lock")
+							? [{ acquired: false }]
+							: [
+									{
+										relation_0: "projects",
+										relation_1: "stacks",
+										relation_2: "updates",
+										relation_3: "checkpoints",
+										relation_4: "__drizzle_migrations",
+										migrated: true,
+									},
+								],
 					}),
 					transaction: async (callback: (tx: unknown) => unknown) =>
-						callback({ execute: async () => ({ rows: [{ acquired: false }] }) }),
+						callback({ execute: async () => ({ rows: [] }) }),
 				} as unknown as Database),
+			storage: {
+				get: async () => null,
+				put: async () => {},
+				delete: async () => {},
+				exists: async () => false,
+			},
 			dbUrl: "postgres://test:test@localhost:5432/test",
 			cronSecret: opts?.cronSecret,
 			corsOrigins: opts?.corsOrigins,
@@ -439,6 +446,9 @@ describe("@procella/server routes", () => {
 					if (transactions === 1) {
 						return callback({ execute: async () => ({ rows: [{ acquired: false }] }) });
 					}
+					if (transactions === 2) {
+						return callback({ execute: async () => ({ rows: [] }) });
+					}
 					throw new Error("outbox unavailable");
 				},
 			} as unknown as Database;
@@ -452,7 +462,7 @@ describe("@procella/server routes", () => {
 				headers: { Authorization: "Bearer correct-secret" },
 			});
 			expect(res.status).toBe(200);
-			expect(transactions).toBe(2);
+			expect(transactions).toBe(3);
 		});
 	});
 
