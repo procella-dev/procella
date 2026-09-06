@@ -1,3 +1,4 @@
+import { trpcTransformer } from "@procella/api/src/trpc.js";
 import type { AuthService } from "@procella/auth";
 import {
 	type Caller,
@@ -61,6 +62,10 @@ export function trpcAuth(deps: TrpcAuthDeps): MiddlewareHandler<Env> {
 
 function subscriptionScopeFromRequest(req: Request): SubscriptionTicketScope | null {
 	const url = new URL(req.url);
+	if (url.searchParams.get("batch") === "1") {
+		return null;
+	}
+
 	const trpcPathIndex = url.pathname.lastIndexOf("/trpc/");
 	const procedure =
 		trpcPathIndex === -1 ? "" : decodeURIComponent(url.pathname.slice(trpcPathIndex + 6));
@@ -70,11 +75,19 @@ function subscriptionScopeFromRequest(req: Request): SubscriptionTicketScope | n
 		return null;
 	}
 
-	const parsed: unknown = JSON.parse(input);
-	const resourceInput =
-		typeof parsed === "object" && parsed !== null && "json" in parsed
-			? (parsed as { json: unknown }).json
-			: parsed;
+	const envelope: unknown = JSON.parse(input);
+	if (
+		typeof envelope !== "object" ||
+		envelope === null ||
+		Array.isArray(envelope) ||
+		!Object.hasOwn(envelope, "json") ||
+		Object.keys(envelope).some((key) => key !== "json" && key !== "meta")
+	) {
+		return null;
+	}
 
+	const resourceInput = trpcTransformer.deserialize(
+		envelope as Parameters<typeof trpcTransformer.deserialize>[0],
+	);
 	return subscriptionTicketScopeSchema.parse({ procedure, resource: resourceInput });
 }

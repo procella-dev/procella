@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { trpcTransformer } from "@procella/api/src/trpc.js";
 import type { AuthService } from "@procella/auth";
 import type { Caller, SubscriptionTicketScope } from "@procella/types";
 import { SignJWT } from "jose";
@@ -39,9 +40,12 @@ const stackActivityScope: SubscriptionTicketScope = {
 function subscriptionRequest(
 	procedure: string = scope.procedure,
 	resource: SubscriptionTicketScope["resource"] = scope.resource,
+	options?: { batch?: boolean; envelope?: unknown },
 ): Request {
+	const input = options?.envelope ?? trpcTransformer.serialize(resource);
+	const batch = options?.batch ? "&batch=1" : "";
 	return new Request(
-		`https://procella.dev/trpc/${procedure}?input=${encodeURIComponent(JSON.stringify(resource))}`,
+		`https://procella.dev/trpc/${procedure}?input=${encodeURIComponent(JSON.stringify(input))}${batch}`,
 		{ method: "GET" },
 	);
 }
@@ -153,6 +157,46 @@ describe("authenticateTrpcCaller", () => {
 		);
 
 		expect(result).toEqual({ caller: null, invalidTicket: true });
+	});
+
+	test("rejects a ticket when SuperJSON references change the executed resource", async () => {
+		const service = createSubscriptionTicketService(SIGNING_KEY);
+		const ticket = await service.issueTicket(caller, scope);
+		const envelope = {
+			json: { ...scope.resource, otherOrg: "other-org" },
+			meta: { referentialEqualities: { otherOrg: ["org"] }, v: 1 },
+		};
+		const executedInput = trpcTransformer.deserialize(envelope);
+		expect(executedInput).toMatchObject({ org: "other-org" });
+
+		const result = await authenticateTrpcCaller(
+			subscriptionRequest(scope.procedure, scope.resource, { envelope }),
+			ticket,
+			{
+				auth: mockAuthService(null),
+				verifySubscriptionTicket: service.verifyTicket,
+			},
+		);
+
+		expect(result).toEqual({ caller: null, invalidTicket: true });
+	});
+
+	test("rejects batch and non-SuperJSON ticket input shapes", async () => {
+		const service = createSubscriptionTicketService(SIGNING_KEY);
+		const ticket = await service.issueTicket(caller, scope);
+		const incompatibleRequests = [
+			subscriptionRequest(scope.procedure, scope.resource, { batch: true }),
+			subscriptionRequest(scope.procedure, scope.resource, { envelope: scope.resource }),
+		];
+
+		for (const request of incompatibleRequests) {
+			expect(
+				await authenticateTrpcCaller(request, ticket, {
+					auth: mockAuthService(null),
+					verifySubscriptionTicket: service.verifyTicket,
+				}),
+			).toEqual({ caller: null, invalidTicket: true });
+		}
 	});
 
 	test("accepts a stack activity ticket for its intended stack", async () => {

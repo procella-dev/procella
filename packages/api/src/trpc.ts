@@ -39,6 +39,8 @@ export interface TRPCContext {
 // tRPC Instance
 // ============================================================================
 
+export const trpcTransformer = superjson;
+
 const TRPC_CODE_BY_STATUS: Partial<Record<number, TRPC_ERROR_CODE_KEY>> = {
 	400: "BAD_REQUEST",
 	401: "UNAUTHORIZED",
@@ -49,7 +51,7 @@ const TRPC_CODE_BY_STATUS: Partial<Record<number, TRPC_ERROR_CODE_KEY>> = {
 };
 
 const t = initTRPC.context<TRPCContext>().create({
-	transformer: superjson,
+	transformer: trpcTransformer,
 	errorFormatter({ error, shape }) {
 		const domainError = error.cause instanceof ProcellaError ? error.cause : undefined;
 		let code: TRPC_ERROR_CODE_KEY = error.code;
