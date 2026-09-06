@@ -151,7 +151,6 @@ export class GCWorker {
 				activeUpdatesGauge().add(-result.expiredRunningCount);
 			}
 			gcOrphansCleanedCount().add(result.orphanCount);
-
 		} finally {
 			this.running = false;
 		}
