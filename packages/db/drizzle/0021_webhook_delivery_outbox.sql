@@ -6,7 +6,7 @@ CREATE TABLE "webhook_outbox" (
 	"webhook_id" uuid NOT NULL,
 	"tenant_id" text NOT NULL,
 	"url" text NOT NULL,
-	"secret" text NOT NULL,
+	"secret" text,
 	"event" text NOT NULL,
 	"body" text NOT NULL,
 	"attempts" integer DEFAULT 0 NOT NULL,
@@ -16,7 +16,8 @@ CREATE TABLE "webhook_outbox" (
 	"failed_at" timestamp,
 	"last_error" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp DEFAULT now() NOT NULL
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "chk_webhook_outbox_live_secret" CHECK ("webhook_outbox"."secret" IS NOT NULL OR "webhook_outbox"."failed_at" IS NOT NULL)
 );
 --> statement-breakpoint
 ALTER TABLE "webhook_outbox" ADD CONSTRAINT "webhook_outbox_webhook_id_webhooks_id_fk" FOREIGN KEY ("webhook_id") REFERENCES "public"."webhooks"("id") ON DELETE cascade ON UPDATE no action;

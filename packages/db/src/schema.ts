@@ -237,7 +237,7 @@ export const webhookOutbox = pgTable(
 			.references(() => webhooks.id, { onDelete: "cascade" }),
 		tenantId: text("tenant_id").notNull(),
 		url: text().notNull(),
-		secret: text().notNull(),
+		secret: text(),
 		event: text().notNull(),
 		body: text().notNull(),
 		attempts: integer().notNull().default(0),
@@ -250,6 +250,10 @@ export const webhookOutbox = pgTable(
 		updatedAt: timestamp("updated_at").notNull().defaultNow(),
 	},
 	(table) => [
+		check(
+			"chk_webhook_outbox_live_secret",
+			sql`${table.secret} IS NOT NULL OR ${table.failedAt} IS NOT NULL`,
+		),
 		index("idx_webhook_outbox_available").on(table.availableAt, table.claimedUntil),
 		index("idx_webhook_outbox_webhook").on(table.webhookId),
 	],

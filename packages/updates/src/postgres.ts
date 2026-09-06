@@ -6,6 +6,7 @@ import {
 	checkpoints,
 	githubUpdateOutbox,
 	journalEntries,
+	projects,
 	stacks,
 	updateEvents,
 	updates,
@@ -1275,14 +1276,15 @@ export class PostgresUpdatesService implements UpdatesService {
 		event: "update.started" | "update.succeeded" | "update.failed" | "update.cancelled",
 		status?: string,
 	): Promise<void> {
-		if (!row.webhookContext) return;
+		const context = row.webhookContext ?? (await loadUpdateWebhookContext(tx, row.stackId));
+		if (!context) return;
 		await enqueueWebhookEvent(tx, {
-			tenantId: row.webhookContext.tenantId,
+			tenantId: context.tenantId,
 			event,
 			data: {
-				org: row.webhookContext.org,
-				project: row.webhookContext.project,
-				stack: row.webhookContext.stack,
+				org: context.org,
+				project: context.project,
+				stack: context.stack,
 				updateId,
 				...(status ? { status } : {}),
 			},
@@ -1477,6 +1479,25 @@ function parseWebhookContext(value: unknown): UpdateWebhookContext | null {
 		return null;
 	}
 	return { tenantId, org, project, stack };
+}
+
+/**
+ * Reconstruct webhook addressing for updates created before `webhook_context` existed.
+ * The human org slug was not persisted historically, so the tenant id is the only safe fallback.
+ */
+export async function loadUpdateWebhookContext(
+	db: Pick<Database, "select">,
+	stackId: string,
+): Promise<UpdateWebhookContext | null> {
+	const [row] = await db
+		.select({ tenantId: projects.tenantId, project: projects.name, stack: stacks.name })
+		.from(stacks)
+		.innerJoin(projects, eq(stacks.projectId, projects.id))
+		.where(eq(stacks.id, stackId))
+		.limit(1);
+	return row
+		? { tenantId: row.tenantId, org: row.tenantId, project: row.project, stack: row.stack }
+		: null;
 }
 export function deriveGitHubUpdateTarget({
 	caller,

@@ -243,6 +243,47 @@ describe("durable webhook delivery", () => {
 		expect(intents[0].tenantId).toBe("tenant-1");
 	});
 
+	test("reconstructs webhook context for an update already in flight during deployment", async () => {
+		await createHook("tenant-1", ["update.succeeded"]);
+		const updateId = await startedUpdate();
+		await db.update(updates).set({ webhookContext: null }).where(eq(updates.id, updateId));
+
+		await updatesService.completeUpdate(updateId, { status: "succeeded" });
+
+		const [intent] = await pendingIntents();
+		expect(intent.tenantId).toBe("tenant-1");
+		expect(JSON.parse(intent.body)).toMatchObject({
+			event: "update.succeeded",
+			data: { org: "tenant-1", project: "infra", updateId },
+		});
+	});
+
+	test("retries a transient resolver failure instead of dead-lettering the intent", async () => {
+		await createHook("tenant-1", ["update.succeeded"]);
+		const updateId = await startedUpdate();
+		await updatesService.completeUpdate(updateId, { status: "succeeded" });
+		const [intent] = await pendingIntents();
+		await db
+			.update(webhookOutbox)
+			.set({ url: "https://temporarily-unresolved.invalid/hook" })
+			.where(eq(webhookOutbox.id, intent.id));
+		const { fetcher, requests } = makeFetcher(ok);
+		const outbox = worker(fetcher);
+
+		expect(await outbox.runOnce()).toBe(0);
+		const [retrying] = await pendingIntents();
+		expect(retrying.failedAt).toBeNull();
+		expect(retrying.lastError).toContain("could not be resolved");
+		expect(requests).toHaveLength(0);
+
+		await db
+			.update(webhookOutbox)
+			.set({ url: "https://1.1.1.1/hook", availableAt: new Date() })
+			.where(eq(webhookOutbox.id, intent.id));
+		expect(await outbox.runOnce()).toBe(1);
+		expect(requests).toHaveLength(1);
+	});
+
 	test("enqueues cancellations from both the API path and the GC worker", async () => {
 		await createHook("tenant-1", ["update.cancelled"]);
 
@@ -254,6 +295,7 @@ describe("durable webhook delivery", () => {
 			.update(updates)
 			.set({ leaseExpiresAt: new Date(Date.now() - 120_000) })
 			.where(eq(updates.id, orphaned));
+		await db.update(updates).set({ webhookContext: null }).where(eq(updates.id, orphaned));
 		await new GCWorker({ db }).runOnce();
 
 		const intents = await pendingIntents();
@@ -278,6 +320,7 @@ describe("durable webhook delivery", () => {
 		expect(dead.failedAt).toBeInstanceOf(Date);
 		expect(dead.attempts).toBe(1);
 		expect(dead.lastError).toContain("422");
+		expect(dead.secret).toBeNull();
 
 		expect(await outbox.runOnce()).toBe(0);
 		expect(requests).toHaveLength(1);

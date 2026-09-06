@@ -54,6 +54,7 @@ import {
 	requireRoleMiddleware,
 	updateAuth,
 } from "../middleware/index.js";
+import { drainOutboxes } from "../outbox-drain.js";
 import type { Env } from "../types.js";
 import { trpcAuth } from "./trpc-auth.js";
 

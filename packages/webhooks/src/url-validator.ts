@@ -38,6 +38,9 @@ const BLOCKED_HOSTNAMES = new Set([
 
 const BLOCKED_HOSTNAME_SUFFIXES = [".nip.io", ".sslip.io", ".xip.io", ".localtest.me", ".lvh.me"];
 
+/** A syntactically valid public hostname could not be resolved right now; callers may retry. */
+export class UrlResolutionError extends BadRequestError {}
+
 function stripBrackets(hostname: string): string {
 	if (hostname.startsWith("[") && hostname.endsWith("]")) {
 		return hostname.slice(1, -1);
@@ -154,7 +157,7 @@ export async function resolveAndValidateUrl(url: string, label: string): Promise
 	const addresses = [...v4, ...v6];
 
 	if (addresses.length === 0) {
-		throw new BadRequestError(`${label} URL hostname could not be resolved`);
+		throw new UrlResolutionError(`${label} URL hostname could not be resolved`);
 	}
 
 	for (const addr of addresses) {

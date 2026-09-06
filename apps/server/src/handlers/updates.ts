@@ -67,7 +67,6 @@ export function updateHandlers(updates: UpdatesService, stacks: StacksService) {
 			}
 			await updates.completeUpdate(updateId, body);
 
-
 			return c.body(null, 204);
 		},
 

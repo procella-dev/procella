@@ -6,6 +6,7 @@ import { activeUpdatesGauge, gcCycleCount, gcOrphansCleanedCount } from "@procel
 import { projectError } from "@procella/types";
 import { enqueueWebhookEvent } from "@procella/webhooks";
 import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
+import { loadUpdateWebhookContext } from "./postgres.js";
 import {
 	GC_ADVISORY_LOCK_ID,
 	GC_INTERVAL_MS,
@@ -180,14 +181,16 @@ export class GCWorker {
 					// Only leases that were actually running had a start event; a never-started
 					// update was never announced, so cancelling it announces nothing either.
 					for (const update of expiredLeaseUpdates) {
-						if (!update.webhookContext) continue;
+						const context =
+							update.webhookContext ?? (await loadUpdateWebhookContext(tx, update.stackId));
+						if (!context) continue;
 						await enqueueWebhookEvent(tx, {
-							tenantId: update.webhookContext.tenantId,
+							tenantId: context.tenantId,
 							event: "update.cancelled",
 							data: {
-								org: update.webhookContext.org,
-								project: update.webhookContext.project,
-								stack: update.webhookContext.stack,
+								org: context.org,
+								project: context.project,
+								stack: context.stack,
 								updateId: update.id,
 								status: "cancelled",
 							},

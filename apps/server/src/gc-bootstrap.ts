@@ -1,4 +1,5 @@
 import type { ScheduledEvent } from "aws-lambda";
+import { drainOutboxes } from "./outbox-drain.js";
 
 const LAMBDA_WORK_DEADLINE_MS = 52_000;
 const TELEMETRY_FLUSH_TIMEOUT_MS = 3_000;

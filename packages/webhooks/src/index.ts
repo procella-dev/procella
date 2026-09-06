@@ -1,12 +1,13 @@
 import { type Database, webhookDeliveries, webhookOutbox, webhooks } from "@procella/db";
 import { NotFoundError } from "@procella/types";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { resolveAndValidateUrl, validateUrl } from "./url-validator.js";
+import { resolveAndValidateUrl, UrlResolutionError, validateUrl } from "./url-validator.js";
 
 export {
 	isBlockedHostname,
 	isPrivateIp,
 	resolveAndValidateUrl,
+	UrlResolutionError,
 	validateUrl,
 } from "./url-validator.js";
 
@@ -593,10 +594,9 @@ export class WebhookOutboxWorker {
 			await resolveAndValidateWebhookUrl(claim.url);
 		} catch (error) {
 			const message = error instanceof Error ? error.message : "Invalid webhook URL";
-			throw new PermanentWebhookDeliveryError(message, {
-				...failedDeliveryResult(message),
-				duration: this.now() - startedAt,
-			});
+			const result = { ...failedDeliveryResult(message), duration: this.now() - startedAt };
+			if (error instanceof UrlResolutionError) return result;
+			throw new PermanentWebhookDeliveryError(message, result);
 		}
 
 		const signature = await signPayload(claim.body, claim.secret);
@@ -659,7 +659,7 @@ export class WebhookOutboxWorker {
 							lastError: error,
 							updatedAt: sql`now()`,
 							...(terminal
-								? { failedAt: sql`now()` }
+								? { failedAt: sql`now()`, secret: null }
 								: { availableAt: sql`now() + (${delay} * interval '1 second')` }),
 						})
 						.where(fence)

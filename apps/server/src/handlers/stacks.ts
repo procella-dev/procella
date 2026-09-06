@@ -26,6 +26,7 @@ export function stackHandlers(stacks: StacksService) {
 				throw new BadRequestError("Missing stack name in URL or body");
 			}
 			const result = await stacks.createStack(caller.tenantId, org, project, stack, typedBody.tags);
+
 			return c.json(mapToStack(result, caller.orgSlug));
 		},
 
