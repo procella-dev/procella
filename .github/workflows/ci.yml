@@ -20,6 +20,22 @@ jobs:
   check:
     name: Lint, Typecheck & Unit Tests
     runs-on: namespace-profile-amd64-4cpu-8ram
+    env:
+      PROCELLA_DATABASE_URL: postgres://procella:procella@localhost:5432/procella?sslmode=disable
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: procella
+          POSTGRES_PASSWORD: procella
+          POSTGRES_DB: procella
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U procella"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     permissions:
       id-token: write
     steps:
@@ -27,12 +43,15 @@ jobs:
         with:
           persist-credentials: false
       - uses: $/.github/actions/setup-bun
+      - name: Run database migrations
+        run: bun run db:migrate
       - run: bunx biome check .
       - run: bun run typecheck
       - name: Run unit tests with coverage
         run: |
           mkdir -p test-results
           bun test --parallel --coverage --coverage-reporter=lcov --reporter=junit --reporter-outfile=test-results/unit.junit.xml packages/ apps/ scripts/
+          bun run scripts/check-test-skips.ts test-results/unit.junit.xml
       - name: Upload coverage to Codecov
         if: always()
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
@@ -148,7 +167,7 @@ jobs:
     runs-on: namespace-profile-amd64-4cpu-8ram
     permissions:
       id-token: write
-    needs: [check]
+    needs: [check, esc-eval-go]
     services:
       postgres:
         image: postgres:18-alpine
@@ -168,12 +187,20 @@ jobs:
         with:
           persist-credentials: false
       - uses: $/.github/actions/setup-bun
+      - name: Download ESC eval bootstrap artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: esc-eval-bootstrap
+          path: .build/esc-eval
+      - name: Restore ESC eval executable permission
+        run: chmod +x .build/esc-eval/bootstrap
       - name: Run integration tests with coverage
         env:
           TEST_DATABASE_URL: postgres://procella:procella@localhost:5432/procella?sslmode=disable
         run: |
           mkdir -p test-results
           bun test --timeout 30000 --preload ./integration/setup.ts --coverage --coverage-reporter=lcov --reporter=junit --reporter-outfile=test-results/integration.junit.xml integration/
+          bun run scripts/check-test-skips.ts test-results/integration.junit.xml
       - name: Upload coverage to Codecov
         if: always()
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
@@ -227,7 +254,10 @@ jobs:
       - name: Run ESC CLI E2E test
         env:
           PROCELLA_DATABASE_URL: postgres://procella:procella@localhost:5432/procella?sslmode=disable
-        run: bun test --timeout 60000 --preload ./e2e/setup.ts e2e/esc-cli.test.ts
+        run: |
+          mkdir -p test-results
+          bun test --timeout 60000 --preload ./e2e/setup.ts --reporter=junit --reporter-outfile=test-results/esc-cli-e2e.junit.xml e2e/esc-cli.test.ts
+          bun run scripts/check-test-skips.ts --require-suite=e2e/esc-cli.test.ts test-results/esc-cli-e2e.junit.xml
 
   pulumi-versions:
     name: Resolve Pulumi CLI Versions
@@ -354,6 +384,7 @@ jobs:
         run: |
           mkdir -p test-results
           bun test --shard=${{ matrix.shard }}/3 --timeout 120000 --preload ./e2e/setup.ts --reporter=junit --reporter-outfile=test-results/e2e-shard-${{ matrix.shard }}.junit.xml e2e/*.test.ts
+          bun run scripts/check-test-skips.ts test-results/e2e-shard-${{ matrix.shard }}.junit.xml
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
         uses: codecov/test-results-action@0fa95f0e1eeaafde2c782583b36b28ad0d8c77d3 # v1
@@ -452,6 +483,10 @@ jobs:
         run: |
           mkdir -p test-results
           bun test --timeout 60000 --preload ./e2e/setup.ts --reporter=junit --reporter-outfile=test-results/security-e2e.junit.xml e2e/security-regressions/ e2e/encrypt-decrypt.test.ts e2e/lease-token-binding.test.ts
+          bun run scripts/check-test-skips.ts \
+            --require-suite=e2e/security-regressions/critical-and-high.test.ts \
+            --require-suite=e2e/security-regressions/low-and-versions.test.ts \
+            test-results/security-e2e.junit.xml
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
         uses: codecov/test-results-action@0fa95f0e1eeaafde2c782583b36b28ad0d8c77d3 # v1
@@ -856,7 +891,14 @@ jobs:
           PROCELLA_DESCOPE_PROJECT_ID: ${{ needs.preview-deploy.outputs.descope_project_id }}
           PROCELLA_DESCOPE_MANAGEMENT_KEY: ${{ secrets.DESCOPE_MANAGEMENT_KEY }}
           PROCELLA_E2E_ORG_SLUG: procella-pr-${{ github.event.number }}
-        run: bun run e2e:descope
+        run: |
+          mkdir -p test-results
+          bun test --timeout 120000 --reporter=junit --reporter-outfile=test-results/descope-auth.junit.xml e2e/descope-auth.test.ts
+          bun run scripts/check-test-skips.ts \
+            --require-suite=e2e/descope-auth.test.ts \
+            '--require-test=e2e/descope-auth.test.ts::exchange real GitHub OIDC token' \
+            '--require-test=e2e/descope-auth.test.ts::pulumi login --oidc-token with real GitHub OIDC token' \
+            test-results/descope-auth.junit.xml
 
   preview-oidc-e2e:
     name: OIDC Pulumi Deploy (real end-to-end)
