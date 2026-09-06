@@ -19,9 +19,20 @@ export function stateHandlers(updates: UpdatesService, stacks: StacksService) {
 			const org = param(c, "org");
 			const project = param(c, "project");
 			const stack = param(c, "stack");
-			const stackInfo = await stacks.getStack(caller.tenantId, org, project, stack);
 			const versionParam = c.req.param("version");
-			const version = versionParam ? Number.parseInt(versionParam, 10) : undefined;
+			let version: number | undefined;
+			if (versionParam !== undefined) {
+				// Pulumi's `--version` is a stack update version: a positive integer, never a
+				// float, a sign, or `parseInt`'s "7junk" -> 7 prefix coercion.
+				version = /^\d+$/.test(versionParam) ? Number(versionParam) : Number.NaN;
+				if (!Number.isSafeInteger(version) || version <= 0) {
+					return c.json(
+						{ code: "invalid_request", message: "Version must be a positive integer" },
+						400,
+					);
+				}
+			}
+			const stackInfo = await stacks.getStack(caller.tenantId, org, project, stack);
 			const result = await updates.exportStack(stackInfo.id, version);
 			return c.json(result);
 		},

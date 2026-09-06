@@ -417,6 +417,59 @@ describe("PostgresUpdatesService — integration", () => {
 			expect(deployment.deployment).toBeDefined();
 		});
 
+		test("exports each stack update version at its final canonical checkpoint", async () => {
+			const stack = await seedStack();
+			const expectedResources = [
+				["urn:pulumi:dev::test-project::test:index:Thing::version-1"],
+				[
+					"urn:pulumi:dev::test-project::test:index:Thing::version-2-a",
+					"urn:pulumi:dev::test-project::test:index:Thing::version-2-b",
+				],
+				[
+					"urn:pulumi:dev::test-project::test:index:Thing::version-3-a",
+					"urn:pulumi:dev::test-project::test:index:Thing::version-3-b",
+					"urn:pulumi:dev::test-project::test:index:Thing::version-3-c",
+				],
+			];
+
+			for (const [index, resources] of expectedResources.entries()) {
+				const created = await updatesService.createUpdate(stack.id, "update");
+				const started = await updatesService.startUpdate(created.updateID, {});
+				expect(started.version).toBe(index + 1);
+
+				await updatesService.patchCheckpoint(created.updateID, {
+					isInvalid: false,
+					version: 3,
+					deployment: { resources: [{ urn: `${resources[0]}-draft` }] },
+				});
+				await updatesService.patchCheckpoint(created.updateID, {
+					isInvalid: false,
+					version: 3,
+					deployment: { resources: resources.map((urn) => ({ urn })) },
+				});
+				await updatesService.completeUpdate(created.updateID, { status: "succeeded" });
+
+				if (index === 0) {
+					const preview = await updatesService.createUpdate(stack.id, "preview");
+					const previewStarted = await updatesService.startUpdate(preview.updateID, {});
+					expect(previewStarted.version).toBe(1);
+					for (let checkpoint = 1; checkpoint <= 3; checkpoint++) {
+						await updatesService.patchCheckpoint(preview.updateID, {
+							isInvalid: false,
+							version: 3,
+							deployment: { resources: [{ urn: `urn:preview:${checkpoint}` }] },
+						});
+					}
+					await updatesService.completeUpdate(preview.updateID, { status: "succeeded" });
+				}
+			}
+
+			for (const [index, resources] of expectedResources.entries()) {
+				const exported = await updatesService.exportStack(stack.id, index + 1);
+				expect(exported.deployment).toEqual({ resources: resources.map((urn) => ({ urn })) });
+			}
+		});
+
 		test("rejects import while stack has active update", async () => {
 			const stack = await seedStack();
 			const created = await updatesService.createUpdate(stack.id, "update");
@@ -903,7 +956,7 @@ describe("PostgresUpdatesService — integration", () => {
 			expect(latest.version).toBe(3);
 			expect(latest.deployment).toEqual(canonical);
 
-			const versioned = await updatesService.exportStack(stack.id, 2);
+			const versioned = await updatesService.exportStack(stack.id, 1);
 			expect(versioned.version).toBe(3);
 			expect(versioned.deployment).toEqual(canonical);
 		});
