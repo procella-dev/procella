@@ -789,16 +789,11 @@ export class PostgresUpdatesService implements UpdatesService {
 					throw new CheckpointNotFoundError("", "", `version ${version}`);
 				}
 			} else {
-				const rows = await this.db
-					.select()
-					.from(checkpoints)
-					.where(and(eq(checkpoints.stackId, stackId), eq(checkpoints.isDelta, false)))
-					.orderBy(desc(checkpoints.createdAt))
-					.limit(1);
-				checkpoint = rows[0];
+				const checkpoint = await this.readHeadCheckpoint(this.db, stackId);
 				if (!checkpoint) {
 					return emptyDeployment();
 				}
+				return this.readCheckpointDeployment(checkpoint);
 			}
 
 			return this.readCheckpointDeployment(checkpoint);
@@ -807,12 +802,7 @@ export class PostgresUpdatesService implements UpdatesService {
 
 	async repairStack(stackId: string): Promise<RepairMutation[]> {
 		return withDbSpan("repairStack", { "stack.id": stackId }, async () => {
-			const [sourceCheckpoint] = await this.db
-				.select()
-				.from(checkpoints)
-				.where(and(eq(checkpoints.stackId, stackId), eq(checkpoints.isDelta, false)))
-				.orderBy(desc(checkpoints.createdAt))
-				.limit(1);
+			const sourceCheckpoint = await this.readHeadCheckpoint(this.db, stackId);
 
 			if (!sourceCheckpoint) return [];
 
@@ -854,12 +844,7 @@ export class PostgresUpdatesService implements UpdatesService {
 				throw new ImportConflictError();
 			}
 			if (expectedCheckpointId !== undefined) {
-				const [headCheckpoint] = await tx
-					.select({ id: checkpoints.id })
-					.from(checkpoints)
-					.where(and(eq(checkpoints.stackId, stackId), eq(checkpoints.isDelta, false)))
-					.orderBy(desc(checkpoints.createdAt))
-					.limit(1);
+				const headCheckpoint = await this.readHeadCheckpoint(tx, stackId);
 				if (headCheckpoint?.id !== expectedCheckpointId) {
 					throw new ImportConflictError("Cannot repair because the stack checkpoint changed");
 				}
@@ -889,6 +874,19 @@ export class PostgresUpdatesService implements UpdatesService {
 		});
 
 		return { updateId: updateRow.id } satisfies ImportStackResponse;
+	}
+
+	private async readHeadCheckpoint(
+		db: Pick<Database, "select">,
+		stackId: string,
+	): Promise<typeof checkpoints.$inferSelect | undefined> {
+		const [checkpoint] = await db
+			.select()
+			.from(checkpoints)
+			.where(and(eq(checkpoints.stackId, stackId), eq(checkpoints.isDelta, false)))
+			.orderBy(desc(checkpoints.createdAt), desc(checkpoints.id))
+			.limit(1);
+		return checkpoint;
 	}
 
 	private async readCheckpointDeployment(

@@ -45,12 +45,15 @@ function staleRepairDatabase() {
 
 	const db = {
 		select: () => {
-			const result = [headCheckpoint];
+			let deterministicOrder = false;
 			const query = {
 				from: () => query,
 				where: () => query,
-				orderBy: () => query,
-				limit: () => Promise.resolve(result),
+				orderBy: (...columns: unknown[]) => {
+					deterministicOrder = columns.length === 2;
+					return query;
+				},
+				limit: () => Promise.resolve([deterministicOrder ? headCheckpoint : sourceCheckpoint]),
 			};
 			return query;
 		},
@@ -76,7 +79,11 @@ function staleRepairDatabase() {
 		storage,
 		exportStarted,
 		completeNewerUpdate: () => {
-			headCheckpoint = { ...sourceCheckpoint, id: "checkpoint-completed-update" };
+			headCheckpoint = {
+				...sourceCheckpoint,
+				id: "checkpoint-completed-update",
+				createdAt: sourceCheckpoint.createdAt,
+			};
 		},
 		releaseExport,
 		insertCount: () => insertCount,
