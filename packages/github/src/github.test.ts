@@ -48,19 +48,31 @@ describe("@procella/github", () => {
 				.map((b) => b.toString(16).padStart(2, "0"))
 				.join("");
 
-			const ok = await verifyGitHubWebhookSignature(payload, `sha256=${hex}`, secret);
+			const ok = await verifyGitHubWebhookSignature(
+				new TextEncoder().encode(payload),
+				`sha256=${hex}`,
+				secret,
+			);
 			expect(ok).toBe(true);
 		});
 
 		test("returns false for tampered signature", async () => {
 			const payload = JSON.stringify({ hello: "world" });
-			const ok = await verifyGitHubWebhookSignature(payload, "sha256=deadbeef", "webhook-secret");
+			const ok = await verifyGitHubWebhookSignature(
+				new TextEncoder().encode(payload),
+				"sha256=deadbeef",
+				"webhook-secret",
+			);
 			expect(ok).toBe(false);
 		});
 
 		test("returns false for empty signature", async () => {
 			const payload = JSON.stringify({ hello: "world" });
-			const ok = await verifyGitHubWebhookSignature(payload, "", "webhook-secret");
+			const ok = await verifyGitHubWebhookSignature(
+				new TextEncoder().encode(payload),
+				"",
+				"webhook-secret",
+			);
 			expect(ok).toBe(false);
 		});
 	});

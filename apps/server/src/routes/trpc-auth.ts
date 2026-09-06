@@ -1,5 +1,7 @@
 import type { AuthService } from "@procella/auth";
 import type { Caller } from "@procella/types";
+import type { MiddlewareHandler } from "hono";
+import type { Env } from "../types.js";
 
 export interface TrpcAuthDeps {
 	auth: AuthService;
@@ -28,5 +30,23 @@ export async function authenticateTrpcCaller(
 	return {
 		caller: await deps.auth.authenticate(req).catch(() => null),
 		invalidTicket: false,
+	};
+}
+
+export function trpcAuth(deps: TrpcAuthDeps): MiddlewareHandler<Env> {
+	return async (c, next) => {
+		const { caller, invalidTicket } = await authenticateTrpcCaller(
+			c.req.raw,
+			c.req.query("ticket"),
+			deps,
+		);
+		if (invalidTicket) {
+			return c.json({ code: "invalid_ticket" }, 401);
+		}
+		if (!caller) {
+			return c.json({ code: 401, message: "Unauthorized" }, 401);
+		}
+		c.set("caller", caller);
+		await next();
 	};
 }

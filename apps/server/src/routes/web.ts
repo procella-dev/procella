@@ -28,7 +28,7 @@ import {
 	requestLogger,
 } from "../middleware/index.js";
 import type { Env } from "../types.js";
-import { authenticateTrpcCaller } from "./trpc-auth.js";
+import { trpcAuth } from "./trpc-auth.js";
 
 export interface WebAppDeps {
 	auth: AuthService;
@@ -58,7 +58,7 @@ export function createWebApp(deps: WebAppDeps): Hono<Env> {
 	app.use("*", createSecurityHeadersMiddleware(authOrigin ? [authOrigin] : []));
 	app.use("*", tracingMiddleware());
 	app.use("*", requestLogger());
-	app.use("*", decompress());
+	const withApiDecompress = decompress();
 	const withCliTokenRateLimit = createIpRateLimiter({ limit: 10 });
 	const withOauthTokenRateLimit = createIpRateLimiter({ limit: 30 });
 	const withTrpcMutationRateLimit = createIpRateLimiter({
@@ -88,73 +88,82 @@ export function createWebApp(deps: WebAppDeps): Hono<Env> {
 	});
 
 	// CLI token creation — browser login flow
-	app.post("/api/auth/cli-token", withCliTokenRateLimit, async (c) => {
-		if (!deps.auth.createCliAccessKey) {
-			return c.json({ error: "CLI token creation not available in this auth mode" }, 400);
-		}
-		const caller = await deps.auth.authenticate(c.req.raw).catch(() => null);
-		if (!caller) {
-			return c.json({ error: "Unauthorized" }, 401);
-		}
-		if (caller.principalType !== "user") {
-			return c.json(
-				{ error: "CLI tokens can only be created from an interactive user session" },
-				403,
-			);
-		}
-		const body = await c.req.json<{ name?: string }>().catch(() => ({}));
-		const keyName =
-			"name" in body && body.name ? body.name : `procella-cli-${caller.login}-${Date.now()}`;
-		const cleartext = await deps.auth.createCliAccessKey(caller, keyName);
-		return c.json({ token: cleartext });
-	});
+	app.post(
+		"/api/auth/cli-token",
+		async (c, next) => {
+			if (!deps.auth.createCliAccessKey) {
+				return c.json({ error: "CLI token creation not available in this auth mode" }, 400);
+			}
+			const caller = await deps.auth.authenticate(c.req.raw).catch(() => null);
+			if (!caller) {
+				return c.json({ error: "Unauthorized" }, 401);
+			}
+			if (caller.principalType !== "user") {
+				return c.json(
+					{ error: "CLI tokens can only be created from an interactive user session" },
+					403,
+				);
+			}
+			c.set("caller", caller);
+			await next();
+		},
+		withApiDecompress,
+		withCliTokenRateLimit,
+		async (c) => {
+			if (!deps.auth.createCliAccessKey) {
+				return c.json({ error: "CLI token creation not available in this auth mode" }, 400);
+			}
+			const caller = c.get("caller");
+			const body = await c.req.json<{ name?: string }>().catch(() => ({}));
+			const keyName =
+				"name" in body && body.name ? body.name : `procella-cli-${caller.login}-${Date.now()}`;
+			const cleartext = await deps.auth.createCliAccessKey(caller, keyName);
+			return c.json({ token: cleartext });
+		},
+	);
 
 	const oauth = oauthHandlers(deps.oidc ?? null);
-	app.post("/api/oauth/token", withOauthTokenRateLimit, oauth.tokenExchange);
+	app.post("/api/oauth/token", withOauthTokenRateLimit, withApiDecompress, oauth.tokenExchange);
 
 	// tRPC routes — queries, mutations, SSE subscriptions (short-lived ticket auth for GET)
-	app.all("/trpc/*", withTrpcMutationRateLimit, async (c) => {
-		const req = c.req.raw;
-		const { caller, invalidTicket } = await authenticateTrpcCaller(req, c.req.query("ticket"), {
+	app.all(
+		"/trpc/*",
+		withTrpcMutationRateLimit,
+		trpcAuth({
 			auth: deps.auth,
 			verifySubscriptionTicket: deps.verifySubscriptionTicket,
-		});
+		}),
+		withApiDecompress,
+		(c) => {
+			const caller = c.get("caller");
+			const ctx: TRPCContext = {
+				caller,
+				resolveUserDisplayName: (subject) => deps.auth.resolveUserDisplayName(subject),
+				issueSubscriptionTicket: deps.issueSubscriptionTicket,
+				db: deps.db,
+				dbUrl: deps.dbUrl,
+				stacks: deps.stacks,
+				audit: deps.audit,
+				updates: deps.updates,
+				webhooks: deps.webhooks,
+				esc: deps.esc,
+				github: deps.github,
+				oidcPolicies: deps.oidcPolicies ?? null,
+			};
 
-		if (invalidTicket) {
-			return c.json({ code: "invalid_ticket" }, 401);
-		}
-
-		if (!caller) {
-			return c.json({ code: 401, message: "Unauthorized" }, 401);
-		}
-
-		const ctx: TRPCContext = {
-			caller,
-			resolveUserDisplayName: (subject) => deps.auth.resolveUserDisplayName(subject),
-			issueSubscriptionTicket: deps.issueSubscriptionTicket,
-			db: deps.db,
-			dbUrl: deps.dbUrl,
-			stacks: deps.stacks,
-			audit: deps.audit,
-			updates: deps.updates,
-			webhooks: deps.webhooks,
-			esc: deps.esc,
-			github: deps.github,
-			oidcPolicies: deps.oidcPolicies ?? null,
-		};
-
-		return fetchRequestHandler({
-			endpoint: "/trpc",
-			req,
-			router: appRouter,
-			createContext: () => ctx,
-			onError({ error }) {
-				if (error.code !== "UNAUTHORIZED") {
-					console.error("[trpc]", projectError(error));
-				}
-			},
-		});
-	});
+			return fetchRequestHandler({
+				endpoint: "/trpc",
+				req: c.req.raw,
+				router: appRouter,
+				createContext: () => ctx,
+				onError({ error }) {
+					if (error.code !== "UNAUTHORIZED") {
+						console.error("[trpc]", projectError(error));
+					}
+				},
+			});
+		},
+	);
 
 	return app;
 }

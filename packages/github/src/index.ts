@@ -197,7 +197,7 @@ export function buildGitHubAppConfig(config: Config): GitHubAppConfig | null {
 }
 
 export async function verifyGitHubWebhookSignature(
-	payload: string,
+	payload: Uint8Array,
 	signature: string,
 	secret: string,
 ): Promise<boolean> {
@@ -213,7 +213,7 @@ export async function verifyGitHubWebhookSignature(
 		false,
 		["sign"],
 	);
-	const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload));
+	const sig = await crypto.subtle.sign("HMAC", key, payload as Uint8Array<ArrayBuffer>);
 	const computed = Array.from(new Uint8Array(sig))
 		.map((b) => b.toString(16).padStart(2, "0"))
 		.join("");

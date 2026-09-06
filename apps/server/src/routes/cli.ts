@@ -72,12 +72,6 @@ export function createCliApp(deps: CliAppDeps): Hono<Env> {
 	app.use("*", createSecurityHeadersMiddleware());
 	app.use("*", tracingMiddleware());
 	app.use("*", requestLogger());
-	app.use("/api/*", (c, next) => {
-		if (isCheckpointPath(c.req.path)) {
-			return next();
-		}
-		return withApiDecompress(c, next);
-	});
 
 	// Handler instances
 	const health = healthHandlers({
@@ -125,7 +119,7 @@ export function createCliApp(deps: CliAppDeps): Hono<Env> {
 	app.post("/api/webhooks/github", githubH.handleGitHubWebhook);
 
 	const oauth = oauthHandlers(deps.oidc ?? null);
-	app.post("/api/oauth/token", withOauthTokenRateLimit, oauth.tokenExchange);
+	app.post("/api/oauth/token", withOauthTokenRateLimit, withApiDecompress, oauth.tokenExchange);
 
 	// Update-token authenticated routes (during active update execution)
 	// Auth runs before decompress so unauthenticated requests are rejected before
@@ -149,14 +143,20 @@ export function createCliApp(deps: CliAppDeps): Hono<Env> {
 		withCheckpointDecompress,
 		checkpointH.patchCheckpointDelta,
 	);
-	app.patch(R.patchJournalEntries.path, withUpdateAuth, checkpointH.appendJournalEntries);
-	app.post(R.postEngineEventBatch.path, withUpdateAuth, eventH.postEvents);
-	app.post(R.renewLease.path, withUpdateAuth, eventH.renewLease);
-	app.post(R.completeUpdate.path, withUpdateAuth, updateH.completeUpdate);
+	app.patch(
+		R.patchJournalEntries.path,
+		withUpdateAuth,
+		withApiDecompress,
+		checkpointH.appendJournalEntries,
+	);
+	app.post(R.postEngineEventBatch.path, withUpdateAuth, withApiDecompress, eventH.postEvents);
+	app.post(R.renewLease.path, withUpdateAuth, withApiDecompress, eventH.renewLease);
+	app.post(R.completeUpdate.path, withUpdateAuth, withApiDecompress, updateH.completeUpdate);
 
 	// API-token authenticated routes
 	const api = new Hono<Env>();
 	api.use("*", withApiAuth);
+	api.use("*", withApiDecompress);
 	api.use("*", withAudit);
 	const roleMiddlewareByMethod = new Map<string, MiddlewareHandler<Env>>(
 		Object.entries(METHOD_ROLE_MAP).map(([method, role]) => [method, requireRoleMiddleware(role)]),
@@ -320,10 +320,4 @@ export function createCliApp(deps: CliAppDeps): Hono<Env> {
 
 	app.route("/api", api);
 	return app;
-}
-
-function isCheckpointPath(path: string): boolean {
-	return /\/api\/stacks\/[^/]+\/[^/]+\/[^/]+\/[^/]+\/[^/]+\/(checkpoint|checkpointverbatim|checkpointdelta)$/.test(
-		path,
-	);
 }

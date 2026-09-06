@@ -74,25 +74,36 @@ describe("decompress middleware", () => {
 		expect(body.code).toBe(400);
 	});
 
-	test("returns 413 when compressed payload exceeds 20MB", async () => {
+	test("stops reading when the compressed payload exceeds 20 MiB", async () => {
 		const app = createApp();
-		// Create a buffer just over 20MB
-		const oversized = new Uint8Array(20 * 1024 * 1024 + 1);
-		// Add gzip magic bytes to make it look like gzip
-		oversized[0] = 0x1f;
-		oversized[1] = 0x8b;
-
-		const res = await app.request("/test", {
+		const compressed = gzipSync(Buffer.alloc(24 * 1024 * 1024), { level: 0 });
+		let offset = 0;
+		let cancelled = false;
+		const stream = new ReadableStream<Uint8Array>({
+			pull(controller) {
+				const end = Math.min(offset + 256 * 1024, compressed.byteLength);
+				controller.enqueue(compressed.subarray(offset, end));
+				offset = end;
+				if (offset === compressed.byteLength) controller.close();
+			},
+			cancel() {
+				cancelled = true;
+			},
+		});
+		const request = new Request("http://localhost/test", {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
 				"Content-Encoding": "gzip",
 			},
-			body: oversized,
+			body: stream,
 		});
+
+		const res = await app.fetch(request);
 		expect(res.status).toBe(413);
-		const body = await res.json();
-		expect(body.message).toContain("too large");
+		expect((await res.json()).message).toContain("too large");
+		expect(offset).toBeLessThan(compressed.byteLength);
+		expect(cancelled).toBe(true);
 	});
 
 	test("handles nested JSON objects in gzip", async () => {
