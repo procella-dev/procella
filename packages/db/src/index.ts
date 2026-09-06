@@ -8,6 +8,11 @@
 // Neon connection strings use *.neon.tech hosts; everything else (localhost,
 // 127.0.0.1, Docker hostnames, RDS, Supabase) uses Bun's native driver.
 
+import {
+	getDirectNeonMigrationUrl,
+	MIGRATIONS_ADVISORY_LOCK_ID,
+	releaseMigrationLock,
+} from "./migration-lock.js";
 import { schema } from "./schema.js";
 
 // Re-export schema for consumers
@@ -175,8 +180,25 @@ export async function runMigrations(
 		const { migrate } = await import("drizzle-orm/bun-sql/migrator");
 		const client = new SQL({ url });
 		try {
-			const db = drizzle({ client });
-			await migrate(db, { migrationsFolder });
+			const connection = await client.reserve();
+			let locked = false;
+			try {
+				await connection.unsafe("SELECT pg_advisory_lock($1)", [
+					MIGRATIONS_ADVISORY_LOCK_ID.toString(),
+				]);
+				locked = true;
+				const db = drizzle({ client: connection });
+				await migrate(db, { migrationsFolder });
+			} finally {
+				await releaseMigrationLock(
+					locked,
+					() =>
+						connection.unsafe("SELECT pg_advisory_unlock($1)", [
+							MIGRATIONS_ADVISORY_LOCK_ID.toString(),
+						]),
+					() => connection.release(),
+				);
+			}
 		} finally {
 			await client.close();
 		}
@@ -190,10 +212,27 @@ export async function runMigrations(
 		neonConfig.webSocketConstructor = (await import("ws")).default;
 	}
 
-	const pool = new Pool({ connectionString: url });
+	const pool = new Pool({ connectionString: getDirectNeonMigrationUrl(url) });
 	try {
-		const db = drizzle({ client: pool });
-		await migrate(db, { migrationsFolder });
+		const connection = await pool.connect();
+		let locked = false;
+		try {
+			await connection.query("SELECT pg_advisory_lock($1)", [
+				MIGRATIONS_ADVISORY_LOCK_ID.toString(),
+			]);
+			locked = true;
+			const db = drizzle({ client: connection });
+			await migrate(db, { migrationsFolder });
+		} finally {
+			await releaseMigrationLock(
+				locked,
+				() =>
+					connection.query("SELECT pg_advisory_unlock($1)", [
+						MIGRATIONS_ADVISORY_LOCK_ID.toString(),
+					]),
+				() => connection.release(),
+			);
+		}
 	} finally {
 		await pool.end();
 	}
