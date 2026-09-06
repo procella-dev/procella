@@ -258,6 +258,7 @@ describe("Settings authorization", () => {
 		const page = render(createElement(Settings));
 		expect(page.getByText("GitHub App installation connected successfully.")).toBeTruthy();
 		expect(page.getByText("Selected repositories")).toBeTruthy();
+		expect(page.getByText("Connect another GitHub account")).toBeTruthy();
 		fireEvent.click(page.getByRole("button", { name: "Verify & Configure" }));
 		await waitFor(() =>
 			expect(createInstallationUrl).toHaveBeenCalledWith({ accountLogin: "acme" }),

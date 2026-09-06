@@ -200,7 +200,11 @@ function GitHubSettingsTab() {
 			)}
 
 			{status.installations.length === 0 ? (
-				<GitHubNotConnected onConnect={handleConnect} pending={createUrlMutation.isPending} />
+				<GitHubAccountConnect
+					title="GitHub App is not installed"
+					onConnect={handleConnect}
+					pending={createUrlMutation.isPending}
+				/>
 			) : (
 				<>
 					<div className="flex items-center justify-between gap-4">
@@ -259,6 +263,11 @@ function GitHubSettingsTab() {
 							</div>
 						</div>
 					))}
+					<GitHubAccountConnect
+						title="Connect another GitHub account"
+						onConnect={handleConnect}
+						pending={createUrlMutation.isPending}
+					/>
 				</>
 			)}
 
@@ -332,16 +341,18 @@ PROCELLA_GITHUB_APP_WEBHOOK_SECRET=<your-webhook-secret>`}
 	);
 }
 
-function GitHubNotConnected({
+function GitHubAccountConnect({
+	title,
 	onConnect,
 	pending,
 }: {
+	title: string;
 	onConnect: (accountLogin: string) => void;
 	pending: boolean;
 }) {
 	return (
 		<div className="bg-slate-brand/30 border border-slate-brand/60 rounded-xl p-8">
-			<h3 className="text-sm font-semibold text-mist mb-1.5">GitHub App is not installed</h3>
+			<h3 className="text-sm font-semibold text-mist mb-1.5">{title}</h3>
 			<p className="text-sm text-cloud leading-relaxed mb-5">
 				Enter the GitHub user or organization account to connect. GitHub will verify that your user
 				owns the account or is an active organization administrator.
