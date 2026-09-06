@@ -8,6 +8,11 @@
 // Neon connection strings use *.neon.tech hosts; everything else (localhost,
 // 127.0.0.1, Docker hostnames, RDS, Supabase) uses Bun's native driver.
 
+import {
+	getDirectNeonMigrationUrl,
+	MIGRATIONS_ADVISORY_LOCK_ID,
+	releaseMigrationLock,
+} from "./migration-lock.js";
 import { schema } from "./schema.js";
 
 // Re-export schema for consumers
@@ -133,8 +138,6 @@ export async function createDbFromUrl(
 // Migrations
 // ============================================================================
 
-const MIGRATIONS_ADVISORY_LOCK_ID = 5_796_818_143_073_299_553n; // "Procella"
-
 export async function ensureDatabase(adminUrl: string, dbName: string): Promise<void> {
 	if (!isNeonHost(adminUrl)) {
 		const { SQL } = require("bun") as typeof import("bun");
@@ -187,15 +190,14 @@ export async function runMigrations(
 				const db = drizzle({ client: connection });
 				await migrate(db, { migrationsFolder });
 			} finally {
-				try {
-					if (locked) {
-						await connection.unsafe("SELECT pg_advisory_unlock($1)", [
+				await releaseMigrationLock(
+					locked,
+					() =>
+						connection.unsafe("SELECT pg_advisory_unlock($1)", [
 							MIGRATIONS_ADVISORY_LOCK_ID.toString(),
-						]);
-					}
-				} finally {
-					connection.release();
-				}
+						]),
+					() => connection.release(),
+				);
 			}
 		} finally {
 			await client.close();
@@ -210,7 +212,7 @@ export async function runMigrations(
 		neonConfig.webSocketConstructor = (await import("ws")).default;
 	}
 
-	const pool = new Pool({ connectionString: url });
+	const pool = new Pool({ connectionString: getDirectNeonMigrationUrl(url) });
 	try {
 		const connection = await pool.connect();
 		let locked = false;
@@ -222,15 +224,14 @@ export async function runMigrations(
 			const db = drizzle({ client: connection });
 			await migrate(db, { migrationsFolder });
 		} finally {
-			try {
-				if (locked) {
-					await connection.query("SELECT pg_advisory_unlock($1)", [
+			await releaseMigrationLock(
+				locked,
+				() =>
+					connection.query("SELECT pg_advisory_unlock($1)", [
 						MIGRATIONS_ADVISORY_LOCK_ID.toString(),
-					]);
-				}
-			} finally {
-				connection.release();
-			}
+					]),
+				() => connection.release(),
+			);
 		}
 	} finally {
 		await pool.end();
