@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import { trpcTransformer } from "@procella/api/src/trpc.js";
 import type { AuthService } from "@procella/auth";
 import type { Caller, SubscriptionTicketScope } from "@procella/types";
@@ -8,6 +8,9 @@ import { authenticateTrpcCaller } from "./trpc-auth.js";
 
 const SIGNING_KEY = "ticket-signing-key-ticket-signing-key";
 const WRONG_SIGNING_KEY = "wrong-ticket-signing-key-wrong-key";
+const ticketStore = {
+	consume: async () => true,
+};
 
 const caller: Caller = {
 	tenantId: "tenant-1",
@@ -70,7 +73,8 @@ describe("authenticateTrpcCaller", () => {
 			undefined,
 			{
 				auth: mockAuthService(caller),
-				verifySubscriptionTicket: createSubscriptionTicketService(SIGNING_KEY).verifyTicket,
+				verifySubscriptionTicket: createSubscriptionTicketService(SIGNING_KEY, ticketStore)
+					.verifyTicket,
 			},
 		);
 
@@ -96,7 +100,8 @@ describe("authenticateTrpcCaller", () => {
 
 		const result = await authenticateTrpcCaller(subscriptionRequest(), expiredTicket, {
 			auth: mockAuthService(null),
-			verifySubscriptionTicket: createSubscriptionTicketService(SIGNING_KEY).verifyTicket,
+			verifySubscriptionTicket: createSubscriptionTicketService(SIGNING_KEY, ticketStore)
+				.verifyTicket,
 		});
 
 		expect(result).toEqual({ caller: null, invalidTicket: true });
@@ -105,18 +110,20 @@ describe("authenticateTrpcCaller", () => {
 	test("rejects a wrong-signature ticket", async () => {
 		const wrongSignatureTicket = await createSubscriptionTicketService(
 			WRONG_SIGNING_KEY,
+			ticketStore,
 		).issueTicket(caller, scope);
 
 		const result = await authenticateTrpcCaller(subscriptionRequest(), wrongSignatureTicket, {
 			auth: mockAuthService(null),
-			verifySubscriptionTicket: createSubscriptionTicketService(SIGNING_KEY).verifyTicket,
+			verifySubscriptionTicket: createSubscriptionTicketService(SIGNING_KEY, ticketStore)
+				.verifyTicket,
 		});
 
 		expect(result).toEqual({ caller: null, invalidTicket: true });
 	});
 
 	test("accepts a valid ticket and reconstructs the caller from claims", async () => {
-		const service = createSubscriptionTicketService(SIGNING_KEY);
+		const service = createSubscriptionTicketService(SIGNING_KEY, ticketStore);
 		const ticket = await service.issueTicket(caller, scope);
 
 		const result = await authenticateTrpcCaller(subscriptionRequest(), ticket, {
@@ -128,7 +135,7 @@ describe("authenticateTrpcCaller", () => {
 	});
 
 	test("rejects a ticket used for a different procedure", async () => {
-		const service = createSubscriptionTicketService(SIGNING_KEY);
+		const service = createSubscriptionTicketService(SIGNING_KEY, ticketStore);
 		const ticket = await service.issueTicket(caller, scope);
 
 		const result = await authenticateTrpcCaller(
@@ -144,7 +151,7 @@ describe("authenticateTrpcCaller", () => {
 	});
 
 	test("rejects a ticket used for a different resource", async () => {
-		const service = createSubscriptionTicketService(SIGNING_KEY);
+		const service = createSubscriptionTicketService(SIGNING_KEY, ticketStore);
 		const ticket = await service.issueTicket(caller, scope);
 
 		const result = await authenticateTrpcCaller(
@@ -159,8 +166,10 @@ describe("authenticateTrpcCaller", () => {
 		expect(result).toEqual({ caller: null, invalidTicket: true });
 	});
 
-	test("rejects a ticket when SuperJSON references change the executed resource", async () => {
-		const service = createSubscriptionTicketService(SIGNING_KEY);
+	test("rejects an effective SuperJSON scope mismatch without consuming the ticket", async () => {
+		const consume = mock(async () => true);
+		const store = { consume };
+		const service = createSubscriptionTicketService(SIGNING_KEY, store);
 		const ticket = await service.issueTicket(caller, scope);
 		const envelope = {
 			json: { ...scope.resource, otherOrg: "other-org" },
@@ -179,10 +188,18 @@ describe("authenticateTrpcCaller", () => {
 		);
 
 		expect(result).toEqual({ caller: null, invalidTicket: true });
+		expect(consume).not.toHaveBeenCalled();
+		expect(
+			await authenticateTrpcCaller(subscriptionRequest(), ticket, {
+				auth: mockAuthService(null),
+				verifySubscriptionTicket: service.verifyTicket,
+			}),
+		).toEqual({ caller, invalidTicket: false });
+		expect(consume).toHaveBeenCalledTimes(1);
 	});
 
 	test("rejects batch and non-SuperJSON ticket input shapes", async () => {
-		const service = createSubscriptionTicketService(SIGNING_KEY);
+		const service = createSubscriptionTicketService(SIGNING_KEY, ticketStore);
 		const ticket = await service.issueTicket(caller, scope);
 		const incompatibleRequests = [
 			subscriptionRequest(scope.procedure, scope.resource, { batch: true }),
@@ -200,7 +217,7 @@ describe("authenticateTrpcCaller", () => {
 	});
 
 	test("accepts reconnect envelope fields ignored by the tRPC transformer", async () => {
-		const service = createSubscriptionTicketService(SIGNING_KEY);
+		const service = createSubscriptionTicketService(SIGNING_KEY, ticketStore);
 		const ticket = await service.issueTicket(caller, scope);
 		const envelope = { ...trpcTransformer.serialize(scope.resource), lastEventId: 42 };
 
@@ -217,7 +234,7 @@ describe("authenticateTrpcCaller", () => {
 	});
 
 	test("accepts a stack activity ticket for its intended stack", async () => {
-		const service = createSubscriptionTicketService(SIGNING_KEY);
+		const service = createSubscriptionTicketService(SIGNING_KEY, ticketStore);
 		const ticket = await service.issueTicket(caller, stackActivityScope);
 
 		const result = await authenticateTrpcCaller(

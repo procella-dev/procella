@@ -1,9 +1,11 @@
+import { type Database, subscriptionTicketNonces } from "@procella/db";
 import {
 	type Caller,
 	type SubscriptionTicketScope,
 	subscriptionTicketScopeSchema,
 	type WorkloadIdentity,
 } from "@procella/types";
+import { and, eq, lte, sql } from "drizzle-orm";
 import { jwtVerify, SignJWT } from "jose";
 import { z } from "zod/v4";
 
@@ -43,18 +45,62 @@ const callerClaimsSchema = z.object({
 type CallerClaims = z.infer<typeof callerClaimsSchema>;
 
 const subscriptionTicketClaimsSchema = z.intersection(
-	callerClaimsSchema,
+	callerClaimsSchema.extend({
+		jti: z.string().uuid(),
+		exp: z.number().int().positive(),
+	}),
 	subscriptionTicketScopeSchema,
 );
 
 type SubscriptionTicketClaims = z.infer<typeof subscriptionTicketClaimsSchema>;
+
+export interface SubscriptionTicketStore {
+	consume(nonce: string, expiresAt: Date): Promise<boolean>;
+}
+
+export class PostgresSubscriptionTicketStore implements SubscriptionTicketStore {
+	constructor(private readonly db: Database) {}
+
+	async consume(nonce: string, expiresAt: Date): Promise<boolean> {
+		return this.db.transaction(async (tx) => {
+			const [inserted] = await tx
+				.insert(subscriptionTicketNonces)
+				.values({ nonce, expiresAt })
+				.onConflictDoNothing()
+				.returning({ nonce: subscriptionTicketNonces.nonce });
+			if (!inserted) return false;
+
+			// `now()` is the transaction's snapshot timestamp: it stays frozen at BEGIN
+			// for the entire transaction, including nested savepoints. A transaction that
+			// starts just before a ticket's real expiry would see that stale pre-expiry
+			// value here even after real time has since passed expiresAt, so a nonce row
+			// recreated after cleanup could pass this guard as "not expired" when it is.
+			// clock_timestamp() re-evaluates the actual current time on every call, so it
+			// always reflects real elapsed time regardless of how long the transaction
+			// (or an enclosing transaction, via savepoint) has been open.
+			const [expired] = await tx
+				.delete(subscriptionTicketNonces)
+				.where(
+					and(
+						eq(subscriptionTicketNonces.nonce, nonce),
+						lte(subscriptionTicketNonces.expiresAt, sql`clock_timestamp()`),
+					),
+				)
+				.returning({ nonce: subscriptionTicketNonces.nonce });
+			return expired === undefined;
+		});
+	}
+}
 
 export interface SubscriptionTicketService {
 	issueTicket(caller: Caller, scope: SubscriptionTicketScope): Promise<string>;
 	verifyTicket(ticket: string, scope: SubscriptionTicketScope): Promise<Caller>;
 }
 
-export function createSubscriptionTicketService(signingKey: string): SubscriptionTicketService {
+export function createSubscriptionTicketService(
+	signingKey: string,
+	store: SubscriptionTicketStore,
+): SubscriptionTicketService {
 	const secret = new TextEncoder().encode(signingKey);
 
 	return {
@@ -64,6 +110,7 @@ export function createSubscriptionTicketService(signingKey: string): Subscriptio
 				.setProtectedHeader({ alg: "HS256", typ: "JWT" })
 				.setIssuer(SUBSCRIPTION_TICKET_ISSUER)
 				.setAudience(SUBSCRIPTION_TICKET_AUDIENCE)
+				.setJti(crypto.randomUUID())
 				.setIssuedAt()
 				.setExpirationTime(`${SUBSCRIPTION_TICKET_TTL_SECONDS}s`)
 				.sign(secret);
@@ -92,7 +139,13 @@ export function createSubscriptionTicketService(signingKey: string): Subscriptio
 				throw new Error("Subscription ticket scope does not match request");
 			}
 
-			return claimsToCaller(claims);
+			const caller = claimsToCaller(claims);
+			const consumed = await store.consume(claims.jti, new Date(claims.exp * 1000));
+			if (!consumed) {
+				throw new Error("Subscription ticket has already been used");
+			}
+
+			return caller;
 		},
 	};
 }

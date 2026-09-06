@@ -363,6 +363,19 @@ export const githubSetupStates = pgTable(
 	(table) => [index("idx_github_setup_states_expires").on(table.expiresAt)],
 );
 
+// ============================================================================
+// subscription_ticket_nonces — Single-use SSE ticket replay prevention
+// ============================================================================
+
+export const subscriptionTicketNonces = pgTable(
+	"subscription_ticket_nonces",
+	{
+		nonce: text().primaryKey(),
+		expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+	},
+	(table) => [index("idx_subscription_ticket_nonces_expires").on(table.expiresAt)],
+);
+
 export const oidcTrustPolicies = pgTable(
 	"oidc_trust_policies",
 	{
@@ -555,6 +568,7 @@ export const schema = {
 	githubInstallations,
 	githubSetupStates,
 	oidcTrustPolicies,
+	subscriptionTicketNonces,
 	escProjects,
 	escEnvironments,
 	escEnvironmentRevisions,

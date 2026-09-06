@@ -73,8 +73,14 @@ describe("@procella/updates GCWorker", () => {
 						where: () => ({
 							orderBy: () => ({
 								for: () => Promise.resolve([{ id: "stack-1" }]),
+								limit: () => Promise.resolve([]),
 							}),
 						}),
+					}),
+				}),
+				delete: () => ({
+					where: () => ({
+						returning: () => Promise.resolve([]),
 					}),
 				}),
 				update: () => ({

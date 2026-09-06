@@ -8,6 +8,7 @@ let dbOpsCounter: Counter | null = null;
 let cryptoOps: Counter | null = null;
 let gcCycles: Counter | null = null;
 let gcOrphansCleaned: Counter | null = null;
+let gcTicketNoncesCleaned: Counter | null = null;
 let activeUpdates: UpDownCounter | null = null;
 let checkpointSizeBytes: Histogram | null = null;
 let journalEntriesCounter: Counter | null = null;
@@ -52,6 +53,13 @@ export function gcCycleCount(): Counter {
 export function gcOrphansCleanedCount(): Counter {
 	if (!gcOrphansCleaned) gcOrphansCleaned = getMeter().createCounter("procella.gc.orphans_cleaned");
 	return gcOrphansCleaned;
+}
+
+export function gcTicketNoncesCleanedCount(): Counter {
+	if (!gcTicketNoncesCleaned) {
+		gcTicketNoncesCleaned = getMeter().createCounter("procella.gc.ticket_nonces_cleaned");
+	}
+	return gcTicketNoncesCleaned;
 }
 
 export function activeUpdatesGauge(): UpDownCounter {

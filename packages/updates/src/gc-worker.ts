@@ -1,17 +1,23 @@
 // @procella/updates — GC Worker for cleaning up stale/orphaned updates.
 
 import type { Database } from "@procella/db";
-import { githubUpdateOutbox, stacks, updates } from "@procella/db";
-import { activeUpdatesGauge, gcCycleCount, gcOrphansCleanedCount } from "@procella/telemetry";
+import { githubUpdateOutbox, stacks, subscriptionTicketNonces, updates } from "@procella/db";
+import {
+	activeUpdatesGauge,
+	gcCycleCount,
+	gcOrphansCleanedCount,
+	gcTicketNoncesCleanedCount,
+} from "@procella/telemetry";
 import { projectError } from "@procella/types";
 import { enqueueWebhookEvent } from "@procella/webhooks";
-import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
+import { and, eq, inArray, lt, lte, or, sql } from "drizzle-orm";
 import { loadUpdateWebhookContext } from "./postgres.js";
 import {
 	GC_ADVISORY_LOCK_ID,
 	GC_INTERVAL_MS,
 	GC_LEASE_GRACE_MS,
 	GC_STALE_THRESHOLD_MS,
+	SUBSCRIPTION_TICKET_NONCE_GC_BATCH_SIZE,
 } from "./types.js";
 
 // ============================================================================
@@ -80,6 +86,25 @@ export class GCWorker {
 					return null;
 				}
 
+				// Bounded so a large backlog cannot monopolize this cycle's hold on the
+				// advisory lock; any remainder is picked up on the next cycle. Runs
+				// unconditionally once the lock is held, independent of orphaned updates.
+				const expiredNonces = await tx
+					.delete(subscriptionTicketNonces)
+					.where(
+						inArray(
+							subscriptionTicketNonces.nonce,
+							tx
+								.select({ nonce: subscriptionTicketNonces.nonce })
+								.from(subscriptionTicketNonces)
+								.where(lte(subscriptionTicketNonces.expiresAt, sql`now()`))
+								.orderBy(subscriptionTicketNonces.expiresAt)
+								.limit(SUBSCRIPTION_TICKET_NONCE_GC_BATCH_SIZE),
+						),
+					)
+					.returning({ nonce: subscriptionTicketNonces.nonce });
+				const noncesCleaned = expiredNonces.length;
+
 				const now = new Date();
 				const graceThreshold = new Date(now.getTime() - GC_LEASE_GRACE_MS);
 				const staleThreshold = new Date(now.getTime() - GC_STALE_THRESHOLD_MS);
@@ -98,7 +123,7 @@ export class GCWorker {
 					.orderBy(updates.stackId);
 
 				if (candidateStacks.length === 0) {
-					return { orphanCount: 0, expiredRunningCount: 0 };
+					return { orphanCount: 0, expiredRunningCount: 0, noncesCleaned };
 				}
 
 				// Stack deletion and every update lifecycle writer acquire stack rows before
@@ -117,7 +142,7 @@ export class GCWorker {
 					.for("update");
 				const lockedStackIds = lockedStacks.map(({ id }) => id);
 				if (lockedStackIds.length === 0) {
-					return { orphanCount: 0, expiredRunningCount: 0 };
+					return { orphanCount: 0, expiredRunningCount: 0, noncesCleaned };
 				}
 
 				const expiredLeaseUpdates = await tx
@@ -209,6 +234,7 @@ export class GCWorker {
 				return {
 					orphanCount: allOrphans.length,
 					expiredRunningCount: expiredLeaseUpdates.length,
+					noncesCleaned,
 				};
 			});
 
@@ -217,6 +243,7 @@ export class GCWorker {
 				activeUpdatesGauge().add(-result.expiredRunningCount);
 			}
 			gcOrphansCleanedCount().add(result.orphanCount);
+			gcTicketNoncesCleanedCount().add(result.noncesCleaned);
 		} finally {
 			this.running = false;
 		}

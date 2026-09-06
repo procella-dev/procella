@@ -95,22 +95,34 @@ function withLastEventId(url: URL, lastEventId: string | undefined): void {
 			return;
 		}
 
-		url.searchParams.set(
-			"input",
-			JSON.stringify({
-				...parsed,
-				lastEventId: coerceLastEventId(lastEventId),
-			}),
-		);
+		const serializedInput =
+			"json" in parsed
+				? isRecord(parsed.json)
+					? {
+							...parsed,
+							json: {
+								...parsed.json,
+								lastEventId: coerceLastEventId(lastEventId),
+							},
+						}
+					: null
+				: { ...parsed, lastEventId: coerceLastEventId(lastEventId) };
+		if (serializedInput) {
+			url.searchParams.set("input", JSON.stringify(serializedInput));
+		}
 	} catch {
 		// Ignore malformed client-generated URLs and reconnect without replay state.
 	}
 }
 
-async function buildSubscriptionUrl(baseUrl: string, lastEventId?: string): Promise<string> {
+async function buildSubscriptionUrl(
+	baseUrl: string,
+	lastEventId: string | undefined,
+	getTicket: (scope: SubscriptionTicketScope) => Promise<string>,
+): Promise<string> {
 	const url = new URL(baseUrl);
 	withLastEventId(url, lastEventId);
-	url.searchParams.set("ticket", await fetchSubscriptionTicket(subscriptionScopeFromUrl(url)));
+	url.searchParams.set("ticket", await getTicket(subscriptionScopeFromUrl(url)));
 	return url.toString();
 }
 
@@ -123,8 +135,13 @@ function dispatchListener(listener: EventSourceListener, event: Event): void {
 	listener.handleEvent(event);
 }
 
-function createTicketRefreshingEventSource() {
-	const NativeEventSource = globalThis.EventSource;
+export function createTicketRefreshingEventSource(
+	NativeEventSource: typeof EventSource | undefined = globalThis.EventSource,
+	getTicket: (scope: SubscriptionTicketScope) => Promise<string> = fetchSubscriptionTicket,
+	scheduleReconnect: (reconnect: () => void) => void = (reconnect) => {
+		setTimeout(reconnect, 1000);
+	},
+) {
 	if (!NativeEventSource) {
 		return undefined;
 	}
@@ -202,7 +219,7 @@ function createTicketRefreshingEventSource() {
 
 			this.#connecting = true;
 			try {
-				const authenticatedUrl = await buildSubscriptionUrl(this.url, this.#lastEventId);
+				const authenticatedUrl = await buildSubscriptionUrl(this.url, this.#lastEventId, getTicket);
 				if (this.#closed) {
 					return;
 				}
@@ -227,26 +244,34 @@ function createTicketRefreshingEventSource() {
 				};
 
 				source.onerror = (event) => {
-					this.#readyState = source.readyState;
+					if (source !== this.#source) {
+						return;
+					}
+
+					source.close();
+					this.#source = null;
+					this.#readyState = NativeEventSource.CONNECTING;
 					this.onerror?.(event);
 					this.#emit("error", event);
 
-					if (!this.#closed && source.readyState === NativeEventSource.CLOSED) {
-						source.close();
-						queueMicrotask(() => {
+					if (!this.#closed) {
+						scheduleReconnect(() => {
 							void this.#connect();
 						});
 					}
 				};
 			} catch (error) {
-				this.#readyState = NativeEventSource.CLOSED;
+				if (this.#closed) {
+					return;
+				}
+				this.#readyState = NativeEventSource.CONNECTING;
 				const event = new CustomEvent("error", { detail: error });
 				this.onerror?.(event);
 				this.#emit("error", event);
 				if (!this.#closed) {
-					setTimeout(() => {
+					scheduleReconnect(() => {
 						void this.#connect();
-					}, 1000);
+					});
 				}
 			} finally {
 				this.#connecting = false;
