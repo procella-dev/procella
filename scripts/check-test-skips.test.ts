@@ -1,5 +1,9 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
+import { rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
+	checkTestSkips,
 	collectSkippedTests,
 	EXPECTED_SKIP_FILES,
 	findUnexpectedSkips,
@@ -11,6 +15,12 @@ function report(testCases: string): string {
 
 function skippedTest(file: string, name = "skipped test"): string {
 	return `<testcase name="${name}" file="${file}"><skipped /></testcase>`;
+}
+
+async function writeReport(testCases: string): Promise<string> {
+	const path = join(tmpdir(), `procella-test-skips-${crypto.randomUUID()}.xml`);
+	await Bun.write(path, report(testCases));
+	return path;
 }
 
 describe("CI skipped-test guard", () => {
@@ -47,5 +57,59 @@ describe("CI skipped-test guard", () => {
 		);
 
 		expect(collectSkippedTests(xml)).toEqual([{ file: "e2e/oidc.test.ts", name: "secret-gated" }]);
+	});
+
+	test("requires at least one JUnit report", async () => {
+		const error = spyOn(console, "error").mockImplementation(() => {});
+		try {
+			expect(await checkTestSkips([])).toBe(2);
+			expect(error).toHaveBeenCalledWith(
+				"Usage: bun run scripts/check-test-skips.ts <junit-report> [...]",
+			);
+		} finally {
+			error.mockRestore();
+		}
+	});
+
+	test("accepts a report without skipped tests", async () => {
+		const path = await writeReport('<testcase name="passes" file="test.ts" />');
+		const log = spyOn(console, "log").mockImplementation(() => {});
+		try {
+			expect(await checkTestSkips([path])).toBe(0);
+			expect(log).toHaveBeenCalledWith("Verified 1 test report(s): no skipped tests.");
+		} finally {
+			log.mockRestore();
+			await rm(path, { force: true });
+		}
+	});
+
+	test("reports allowlisted skips with their reason", async () => {
+		const path = await writeReport(skippedTest("e2e/oidc.test.ts", "secret-gated"));
+		const log = spyOn(console, "log").mockImplementation(() => {});
+		try {
+			expect(await checkTestSkips([path])).toBe(0);
+			expect(log).toHaveBeenCalledWith(
+				"Allowed skips in e2e/oidc.test.ts: requires Descope credentials",
+			);
+		} finally {
+			log.mockRestore();
+			await rm(path, { force: true });
+		}
+	});
+
+	test("fails a report containing an unexpected skip", async () => {
+		const path = await writeReport(
+			skippedTest("packages/esc/src/service.test.ts", "requires postgres"),
+		);
+		const error = spyOn(console, "error").mockImplementation(() => {});
+		try {
+			expect(await checkTestSkips([path])).toBe(1);
+			expect(error).toHaveBeenCalledWith(
+				"::error file=packages/esc/src/service.test.ts::Unexpected skipped test: requires postgres",
+			);
+		} finally {
+			error.mockRestore();
+			await rm(path, { force: true });
+		}
 	});
 });
