@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { adminProcedure, protectedProcedure, router, type TRPCContext } from "./trpc.js";
+import { ConflictError, NotFoundError } from "@procella/types";
+import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
+import {
+	adminProcedure,
+	protectedProcedure,
+	publicProcedure,
+	router,
+	type TRPCContext,
+} from "./trpc.js";
 
 function buildContext(overrides?: Partial<TRPCContext>): TRPCContext {
 	return {
@@ -23,6 +31,36 @@ function buildContext(overrides?: Partial<TRPCContext>): TRPCContext {
 		oidcPolicies: null,
 		...overrides,
 	};
+}
+
+interface ErrorResponse {
+	error: {
+		json: {
+			message: string;
+			code: number;
+			data: {
+				code: string;
+				httpStatus: number;
+				stack?: string;
+			};
+		};
+	};
+}
+
+async function formatError(error: Error): Promise<{ response: Response; body: ErrorResponse }> {
+	const testRouter = router({
+		fail: publicProcedure.query(() => {
+			throw error;
+		}),
+	});
+	const response = await fetchRequestHandler({
+		endpoint: "/trpc",
+		req: new Request("https://procella.test/trpc/fail"),
+		router: testRouter,
+		createContext: () => buildContext(),
+	});
+
+	return { response, body: (await response.json()) as ErrorResponse };
 }
 
 describe("trpc procedures", () => {
@@ -103,5 +141,51 @@ describe("trpc procedures", () => {
 			tenantId: "t-1",
 			roles: ["admin"],
 		});
+	});
+});
+
+describe("trpc error formatting", () => {
+	for (const testCase of [
+		{
+			name: "not found",
+			error: new NotFoundError("Stack", "example"),
+			message: "Stack not found: example",
+			code: "NOT_FOUND",
+			jsonRpcCode: -32004,
+			status: 404,
+		},
+		{
+			name: "conflict",
+			error: new ConflictError("Stack already exists"),
+			message: "Stack already exists",
+			code: "CONFLICT",
+			jsonRpcCode: -32009,
+			status: 409,
+		},
+	]) {
+		test(`maps ${testCase.name} domain errors`, async () => {
+			const { response, body } = await formatError(testCase.error);
+
+			expect(response.status).toBe(testCase.status);
+			expect(body.error.json).toMatchObject({
+				message: testCase.message,
+				code: testCase.jsonRpcCode,
+				data: { code: testCase.code, httpStatus: testCase.status },
+			});
+		});
+	}
+
+	test("redacts non-client error details", async () => {
+		const secret = "postgres://secret-internal-connection";
+		const { response, body } = await formatError(new Error(secret));
+
+		expect(response.status).toBe(500);
+		expect(body.error.json).toMatchObject({
+			message: "Internal server error",
+			code: -32603,
+			data: { code: "INTERNAL_SERVER_ERROR", httpStatus: 500 },
+		});
+		expect(body.error.json.data).not.toHaveProperty("stack");
+		expect(JSON.stringify(body)).not.toContain(secret);
 	});
 });

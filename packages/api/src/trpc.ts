@@ -7,10 +7,11 @@ import type { GitHubService } from "@procella/github";
 import type { TrustPolicyRepository } from "@procella/oidc";
 import type { StacksService } from "@procella/stacks";
 import { trpcProcedureDuration, withSpan } from "@procella/telemetry";
-import type { Caller } from "@procella/types";
+import { type Caller, ProcellaError } from "@procella/types";
 import type { UpdatesService } from "@procella/updates";
 import type { WebhooksService } from "@procella/webhooks";
-import { initTRPC, TRPCError } from "@trpc/server";
+import { initTRPC, type TRPC_ERROR_CODE_KEY, TRPCError } from "@trpc/server";
+import { TRPC_ERROR_CODES_BY_KEY } from "@trpc/server/rpc";
 import superjson from "superjson";
 
 // ============================================================================
@@ -36,8 +37,41 @@ export interface TRPCContext {
 // tRPC Instance
 // ============================================================================
 
+const TRPC_CODE_BY_STATUS: Partial<Record<number, TRPC_ERROR_CODE_KEY>> = {
+	400: "BAD_REQUEST",
+	401: "UNAUTHORIZED",
+	403: "FORBIDDEN",
+	404: "NOT_FOUND",
+	409: "CONFLICT",
+	422: "UNPROCESSABLE_CONTENT",
+};
+
 const t = initTRPC.context<TRPCContext>().create({
 	transformer: superjson,
+	errorFormatter({ error, shape }) {
+		const domainError = error.cause instanceof ProcellaError ? error.cause : undefined;
+		const code = domainError
+			? (TRPC_CODE_BY_STATUS[domainError.statusCode] ?? "INTERNAL_SERVER_ERROR")
+			: error.code;
+		const httpStatus = domainError ? domainError.statusCode : shape.data.httpStatus;
+
+		if (httpStatus >= 400 && httpStatus < 500) {
+			return {
+				...shape,
+				message: domainError?.message ?? shape.message,
+				code: TRPC_ERROR_CODES_BY_KEY[code],
+				data: { ...shape.data, code, httpStatus },
+			};
+		}
+
+		const { stack: _stack, ...data } = shape.data;
+		return {
+			...shape,
+			message: "Internal server error",
+			code: TRPC_ERROR_CODES_BY_KEY[code],
+			data: { ...data, code, httpStatus },
+		};
+	},
 });
 
 const tracingMiddleware = t.middleware(async (ctx) => {
