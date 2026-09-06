@@ -21,6 +21,10 @@ on:
         required: true
       PROCELLA_GITHUB_APP_ID:
         required: false
+      PROCELLA_GITHUB_APP_CLIENT_ID:
+        required: false
+      PROCELLA_GITHUB_APP_CLIENT_SECRET:
+        required: false
       PROCELLA_GITHUB_APP_PRIVATE_KEY:
         required: false
       PROCELLA_GITHUB_APP_WEBHOOK_SECRET:
