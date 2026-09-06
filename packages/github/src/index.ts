@@ -4,6 +4,7 @@ import { Octokit } from "@octokit/rest";
 import type { Config } from "@procella/config";
 import type { Database } from "@procella/db";
 import { githubInstallations, githubSetupStates, githubUpdateOutbox, updates } from "@procella/db";
+import { projectError } from "@procella/types";
 import { and, desc, eq, gt, lt, sql } from "drizzle-orm";
 import { errors as joseErrors, jwtVerify, SignJWT } from "jose";
 
@@ -765,9 +766,13 @@ export class GitHubOutboxWorker {
 	async start(): Promise<void> {
 		if (this.timer) return;
 		this.timer = setInterval(() => {
-			void this.runCycle().catch((error) => console.error("[github-outbox] cycle failed", error));
+			void this.runCycle().catch((error) =>
+				console.error("[github-outbox] cycle failed", projectError(error)),
+			);
 		}, this.interval);
-		await this.runCycle().catch((error) => console.error("[github-outbox] cycle failed", error));
+		await this.runCycle().catch((error) =>
+			console.error("[github-outbox] cycle failed", projectError(error)),
+		);
 	}
 	async stop(): Promise<void> {
 		if (this.timer) {

@@ -2,6 +2,7 @@
 
 export * from "./compatibility.js";
 export * from "./domain.js";
+export * from "./error-projection.js";
 export * from "./errors.js";
 export * from "./pulumi.js";
 export * from "./routes.gen.js";
