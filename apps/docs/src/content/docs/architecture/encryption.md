@@ -42,6 +42,8 @@ Procella first attempts the versioned v2 format. Legacy v1 blobs have no version
 
 The request path's `org` segment is never used as legacy key material by itself. In dev mode, the tenant ID and org slug are the same unique value. Descope deployments must register every v1 tenant in `PROCELLA_LEGACY_ORG_MAPPINGS`, a deployment-owned one-to-one map from signed tenant ID to the original canonical org slug. Procella rejects duplicate mapped slugs, mapped slugs equal to mapped tenant IDs, and unmapped tenant-ID fallbacks that collide with a mapped slug. It accepts the configured identity only when JWT tenant metadata is absent or resolves to the same value, then combines it with project and stack names from the tenant-scoped resolved stack row.
 
+Metadata provenance is explicit: missing org metadata may defer to the deployment mapping, but conflicting signed aliases never do. A server-minted `procellaLegacyOrgSlug` remains authoritative only after the signed tenant ID binds it back to the configured mapping.
+
 Without a unique mapping, v2 encryption and decryption continue using the stack UUID, but v1 fallback fails closed with `stack_not_found`. This prevents another tenant with a colliding display-name slug and matching project/stack names from entering the victim's legacy KDF namespace.
 
 A legacy alias is cryptographic key ownership, not a reusable display name. Never move a mapping value to another tenant while any v1 ciphertext under that alias exists. Keep a retired tenant's mapping entry reserved until every affected stack has been rewritten to v2 and validated; only then remove the entry or assign that human-readable slug elsewhere.
