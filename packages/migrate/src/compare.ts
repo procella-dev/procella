@@ -240,6 +240,12 @@ function describeScalar(value: unknown): string {
  * export/import round trip dropped the key — only genuinely non-empty content differs.
  */
 function isEmptyJsonValue(value: unknown): boolean {
+	// A secret sentinel is never a wire-format zero value — its Symbol-keyed brand is
+	// invisible to `Object.keys`, so without this check an `UnverifiableSecret` wrapper
+	// (zero string keys) or a single-field `ResolvedSecret` wrapper would otherwise look
+	// "empty" here and be silently dropped as if the field were merely omitted, letting an
+	// undecryptable secret present on only one side pass without a mismatch.
+	if (isResolvedSecret(value) || isUnverifiableSecret(value)) return false;
 	if (value === undefined || value === null || value === false || value === "" || value === 0) {
 		return true;
 	}

@@ -590,6 +590,18 @@ describe("compareDeploymentState — hardening against adversarial/coincidental 
 		const result = await compareDeploymentState(source, target);
 		expect(result.match).toBe(true);
 	});
+
+	test("an unverifiable secret in a top-level field is never treated as empty/omitted", async () => {
+		const ciphertext = Buffer.from(JSON.stringify("value")).toString("base64");
+		// A hypothetical unrecognised deployment-level field whose value is itself a
+		// secret envelope this comparator cannot decrypt (no decrypter configured).
+		const source = baseDeployment({ custom_field: ciphertextSecret(ciphertext) });
+		const target = baseDeployment();
+
+		const result = await compareDeploymentState(source, target);
+
+		expect(result.match).toBe(false);
+	});
 });
 
 describe("describeFirstMismatch", () => {
