@@ -104,7 +104,8 @@ interface ChannelState {
 	ready: Promise<void>;
 	keys: Map<string, Set<Subscriber>>;
 	refCount: number;
-	failed: boolean;
+	/** The client has been ended — by failure, by the last subscriber leaving, or by shutdown. */
+	retired: boolean;
 }
 
 class Subscriber implements NotificationStream {
@@ -247,7 +248,7 @@ export class PostgresNotificationHub implements NotificationHub {
 		this.channels.clear();
 		await Promise.all(
 			states.map(async (state) => {
-				state.failed = true;
+				state.retired = true;
 				for (const subscribers of state.keys.values()) {
 					for (const subscriber of subscribers) subscriber.end();
 				}
@@ -266,7 +267,7 @@ export class PostgresNotificationHub implements NotificationHub {
 			ready: Promise.resolve(),
 			keys: new Map(),
 			refCount: 0,
-			failed: false,
+			retired: false,
 		};
 
 		// Attached before connecting so no notification or connection error is
@@ -300,8 +301,8 @@ export class PostgresNotificationHub implements NotificationHub {
 	}
 
 	private failChannel(channel: NotifyChannel, state: ChannelState, error: unknown): void {
-		if (state.failed) return;
-		state.failed = true;
+		if (state.retired) return;
+		state.retired = true;
 		if (this.channels.get(channel) === state) this.channels.delete(channel);
 		for (const subscribers of state.keys.values()) {
 			for (const subscriber of subscribers) subscriber.fail(error);
@@ -323,13 +324,13 @@ export class PostgresNotificationHub implements NotificationHub {
 			if (subscribers.size === 0) state.keys.delete(key);
 		}
 
-		// A failed channel already ended its client and dropped its registration.
-		if (state.failed) return;
+		// A retired channel already ended its client and dropped its registration.
+		if (state.retired) return;
 
 		state.refCount = Math.max(0, state.refCount - 1);
 		if (state.refCount > 0) return;
 
-		state.failed = true;
+		state.retired = true;
 		if (this.channels.get(channel) === state) this.channels.delete(channel);
 		void state.client.end().catch(() => {});
 	}
