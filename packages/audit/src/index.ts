@@ -194,8 +194,16 @@ function toEpochSeconds(date: Date | undefined): number | undefined {
 
 function inferActorType(
 	actorId: string,
+	persistedActorType: unknown,
 	metadata: Record<string, unknown>,
 ): AuditLogEntry["actorType"] {
+	if (
+		persistedActorType === "user" ||
+		persistedActorType === "token" ||
+		persistedActorType === "workload"
+	) {
+		return persistedActorType;
+	}
 	if (metadata.workload && typeof metadata.workload === "object") {
 		return "workload";
 	}
@@ -204,10 +212,7 @@ function inferActorType(
 
 function mapDescopeRecordToEntry(record: DescopeAuditRecord): AuditLogEntry {
 	const data = record.data ?? {};
-	const { resourceType, resourceId, ipAddress, userAgent, ...metadata } = data as Record<
-		string,
-		unknown
-	>;
+	const { resourceType, resourceId, ipAddress, userAgent, actorType, ...metadata } = data;
 
 	const ts = record.createdTime ?? record.createdAt ?? Date.now();
 	const createdAt =
@@ -218,7 +223,7 @@ function mapDescopeRecordToEntry(record: DescopeAuditRecord): AuditLogEntry {
 	return {
 		id: record.id ?? `${record.action ?? "audit"}-${createdAt.getTime()}`,
 		actorId,
-		actorType: inferActorType(actorId, metadata),
+		actorType: inferActorType(actorId, actorType, metadata),
 		action: (record.action ?? AuditAction.STACK_UPDATE) as AuditActionValue,
 		resourceType: typeof resourceType === "string" ? resourceType : "unknown",
 		resourceId: typeof resourceId === "string" ? resourceId : "unknown",
@@ -254,6 +259,7 @@ export class DescopeAuditService implements AuditService {
 				ipAddress: entry.ipAddress,
 				userAgent: entry.userAgent,
 				...entry.metadata,
+				actorType: entry.actorType,
 			},
 		});
 	}

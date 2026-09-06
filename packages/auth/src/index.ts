@@ -284,7 +284,7 @@ export class DescopeAuthService implements AuthService {
 		if (payload.aud && !audienceIncludes(payload.aud, this.projectId)) {
 			throw new UnauthorizedError("JWT audience does not match project");
 		}
-		return this.extractCaller(payload as Record<string, unknown>);
+		return this.extractCaller(payload as Record<string, unknown>, "user");
 	}
 
 	/**
@@ -510,7 +510,7 @@ export class DescopeAuthService implements AuthService {
 
 	private extractCaller(
 		claims: Record<string, unknown>,
-		authenticatedPrincipalType: "user" | "token" = "user",
+		authenticatedPrincipalType: "user" | "token",
 	): Caller {
 		const tenantId = extractTenantId(claims);
 		if (!tenantId) {
