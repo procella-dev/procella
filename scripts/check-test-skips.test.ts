@@ -102,6 +102,12 @@ describe("CI skipped-test guard", () => {
 		expect(() => parseSkipGuardArguments(["--require-test=missing-separator"])).toThrow(
 			"Invalid required test identifier: missing-separator",
 		);
+		expect(() => parseSkipGuardArguments(["--require-test=::name"])).toThrow(
+			"Invalid required test identifier: ::name",
+		);
+		expect(() => parseSkipGuardArguments(["--require-test=file.ts::"])).toThrow(
+			"Invalid required test identifier: file.ts::",
+		);
 	});
 
 	test("requires at least one JUnit report", async () => {

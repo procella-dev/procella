@@ -116,7 +116,7 @@ export function parseSkipGuardArguments(args: string[]): SkipGuardArguments {
 		if (arg.startsWith(REQUIRE_TEST_PREFIX)) {
 			const identifier = arg.slice(REQUIRE_TEST_PREFIX.length);
 			const separator = identifier.indexOf("::");
-			if (separator <= 0 || separator === identifier.length - 2) {
+			if (separator === -1 || separator === 0 || separator + 2 === identifier.length) {
 				throw new Error(`Invalid required test identifier: ${identifier || "(empty)"}`);
 			}
 			requiredTests.push({
