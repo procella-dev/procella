@@ -390,8 +390,7 @@ describe("PostgresStacksService — integration", () => {
 				const holderPid = holderRows[0]?.pid;
 				expect(holderPid).toBeNumber();
 				await holder.unsafe(
-					"SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
-					[sharedBlobKey],
+					"SELECT pg_advisory_xact_lock(hashtext('procella-stack-delete-blob-cleanup'))",
 				);
 
 				deletions = [
