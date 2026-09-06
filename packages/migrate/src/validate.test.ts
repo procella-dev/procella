@@ -6,6 +6,7 @@ import {
 	findMatchingTargetStack,
 	formatDiffSummary,
 	hasMatchingSourceStack,
+	validate,
 } from "./validate.js";
 
 function makeStack(fqn: string, resourceCount: number = 1): DiscoveredStack {
@@ -47,6 +48,49 @@ describe("hasMatchingSourceStack", () => {
 		const target = makeStack("tenant-a/billing/dev");
 
 		expect(hasMatchingSourceStack(target, sourceStacks)).toBe(false);
+	});
+
+	test("rejects a target matched by multiple source organizations", () => {
+		const sourceStacks = [makeStack("org-a/payments/dev"), makeStack("org-b/payments/dev")];
+		const target = makeStack("tenant-a/payments/dev");
+
+		expect(hasMatchingSourceStack(target, sourceStacks)).toBe(false);
+	});
+
+	test("reports ambiguous source-to-target mappings as errors without exporting state", async () => {
+		const sourceStacks = [makeStack("org-a/payments/dev"), makeStack("org-b/payments/dev")];
+		const targetStacks = [makeStack("tenant-a/payments/dev")];
+		let exports = 0;
+
+		const results = await validate(
+			{
+				sourceUrl: "file://source",
+				sourceToken: "source-token",
+				targetUrl: "https://target.example.com",
+				targetToken: "target-token",
+				filter: "*",
+				exclude: "",
+			},
+			{
+				discoverStacks: async (url) => (url === "file://source" ? sourceStacks : targetStacks),
+				exportFromBackend: async () => {
+					exports++;
+					throw new Error("must not export ambiguous source");
+				},
+				exportState: async () => {
+					exports++;
+					throw new Error("must not export ambiguous target");
+				},
+			},
+		);
+
+		expect(results).toHaveLength(2);
+		expect(results.every((result) => result.status === "error")).toBe(true);
+		expect(results.map((result) => result.error)).toEqual([
+			"Ambiguous target payments/dev: conflicting sources org-a/payments/dev, org-b/payments/dev",
+			"Ambiguous target payments/dev: conflicting sources org-a/payments/dev, org-b/payments/dev",
+		]);
+		expect(exports).toBe(0);
 	});
 });
 
