@@ -30,7 +30,7 @@ describe("@procella/webhooks", () => {
 		test("allows public HTTP and HTTPS URLs", () => {
 			expect(() => validateWebhookUrl("https://example.com/webhook")).not.toThrow();
 			expect(() => validateWebhookUrl("https://hooks.slack.com/services/T123")).not.toThrow();
-			expect(() => validateWebhookUrl("http://203.0.113.1:8080/hook")).not.toThrow();
+			expect(() => validateWebhookUrl("http://93.184.216.34:8080/hook")).not.toThrow();
 		});
 
 		test("blocks localhost", () => {
@@ -84,6 +84,39 @@ describe("@procella/webhooks", () => {
 			expect(() => validateWebhookUrl("http://[::ffff:127.0.0.1]/")).toThrow(BadRequestError);
 		});
 
+		test.each([
+			["unspecified IPv4", "0.0.0.0"],
+			["shared address space", "100.64.0.1"],
+			["IETF protocol assignment", "192.0.0.1"],
+			["TEST-NET-1", "192.0.2.1"],
+			["deprecated 6to4 relay anycast", "192.88.99.1"],
+			["benchmarking", "198.18.0.1"],
+			["TEST-NET-2", "198.51.100.1"],
+			["TEST-NET-3", "203.0.113.1"],
+			["multicast", "224.0.0.1"],
+			["reserved", "240.0.0.1"],
+			["unspecified IPv6", "::"],
+			["IPv6 loopback", "::1"],
+			["IPv6 unique-local", "fc01::1"],
+			["IPv6 unique-local upper half", "fdff::1"],
+			["IPv6 link-local", "fe90::1"],
+			["IPv6 documentation", "2001:db8::1"],
+			["IPv6 6to4", "2002::1"],
+		])("blocks non-global %s address", (_name, address) => {
+			const host = address.includes(":") ? `[${address}]` : address;
+			expect(() => validateWebhookUrl(`http://${host}/`)).toThrow(BadRequestError);
+		});
+
+		test.each([
+			["Google DNS IPv4", "8.8.8.8"],
+			["Cloudflare IPv4", "1.1.1.1"],
+			["Google DNS IPv6", "2001:4860:4860::8888"],
+			["Cloudflare IPv6", "2606:4700:4700::1111"],
+		])("allows global-unicast %s address", (_name, address) => {
+			const host = address.includes(":") ? `[${address}]` : address;
+			expect(() => validateWebhookUrl(`https://${host}/`)).not.toThrow();
+		});
+
 		test("allows hostnames that look like private IPs but are not", () => {
 			expect(() => validateWebhookUrl("https://10.example.com/hook")).not.toThrow();
 			expect(() => validateWebhookUrl("https://192.168.evil.com/hook")).not.toThrow();
@@ -121,13 +154,13 @@ describe("@procella/webhooks", () => {
 			);
 		});
 
-		test("blocks hostnames that resolve to private IPs", async () => {
+		test("blocks hostnames when any resolved address is not global unicast", async () => {
 			const dns = await import("node:dns/promises");
 			const origV4 = dns.resolve4;
 			const origV6 = dns.resolve6;
 			mock.module("node:dns/promises", () => ({
-				resolve4: async () => ["127.0.0.1"],
-				resolve6: async () => [],
+				resolve4: async () => ["93.184.216.34", "100.64.0.1"],
+				resolve6: async () => ["2606:4700:4700::1111"],
 			}));
 			try {
 				const { resolveAndValidateWebhookUrl: freshResolve } = await import("./index.js");
@@ -169,7 +202,7 @@ describe("@procella/webhooks", () => {
 
 		test("skips DNS resolution when hostname is already a validated public IP", async () => {
 			await expect(
-				resolveAndValidateWebhookUrl("http://203.0.113.1:8080/hook"),
+				resolveAndValidateWebhookUrl("http://93.184.216.34:8080/hook"),
 			).resolves.toBeUndefined();
 		});
 	});
