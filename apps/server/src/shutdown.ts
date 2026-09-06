@@ -27,16 +27,17 @@ export interface DrainTargets {
 }
 
 /**
- * Drain in dependency order: subscriptions, then the HTTP server, then
- * background workers. Never reorder `notifications` after `server` — the
- * server cannot finish draining while subscription responses are still open.
+ * Halt admission and end subscription streams together, then stop background
+ * workers. Sequencing these two is wrong in either direction: stopping the
+ * server first deadlocks on in-flight SSE responses until the force-exit
+ * timer, and closing the hub first leaves Bun accepting new requests while
+ * listener teardown runs.
  */
 export async function drainForShutdown({
 	notifications,
 	server,
 	workers,
 }: DrainTargets): Promise<void> {
-	await notifications.close();
-	await server.stop();
+	await Promise.all([notifications.close(), server.stop()]);
 	for (const worker of workers) await worker.stop();
 }
