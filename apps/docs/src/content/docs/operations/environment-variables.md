@@ -29,6 +29,7 @@ All Procella configuration is via environment variables. Variables prefixed with
 | `PROCELLA_TRUST_PROXY` | `false` | No | Trust `X-Forwarded-For` / `X-Real-IP` only when running behind a trusted reverse proxy |
 | `AWS_ACCESS_KEY_ID` | — | If custom endpoint | S3 access key |
 | `AWS_SECRET_ACCESS_KEY` | — | If custom endpoint | S3 secret key |
+| `AWS_SESSION_TOKEN` | — | No | Session token for temporary custom-endpoint credentials |
 
 ## Server
 
@@ -172,6 +173,6 @@ The bundled `apps/ui/Caddyfile` is configured with trusted proxies and keeps `au
 
 ## AWS Credentials
 
-### AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
+### AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_SESSION_TOKEN
 
-Standard AWS credentials. Required when `PROCELLA_BLOB_S3_ENDPOINT` is set (custom S3 endpoint). For standard AWS S3, you can also use IAM roles, instance profiles, or any method supported by the AWS SDK default credential chain.
+`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are required when `PROCELLA_BLOB_S3_ENDPOINT` is set. Set `AWS_SESSION_TOKEN` as well when the explicit credentials require one. Custom-endpoint credentials are read at startup; restart Procella after rotating them. For standard AWS S3, Procella uses the AWS SDK default credential chain, including refreshable IAM roles and instance profiles.
