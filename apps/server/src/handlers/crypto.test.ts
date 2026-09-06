@@ -359,6 +359,37 @@ describe("cryptoHandlers", () => {
 		expect(updates.decryptValue).toHaveBeenCalledWith({ stackId: attackerStack.id }, ciphertext);
 	});
 
+	test("rejects batch v1 when no unique legacy org mapping exists", async () => {
+		const masterKey = "a".repeat(64);
+		const crypto = new AesCryptoService(masterKey);
+		const stack = testStack();
+		const ciphertext = legacyEncrypt(
+			masterKey,
+			"legacy-alias/myproj/dev",
+			new TextEncoder().encode("v1 batch canary"),
+		);
+		const updates = mockUpdatesService({
+			batchDecrypt: mock((input: StackCryptoInput, encrypted: Uint8Array[]) =>
+				Promise.all(encrypted.map((value) => crypto.decrypt(input, value))),
+			),
+		});
+		const app = createApp(
+			updates,
+			mockStacksService({ getStack: mock(async () => stack) }),
+			testCaller({ canonicalOrgSlug: undefined }),
+		);
+
+		const encoded = toBase64(ciphertext);
+		const res = await app.request("/stacks/legacy-alias/myproj/dev/batch-decrypt", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ ciphertexts: [encoded] }),
+		});
+
+		expect(res.status).toBe(404);
+		expect(await res.json()).toEqual({ code: "stack_not_found" });
+	});
+
 	test("batchEncrypt returns ciphertexts array", async () => {
 		const updates = mockUpdatesService();
 		const app = createApp(updates, mockStacksService());
