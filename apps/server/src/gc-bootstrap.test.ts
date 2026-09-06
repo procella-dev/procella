@@ -13,6 +13,7 @@ test("GC Lambda reports an injected database failure and flushes telemetry", asy
 	let outboxRuns = 0;
 	let blobCleanupRuns = 0;
 	let escSweeps = 0;
+	const drainOrder: string[] = [];
 
 	await runGcInvocation({
 		baseUrl: "http://runtime.test/2018-06-01/runtime",
@@ -20,11 +21,13 @@ test("GC Lambda reports an injected database failure and flushes telemetry", asy
 		gcWorker,
 		blobCleanup: {
 			runOnce: async () => {
+				drainOrder.push("blob-cleanup");
 				blobCleanupRuns += 1;
 			},
 		},
 		githubOutbox: {
 			runOnce: async () => {
+				drainOrder.push("github-outbox");
 				outboxRuns += 1;
 			},
 		},
@@ -49,6 +52,7 @@ test("GC Lambda reports an injected database failure and flushes telemetry", asy
 	expect(flushes).toBe(1);
 	expect(blobCleanupRuns).toBe(1);
 	expect(outboxRuns).toBe(1);
+	expect(drainOrder).toEqual(["github-outbox", "blob-cleanup"]);
 	expect(escSweeps).toBe(1);
 });
 

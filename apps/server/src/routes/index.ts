@@ -241,14 +241,14 @@ export function createApp(deps: {
 			gcFailed = true;
 			gcError = error;
 		}
-		await new BlobCleanupWorker({ db: deps.db, storage: deps.storage, maxPerRun: 100 })
-			.runOnce({ deadlineMs: startedAt + CRON_WORK_DEADLINE_MS })
-			.catch((error) => console.error("[cron] blob cleanup drain failed", projectError(error)));
 		if (deps.github) {
 			await new GitHubOutboxWorker({ db: deps.db, github: deps.github, maxPerRun: 5 })
 				.runOnce({ deadlineMs: startedAt + CRON_WORK_DEADLINE_MS })
 				.catch((error) => console.error("[cron] GitHub outbox drain failed", projectError(error)));
 		}
+		await new BlobCleanupWorker({ db: deps.db, storage: deps.storage, maxPerRun: 100 })
+			.runOnce({ deadlineMs: startedAt + CRON_WORK_DEADLINE_MS })
+			.catch((error) => console.error("[cron] blob cleanup drain failed", projectError(error)));
 		if (gcFailed) throw gcError;
 		return c.json({ ok: true });
 	});

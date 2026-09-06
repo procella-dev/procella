@@ -60,14 +60,6 @@ export async function runGcInvocation({
 		failed = true;
 		invocationError = error;
 	}
-	try {
-		await blobCleanup.runOnce({
-			deadlineMs: invocationStartedAt + LAMBDA_WORK_DEADLINE_MS,
-		});
-	} catch (error) {
-		failed = true;
-		invocationError ??= error;
-	}
 	if (githubOutbox) {
 		try {
 			await githubOutbox.runOnce({
@@ -77,6 +69,14 @@ export async function runGcInvocation({
 			failed = true;
 			invocationError ??= error;
 		}
+	}
+	try {
+		await blobCleanup.runOnce({
+			deadlineMs: invocationStartedAt + LAMBDA_WORK_DEADLINE_MS,
+		});
+	} catch (error) {
+		failed = true;
+		invocationError ??= error;
 	}
 	try {
 		await escGcSweep();
