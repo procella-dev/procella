@@ -238,13 +238,14 @@ export async function migrateOne(
 	const importFile = join(scratchDir, `${stackName}.json`);
 	assertWithin(opts.outputDir, importFile, stack.fqn);
 	const removeScratchFile = operations.removeScratchFile ?? ((path) => rm(path, { force: true }));
-	let scratchCleanupAttempted = false;
+	let scratchCleanupDone = false;
 	let scratchCleanupError: string | undefined;
 	const cleanupScratchFile = async (): Promise<void> => {
-		if (scratchCleanupAttempted) return;
-		scratchCleanupAttempted = true;
+		if (scratchCleanupDone) return;
 		try {
 			await removeScratchFile(importFile);
+			scratchCleanupDone = true;
+			scratchCleanupError = undefined;
 		} catch (err) {
 			scratchCleanupError = err instanceof Error ? err.message : String(err);
 			log.warn(`           Failed to delete scratch import payload ${importFile}: ${err}`);

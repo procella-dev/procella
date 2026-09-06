@@ -167,13 +167,14 @@ test("hasPlaintextSecret detects only signed Pulumi plaintext envelopes", () => 
 	expect(hasPlaintextSecret(ciphertextSecret(randomUUID()))).toBe(false);
 });
 
-test("migrateOne fails when target state still contains plaintext secrets", async () => {
+test("migrateOne fails on plaintext target state and retries scratch cleanup", async () => {
 	const tempDir = await mkdtemp(join(tmpdir(), "procella-migrate-plaintext-target-"));
 	const values = Array.from({ length: 4 }, () => randomUUID());
 	const deployment = deploymentWithSecrets(values.map(plaintextSecret), {
 		type: "passphrase",
 		state: { salt: randomUUID() },
 	});
+	let cleanupAttempts = 0;
 	try {
 		const result = await migrateOne(
 			{
@@ -204,6 +205,10 @@ test("migrateOne fails when target state still contains plaintext secrets", asyn
 				createStack: async () => ({ created: true }),
 				importStack: async () => {},
 				exportState: async () => deployment,
+				removeScratchFile: async () => {
+					cleanupAttempts++;
+					if (cleanupAttempts === 1) throw new Error("scratch file is busy");
+				},
 			},
 		);
 
@@ -211,6 +216,9 @@ test("migrateOne fails when target state still contains plaintext secrets", asyn
 		expect(result.error).toBe(
 			"Target state contains plaintext Pulumi secret envelopes after import",
 		);
+		expect(cleanupAttempts).toBe(2);
+		expect(result.scratchFile).toBeUndefined();
+		expect(result.scratchCleanupError).toBeUndefined();
 	} finally {
 		await rm(tempDir, { recursive: true, force: true });
 	}
