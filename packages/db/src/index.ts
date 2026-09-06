@@ -133,6 +133,8 @@ export async function createDbFromUrl(
 // Migrations
 // ============================================================================
 
+const MIGRATIONS_ADVISORY_LOCK_ID = 5_796_818_143_073_299_553n; // "Procella"
+
 export async function ensureDatabase(adminUrl: string, dbName: string): Promise<void> {
 	if (!isNeonHost(adminUrl)) {
 		const { SQL } = require("bun") as typeof import("bun");
@@ -175,8 +177,26 @@ export async function runMigrations(
 		const { migrate } = await import("drizzle-orm/bun-sql/migrator");
 		const client = new SQL({ url });
 		try {
-			const db = drizzle({ client });
-			await migrate(db, { migrationsFolder });
+			const connection = await client.reserve();
+			let locked = false;
+			try {
+				await connection.unsafe("SELECT pg_advisory_lock($1)", [
+					MIGRATIONS_ADVISORY_LOCK_ID.toString(),
+				]);
+				locked = true;
+				const db = drizzle({ client: connection });
+				await migrate(db, { migrationsFolder });
+			} finally {
+				try {
+					if (locked) {
+						await connection.unsafe("SELECT pg_advisory_unlock($1)", [
+							MIGRATIONS_ADVISORY_LOCK_ID.toString(),
+						]);
+					}
+				} finally {
+					connection.release();
+				}
+			}
 		} finally {
 			await client.close();
 		}
@@ -192,8 +212,26 @@ export async function runMigrations(
 
 	const pool = new Pool({ connectionString: url });
 	try {
-		const db = drizzle({ client: pool });
-		await migrate(db, { migrationsFolder });
+		const connection = await pool.connect();
+		let locked = false;
+		try {
+			await connection.query("SELECT pg_advisory_lock($1)", [
+				MIGRATIONS_ADVISORY_LOCK_ID.toString(),
+			]);
+			locked = true;
+			const db = drizzle({ client: connection });
+			await migrate(db, { migrationsFolder });
+		} finally {
+			try {
+				if (locked) {
+					await connection.query("SELECT pg_advisory_unlock($1)", [
+						MIGRATIONS_ADVISORY_LOCK_ID.toString(),
+					]);
+				}
+			} finally {
+				connection.release();
+			}
+		}
 	} finally {
 		await pool.end();
 	}
