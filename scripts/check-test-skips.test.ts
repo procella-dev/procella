@@ -167,11 +167,13 @@ describe("CI skipped-test guard", () => {
 		}
 	});
 
-	test("accepts required live OIDC cases when they execute", async () => {
+	test("accepts required live OIDC leaf names with describe prefixes", async () => {
 		const file = "e2e/descope-auth.test.ts";
 		const path = await writeReport(
-			passedTest(file, "exchange real GitHub OIDC token") +
-				passedTest(file, "pulumi login --oidc-token with real GitHub OIDC token"),
+			passedTest(
+				file,
+				"Descope auth (deployed preview) > OIDC CI auth (real GitHub OIDC) > exchange real GitHub OIDC token",
+			) + passedTest(file, "pulumi login --oidc-token with real GitHub OIDC token"),
 		);
 		const log = spyOn(console, "log").mockImplementation(() => {});
 		const { expectedSkipFiles, requiredSuites, requiredTests } = parseSkipGuardArguments([

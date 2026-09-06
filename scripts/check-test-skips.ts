@@ -159,7 +159,10 @@ export async function checkTestSkips(
 	);
 	const missingTests = requiredTests.filter(
 		(required) =>
-			!executed.some(({ file, name }) => file === required.file && name === required.name),
+			!executed.some(
+				({ file, name }) =>
+					file === required.file && (name === required.name || name.endsWith(`> ${required.name}`)),
+			),
 	);
 
 	for (const test of unexpected) {
