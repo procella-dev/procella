@@ -38,9 +38,9 @@ if (process.argv.includes("--healthz")) {
 		const { existsSync } = await import("node:fs");
 		const { withInternalClientIp } = await import("./middleware/security.js");
 		const { shutdownTelemetry } = await import("@procella/telemetry");
-		const { GCWorker } = await import("@procella/updates");
+		const { BlobCleanupWorker, GCWorker } = await import("@procella/updates");
 		const { bootstrap } = await import("./bootstrap.js");
-		const { app, auth, config, db, client, github } = await bootstrap();
+		const { app, auth, config, db, client, github, storage } = await bootstrap();
 
 		const uiRoot = process.env.PROCELLA_UI_PATH || "/ui";
 		if (existsSync(`${uiRoot}/index.html`)) {
@@ -67,6 +67,8 @@ if (process.argv.includes("--healthz")) {
 
 		const gc = new GCWorker({ db });
 		void gc.start();
+		const blobCleanup = new BlobCleanupWorker({ db, storage });
+		void blobCleanup.start();
 		const githubOutbox = github ? new GitHubOutboxWorker({ db, github }) : null;
 		if (githubOutbox) void githubOutbox.start();
 
@@ -81,6 +83,7 @@ if (process.argv.includes("--healthz")) {
 
 			await server.stop();
 			await gc.stop();
+			await blobCleanup.stop();
 			if (githubOutbox) await githubOutbox.stop();
 			await shutdownTelemetry();
 			auth.dispose?.();

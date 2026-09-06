@@ -16,9 +16,10 @@ import {
 } from "@procella/github";
 import type { OidcService, TrustPolicyRepository } from "@procella/oidc";
 import type { StacksService } from "@procella/stacks";
+import type { BlobStorage } from "@procella/storage";
 import { tracingMiddleware } from "@procella/telemetry";
 import { PulumiRoutes, projectError } from "@procella/types";
-import { GCWorker, type UpdatesService } from "@procella/updates";
+import { BlobCleanupWorker, GCWorker, type UpdatesService } from "@procella/updates";
 import type { WebhooksService } from "@procella/webhooks";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { Hono, type MiddlewareHandler } from "hono";
@@ -69,6 +70,7 @@ export function createApp(deps: {
 	cronSecret?: string;
 	db: Database;
 	dbUrl: string;
+	storage: BlobStorage;
 	stacks: StacksService;
 	updates: UpdatesService;
 	webhooks: WebhooksService;
@@ -244,6 +246,9 @@ export function createApp(deps: {
 				.runOnce({ deadlineMs: startedAt + CRON_WORK_DEADLINE_MS })
 				.catch((error) => console.error("[cron] GitHub outbox drain failed", projectError(error)));
 		}
+		await new BlobCleanupWorker({ db: deps.db, storage: deps.storage, maxPerRun: 100 })
+			.runOnce({ deadlineMs: startedAt + CRON_WORK_DEADLINE_MS })
+			.catch((error) => console.error("[cron] blob cleanup drain failed", projectError(error)));
 		if (gcFailed) throw gcError;
 		return c.json({ ok: true });
 	});

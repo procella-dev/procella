@@ -22,9 +22,16 @@ const baseDeps = {
 	authConfig,
 	audit: {} as AuditService,
 	db: {
+		execute: async () => ({ rows: [{ acquired: false }] }),
 		transaction: async (callback: (tx: unknown) => unknown) =>
-			callback({ execute: async () => ({ rows: [{ acquired: false }] }) }),
+			callback({ execute: async () => ({ rows: [] }) }),
 	} as unknown as Database,
+	storage: {
+		get: async () => null,
+		put: async () => {},
+		delete: async () => {},
+		exists: async () => false,
+	},
 	dbUrl: "postgres://test:test@localhost:5432/test",
 	github: null as GitHubService | null,
 	githubWebhookSecret: undefined,
@@ -72,7 +79,7 @@ describe("/cron/gc integration", () => {
 		expect(await res.json()).toEqual({ ok: true });
 	});
 
-	test("returns non-2xx after attempting the outbox when the database fails", async () => {
+	test("returns non-2xx after attempting blob cleanup and the outbox when the database fails", async () => {
 		let transactions = 0;
 		const failingDb = {
 			transaction: () => {
@@ -90,6 +97,6 @@ describe("/cron/gc integration", () => {
 		});
 
 		expect(res.status).toBeGreaterThanOrEqual(500);
-		expect(transactions).toBe(2);
+		expect(transactions).toBe(3);
 	});
 });

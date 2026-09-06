@@ -5,6 +5,7 @@ import type { Database } from "@procella/db";
 import type { EscService } from "@procella/esc";
 import type { GitHubService } from "@procella/github";
 import type { StackInfo, StacksService } from "@procella/stacks";
+import type { BlobStorage } from "@procella/storage";
 import type { Caller, SubscriptionTicketScope } from "@procella/types";
 import { UnauthorizedError } from "@procella/types";
 import type { UpdatesService } from "@procella/updates";
@@ -213,6 +214,7 @@ describe("@procella/server routes", () => {
 			corsOrigins?: string[];
 			cronSecret?: string;
 			db?: Database;
+			storage?: BlobStorage;
 			github?: GitHubService | null;
 			issueSubscriptionTicket?: (caller: Caller, scope: SubscriptionTicketScope) => Promise<string>;
 			verifySubscriptionTicket?: (
@@ -229,22 +231,29 @@ describe("@procella/server routes", () => {
 			db:
 				opts?.db ??
 				({
-					execute: async () => ({
-						rows: [
-							{
-								acquired: false,
-								relation_0: "projects",
-								relation_1: "stacks",
-								relation_2: "updates",
-								relation_3: "checkpoints",
-								relation_4: "__drizzle_migrations",
-								migrated: true,
-							},
-						],
+					execute: async (query: unknown) => ({
+						rows: String(query).includes("pg_try_advisory_xact_lock")
+							? [{ acquired: false }]
+							: [
+									{
+										relation_0: "projects",
+										relation_1: "stacks",
+										relation_2: "updates",
+										relation_3: "checkpoints",
+										relation_4: "__drizzle_migrations",
+										migrated: true,
+									},
+								],
 					}),
 					transaction: async (callback: (tx: unknown) => unknown) =>
-						callback({ execute: async () => ({ rows: [{ acquired: false }] }) }),
+						callback({ execute: async () => ({ rows: [] }) }),
 				} as unknown as Database),
+			storage: opts?.storage ?? {
+				get: async () => null,
+				put: async () => {},
+				delete: async () => {},
+				exists: async () => false,
+			},
 			dbUrl: "postgres://test:test@localhost:5432/test",
 			cronSecret: opts?.cronSecret,
 			corsOrigins: opts?.corsOrigins,
@@ -439,7 +448,8 @@ describe("@procella/server routes", () => {
 					if (transactions === 1) {
 						return callback({ execute: async () => ({ rows: [{ acquired: false }] }) });
 					}
-					throw new Error("outbox unavailable");
+					if (transactions === 2) throw new Error("outbox unavailable");
+					return callback({ execute: async () => ({ rows: [] }) });
 				},
 			} as unknown as Database;
 			const app = makeApp(undefined, {
@@ -452,7 +462,82 @@ describe("@procella/server routes", () => {
 				headers: { Authorization: "Bearer correct-secret" },
 			});
 			expect(res.status).toBe(200);
-			expect(transactions).toBe(2);
+			expect(transactions).toBe(3);
+		});
+
+		test("continues the cron tick when blob cleanup claim fails", async () => {
+			let transactions = 0;
+			const db = {
+				transaction: async (callback: (tx: unknown) => unknown) => {
+					transactions += 1;
+					if (transactions === 1) {
+						return callback({ execute: async () => ({ rows: [{ acquired: false }] }) });
+					}
+					if (transactions === 2) {
+						return callback({ execute: async () => ({ rows: [] }) });
+					}
+					throw new Error("cleanup queue unavailable");
+				},
+			} as unknown as Database;
+			const app = makeApp(undefined, {
+				cronSecret: "correct-secret",
+				db,
+				github: {} as GitHubService,
+			});
+
+			const res = await app.request("/cron/gc", {
+				headers: { Authorization: "Bearer correct-secret" },
+			});
+			expect(res.status).toBe(200);
+			expect(transactions).toBe(3);
+		});
+
+		test("reserves the shared deadline for GitHub before blob cleanup", async () => {
+			let transactions = 0;
+			const deleted: string[] = [];
+			const db = {
+				transaction: async (callback: (tx: unknown) => unknown) => {
+					transactions += 1;
+					if (transactions === 1) {
+						return callback({ execute: async () => ({ rows: [{ acquired: false }] }) });
+					}
+					if (transactions === 2) {
+						return callback({ execute: async () => ({ rows: [] }) });
+					}
+					if (transactions === 3) {
+						return callback({
+							execute: async () => ({
+								rows: [{ id: "cleanup-1", blobKey: "checkpoints/stack/update/1", attempts: 1 }],
+							}),
+						});
+					}
+					return callback({ execute: async () => ({ rows: [] }) });
+				},
+				delete: () => ({
+					where: () => ({ returning: async () => [{ id: "cleanup-1" }] }),
+				}),
+			} as unknown as Database;
+			const storage: BlobStorage = {
+				get: async () => null,
+				put: async () => {},
+				delete: async (key) => {
+					deleted.push(key);
+				},
+				exists: async () => false,
+			};
+			const app = makeApp(undefined, {
+				cronSecret: "correct-secret",
+				db,
+				github: {} as GitHubService,
+				storage,
+			});
+
+			const res = await app.request("/cron/gc", {
+				headers: { Authorization: "Bearer correct-secret" },
+			});
+			expect(res.status).toBe(200);
+			expect(transactions).toBe(4);
+			expect(deleted).toEqual(["checkpoints/stack/update/1"]);
 		});
 	});
 

@@ -1,5 +1,6 @@
 // @procella/updates — Update lifecycle domain (updates, events, checkpoints, GC)
 
+export { BlobCleanupWorker } from "./blob-cleanup-worker.js";
 export { GCWorker } from "./gc-worker.js";
 export * from "./helpers.js";
 export {

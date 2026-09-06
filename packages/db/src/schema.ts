@@ -2,7 +2,7 @@
 //
 // This is a multi-tenant SaaS. Auth is Descope (no users/orgs tables).
 // tenant_id is TEXT from Descope JWT — never a FK, always a soft reference.
-// Cross-domain references (stack_id in updates) are soft references (no FK).
+// Cross-domain update rows reference their owning stack with cascading deletion.
 
 import { sql } from "drizzle-orm";
 import {
@@ -65,7 +65,9 @@ export const updates = pgTable(
 	"updates",
 	{
 		id: uuid().primaryKey().defaultRandom(),
-		stackId: uuid("stack_id").notNull(),
+		stackId: uuid("stack_id")
+			.notNull()
+			.references(() => stacks.id, { onDelete: "cascade" }),
 		kind: text().notNull(),
 		status: text().notNull().default("not started"),
 		result: text(),
@@ -107,6 +109,7 @@ export const updates = pgTable(
 			"chk_updates_completed_terminal",
 			sql`${table.completedAt} IS NULL OR ${table.status} IN ('succeeded', 'failed', 'cancelled')`,
 		),
+		index("idx_updates_stack_id").on(table.stackId),
 		uniqueIndex("idx_updates_active")
 			.on(table.stackId)
 			.where(sql`status IN ('not started', 'requested', 'running')`),
@@ -135,6 +138,29 @@ export const checkpoints = pgTable(
 		createdAt: timestamp("created_at").notNull().defaultNow(),
 	},
 	(table) => [uniqueIndex("idx_checkpoints_update_version").on(table.updateId, table.version)],
+);
+
+// ============================================================================
+// blob_cleanup_queue — Durable exact-key deletion queue for orphaned blobs
+// ============================================================================
+
+export const blobCleanupQueue = pgTable(
+	"blob_cleanup_queue",
+	{
+		id: uuid().primaryKey().defaultRandom(),
+		blobKey: text("blob_key").notNull(),
+		attempts: integer().notNull().default(0),
+		availableAt: timestamp("available_at").notNull().defaultNow(),
+		claimedBy: uuid("claimed_by"),
+		claimedUntil: timestamp("claimed_until"),
+		lastError: text("last_error"),
+		createdAt: timestamp("created_at").notNull().defaultNow(),
+		updatedAt: timestamp("updated_at").notNull().defaultNow(),
+	},
+	(table) => [
+		uniqueIndex("idx_blob_cleanup_queue_blob_key").on(table.blobKey),
+		index("idx_blob_cleanup_queue_available").on(table.availableAt, table.claimedUntil),
+	],
 );
 
 // ============================================================================
@@ -477,6 +503,7 @@ export const schema = {
 	stacks,
 	updates,
 	checkpoints,
+	blobCleanupQueue,
 	updateEvents,
 	githubUpdateOutbox,
 	journalEntries,

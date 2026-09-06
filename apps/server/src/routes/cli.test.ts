@@ -219,6 +219,12 @@ function makeWebApp(deltaCheckpointsEnabled?: boolean) {
 		audit: mockAuditService(),
 		db: { execute: async () => ({ rows: [{ acquired: false }] }) } as unknown as Database,
 		dbUrl: "postgres://test:test@localhost:5432/test",
+		storage: {
+			get: async () => null,
+			put: async () => {},
+			delete: async () => {},
+			exists: async () => false,
+		},
 		github: null,
 		githubWebhookSecret: undefined,
 		stacks: mockStacksService(),

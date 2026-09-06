@@ -166,6 +166,7 @@ async function bootstrapServices() {
 		client,
 		config,
 		stacks: stacksService,
+		storage,
 		updates: updatesService,
 		webhooks: webhooksService,
 		esc: escService,
@@ -193,6 +194,7 @@ export async function bootstrap() {
 		auth: services.auth,
 		config: services.config,
 		db: services.db,
+		storage: services.storage,
 		client: services.client,
 		github: services.github,
 	};
