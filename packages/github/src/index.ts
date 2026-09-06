@@ -806,16 +806,17 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 		let installationAccessible = false;
 		let page = 1;
 		try {
-			while (!installationAccessible) {
+			while (true) {
 				const { data } = await client.request("GET /user/installations", {
 					per_page: 100,
 					page,
 					...request,
 				});
-				installationAccessible = data.installations.some(
-					(installation) => installation.id === installationId,
-				);
-				if (installationAccessible || page * 100 >= data.total_count) break;
+				if (data.installations.some((installation) => installation.id === installationId)) {
+					installationAccessible = true;
+					break;
+				}
+				if (page * 100 >= data.total_count) break;
 				page += 1;
 			}
 		} catch {
