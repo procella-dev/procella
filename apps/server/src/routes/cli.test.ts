@@ -1,6 +1,7 @@
 // @procella/server — createCliApp route parity + delta-checkpoint capability tests.
 
 import { describe, expect, test } from "bun:test";
+import { gzipSync } from "node:zlib";
 import type { AuditService } from "@procella/audit";
 import type { AuthService } from "@procella/auth";
 import type { Database } from "@procella/db";
@@ -226,6 +227,12 @@ function makeWebApp(deltaCheckpointsEnabled?: boolean) {
 	});
 }
 
+function createLargeCheckpointPayload(bytes: number): Buffer {
+	const chunk = "x".repeat(256 * 1024);
+	const chunks = Array.from({ length: Math.ceil(bytes / chunk.length) }, () => chunk);
+	return gzipSync(Buffer.from(JSON.stringify({ version: 3, deployment: { chunks } })));
+}
+
 // ============================================================================
 // Tests
 // ============================================================================
@@ -236,6 +243,37 @@ describe("@procella/server createCliApp", () => {
 		const res = await app.request("/api/capabilities");
 		expect(res.status).toBe(200);
 	});
+
+	test("combined and CLI apps authenticate before inflating API bodies", async () => {
+		for (const app of [makeWebApp(), makeCliApp()]) {
+			const res = await app.request("/api/stacks/myorg/myproj/dev/import", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					"Content-Encoding": "gzip",
+				},
+				body: new Uint8Array([0x1f, 0x8b, 0x00, 0x00, 0xff, 0xff]),
+			});
+			expect(res.status).toBe(401);
+		}
+	});
+
+	test("combined and CLI apps retain the 100 MiB checkpoint exception", async () => {
+		const compressed = createLargeCheckpointPayload(33 * 1024 * 1024);
+		for (const app of [makeWebApp(), makeCliApp()]) {
+			const res = await app.request("/api/stacks/myorg/myproj/dev/update/upd-1/checkpoint", {
+				method: "PATCH",
+				headers: {
+					Authorization:
+						"update-token update:upd-1:sid-1:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+					"Content-Type": "application/json",
+					"Content-Encoding": "gzip",
+				},
+				body: new Uint8Array(compressed),
+			});
+			expect(res.status).toBe(200);
+		}
+	}, 30_000);
 
 	describe("delta-checkpoint capability advertisement", () => {
 		test("createApp and createCliApp return identical capability bodies when disabled (default)", async () => {

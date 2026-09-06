@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { gzipSync } from "node:zlib";
 import type { AuditService } from "@procella/audit";
 import type { AuthConfig, AuthService } from "@procella/auth";
 import type { Database } from "@procella/db";
@@ -80,6 +81,35 @@ describe("createWebApp tRPC auth", () => {
 		});
 
 		expect(res.status).toBe(401);
+	});
+
+	test("rejects unauthorized compressed requests before inflation", async () => {
+		const app = makeApp();
+		const res = await app.request("/trpc/subscriptions.createTicket?batch=1", {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				"Content-Encoding": "gzip",
+			},
+			body: new Uint8Array([0x1f, 0x8b, 0x00, 0x00, 0xff, 0xff]),
+		});
+
+		expect(res.status).toBe(401);
+	});
+
+	test("inflates authenticated compressed requests", async () => {
+		const app = makeApp();
+		const res = await app.request("/trpc/subscriptions.createTicket?batch=1", {
+			method: "POST",
+			headers: {
+				Authorization: "token valid-token",
+				"Content-Type": "application/json",
+				"Content-Encoding": "gzip",
+			},
+			body: gzipSync(Buffer.from("{}")),
+		});
+
+		expect(res.status).toBe(200);
 	});
 
 	test("subscriptions.createTicket returns a signed short-lived ticket", async () => {
