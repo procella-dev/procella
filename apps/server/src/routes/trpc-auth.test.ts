@@ -199,6 +199,23 @@ describe("authenticateTrpcCaller", () => {
 		}
 	});
 
+	test("accepts reconnect envelope fields ignored by the tRPC transformer", async () => {
+		const service = createSubscriptionTicketService(SIGNING_KEY);
+		const ticket = await service.issueTicket(caller, scope);
+		const envelope = { ...trpcTransformer.serialize(scope.resource), lastEventId: 42 };
+
+		const result = await authenticateTrpcCaller(
+			subscriptionRequest(scope.procedure, scope.resource, { envelope }),
+			ticket,
+			{
+				auth: mockAuthService(null),
+				verifySubscriptionTicket: service.verifyTicket,
+			},
+		);
+
+		expect(result).toEqual({ caller, invalidTicket: false });
+	});
+
 	test("accepts a stack activity ticket for its intended stack", async () => {
 		const service = createSubscriptionTicketService(SIGNING_KEY);
 		const ticket = await service.issueTicket(caller, stackActivityScope);

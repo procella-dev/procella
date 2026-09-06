@@ -80,8 +80,7 @@ function subscriptionScopeFromRequest(req: Request): SubscriptionTicketScope | n
 		typeof envelope !== "object" ||
 		envelope === null ||
 		Array.isArray(envelope) ||
-		!Object.hasOwn(envelope, "json") ||
-		Object.keys(envelope).some((key) => key !== "json" && key !== "meta")
+		!Object.hasOwn(envelope, "json")
 	) {
 		return null;
 	}
