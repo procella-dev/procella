@@ -842,7 +842,6 @@ export function resolveOrgSlugMetadata(
 	let canonical: string | undefined;
 	const explicit = claims[OidcClaims.orgSlug];
 	if (typeof explicit === "string" && explicit) {
-		if (canonical && canonical !== explicit) return { status: "conflicting" };
 		canonical = explicit;
 	}
 
