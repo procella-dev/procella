@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { Database } from "@procella/db";
+import { checkpoints, type Database } from "@procella/db";
+import { desc } from "drizzle-orm";
 import { CHECKPOINT_HEAD_ORDER, PostgresUpdatesService } from "./postgres.js";
 import { ImportConflictError } from "./types.js";
 
@@ -159,6 +160,8 @@ function importDatabase() {
 
 describe("H9 repair checkpoint compare-and-swap", () => {
 	test("rejects repair when a completed update advances the checkpoint after export", async () => {
+		expect(CHECKPOINT_HEAD_ORDER).toHaveLength(2);
+		expect(CHECKPOINT_HEAD_ORDER[1]).toEqual(desc(checkpoints.id));
 		const { db, storage, exportStarted, completeNewerUpdate, releaseExport, insertCount } =
 			staleRepairDatabase();
 		const service = new PostgresUpdatesService({ db, storage, crypto });
