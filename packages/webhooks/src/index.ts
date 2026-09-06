@@ -80,12 +80,6 @@ export interface WebhooksService {
 		webhookId: string,
 		limit?: number,
 	): Promise<WebhookDeliveryInfo[]>;
-	/**
-	 * Persist one delivery intent per subscribed webhook. Delivery itself is performed
-	 * later by {@link WebhookOutboxWorker}, so callers get at-least-once semantics that
-	 * survive a crash between the database commit and the outbound HTTP request.
-	 */
-	enqueue(intent: WebhookIntent): Promise<void>;
 	ping(tenantId: string, webhookId: string): Promise<WebhookDeliveryInfo>;
 }
 
@@ -271,10 +265,6 @@ export class PostgresWebhooksService implements WebhooksService {
 			duration: row.duration,
 			createdAt: row.createdAt,
 		}));
-	}
-
-	async enqueue(intent: WebhookIntent): Promise<void> {
-		await enqueueWebhookEvent(this.db, intent);
 	}
 
 	async ping(tenantId: string, webhookId: string): Promise<WebhookDeliveryInfo> {

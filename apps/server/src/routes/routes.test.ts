@@ -9,7 +9,7 @@ import type { BlobStorage } from "@procella/storage";
 import type { Caller, SubscriptionTicketScope } from "@procella/types";
 import { UnauthorizedError } from "@procella/types";
 import type { UpdatesService } from "@procella/updates";
-import type { CreateWebhookInput, WebhookEventValue, WebhooksService } from "@procella/webhooks";
+import type { CreateWebhookInput, WebhooksService } from "@procella/webhooks";
 import { SignJWT } from "jose";
 import { INTERNAL_CLIENT_IP_HEADER } from "../middleware/security.js";
 import { createSubscriptionTicketService } from "../subscription-tickets.js";
@@ -175,11 +175,6 @@ function mockWebhooksService(): WebhooksService {
 		}),
 		deleteWebhook: async () => {},
 		listDeliveries: async (_tenantId: string, _webhookId: string, _limit?: number) => [],
-		enqueue: async (_intent: {
-			tenantId: string;
-			event: WebhookEventValue;
-			data: Record<string, unknown>;
-		}) => {},
 		ping: async () => ({
 			id: "delivery-1",
 			event: "webhook.ping",

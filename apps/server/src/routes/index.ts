@@ -54,7 +54,6 @@ import {
 	requireRoleMiddleware,
 	updateAuth,
 } from "../middleware/index.js";
-import { drainOutboxes } from "../outbox-drain.js";
 import type { Env } from "../types.js";
 import { trpcAuth } from "./trpc-auth.js";
 
@@ -119,7 +118,7 @@ export function createApp(deps: {
 		deltaCheckpointsEnabled: deps.deltaCheckpointsEnabled,
 	});
 	const user = userHandlers(deps.stacks);
-	const stackH = stackHandlers(deps.stacks, deps.webhooks);
+	const stackH = stackHandlers(deps.stacks);
 	const auditH = auditHandlers({ audit: deps.audit });
 	const updateH = updateHandlers(deps.updates, deps.stacks);
 	const webhookH = webhookHandlers({ webhooks: deps.webhooks });
@@ -253,9 +252,7 @@ export function createApp(deps: {
 				: undefined,
 			new WebhookOutboxWorker({ db: deps.db, maxPerRun: 5 })
 				.runOnce({ deadlineMs: startedAt + CRON_WORK_DEADLINE_MS })
-				.catch((error) =>
-					console.error("[cron] webhook outbox drain failed", projectError(error)),
-				),
+				.catch((error) => console.error("[cron] webhook outbox drain failed", projectError(error))),
 		]);
 		await new BlobCleanupWorker({ db: deps.db, storage: deps.storage, maxPerRun: 100 })
 			.runOnce({ deadlineMs: startedAt + CRON_WORK_DEADLINE_MS })

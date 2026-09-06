@@ -520,32 +520,6 @@ describe("@procella/server handlers", () => {
 			expect(forceValues).toEqual([false, true]);
 		});
 
-		test("committed stack mutations stay successful when webhook enqueue fails", async () => {
-			const errorLog = spyOn(console, "error").mockImplementation(() => {});
-			const enqueue = mock(async () => {
-				throw new Error("outbox unavailable");
-			});
-			const app = new Hono<Env>();
-			app.use("*", injectCaller(validCaller));
-			const stackH = stackHandlers(mockStacksService(), { enqueue });
-			app.post("/stacks/:org/:project/:stack", stackH.createStack);
-			app.delete("/stacks/:org/:project/:stack", stackH.deleteStack);
-
-			const created = await app.request("/stacks/myorg/myproj/dev", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({}),
-			});
-			await Promise.resolve();
-			const deleted = await app.request("/stacks/myorg/myproj/dev", { method: "DELETE" });
-
-			expect(created.status).toBe(200);
-			expect(deleted.status).toBe(204);
-			expect(enqueue).toHaveBeenCalledTimes(2);
-			expect(errorLog).toHaveBeenCalledTimes(2);
-			errorLog.mockRestore();
-		});
-
 		test("listStacks returns array of stacks", async () => {
 			const app = new Hono<Env>();
 			app.use("*", injectCaller(validCaller));

@@ -13,6 +13,7 @@ import {
 	StackNotFoundByIdError,
 	StackNotFoundError,
 } from "@procella/types";
+import { enqueueWebhookEvent } from "@procella/webhooks";
 import { and, asc, desc, eq, type SQL, sql } from "drizzle-orm";
 
 const NAME_REGEX = /^[a-zA-Z0-9._-]+$/;
@@ -291,9 +292,17 @@ function checkpointHasResources(data: unknown, blobKey: string | null): boolean 
 
 export class PostgresStacksService implements StacksService {
 	private readonly db: Database;
+	private readonly enqueueWebhook: typeof enqueueWebhookEvent;
 
-	constructor({ db }: { db: Database }) {
+	constructor({
+		db,
+		enqueueWebhook = enqueueWebhookEvent,
+	}: {
+		db: Database;
+		enqueueWebhook?: typeof enqueueWebhookEvent;
+	}) {
 		this.db = db;
+		this.enqueueWebhook = enqueueWebhook;
 	}
 
 	async createStack(
@@ -339,6 +348,12 @@ export class PostgresStacksService implements StacksService {
 							.insert(stacks)
 							.values({ projectId: proj.id, name: stack, tags })
 							.returning();
+
+						await this.enqueueWebhook(tx, {
+							tenantId,
+							event: "stack.created",
+							data: { org: _org, project, stack },
+						});
 
 						return {
 							id: row.id,
@@ -635,6 +650,11 @@ export class PostgresStacksService implements StacksService {
 					// ownership; the updates→stacks FK also blocks out-of-band orphan inserts.
 					await tx.delete(updates).where(eq(updates.stackId, locked.stackId));
 
+					await this.enqueueWebhook(tx, {
+						tenantId,
+						event: "stack.deleted",
+						data: { org: _org, project, stack },
+					});
 					await tx.delete(stacks).where(eq(stacks.id, locked.stackId));
 				});
 			},

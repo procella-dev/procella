@@ -141,7 +141,6 @@ function mockWebhooksService(): WebhooksService {
 		},
 		deleteWebhook: async () => {},
 		listDeliveries: async () => [],
-		enqueue: async () => {},
 		ping: async () => {
 			throw new Error("not exercised by CLI route parity tests");
 		},

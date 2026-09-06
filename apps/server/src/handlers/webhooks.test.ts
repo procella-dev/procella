@@ -55,7 +55,6 @@ function mockWebhooksService(overrides?: Partial<WebhooksService>): WebhooksServ
 		updateWebhook: mock(async () => mockWebhookInfo),
 		deleteWebhook: mock(async () => {}),
 		listDeliveries: mock(async () => [mockDelivery]),
-		enqueue: mock(async () => {}),
 		ping: mock(async () => mockDelivery),
 		...overrides,
 	};

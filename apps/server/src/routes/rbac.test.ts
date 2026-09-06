@@ -214,7 +214,6 @@ function dependenciesFor(role: Role): { deps: CliAppDeps; tracker: ServiceTracke
 		}),
 		deleteWebhook: mock(async () => {}),
 		listDeliveries: mock(async () => []),
-		enqueue: mock(async () => {}),
 		ping: mock(async () => {
 			throw new Error("not exercised by RBAC tests");
 		}),

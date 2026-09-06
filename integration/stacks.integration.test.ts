@@ -9,8 +9,10 @@ import {
 	stacks as stackRows,
 	updateEvents,
 	updates,
+	webhookOutbox,
 } from "@procella/db";
-import { PostgresStacksService } from "@procella/stacks";
+import { PostgresStacksService, type StackInfo } from "@procella/stacks";
+import { PostgresWebhooksService } from "@procella/webhooks";
 import {
 	ConflictError,
 	StackAlreadyExistsError,
@@ -77,6 +79,45 @@ describe("PostgresStacksService — integration", () => {
 			expect(info.tags["pulumi:project"]).toBe("proj-1");
 			expect(info.tags.env).toBe("development");
 			expect(info.tags.team).toBe("platform");
+		});
+
+		test("commits stack creation and its delivery intent atomically", async () => {
+			const webhooks = new PostgresWebhooksService({ db });
+			await webhooks.createWebhook(
+				"tenant-1",
+				{
+					name: "created",
+					url: "https://1.1.1.1/hook",
+					events: ["stack.created"],
+					secret: "secret",
+				},
+				"user-1",
+			);
+
+			await stacks.createStack("tenant-1", "org-1", "proj-1", "dev");
+
+			const [intent] = await db.select().from(webhookOutbox);
+			expect(intent.event).toBe("stack.created");
+			expect(JSON.parse(intent.body)).toMatchObject({
+				event: "stack.created",
+				data: { org: "org-1", project: "proj-1", stack: "dev" },
+			});
+		});
+
+		test("rolls stack creation back when its intent cannot be committed", async () => {
+			const failing = new PostgresStacksService({
+				db,
+				enqueueWebhook: async () => {
+					throw new Error("outbox unavailable");
+				},
+			});
+
+			await expect(
+				failing.createStack("tenant-1", "org-1", "proj-1", "dev"),
+			).rejects.toThrow("outbox unavailable");
+			await expect(
+				stacks.getStack("tenant-1", "org-1", "proj-1", "dev"),
+			).rejects.toBeInstanceOf(StackNotFoundError);
 		});
 	});
 
@@ -530,6 +571,50 @@ describe("PostgresStacksService — integration", () => {
 			await expect(
 				stacks.deleteStack("tenant-1", "org-1", "proj-1", "nonexistent"),
 			).rejects.toBeInstanceOf(StackNotFoundError);
+		});
+
+		test("commits stack deletion and its delivery intent atomically", async () => {
+			await stacks.createStack("tenant-1", "org-1", "proj-1", "dev");
+			const webhooks = new PostgresWebhooksService({ db });
+			await webhooks.createWebhook(
+				"tenant-1",
+				{
+					name: "deleted",
+					url: "https://1.1.1.1/hook",
+					events: ["stack.deleted"],
+					secret: "secret",
+				},
+				"user-1",
+			);
+
+			await stacks.deleteStack("tenant-1", "org-1", "proj-1", "dev");
+
+			const [intent] = await db.select().from(webhookOutbox);
+			expect(intent.event).toBe("stack.deleted");
+			expect(JSON.parse(intent.body)).toMatchObject({
+				event: "stack.deleted",
+				data: { org: "org-1", project: "proj-1", stack: "dev" },
+			});
+			await expect(
+				stacks.getStack("tenant-1", "org-1", "proj-1", "dev"),
+			).rejects.toBeInstanceOf(StackNotFoundError);
+		});
+
+		test("rolls stack deletion back when its intent cannot be committed", async () => {
+			await stacks.createStack("tenant-1", "org-1", "proj-1", "dev");
+			const failing = new PostgresStacksService({
+				db,
+				enqueueWebhook: async () => {
+					throw new Error("outbox unavailable");
+				},
+			});
+
+			await expect(
+				failing.deleteStack("tenant-1", "org-1", "proj-1", "dev"),
+			).rejects.toThrow("outbox unavailable");
+			await expect(
+				stacks.getStack("tenant-1", "org-1", "proj-1", "dev"),
+			).resolves.toMatchObject({ stackName: "dev" });
 		});
 	});
 
