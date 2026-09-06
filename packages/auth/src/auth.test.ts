@@ -286,6 +286,27 @@ describe("DescopeAuthService", () => {
 		expect(caller.workload).toBeUndefined();
 	});
 
+	test("explicit token claim classifies an unprefixed subject as an access-key principal", async () => {
+		const claims = {
+			sub: "K3-unprefixed-access-key",
+			dct: "tenant-1",
+			procellaLogin: "ci-access-key",
+			tenant_name: "Omer Corp",
+			tenants: { "tenant-1": { roles: ["admin"] } },
+			[OidcClaims.principalType]: "token",
+			exp: Math.floor(Date.now() / 1000) + 3600,
+		};
+		const token = await signDescopeJwt(harness.privateKey, claims, {
+			issuer: harness.issuer,
+			audience: harness.audience,
+		});
+
+		const caller = await svc.authenticate(reqWithAuth(`Bearer ${token}`));
+
+		expect(caller.userId).toBe("K3-unprefixed-access-key");
+		expect(caller.principalType).toBe("token");
+	});
+
 	test("workload JWT with full claims returns workload identity", async () => {
 		const claims = {
 			sub: "repo:org/repo:ref:refs/heads/main",
@@ -1109,6 +1130,7 @@ describe("DescopeAuthService — createCliAccessKey", () => {
 		const customClaims = createCall[5];
 		expect(customClaims.procellaLogin).toBe("omer@acme.com");
 		expect(customClaims.procellaOrgSlug).toBe("my-org");
+		expect(customClaims[OidcClaims.principalType]).toBe("token");
 	});
 
 	test("skips user lookup for workload principals", async () => {

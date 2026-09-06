@@ -398,6 +398,7 @@ export class DescopeAuthService implements AuthService {
 					const customClaims = {
 						procellaLogin: loginId,
 						procellaOrgSlug: caller.orgSlug,
+						[OidcClaims.principalType]: "token",
 						...safeCustomClaims,
 					};
 
@@ -523,6 +524,7 @@ export class DescopeAuthService implements AuthService {
 		const roles = extractRoles(claims, tenantId);
 		const principalTypeRaw = claims[OidcClaims.principalType];
 		const isWorkload = principalTypeRaw === "workload";
+		const isToken = principalTypeRaw === "token" || userId.startsWith("token:");
 
 		const workload: WorkloadIdentity | undefined = isWorkload
 			? {
@@ -549,7 +551,7 @@ export class DescopeAuthService implements AuthService {
 			userId,
 			login,
 			roles,
-			principalType: isWorkload ? "workload" : userId.startsWith("token:") ? "token" : "user",
+			principalType: isWorkload ? "workload" : isToken ? "token" : "user",
 			workload,
 		};
 	}
