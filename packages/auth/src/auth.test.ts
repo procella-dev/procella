@@ -10,9 +10,9 @@ import {
 	DevAuthService,
 	extractOrgSlug,
 	extractRoles,
-	extractUnambiguousOrgSlug,
 	METHOD_ROLE_MAP,
 	requireRole,
+	resolveOrgSlugMetadata,
 	slugify,
 } from "./index.js";
 
@@ -1171,7 +1171,10 @@ describe("extractOrgSlug", () => {
 	test("uses top-level tenant_name from session JWT", () => {
 		const claims = { tenant_name: "My Company" };
 		expect(extractOrgSlug(claims, "T3raw_tenant_id")).toBe("my-company");
-		expect(extractUnambiguousOrgSlug(claims, "T3raw_tenant_id")).toBe("my-company");
+		expect(resolveOrgSlugMetadata(claims, "T3raw_tenant_id")).toEqual({
+			status: "resolved",
+			slug: "my-company",
+		});
 	});
 
 	test("uses nested tenants.<id>.name from access key JWT", () => {
@@ -1181,7 +1184,10 @@ describe("extractOrgSlug", () => {
 			},
 		};
 		expect(extractOrgSlug(claims, "T3raw_tenant_id")).toBe("acme-corp");
-		expect(extractUnambiguousOrgSlug(claims, "T3raw_tenant_id")).toBe("acme-corp");
+		expect(resolveOrgSlugMetadata(claims, "T3raw_tenant_id")).toEqual({
+			status: "resolved",
+			slug: "acme-corp",
+		});
 	});
 
 	test("prefers top-level tenant_name over nested name", () => {
@@ -1192,18 +1198,18 @@ describe("extractOrgSlug", () => {
 			},
 		};
 		expect(extractOrgSlug(claims, "T3id")).toBe("top-level-org");
-		expect(extractUnambiguousOrgSlug(claims, "T3id")).toBeUndefined();
+		expect(resolveOrgSlugMetadata(claims, "T3id")).toEqual({ status: "conflicting" });
 	});
 
 	test("falls back to tenantId when no name is available", () => {
 		const claims = { tenants: { T3id: { roles: ["admin"] } } };
 		expect(extractOrgSlug(claims, "T3id")).toBe("T3id");
-		expect(extractUnambiguousOrgSlug(claims, "T3id")).toBeUndefined();
+		expect(resolveOrgSlugMetadata(claims, "T3id")).toEqual({ status: "absent" });
 	});
 
 	test("falls back to tenantId for empty claims", () => {
 		expect(extractOrgSlug({}, "T3raw")).toBe("T3raw");
-		expect(extractUnambiguousOrgSlug({}, "T3raw")).toBeUndefined();
+		expect(resolveOrgSlugMetadata({}, "T3raw")).toEqual({ status: "absent" });
 	});
 
 	test("prefers procellaOrgSlug over tenant name (OIDC workload identity)", () => {
@@ -1213,7 +1219,7 @@ describe("extractOrgSlug", () => {
 			tenants: { T3id: { name: "different-name" } },
 		};
 		expect(extractOrgSlug(claims, "T3id")).toBe("procella-pr-102");
-		expect(extractUnambiguousOrgSlug(claims, "T3id")).toBeUndefined();
+		expect(resolveOrgSlugMetadata(claims, "T3id")).toEqual({ status: "conflicting" });
 	});
 
 	test("falls through to tenant_name when procellaOrgSlug is absent", () => {
@@ -1227,7 +1233,10 @@ describe("extractOrgSlug", () => {
 			tenant_name: "My Org",
 			tenants: { T3id: { name: "My Org" } },
 		};
-		expect(extractUnambiguousOrgSlug(claims, "T3id")).toBe("my-org");
+		expect(resolveOrgSlugMetadata(claims, "T3id")).toEqual({
+			status: "resolved",
+			slug: "my-org",
+		});
 	});
 
 	test("rejects contradictory tenant name aliases", () => {
@@ -1235,7 +1244,7 @@ describe("extractOrgSlug", () => {
 			tenant_name: "Current Org",
 			tenants: { T3id: { name: "Legacy Alias" } },
 		};
-		expect(extractUnambiguousOrgSlug(claims, "T3id")).toBeUndefined();
+		expect(resolveOrgSlugMetadata(claims, "T3id")).toEqual({ status: "conflicting" });
 	});
 });
 

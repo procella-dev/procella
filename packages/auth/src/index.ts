@@ -580,13 +580,16 @@ export class DescopeAuthService implements AuthService {
 				}
 			: undefined;
 
-		const metadataOrgSlug = extractUnambiguousOrgSlug(claims, tenantId);
+		const metadataOrg = resolveOrgSlugMetadata(claims, tenantId);
 		const configuredOrgSlug = this.legacyOrgMappings[tenantId];
 		const canonicalOrgSlug = configuredOrgSlug
-			? !metadataOrgSlug || metadataOrgSlug === configuredOrgSlug
+			? metadataOrg.status === "absent" ||
+				(metadataOrg.status === "resolved" && metadataOrg.slug === configuredOrgSlug)
 				? configuredOrgSlug
 				: undefined
-			: metadataOrgSlug === tenantId && !this.mappedLegacyOrgSlugs.has(tenantId)
+			: metadataOrg.status === "resolved" &&
+					metadataOrg.slug === tenantId &&
+					!this.mappedLegacyOrgSlugs.has(tenantId)
 				? tenantId
 				: undefined;
 
@@ -821,11 +824,16 @@ export function extractOrgSlug(claims: Record<string, unknown>, tenantId: string
 	return tenantId;
 }
 
-/** Resolve one unambiguous org slug from trusted tenant metadata. */
-export function extractUnambiguousOrgSlug(
+export type OrgSlugMetadataResolution =
+	| { status: "absent" }
+	| { status: "conflicting" }
+	| { status: "resolved"; slug: string };
+
+/** Resolve trusted org metadata while preserving absence versus contradiction. */
+export function resolveOrgSlugMetadata(
 	claims: Record<string, unknown>,
 	tenantId: string,
-): string | undefined {
+): OrgSlugMetadataResolution {
 	let canonical: string | undefined;
 
 	const legacy = claims[LEGACY_ORG_SLUG_CLAIM];
@@ -833,7 +841,7 @@ export function extractUnambiguousOrgSlug(
 
 	const explicit = claims[OidcClaims.orgSlug];
 	if (typeof explicit === "string" && explicit) {
-		if (canonical && canonical !== explicit) return undefined;
+		if (canonical && canonical !== explicit) return { status: "conflicting" };
 		canonical = explicit;
 	}
 
@@ -841,9 +849,11 @@ export function extractUnambiguousOrgSlug(
 		typeof claims.tenant_name === "string" && claims.tenant_name
 			? slugify(claims.tenant_name)
 			: undefined;
-	if (typeof claims.tenant_name === "string" && claims.tenant_name && !topLevel) return undefined;
+	if (typeof claims.tenant_name === "string" && claims.tenant_name && !topLevel) {
+		return { status: "conflicting" };
+	}
 	if (topLevel) {
-		if (canonical && canonical !== topLevel) return undefined;
+		if (canonical && canonical !== topLevel) return { status: "conflicting" };
 		canonical = topLevel;
 	}
 
@@ -854,12 +864,12 @@ export function extractUnambiguousOrgSlug(
 		const name = tenant?.name;
 		if (typeof name === "string" && name) {
 			const nested = slugify(name);
-			if (!nested || (canonical && canonical !== nested)) return undefined;
+			if (!nested || (canonical && canonical !== nested)) return { status: "conflicting" };
 			canonical = nested;
 		}
 	}
 
-	return canonical;
+	return canonical ? { status: "resolved", slug: canonical } : { status: "absent" };
 }
 
 /** Convert a string to a URL-safe slug (lowercase, alphanumeric + hyphens). */
