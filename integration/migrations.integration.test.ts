@@ -97,19 +97,31 @@ test("concurrent migrators serialize DDL and journal writes", async () => {
 			expect(probe).toEqual({ ddl_rows: 1, journal_rows: 1 });
 		} finally {
 			if (barrierLocked) {
-				await barrierConnection.unsafe(
-					`SELECT pg_advisory_unlock(${MIGRATION_BARRIER_LOCK_ID})`,
-				);
+				try {
+					await barrierConnection.unsafe(
+						`SELECT pg_advisory_unlock(${MIGRATION_BARRIER_LOCK_ID})`,
+					);
+				} catch {
+					// Closing the session releases the barrier if explicit unlock is unavailable.
+				}
 			}
 			await Promise.allSettled(migrationRuns);
 			barrierConnection.release();
 			await database.close();
 		}
 	} finally {
-		if (databaseCreated) {
-			await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`);
+		try {
+			if (databaseCreated) {
+				await admin.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`);
+			}
+		} catch (error) {
+			console.error(`failed to drop test database ${databaseName}`, error);
+		} finally {
+			try {
+				await admin.close();
+			} finally {
+				await rm(migrationsFolder, { recursive: true, force: true });
+			}
 		}
-		await admin.close();
-		await rm(migrationsFolder, { recursive: true, force: true });
 	}
 });
