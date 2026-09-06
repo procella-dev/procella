@@ -23,9 +23,13 @@ const validCaller: Caller = {
 	principalType: "user",
 };
 
-function mockAuthService(opts?: { failAuth?: boolean }): AuthService {
+function mockAuthService(opts?: {
+	failAuth?: boolean;
+	onAuthenticate?: (request: Request) => void;
+}): AuthService {
 	return {
-		authenticate: async () => {
+		authenticate: async (request) => {
+			opts?.onAuthenticate?.(request);
 			if (opts?.failAuth) {
 				throw new UnauthorizedError("Invalid token");
 			}
@@ -84,6 +88,30 @@ describe("@procella/server middleware", () => {
 			expect(body.login).toBe("test-user");
 		});
 
+		test("allows cookie-only requests to reach the authenticator", async () => {
+			const receivedCookies: Array<string | null> = [];
+			const app = new Hono<Env>();
+			app.use(
+				"*",
+				apiAuth(
+					mockAuthService({
+						onAuthenticate: (request) => {
+							receivedCookies.push(request.headers.get("Cookie"));
+						},
+					}),
+				),
+			);
+			app.get("/test", (c) => c.json(c.get("caller")));
+
+			const res = await app.request("/test", {
+				headers: { Cookie: "DS=session.jwt.value" },
+			});
+
+			expect(res.status).toBe(200);
+			expect(receivedCookies).toEqual(["DS=session.jwt.value"]);
+			expect(await res.json()).toEqual(validCaller);
+		});
+
 		test("returns 401 for invalid token", async () => {
 			const app = new Hono<Env>();
 			app.use("*", apiAuth(mockAuthService({ failAuth: true })));
@@ -95,13 +123,50 @@ describe("@procella/server middleware", () => {
 			expect(res.status).toBe(401);
 		});
 
-		test("returns 401 for missing Authorization header", async () => {
+		test("returns 401 for missing credentials after consulting the authenticator", async () => {
+			let authenticateCalls = 0;
 			const app = new Hono<Env>();
-			app.use("*", apiAuth(mockAuthService({ failAuth: true })));
+			app.use(
+				"*",
+				apiAuth(
+					mockAuthService({
+						failAuth: true,
+						onAuthenticate: () => {
+							authenticateCalls++;
+						},
+					}),
+				),
+			);
 			app.get("/test", (c) => c.json({ ok: true }));
 
 			const res = await app.request("/test");
+
 			expect(res.status).toBe(401);
+			expect(authenticateCalls).toBe(1);
+		});
+
+		test("returns 401 for malformed credentials after consulting the authenticator", async () => {
+			let authenticateCalls = 0;
+			const app = new Hono<Env>();
+			app.use(
+				"*",
+				apiAuth(
+					mockAuthService({
+						failAuth: true,
+						onAuthenticate: () => {
+							authenticateCalls++;
+						},
+					}),
+				),
+			);
+			app.get("/test", (c) => c.json({ ok: true }));
+
+			const res = await app.request("/test", {
+				headers: { Authorization: "Basic malformed" },
+			});
+
+			expect(res.status).toBe(401);
+			expect(authenticateCalls).toBe(1);
 		});
 	});
 
