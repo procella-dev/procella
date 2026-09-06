@@ -21,13 +21,16 @@ x-procella: &procella
     PROCELLA_DEV_USERS: '[{"token":"token-user-b","login":"user-b","org":"org-b","role":"admin"},{"token":"token-viewer","login":"viewer-user","org":"dev-org","role":"viewer"}]'
     # Generate via: openssl rand -hex 32 ; do not reuse across deployments.
     PROCELLA_ENCRYPTION_KEY: ${PROCELLA_ENCRYPTION_KEY:?must be set; generate with `openssl rand -hex 32`}
+    # Signs dashboard subscription tickets; bootstrap refuses to start without it.
+    PROCELLA_TICKET_SIGNING_KEY: ${PROCELLA_TICKET_SIGNING_KEY:?must be set (32+ chars); generate with `openssl rand -hex 32`}
     # Placeholder only; generate a unique secret when enabling /cron/gc.
     PROCELLA_CRON_SECRET: CHANGE_ME_GENERATE_RANDOM_32_HEX
     PROCELLA_BLOB_BACKEND: s3
     PROCELLA_BLOB_S3_BUCKET: procella-checkpoints
     PROCELLA_BLOB_S3_ENDPOINT: http://minio:9000
-    AWS_ACCESS_KEY_ID: minio
-    AWS_SECRET_ACCESS_KEY: minio
+    # Must match the MinIO root credentials below; MinIO rejects any other key.
+    AWS_ACCESS_KEY_ID: minioadmin
+    AWS_SECRET_ACCESS_KEY: minioadmin
   healthcheck: &procella-health
     test: ["CMD", "/procella", "--healthz"]
     interval: 5s
@@ -44,7 +47,9 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      # postgres:18 keeps PGDATA at /var/lib/postgresql/18/docker and declares
+      # the volume one level up, so the mount must be /var/lib/postgresql.
+      - postgres-data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U procella"]
       interval: 5s

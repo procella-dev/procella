@@ -16,7 +16,7 @@ services:
     # Or use a pre-built image:
     # image: ghcr.io/your-org/procella:latest
 
-    environment:
+    environment: &procella-environment
       PROCELLA_LISTEN_ADDR: ":9090"
       PROCELLA_AUTH_MODE: "dev"
       PROCELLA_BLOB_BACKEND: "s3"
@@ -26,6 +26,8 @@ services:
       PROCELLA_DATABASE_URL: "${PROCELLA_DATABASE_URL}"
       PROCELLA_DEV_AUTH_TOKEN: "${PROCELLA_DEV_AUTH_TOKEN}"
       PROCELLA_ENCRYPTION_KEY: "${PROCELLA_ENCRYPTION_KEY}"
+      # 32+ chars; the server refuses to start without it.
+      PROCELLA_TICKET_SIGNING_KEY: "${PROCELLA_TICKET_SIGNING_KEY}"
       PROCELLA_DESCOPE_PROJECT_ID: "${PROCELLA_DESCOPE_PROJECT_ID}"
       PROCELLA_DESCOPE_MANAGEMENT_KEY: "${PROCELLA_DESCOPE_MANAGEMENT_KEY}"
       PROCELLA_BLOB_S3_BUCKET: "${PROCELLA_BLOB_S3_BUCKET}"
@@ -43,6 +45,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
     restart: unless-stopped
 
@@ -53,6 +57,19 @@ services:
       retries: 3
       start_period: 20s
 
+  # One-shot migration gate: the server image ships /migrations, so the same
+  # image applies the schema before any replica starts serving.
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["--migrate", "/migrations"]
+    environment: *procella-environment
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
   db:
     image: postgres:18-alpine
     environment:
@@ -60,7 +77,9 @@ services:
       POSTGRES_USER: procella
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
     volumes:
-      - procella_pgdata:/var/lib/postgresql/data
+      # postgres:18 keeps PGDATA at /var/lib/postgresql/18/docker and declares
+      # the volume one level up, so the mount must be /var/lib/postgresql.
+      - procella_pgdata:/var/lib/postgresql
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U procella -d procella"]

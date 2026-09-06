@@ -8,6 +8,7 @@
 // Neon connection strings use *.neon.tech hosts; everything else (localhost,
 // 127.0.0.1, Docker hostnames, RDS, Supabase) uses Bun's native driver.
 
+import migrationJournal from "../drizzle/meta/_journal.json";
 import {
 	getDirectNeonMigrationUrl,
 	MIGRATIONS_ADVISORY_LOCK_ID,
@@ -63,6 +64,29 @@ export interface DbClient {
 	/** Shut down the connection pool. */
 	close(): Promise<void>;
 }
+
+/**
+ * Normalize a raw `db.execute()` result into rows. Bun.sql returns the row
+ * array directly; neon-serverless returns a `{ rows }` result object.
+ */
+export function readExecuteRows(result: unknown): Record<string, unknown>[] {
+	if (Array.isArray(result)) return result as Record<string, unknown>[];
+	if (
+		typeof result === "object" &&
+		result !== null &&
+		"rows" in result &&
+		Array.isArray(result.rows)
+	) {
+		return result.rows as Record<string, unknown>[];
+	}
+	return [];
+}
+
+const latestMigration = migrationJournal.entries.at(-1);
+if (!latestMigration) throw new Error("Database migration journal is empty");
+
+/** Timestamp Drizzle records after applying the current final migration. */
+export const LATEST_MIGRATION_TIMESTAMP = latestMigration.when;
 
 // ============================================================================
 // Driver Detection

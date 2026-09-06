@@ -25,23 +25,6 @@ databases:
     user: procella
     postgresMajorVersion: 17
 
-envVarGroups:
-  - name: procella-secrets
-    envVars:
-      # Mark sync:false so Render prompts for values on first deploy
-      - key: PROCELLA_DEV_AUTH_TOKEN
-        sync: false
-      - key: PROCELLA_ENCRYPTION_KEY
-        sync: false
-      - key: PROCELLA_DESCOPE_PROJECT_ID
-        sync: false
-      - key: PROCELLA_DESCOPE_MANAGEMENT_KEY
-        sync: false
-      - key: AWS_ACCESS_KEY_ID
-        sync: false
-      - key: AWS_SECRET_ACCESS_KEY
-        sync: false
-
 services:
   - name: procella
     type: web
@@ -56,7 +39,7 @@ services:
       - key: PROCELLA_LISTEN_ADDR
         value: ":10000"        # Render assigns ~10000, not 9090
       - key: PROCELLA_AUTH_MODE
-        value: descope         # or dev
+        value: dev             # or descope
       - key: PROCELLA_BLOB_BACKEND
         value: s3
       - key: PROCELLA_BLOB_S3_REGION
@@ -72,22 +55,42 @@ services:
           name: procella-db
           property: connectionString
 
-      # Pull in the secrets group
-      - fromGroup: procella-secrets
+      # Secrets live on the service: Render rejects `sync: false` inside an
+      # envVarGroup, so a grouped secret never prompts and never resolves.
+      - key: PROCELLA_DEV_AUTH_TOKEN
+        sync: false
+      - key: PROCELLA_ENCRYPTION_KEY        # openssl rand -hex 32
+        sync: false
+      - key: PROCELLA_TICKET_SIGNING_KEY    # openssl rand -hex 32 (32+ chars)
+        sync: false
+      - key: PROCELLA_DESCOPE_PROJECT_ID
+        sync: false
+      - key: PROCELLA_DESCOPE_MANAGEMENT_KEY
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
 
-    # Health check — Render marks deploy failed if this doesn't return 200
+    # Apply migrations before the new image serves traffic. The image ships its
+    # migrations at /migrations and has no shell, so this is a single exec.
+    preDeployCommand: "/procella --migrate /migrations"
+
+    # Health check: Render marks deploy failed unless the app returns 200.
+    # /healthz verifies that the schema is current, so an unmigrated database
+    # blocks the deploy instead of serving 500s on every stack operation.
     healthCheckPath: /healthz
 
     # Auto-deploy on every push to the linked branch
     autoDeploy: true
-
-    # Run DB migrations before starting the new instance.
-    # Procella uses drizzle-kit for migrations — run from the build stage:
-    # preDeployCommand: "bunx drizzle-kit migrate --config packages/db/drizzle.config.ts"
 ```
 
 <Aside type="note">
-`sync: false` env vars require a value to be entered in the Render dashboard before the first deploy. This is the recommended pattern for secrets — they are never stored in your repo.
+`sync: false` env vars require a value to be entered in the Render dashboard before the first deploy. This is the recommended pattern for secrets; they are never stored in your repo. They must be declared on the service because the Blueprint spec forbids `sync: false` inside `envVarGroups`.
+</Aside>
+
+<Aside type="caution">
+`preDeployCommand` requires a paid instance type. On the free tier, run `/procella --migrate /migrations` manually (Render Shell or a one-off job) before the first deploy, or the service starts against an empty schema and `/healthz` returns 503.
 </Aside>
 
 ---
@@ -112,13 +115,15 @@ The `connectionString` property auto-generates as:
 
 ## Secrets
 
-Set `sync: false` env vars in the Render Dashboard under **Environment → Environment Variables** before the first Blueprint sync. After that, values persist across resyncs.
+Set `sync: false` env vars in the Render Dashboard under **Environment → Environment Variables** before the first Blueprint sync. After that, values persist across resyncs. Declare them on the service, not in an `envVarGroup`; the Blueprint spec rejects `sync: false` there.
 
 Alternatively, use the Render CLI:
 
 ```bash
 render env:set PROCELLA_ENCRYPTION_KEY="$(openssl rand -hex 32)" --service procella
 ```
+
+`PROCELLA_ENCRYPTION_KEY` and `PROCELLA_TICKET_SIGNING_KEY` are both mandatory: the server exits at startup if either is unset.
 
 ---
 

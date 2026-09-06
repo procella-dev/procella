@@ -1,0 +1,49 @@
+# Caddyfile — cluster profile reverse proxy (docker-compose.yml, profile: cluster).
+#
+# Mounted read-only at /etc/caddy/Caddyfile by the `caddy` service. TLS is
+# terminated upstream in this profile, so auto_https stays off.
+{
+	auto_https off
+	admin off
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+:9090 {
+	log {
+		output stdout
+		format filter {
+			wrap json
+			fields {
+				request>uri query {
+					delete ticket
+					delete connectionParams
+				}
+			}
+		}
+	}
+
+	# Pulumi CLI protocol, dashboard API, and readiness go to the server replicas.
+	handle /api/* {
+		reverse_proxy procella-cluster:9090
+	}
+
+	handle /trpc/* {
+		reverse_proxy procella-cluster:9090
+	}
+
+	handle /healthz {
+		reverse_proxy procella-cluster:9090
+	}
+
+	# GitHub App callback outside the API prefixes.
+	handle /github/setup {
+		reverse_proxy procella-cluster:9090
+	}
+
+	# Everything else is the React SPA, which handles client-side routing.
+	handle {
+		reverse_proxy procella-ui:80
+	}
+}

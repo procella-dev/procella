@@ -216,7 +216,19 @@ describe("@procella/server routes", () => {
 			db:
 				opts?.db ??
 				({
-					execute: async () => ({ rows: [{ acquired: false }] }),
+					execute: async () => ({
+						rows: [
+							{
+								acquired: false,
+								relation_0: "projects",
+								relation_1: "stacks",
+								relation_2: "updates",
+								relation_3: "checkpoints",
+								relation_4: "__drizzle_migrations",
+								migrated: true,
+							},
+						],
+					}),
 					transaction: async (callback: (tx: unknown) => unknown) =>
 						callback({ execute: async () => ({ rows: [{ acquired: false }] }) }),
 				} as unknown as Database),

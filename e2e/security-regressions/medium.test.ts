@@ -117,7 +117,16 @@ function createSizedPayload(bytes: number): string {
 
 function makeRouteTestApp(opts?: { corsOrigins?: string[]; cronSecret?: string }) {
 	const mockDb = {
-		execute: async () => [{ "?column?": 1 }],
+		execute: async () => [
+			{
+				relation_0: "projects",
+				relation_1: "stacks",
+				relation_2: "updates",
+				relation_3: "checkpoints",
+				relation_4: "__drizzle_migrations",
+				migrated: true,
+			},
+		],
 	} as unknown as Database;
 
 	const mockStackInfo: StackInfo = {

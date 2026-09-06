@@ -11,15 +11,13 @@ RUN bun install --frozen-lockfile
 FROM deps AS prod-deps
 RUN bun prune --production
 
-FROM base AS ui
-COPY --from=deps /usr/src/app/node_modules ./node_modules
+FROM deps AS ui
 COPY packages/ packages/
 COPY apps/ui/ apps/ui/
 COPY tsconfig.json tsconfig.base.json ./
 RUN bun run --cwd apps/ui build
 
-FROM base AS build
-COPY --from=deps /usr/src/app/node_modules ./node_modules
+FROM deps AS build
 COPY packages/ packages/
 COPY apps/server/ apps/server/
 COPY tsconfig.json tsconfig.base.json ./

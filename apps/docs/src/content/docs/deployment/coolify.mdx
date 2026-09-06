@@ -26,7 +26,7 @@ services:
     # Or use a pre-built image:
     # image: ghcr.io/your-org/procella:latest
 
-    environment:
+    environment: &procella-environment
       # Non-sensitive config (set here or override in Coolify UI)
       PROCELLA_LISTEN_ADDR: ":9090"
       PROCELLA_AUTH_MODE: "descope"     # or dev
@@ -38,6 +38,8 @@ services:
       PROCELLA_DATABASE_URL: "${PROCELLA_DATABASE_URL}"
       PROCELLA_DEV_AUTH_TOKEN: "${PROCELLA_DEV_AUTH_TOKEN}"
       PROCELLA_ENCRYPTION_KEY: "${PROCELLA_ENCRYPTION_KEY}"
+      # 32+ chars; the server refuses to start without it.
+      PROCELLA_TICKET_SIGNING_KEY: "${PROCELLA_TICKET_SIGNING_KEY}"
       PROCELLA_DESCOPE_PROJECT_ID: "${PROCELLA_DESCOPE_PROJECT_ID}"
       PROCELLA_DESCOPE_MANAGEMENT_KEY: "${PROCELLA_DESCOPE_MANAGEMENT_KEY}"
       PROCELLA_BLOB_S3_BUCKET: "${PROCELLA_BLOB_S3_BUCKET}"
@@ -56,6 +58,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
     restart: unless-stopped
 
@@ -66,14 +70,29 @@ services:
       retries: 3
       start_period: 20s
 
+  # One-shot migration gate: the server image ships /migrations, so the same
+  # image applies the schema before any replica starts serving.
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["--migrate", "/migrations"]
+    environment: *procella-environment
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
   db:
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_DB: procella
       POSTGRES_USER: procella
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
     volumes:
-      - procella_pgdata:/var/lib/postgresql/data
+      # postgres:18 keeps PGDATA at /var/lib/postgresql/18/docker and declares
+      # the volume one level up, so the mount must be /var/lib/postgresql.
+      - procella_pgdata:/var/lib/postgresql
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U procella -d procella"]
@@ -88,6 +107,10 @@ volumes:
 
 <Aside type="note">
 The `POSTGRES_PASSWORD` and `PROCELLA_DATABASE_URL` should be set as environment variables in the Coolify UI under your service's **Environment Variables** tab. Coolify substitutes `${VAR}` placeholders at deploy time.
+</Aside>
+
+<Aside type="caution" title="Upgrading an existing PostgreSQL 18 service">
+Earlier versions mounted `procella_pgdata` at `/var/lib/postgresql/data`, while the PostgreSQL 18 image stores its cluster under `/var/lib/postgresql/18/docker`. Before the first redeploy with this file, use the terminal on the currently running `db` service to create a `pg_dumpall` backup. Restore that backup into the database after Coolify recreates the service with the corrected `/var/lib/postgresql` mount. Keep the old container and its anonymous volume until the restored data is verified.
 </Aside>
 
 ---
@@ -122,6 +145,7 @@ In the Coolify UI → your service → **Environment Variables**:
 | `PROCELLA_DATABASE_URL` | `postgresql://procella:${POSTGRES_PASSWORD}@db:5432/procella` |
 | `POSTGRES_PASSWORD` | `openssl rand -hex 24` output |
 | `PROCELLA_ENCRYPTION_KEY` | `openssl rand -hex 32` output |
+| `PROCELLA_TICKET_SIGNING_KEY` | `openssl rand -hex 32` output (32+ chars) |
 | `PROCELLA_DEV_AUTH_TOKEN` | your auth token |
 | `PROCELLA_DESCOPE_PROJECT_ID` | from Descope console |
 | `PROCELLA_DESCOPE_MANAGEMENT_KEY` | from Descope console |

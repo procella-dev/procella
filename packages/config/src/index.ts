@@ -270,6 +270,23 @@ const envMapping = {
 	corsOrigins: "PROCELLA_CORS_ORIGINS",
 } as const;
 
+// ============================================================================
+// Deployment startup contract
+// ============================================================================
+
+/**
+ * Env vars a deployment must supply for the server to reach a serving state,
+ * regardless of auth mode or blob backend: the schema requires the database
+ * URL, and bootstrapServices() rejects a missing encryption or ticket signing
+ * key. Deployment manifests are linted against this list by
+ * scripts/check-deployment-manifests.ts.
+ */
+export const BOOTSTRAP_REQUIRED_ENV_VARS = [
+	envMapping.databaseUrl,
+	envMapping.authMode,
+	envMapping.encryptionKey,
+	envMapping.ticketSigningKey,
+] as const;
 function envToConfig(): Record<string, unknown> {
 	const result: Record<string, unknown> = {};
 	for (const [key, envVar] of Object.entries(envMapping)) {
