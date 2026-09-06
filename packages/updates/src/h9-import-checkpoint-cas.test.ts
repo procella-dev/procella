@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { checkpoints, type Database } from "@procella/db";
-import { PostgresUpdatesService } from "./postgres.js";
+import type { Database } from "@procella/db";
+import { CHECKPOINT_HEAD_ORDER, PostgresUpdatesService } from "./postgres.js";
 import { ImportConflictError } from "./types.js";
 
 const crypto = {} as never;
@@ -50,8 +50,7 @@ function staleRepairDatabase() {
 				from: () => query,
 				where: () => query,
 				orderBy: (...columns: unknown[]) => {
-					const tieBreaker = columns[1] as { queryChunks?: unknown[] } | undefined;
-					deterministicOrder = tieBreaker?.queryChunks?.includes(checkpoints.id) ?? false;
+					deterministicOrder = columns[1] === CHECKPOINT_HEAD_ORDER[1];
 					return query;
 				},
 				limit: () => Promise.resolve([deterministicOrder ? headCheckpoint : sourceCheckpoint]),

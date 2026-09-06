@@ -90,7 +90,11 @@ import {
 	LEASE_DURATION_SECONDS,
 } from "./types.js";
 
-const CHECKPOINT_HEAD_ORDER = [desc(checkpoints.createdAt), desc(checkpoints.id)] as const;
+export const CHECKPOINT_HEAD_ORDER = [desc(checkpoints.createdAt), desc(checkpoints.id)] as const;
+
+function checkpointHeadWhere(stackId: string) {
+	return and(eq(checkpoints.stackId, stackId), eq(checkpoints.isDelta, false));
+}
 const MAX_JOURNAL_ENTRIES = 10_000;
 const MAX_EVENT_BATCH_SIZE = 1_000;
 
@@ -883,7 +887,7 @@ export class PostgresUpdatesService implements UpdatesService {
 		const [checkpoint] = await db
 			.select()
 			.from(checkpoints)
-			.where(and(eq(checkpoints.stackId, stackId), eq(checkpoints.isDelta, false)))
+			.where(checkpointHeadWhere(stackId))
 			.orderBy(...CHECKPOINT_HEAD_ORDER)
 			.limit(1);
 		return checkpoint;
@@ -896,7 +900,7 @@ export class PostgresUpdatesService implements UpdatesService {
 		const [checkpoint] = await db
 			.select({ id: checkpoints.id })
 			.from(checkpoints)
-			.where(and(eq(checkpoints.stackId, stackId), eq(checkpoints.isDelta, false)))
+			.where(checkpointHeadWhere(stackId))
 			.orderBy(...CHECKPOINT_HEAD_ORDER)
 			.limit(1);
 		return checkpoint?.id;
