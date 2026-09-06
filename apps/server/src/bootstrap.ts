@@ -89,6 +89,7 @@ async function bootstrapServices() {
 					projectId: config.descopeProjectId as string,
 					managementKey: config.descopeManagementKey,
 					authBaseUrl: config.descopeAuthBaseUrl,
+					legacyOrgMappings: config.legacyOrgMappings,
 				};
 	const auth = createAuthService(authConfig);
 	if (!config.ticketSigningKey) {
@@ -122,7 +123,9 @@ async function bootstrapServices() {
 				},
 	);
 
-	const crypto = new AesCryptoService(encryptionKey);
+	const crypto = new AesCryptoService(encryptionKey, {
+		allowLegacyDecryption: config.legacyDecryptionEnabled,
+	});
 
 	// Domain services
 	const stacksService = new PostgresStacksService({ db });
@@ -148,6 +151,7 @@ async function bootstrapServices() {
 		db,
 		evaluator: evaluatorClient,
 		encryptionKeyHex: encryptionKey,
+		allowLegacyDecryption: config.legacyDecryptionEnabled,
 	});
 
 	return {

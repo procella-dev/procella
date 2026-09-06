@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { createCipheriv, hkdfSync } from "node:crypto";
 import { AesCryptoService } from "@procella/crypto";
 import { createDb, type Database, escProjects, escSessions } from "@procella/db";
 import { ConflictError, NotFoundError } from "@procella/types";
@@ -15,6 +16,16 @@ const DB_URL =
 	process.env.PROCELLA_TEST_DATABASE_URL ??
 	process.env.PROCELLA_DATABASE_URL ??
 	"postgres://procella:procella@localhost:5432/procella";
+
+function legacyEncrypt(masterKeyHex: string, identity: string, plaintext: Uint8Array): Uint8Array {
+	const key = Buffer.from(
+		hkdfSync("sha256", Buffer.from(masterKeyHex, "hex"), identity, "procella-encrypt", 32),
+	);
+	const nonce = Buffer.alloc(12, 7);
+	const cipher = createCipheriv("aes-256-gcm", key, nonce);
+	const encrypted = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+	return new Uint8Array(Buffer.concat([nonce, encrypted, cipher.getAuthTag()]));
+}
 
 const hasDb = async (): Promise<boolean> => {
 	try {
@@ -771,6 +782,39 @@ describe.skipIf(!(await hasDb()))("PostgresEscService — sessions", () => {
 			expect(decrypted).toEqual({ foo: "bar" });
 		} finally {
 			await verifyClient.close();
+		}
+	});
+
+	test("legacy decryption switch also applies to ESC sessions", async () => {
+		await service.createEnvironment(
+			tenant,
+			{ projectName: "proj", name: "dev", yamlBody: "values:\n  foo: bar\n" },
+			user,
+		);
+		const session = await service.openSession(tenant, "proj", "dev");
+		const { db, client } = await createDb({ url: DB_URL });
+		try {
+			const legacyCiphertext = legacyEncrypt(
+				encryptionKeyHex,
+				`${tenant}/proj/dev`,
+				new TextEncoder().encode(JSON.stringify({ foo: "bar" })),
+			);
+			await db
+				.update(escSessions)
+				.set({ resolvedValuesCiphertext: Buffer.from(legacyCiphertext).toString("base64") })
+				.where(eq(escSessions.id, session.sessionId));
+			const legacyDisabled = new PostgresEscService({
+				db,
+				evaluator: mockEval,
+				encryptionKeyHex,
+				allowLegacyDecryption: false,
+			});
+
+			await expect(
+				legacyDisabled.getSession(tenant, "proj", "dev", session.sessionId),
+			).rejects.toThrow("Legacy v1 ciphertext decryption is disabled");
+		} finally {
+			await client.close();
 		}
 	});
 

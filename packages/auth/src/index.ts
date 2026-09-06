@@ -51,6 +51,8 @@ export type AuthConfig =
 			issuer?: string;
 			/** Custom Descope auth domain (e.g. https://auth.procella.cloud) — accepted as an additional JWT issuer. */
 			authBaseUrl?: string;
+			/** Deployment-owned one-to-one tenant ID → legacy org slug mapping. */
+			legacyOrgMappings?: Readonly<Record<string, string>>;
 	  };
 
 // ============================================================================
@@ -104,6 +106,7 @@ export class DevAuthService implements AuthService {
 				return {
 					tenantId: user.org,
 					orgSlug: user.org,
+					canonicalOrgSlug: user.org,
 					userId: user.login,
 					login: user.login,
 					roles: [user.role],
@@ -174,11 +177,14 @@ export interface DescopeAuthConfig {
 	issuer?: string;
 	/** Custom Descope auth domain — JWTs issued through it carry it as `iss`. */
 	authBaseUrl?: string;
+	/** Deployment-owned one-to-one tenant ID → legacy org slug mapping. */
+	legacyOrgMappings?: Readonly<Record<string, string>>;
 }
 
 type DescopeClient = ReturnType<typeof DescopeSdk>;
 
 const CLI_ACCESS_KEY_CUSTOM_CLAIM_ALLOWLIST = new Set<string>(Object.values(OidcClaims));
+const LEGACY_ORG_SLUG_CLAIM = "procellaLegacyOrgSlug";
 
 /** Cached access-key → Caller mapping with TTL from JWT exp claim. */
 interface CachedAuth {
@@ -212,6 +218,8 @@ export class DescopeAuthService implements AuthService {
 	private readonly UNKNOWN_USER_CACHE_TTL_MS = 30_000;
 	private readonly projectId: string;
 	private readonly issuer: string;
+	private readonly legacyOrgMappings: Readonly<Record<string, string>>;
+	private readonly mappedLegacyOrgSlugs: ReadonlySet<string>;
 	/** Accepted `iss` values — the default api.descope.com issuer plus the custom auth domain (if any). */
 	private readonly issuers: string[];
 	private readonly jwks: JWTVerifyGetKey;
@@ -220,6 +228,8 @@ export class DescopeAuthService implements AuthService {
 	constructor(options: { sdk: DescopeClient; config: DescopeAuthConfig; jwks?: JWTVerifyGetKey }) {
 		this.sdk = options.sdk;
 		this.projectId = options.config.projectId;
+		this.legacyOrgMappings = options.config.legacyOrgMappings ?? {};
+		this.mappedLegacyOrgSlugs = new Set(Object.values(this.legacyOrgMappings));
 		this.issuer = options.config.issuer ?? buildDescopeIssuer(options.config.projectId);
 		// Descope session cookies can carry `iss = <projectId>`; Bearer JWTs may use
 		// the default URL issuer or, when issued through the custom auth domain,
@@ -413,12 +423,16 @@ export class DescopeAuthService implements AuthService {
 						caller.login; // use pre-computed login for workload callers
 					const expireTime = opts?.expireTime ?? 0;
 					const safeCustomClaims = sanitizeCliAccessKeyCustomClaims(opts?.customClaims);
-					const customClaims = {
+					const customClaims: Record<string, unknown> = {
 						...safeCustomClaims,
 						procellaLogin: loginId,
 						procellaOrgSlug: caller.orgSlug,
 						[OidcClaims.principalType]: caller.principalType === "workload" ? "workload" : "token",
 					};
+					delete customClaims[LEGACY_ORG_SLUG_CLAIM];
+					if (caller.canonicalOrgSlug) {
+						customClaims[LEGACY_ORG_SLUG_CLAIM] = caller.canonicalOrgSlug;
+					}
 
 					const resp = await this.sdk.management.accessKey.create(
 						name,
@@ -566,9 +580,20 @@ export class DescopeAuthService implements AuthService {
 				}
 			: undefined;
 
+		const metadataOrgSlug = extractUnambiguousOrgSlug(claims, tenantId);
+		const configuredOrgSlug = this.legacyOrgMappings[tenantId];
+		const canonicalOrgSlug = configuredOrgSlug
+			? !metadataOrgSlug || metadataOrgSlug === configuredOrgSlug
+				? configuredOrgSlug
+				: undefined
+			: metadataOrgSlug === tenantId && !this.mappedLegacyOrgSlugs.has(tenantId)
+				? tenantId
+				: undefined;
+
 		return {
 			tenantId,
 			orgSlug: extractOrgSlug(claims, tenantId),
+			canonicalOrgSlug,
 			userId,
 			login,
 			roles,
@@ -630,6 +655,7 @@ export function createAuthService(config: AuthConfig): AuthService {
 					managementKey: config.managementKey,
 					issuer: config.issuer,
 					authBaseUrl: config.authBaseUrl,
+					legacyOrgMappings: config.legacyOrgMappings,
 				},
 			});
 		}
@@ -793,6 +819,47 @@ export function extractOrgSlug(claims: Record<string, unknown>, tenantId: string
 
 	// 4. Last resort — should not happen if Descope is configured correctly
 	return tenantId;
+}
+
+/** Resolve one unambiguous org slug from trusted tenant metadata. */
+export function extractUnambiguousOrgSlug(
+	claims: Record<string, unknown>,
+	tenantId: string,
+): string | undefined {
+	let canonical: string | undefined;
+
+	const legacy = claims[LEGACY_ORG_SLUG_CLAIM];
+	if (typeof legacy === "string" && legacy) canonical = legacy;
+
+	const explicit = claims[OidcClaims.orgSlug];
+	if (typeof explicit === "string" && explicit) {
+		if (canonical && canonical !== explicit) return undefined;
+		canonical = explicit;
+	}
+
+	const topLevel =
+		typeof claims.tenant_name === "string" && claims.tenant_name
+			? slugify(claims.tenant_name)
+			: undefined;
+	if (typeof claims.tenant_name === "string" && claims.tenant_name && !topLevel) return undefined;
+	if (topLevel) {
+		if (canonical && canonical !== topLevel) return undefined;
+		canonical = topLevel;
+	}
+
+	if (claims.tenants && typeof claims.tenants === "object") {
+		const tenant = (claims.tenants as Record<string, Record<string, unknown> | undefined>)[
+			tenantId
+		];
+		const name = tenant?.name;
+		if (typeof name === "string" && name) {
+			const nested = slugify(name);
+			if (!nested || (canonical && canonical !== nested)) return undefined;
+			canonical = nested;
+		}
+	}
+
+	return canonical;
 }
 
 /** Convert a string to a URL-safe slug (lowercase, alphanumeric + hyphens). */

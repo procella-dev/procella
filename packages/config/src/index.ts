@@ -78,6 +78,38 @@ const configSchema = z
 			.string()
 			.regex(/^[0-9a-fA-F]{64}$/, "Must be 64 hex chars (32 bytes)")
 			.optional(),
+		legacyDecryptionEnabled: z
+			.enum(["true", "false", "1", "0"])
+			.default("true")
+			.transform((v) => v === "true" || v === "1"),
+		legacyOrgMappings: z
+			.string()
+			.optional()
+			.transform((value, ctx): Record<string, string> => {
+				if (!value) return {};
+				try {
+					const mappings = z
+						.record(z.string().min(1), z.string().regex(/^[a-zA-Z0-9._-]{1,64}$/))
+						.parse(JSON.parse(value));
+					if (new Set(Object.values(mappings)).size !== Object.keys(mappings).length) {
+						throw new Error("org slugs must be unique across tenant IDs");
+					}
+					const tenantIds = new Set(Object.keys(mappings));
+					if (Object.values(mappings).some((slug) => tenantIds.has(slug))) {
+						throw new Error("org slugs must not equal a mapped tenant ID");
+					}
+					return mappings;
+				} catch (error) {
+					ctx.addIssue({
+						code: z.ZodIssueCode.custom,
+						message:
+							error instanceof Error
+								? `Invalid PROCELLA_LEGACY_ORG_MAPPINGS: ${error.message}`
+								: "Invalid PROCELLA_LEGACY_ORG_MAPPINGS",
+					});
+					return z.NEVER;
+				}
+			}),
 		cronSecret: z.string().min(1).optional(),
 
 		// Telemetry
@@ -209,6 +241,8 @@ const envMapping = {
 	blobS3Endpoint: "PROCELLA_BLOB_S3_ENDPOINT",
 	blobS3Region: "PROCELLA_BLOB_S3_REGION",
 	encryptionKey: "PROCELLA_ENCRYPTION_KEY",
+	legacyDecryptionEnabled: "PROCELLA_LEGACY_DECRYPTION_ENABLED",
+	legacyOrgMappings: "PROCELLA_LEGACY_ORG_MAPPINGS",
 	cronSecret: "PROCELLA_CRON_SECRET",
 	otelEnabled: "PROCELLA_OTEL_ENABLED",
 	oidcEnabled: "PROCELLA_OIDC_ENABLED",

@@ -10,6 +10,7 @@ import {
 	DevAuthService,
 	extractOrgSlug,
 	extractRoles,
+	extractUnambiguousOrgSlug,
 	METHOD_ROLE_MAP,
 	requireRole,
 	slugify,
@@ -137,6 +138,7 @@ describe("DevAuthService", () => {
 
 		expect(caller.tenantId).toBe("dev-org");
 		expect(caller.orgSlug).toBe("dev-org");
+		expect(caller.canonicalOrgSlug).toBe("dev-org");
 		expect(caller.userId).toBe("dev-user");
 		expect(caller.login).toBe("dev-user");
 		expect(caller.roles).toEqual(["admin"]);
@@ -233,7 +235,11 @@ describe("DescopeAuthService", () => {
 		harness = await createJwtTestHarness();
 		svc = new DescopeAuthService({
 			sdk: DescopeSdk({ projectId: harness.audience }),
-			config: { projectId: harness.audience, issuer: harness.issuer },
+			config: {
+				projectId: harness.audience,
+				issuer: harness.issuer,
+				legacyOrgMappings: { "tenant-1": "omer-corp" },
+			},
 			jwks: harness.jwks,
 		});
 	});
@@ -311,6 +317,7 @@ describe("DescopeAuthService", () => {
 		const caller = await svc.authenticate(reqWithAuth(`Bearer ${token}`));
 
 		expect(caller.principalType).toBe("user");
+		expect(caller.canonicalOrgSlug).toBe("omer-corp");
 		expect(caller.workload).toBeUndefined();
 	});
 
@@ -353,6 +360,101 @@ describe("DescopeAuthService", () => {
 
 		expect(caller.userId).toBe("K3-legacy-access-key");
 		expect(caller.principalType).toBe("token");
+	});
+
+	test("does not trust an unregistered Descope tenant slug for legacy crypto", async () => {
+		const claims = {
+			sub: "user-1",
+			dct: "tenant-1",
+			tenant_name: "Omer Corp",
+			tenants: { "tenant-1": { roles: ["admin"] } },
+			exp: Math.floor(Date.now() / 1000) + 3600,
+		};
+		const token = await signDescopeJwt(harness.privateKey, claims, {
+			issuer: harness.issuer,
+			audience: harness.audience,
+		});
+		const unmapped = new DescopeAuthService({
+			sdk: DescopeSdk({ projectId: harness.audience }),
+			config: { projectId: harness.audience, issuer: harness.issuer },
+			jwks: harness.jwks,
+		});
+
+		try {
+			const caller = await unmapped.authenticate(reqWithAuth(`Bearer ${token}`));
+			expect(caller.orgSlug).toBe("omer-corp");
+			expect(caller.canonicalOrgSlug).toBeUndefined();
+		} finally {
+			unmapped.dispose();
+		}
+	});
+
+	test("uses the configured legacy identity when tenant name claims are absent", async () => {
+		const claims = {
+			sub: "user-1",
+			dct: "tenant-1",
+			tenants: { "tenant-1": { roles: ["admin"] } },
+			exp: Math.floor(Date.now() / 1000) + 3600,
+		};
+		const token = await signDescopeJwt(harness.privateKey, claims, {
+			issuer: harness.issuer,
+			audience: harness.audience,
+		});
+
+		const caller = await svc.authenticate(reqWithAuth(`Bearer ${token}`));
+
+		expect(caller.orgSlug).toBe("tenant-1");
+		expect(caller.canonicalOrgSlug).toBe("omer-corp");
+	});
+
+	test("rejects contradictory aliases for a configured legacy tenant", async () => {
+		const claims = {
+			sub: "user-1",
+			dct: "tenant-1",
+			procellaOrgSlug: "retired-alias",
+			tenant_name: "Omer Corp",
+			tenants: { "tenant-1": { roles: ["admin"] } },
+			exp: Math.floor(Date.now() / 1000) + 3600,
+		};
+		const token = await signDescopeJwt(harness.privateKey, claims, {
+			issuer: harness.issuer,
+			audience: harness.audience,
+		});
+
+		const caller = await svc.authenticate(reqWithAuth(`Bearer ${token}`));
+
+		expect(caller.orgSlug).toBe("retired-alias");
+		expect(caller.canonicalOrgSlug).toBeUndefined();
+	});
+
+	test("rejects tenant-ID fallback that collides with another legacy mapping", async () => {
+		const claims = {
+			sub: "user-1",
+			dct: "tenant-1",
+			procellaOrgSlug: "tenant-1",
+			tenants: { "tenant-1": { roles: ["admin"] } },
+			exp: Math.floor(Date.now() / 1000) + 3600,
+		};
+		const token = await signDescopeJwt(harness.privateKey, claims, {
+			issuer: harness.issuer,
+			audience: harness.audience,
+		});
+		const colliding = new DescopeAuthService({
+			sdk: DescopeSdk({ projectId: harness.audience }),
+			config: {
+				projectId: harness.audience,
+				issuer: harness.issuer,
+				legacyOrgMappings: { "other-tenant": "tenant-1" },
+			},
+			jwks: harness.jwks,
+		});
+
+		try {
+			const caller = await colliding.authenticate(reqWithAuth(`Bearer ${token}`));
+			expect(caller.canonicalOrgSlug).toBeUndefined();
+		} finally {
+			colliding.dispose();
+		}
 	});
 
 	test("workload JWT with full claims returns workload identity", async () => {
@@ -525,6 +627,7 @@ describe("DescopeAuthService — session cookie fallback", () => {
 				projectId: harness.audience,
 				issuer: harness.issuer,
 				authBaseUrl: "https://auth.example.com",
+				legacyOrgMappings: { "tenant-1": "omer-corp" },
 			},
 			jwks: harness.jwks,
 		});
@@ -544,6 +647,7 @@ describe("DescopeAuthService — session cookie fallback", () => {
 
 		expect(caller.login).toBe("omer");
 		expect(caller.tenantId).toBe("tenant-1");
+		expect(caller.canonicalOrgSlug).toBe("omer-corp");
 		expect(caller.roles).toEqual(["admin"]);
 	});
 
@@ -1067,6 +1171,7 @@ describe("extractOrgSlug", () => {
 	test("uses top-level tenant_name from session JWT", () => {
 		const claims = { tenant_name: "My Company" };
 		expect(extractOrgSlug(claims, "T3raw_tenant_id")).toBe("my-company");
+		expect(extractUnambiguousOrgSlug(claims, "T3raw_tenant_id")).toBe("my-company");
 	});
 
 	test("uses nested tenants.<id>.name from access key JWT", () => {
@@ -1076,6 +1181,7 @@ describe("extractOrgSlug", () => {
 			},
 		};
 		expect(extractOrgSlug(claims, "T3raw_tenant_id")).toBe("acme-corp");
+		expect(extractUnambiguousOrgSlug(claims, "T3raw_tenant_id")).toBe("acme-corp");
 	});
 
 	test("prefers top-level tenant_name over nested name", () => {
@@ -1086,15 +1192,18 @@ describe("extractOrgSlug", () => {
 			},
 		};
 		expect(extractOrgSlug(claims, "T3id")).toBe("top-level-org");
+		expect(extractUnambiguousOrgSlug(claims, "T3id")).toBeUndefined();
 	});
 
 	test("falls back to tenantId when no name is available", () => {
 		const claims = { tenants: { T3id: { roles: ["admin"] } } };
 		expect(extractOrgSlug(claims, "T3id")).toBe("T3id");
+		expect(extractUnambiguousOrgSlug(claims, "T3id")).toBeUndefined();
 	});
 
 	test("falls back to tenantId for empty claims", () => {
 		expect(extractOrgSlug({}, "T3raw")).toBe("T3raw");
+		expect(extractUnambiguousOrgSlug({}, "T3raw")).toBeUndefined();
 	});
 
 	test("prefers procellaOrgSlug over tenant name (OIDC workload identity)", () => {
@@ -1104,11 +1213,29 @@ describe("extractOrgSlug", () => {
 			tenants: { T3id: { name: "different-name" } },
 		};
 		expect(extractOrgSlug(claims, "T3id")).toBe("procella-pr-102");
+		expect(extractUnambiguousOrgSlug(claims, "T3id")).toBeUndefined();
 	});
 
 	test("falls through to tenant_name when procellaOrgSlug is absent", () => {
 		const claims = { tenant_name: "My Org" };
 		expect(extractOrgSlug(claims, "T3id")).toBe("my-org");
+	});
+
+	test("accepts matching canonical org metadata from every source", () => {
+		const claims = {
+			procellaOrgSlug: "my-org",
+			tenant_name: "My Org",
+			tenants: { T3id: { name: "My Org" } },
+		};
+		expect(extractUnambiguousOrgSlug(claims, "T3id")).toBe("my-org");
+	});
+
+	test("rejects contradictory tenant name aliases", () => {
+		const claims = {
+			tenant_name: "Current Org",
+			tenants: { T3id: { name: "Legacy Alias" } },
+		};
+		expect(extractUnambiguousOrgSlug(claims, "T3id")).toBeUndefined();
 	});
 });
 
@@ -1125,6 +1252,7 @@ describe("DescopeAuthService — createCliAccessKey", () => {
 	const userCaller = {
 		tenantId: "tenant-1",
 		orgSlug: "my-org",
+		canonicalOrgSlug: "my-org",
 		userId: "user-1",
 		login: "omer",
 		roles: ["admin"] as const,
@@ -1134,6 +1262,7 @@ describe("DescopeAuthService — createCliAccessKey", () => {
 	const workloadCaller = {
 		tenantId: "tenant-1",
 		orgSlug: "my-org",
+		canonicalOrgSlug: "my-org",
 		userId: "",
 		login: "github-actions:acme/procella",
 		roles: ["member"] as const,
@@ -1187,6 +1316,49 @@ describe("DescopeAuthService — createCliAccessKey", () => {
 		expect(customClaims.procellaLogin).toBe("omer@acme.com");
 		expect(customClaims.procellaOrgSlug).toBe("my-org");
 		expect(customClaims[OidcClaims.principalType]).toBe("token");
+		expect(customClaims.procellaLegacyOrgSlug).toBe("my-org");
+	});
+
+	test("does not persist a fallback org slug as legacy identity", async () => {
+		mockLoadByUserId.mockResolvedValueOnce({
+			ok: true,
+			data: { email: "omer@acme.com" },
+		});
+		mockAccessKeyCreate.mockResolvedValueOnce({
+			ok: true,
+			data: { cleartext: "ak_cleartext_token" },
+		});
+
+		await createKey({ ...userCaller, canonicalOrgSlug: undefined }, "ambiguous-org-key");
+
+		const customClaims = mockAccessKeyCreate.mock.calls[0][5];
+		expect(customClaims.procellaOrgSlug).toBe("my-org");
+		expect(customClaims.procellaLegacyOrgSlug).toBeUndefined();
+	});
+
+	test("keeps routing claims but omits legacy identity for old Caller shapes", async () => {
+		mockLoadByUserId.mockResolvedValueOnce({
+			ok: true,
+			data: { email: "omer@acme.com" },
+		});
+		mockAccessKeyCreate.mockResolvedValueOnce({
+			ok: true,
+			data: { cleartext: "ak_cleartext_token" },
+		});
+		const legacyCaller = {
+			tenantId: userCaller.tenantId,
+			orgSlug: userCaller.orgSlug,
+			userId: userCaller.userId,
+			login: userCaller.login,
+			roles: userCaller.roles,
+			principalType: userCaller.principalType,
+		};
+
+		await createKey(legacyCaller, "legacy-caller-key");
+
+		const customClaims = mockAccessKeyCreate.mock.calls[0][5];
+		expect(customClaims.procellaOrgSlug).toBe("my-org");
+		expect(customClaims.procellaLegacyOrgSlug).toBeUndefined();
 	});
 
 	test("skips user lookup for workload principals", async () => {

@@ -1,6 +1,6 @@
 // @procella/server — Encrypt/decrypt handlers.
 
-import type { StackCryptoInput } from "@procella/crypto";
+import { LegacyIdentityUnavailableError, type StackCryptoInput } from "@procella/crypto";
 import type { StacksService } from "@procella/stacks";
 
 import type {
@@ -64,8 +64,15 @@ export function cryptoHandlers(updates: UpdatesService, stacks: StacksService) {
 				return c.json({ code: "invalid_request", message: parseResult.error.message }, 400);
 			}
 			const ciphertext = decodeBase64((parseResult.data as DecryptValueRequest).ciphertext);
-			const plaintext = await updates.decryptValue(stackInput, ciphertext);
-			return c.json({ plaintext: encodeBase64(plaintext) });
+			try {
+				const plaintext = await updates.decryptValue(stackInput, ciphertext);
+				return c.json({ plaintext: encodeBase64(plaintext) });
+			} catch (error) {
+				if (error instanceof LegacyIdentityUnavailableError) {
+					return c.json({ code: "stack_not_found" }, 404);
+				}
+				throw error;
+			}
 		},
 
 		batchEncrypt: async (c: Context<Env>) => {
@@ -105,14 +112,23 @@ export function cryptoHandlers(updates: UpdatesService, stacks: StacksService) {
 			}
 			const rawCiphertexts = (parseResult.data as BatchDecryptRequest).ciphertexts ?? [];
 			const ciphertexts = rawCiphertexts.map(decodeBase64);
-			const decrypted = await updates.batchDecrypt(stackInput, ciphertexts);
-			const plaintexts: Record<string, string> = {};
-			for (let i = 0; i < rawCiphertexts.length; i++) {
-				const key =
-					typeof rawCiphertexts[i] === "string" ? rawCiphertexts[i] : encodeBase64(ciphertexts[i]);
-				plaintexts[key] = encodeBase64(decrypted[i]);
+			try {
+				const decrypted = await updates.batchDecrypt(stackInput, ciphertexts);
+				const plaintexts: Record<string, string> = {};
+				for (let i = 0; i < rawCiphertexts.length; i++) {
+					const key =
+						typeof rawCiphertexts[i] === "string"
+							? rawCiphertexts[i]
+							: encodeBase64(ciphertexts[i]);
+					plaintexts[key] = encodeBase64(decrypted[i]);
+				}
+				return c.json({ plaintexts });
+			} catch (error) {
+				if (error instanceof LegacyIdentityUnavailableError) {
+					return c.json({ code: "stack_not_found" }, 404);
+				}
+				throw error;
 			}
-			return c.json({ plaintexts });
 		},
 
 		logDecryption: (c: Context<Env>) => c.body(null, 200),
@@ -130,9 +146,15 @@ async function resolveAuthorizedStack(
 
 	try {
 		const stackInfo = await stacks.getStack(caller.tenantId, org, project, stack);
+		if (caller.canonicalOrgSlug && org !== caller.canonicalOrgSlug && org !== caller.orgSlug) {
+			return c.json({ code: "stack_not_found" }, 404);
+		}
+		if (!caller.canonicalOrgSlug) {
+			return { stackId: stackInfo.id };
+		}
 		return {
 			stackId: stackInfo.id,
-			stackFQN: `${org}/${project}/${stack}`,
+			stackFQN: `${caller.canonicalOrgSlug}/${stackInfo.projectName}/${stackInfo.stackName}`,
 		};
 	} catch (error) {
 		if (error instanceof StackNotFoundError) {
