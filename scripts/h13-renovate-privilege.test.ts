@@ -14,6 +14,7 @@ interface WorkflowStep {
 interface WorkflowJob {
 	if?: string;
 	permissions?: Record<string, string>;
+	env?: Record<string, unknown>;
 	steps: WorkflowStep[];
 }
 
@@ -77,5 +78,9 @@ describe("H13 Renovate workflow privilege boundary", () => {
 			'bunx --package "renovate@$RENOVATE_VERSION" renovate-config-validator .github/renovate-global.js',
 		);
 		expect(renovate?.run).toBe('bunx "renovate@$RENOVATE_VERSION"');
+		expect(validationJob.env?.RENOVATE_VERSION).toBeUndefined();
+		expect(privilegedJob.env?.RENOVATE_VERSION).toBeUndefined();
+		expect(validation?.env?.RENOVATE_VERSION).toBeUndefined();
+		expect(renovate?.env?.RENOVATE_VERSION).toBeUndefined();
 	});
 });
