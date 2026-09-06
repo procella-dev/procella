@@ -129,6 +129,13 @@ export const GC_STALE_THRESHOLD_MS = 3_600_000; // 1 hour
 export const GC_ADVISORY_LOCK_ID = 93_874_835_275_587n; // 0x5472617461_4743 (historic, do not change)
 
 /**
+ * Maximum expired subscription ticket nonces deleted per GC cycle. Bounds each
+ * cycle's work so a large backlog cannot monopolize the advisory lock; any
+ * remainder is cleaned up on the next cycle.
+ */
+export const SUBSCRIPTION_TICKET_NONCE_GC_BATCH_SIZE = 500;
+
+/**
  * Highest Pulumi deployment schema version Procella can persist and re-export without loss.
  * Kept in lockstep with the `deployment-schema-version` capability Procella advertises.
  */

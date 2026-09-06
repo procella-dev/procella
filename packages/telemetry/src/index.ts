@@ -26,6 +26,7 @@ export {
 	dbOperationDuration,
 	gcCycleCount,
 	gcOrphansCleanedCount,
+	gcTicketNoncesCleanedCount,
 	httpActiveRequestsGauge,
 	httpRequestDuration,
 	journalEntriesCount,

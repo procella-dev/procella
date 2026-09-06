@@ -14,7 +14,10 @@ import { createSubscriptionTicketService } from "../subscription-tickets.js";
 import { createWebApp } from "./web.js";
 
 const signingKey = "ticket-signing-key-ticket-signing-key";
-const subscriptionTickets = createSubscriptionTicketService(signingKey);
+const ticketStore = {
+	consume: async () => true,
+};
+const subscriptionTickets = createSubscriptionTicketService(signingKey, ticketStore);
 
 const validCaller: Caller = {
 	tenantId: "tenant-1",
@@ -234,6 +237,7 @@ describe("createWebApp tRPC auth", () => {
 		const app = makeApp();
 		const badTicket = await createSubscriptionTicketService(
 			"wrong-ticket-signing-key-wrong-key",
+			ticketStore,
 		).issueTicket(validCaller, subscriptionScope);
 		const res = await app.request(
 			`/trpc/updates.onEvents?ticket=${encodeURIComponent(badTicket)}&input=%7B%22org%22%3A%22my-org%22%2C%22project%22%3A%22myproj%22%2C%22stack%22%3A%22dev%22%2C%22updateId%22%3A%22upd-1%22%7D`,

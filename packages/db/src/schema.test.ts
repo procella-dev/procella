@@ -10,6 +10,7 @@ import {
 	oidcTrustPolicies,
 	projects,
 	stacks,
+	subscriptionTicketNonces,
 	updateEvents,
 	updates,
 } from "./schema.js";
@@ -200,6 +201,72 @@ describe("@procella/db schema", () => {
 		});
 	});
 
+	describe("subscription_ticket_nonces table", () => {
+		test("stores expiring single-use nonces", () => {
+			expect(getTableName(subscriptionTicketNonces)).toBe("subscription_ticket_nonces");
+			const columns = getTableColumns(subscriptionTicketNonces);
+			expect(columns.nonce.primary).toBe(true);
+			expect(columns.expiresAt.name).toBe("expires_at");
+			expect(columns.expiresAt.notNull).toBe(true);
+			expect(columns.expiresAt.getSQLType()).toBe("timestamp with time zone");
+			expect(
+				getTableConfig(subscriptionTicketNonces).indexes.some(
+					(index) => index.config.name === "idx_subscription_ticket_nonces_expires",
+				),
+			).toBe(true);
+		});
+
+		test("0022 snapshot records the replay table", async () => {
+			const snapshot = (await Bun.file(
+				new URL("../drizzle/meta/0022_snapshot.json", import.meta.url),
+			).json()) as {
+				tables: Record<
+					string,
+					{
+						columns: Record<string, { type: string }>;
+						indexes: Record<string, unknown>;
+					}
+				>;
+			};
+			const table = snapshot.tables["public.subscription_ticket_nonces"];
+			expect(table?.columns.expires_at.type).toBe("timestamp with time zone");
+			expect(table?.indexes.idx_subscription_ticket_nonces_expires).toBeDefined();
+		});
+
+		test("keeps the applied 0022 migration marker stable at idx 22, after siblings 0020/0021", async () => {
+			const journal = (await Bun.file(
+				new URL("../drizzle/meta/_journal.json", import.meta.url),
+			).json()) as { entries: Array<{ idx: number; tag: string; when: number }> };
+
+			const byTag = Object.fromEntries(journal.entries.map((entry) => [entry.tag, entry]));
+			expect(byTag["0020_durable_blob_cleanup"]?.idx).toBe(20);
+			expect(byTag["0021_webhook_delivery_outbox"]?.idx).toBe(21);
+			expect(byTag["0022_single_use_subscription_tickets"]?.idx).toBe(22);
+			expect(byTag["0022_single_use_subscription_tickets"]?.when).toBe(1788703548917);
+			expect(byTag["0022_single_use_subscription_tickets"]?.when).toBeGreaterThan(
+				byTag["0021_webhook_delivery_outbox"]?.when ?? 0,
+			);
+		});
+
+		test("orders every migration marker so none is skipped on a migrated database", async () => {
+			const journal = (await Bun.file(
+				new URL("../drizzle/meta/_journal.json", import.meta.url),
+			).json()) as { entries: Array<{ idx: number; tag: string; when: number }> };
+
+			// drizzle compares each entry against the newest marker already recorded in
+			// __drizzle_migrations, so an entry that is not strictly newer than the one
+			// before it is skipped forever once its predecessors have been applied.
+			expect(journal.entries.map((entry) => entry.idx)).toEqual(
+				journal.entries.map((_entry, index) => index),
+			);
+			expect(
+				journal.entries.filter(
+					(entry, index) => index > 0 && entry.when <= (journal.entries[index - 1]?.when ?? 0),
+				),
+			).toEqual([]);
+		});
+	});
+
 	describe("oidc_trust_policies table", () => {
 		test("has tenant-scoped policy columns", () => {
 			const columns = getTableColumns(oidcTrustPolicies);
@@ -251,7 +318,7 @@ describe("@procella/db schema", () => {
 	});
 
 	describe("migration journal", () => {
-		test("keeps portfolio migrations 0019, 0020, and 0021 in order", async () => {
+		test("keeps portfolio migrations 0019, 0020, 0021, and 0022 in order", async () => {
 			const journal = (await Bun.file(
 				new URL("../drizzle/meta/_journal.json", import.meta.url),
 			).json()) as { entries: Array<{ idx: number; tag: string }> };
@@ -259,9 +326,10 @@ describe("@procella/db schema", () => {
 				{ idx: 19, tag: "0019_terminal_update_completion" },
 				{ idx: 20, tag: "0020_durable_blob_cleanup" },
 				{ idx: 21, tag: "0021_webhook_delivery_outbox" },
+				{ idx: 22, tag: "0022_single_use_subscription_tickets" },
 			];
 
-			expect(journal.entries.slice(-3)).toEqual(
+			expect(journal.entries.slice(-4)).toEqual(
 				expected.map(({ idx, tag }) => expect.objectContaining({ idx, tag })),
 			);
 			for (const { tag } of expected) {
@@ -283,6 +351,7 @@ describe("@procella/db schema", () => {
 			expect(getTableName(githubUpdateOutbox)).toBe("github_update_outbox");
 			expect(getTableName(githubInstallations)).toBe("github_installations");
 			expect(getTableName(githubSetupStates)).toBe("github_setup_states");
+			expect(getTableName(subscriptionTicketNonces)).toBe("subscription_ticket_nonces");
 			expect(getTableName(oidcTrustPolicies)).toBe("oidc_trust_policies");
 		});
 

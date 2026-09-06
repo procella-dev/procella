@@ -15,8 +15,13 @@ import { INTERNAL_CLIENT_IP_HEADER } from "../middleware/security.js";
 import { createSubscriptionTicketService } from "../subscription-tickets.js";
 import { createApp } from "./index.js";
 
+const ticketStore = {
+	consume: async () => true,
+};
+
 const subscriptionTickets = createSubscriptionTicketService(
 	"ticket-signing-key-ticket-signing-key",
+	ticketStore,
 );
 
 // ============================================================================
@@ -584,6 +589,7 @@ describe("@procella/server routes", () => {
 			});
 			const badTicket = await createSubscriptionTicketService(
 				"wrong-ticket-signing-key-wrong-key",
+				ticketStore,
 			).issueTicket(validCaller, subscriptionScope);
 			const res = await app.request(
 				`/trpc/updates.onEvents?ticket=${encodeURIComponent(badTicket)}&input=%7B%22org%22%3A%22my-org%22%2C%22project%22%3A%22myproj%22%2C%22stack%22%3A%22dev%22%2C%22updateId%22%3A%22upd-1%22%7D`,

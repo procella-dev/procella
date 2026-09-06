@@ -32,7 +32,10 @@ import { logger } from "./logger.js";
 import { createCliApp } from "./routes/cli.js";
 import { createApp } from "./routes/index.js";
 import { createWebApp } from "./routes/web.js";
-import { createSubscriptionTicketService } from "./subscription-tickets.js";
+import {
+	createSubscriptionTicketService,
+	PostgresSubscriptionTicketStore,
+} from "./subscription-tickets.js";
 
 const KNOWN_DEV_ENCRYPTION_KEY = createHash("sha256")
 	.update("procella-dev-encryption-key")
@@ -97,7 +100,10 @@ async function bootstrapServices() {
 			"PROCELLA_TICKET_SIGNING_KEY is required (32+ chars). Generate with: bun -e \"console.log(crypto.randomBytes(32).toString('hex'))\"",
 		);
 	}
-	const subscriptionTickets = createSubscriptionTicketService(config.ticketSigningKey);
+	const subscriptionTickets = createSubscriptionTicketService(
+		config.ticketSigningKey,
+		new PostgresSubscriptionTicketStore(db),
+	);
 	const oidcPolicies: TrustPolicyRepository | null = config.oidcEnabled
 		? new PostgresTrustPolicyRepository(db)
 		: null;

@@ -1,8 +1,8 @@
 import { afterEach, beforeAll, describe, expect, test } from "bun:test";
 import type { Database } from "@procella/db";
-import { updates } from "@procella/db";
+import { subscriptionTicketNonces, updates } from "@procella/db";
 import { PostgresStacksService, type StackInfo } from "@procella/stacks";
-import { GCWorker } from "@procella/updates";
+import { GCWorker, SUBSCRIPTION_TICKET_NONCE_GC_BATCH_SIZE } from "@procella/updates";
 import { eq, sql } from "drizzle-orm";
 import { getTestDb, getTestDbUrl, truncateTables } from "./setup.js";
 
@@ -155,6 +155,71 @@ describe("GCWorker — integration", () => {
 			);
 			const row = stackRow as { active_update_id: string | null };
 			expect(row.active_update_id).toBeNull();
+		});
+	});
+
+	// ========================================================================
+	// Subscription ticket nonce cleanup
+	// ========================================================================
+
+	describe("subscription ticket nonce cleanup", () => {
+		test("bounds cleanup to SUBSCRIPTION_TICKET_NONCE_GC_BATCH_SIZE per cycle and retains live nonces", async () => {
+			const backlogSize = SUBSCRIPTION_TICKET_NONCE_GC_BATCH_SIZE + 100;
+			const expiredAt = new Date(Date.now() - 1_000);
+			const liveNonce = crypto.randomUUID();
+			await db.insert(subscriptionTicketNonces).values([
+				...Array.from({ length: backlogSize }, () => ({
+					nonce: crypto.randomUUID(),
+					expiresAt: expiredAt,
+				})),
+				{ nonce: liveNonce, expiresAt: new Date(Date.now() + 60_000) },
+			]);
+
+			const worker = new GCWorker({ db, interval: 60_000 });
+
+			await worker.runOnce();
+			const remainingAfterFirstCycle = await db.select().from(subscriptionTicketNonces);
+			// One cycle removes at most the batch size, leaving the rest (plus the live
+			// nonce) for the next cycle — a single backlog cannot monopolize the lock.
+			expect(remainingAfterFirstCycle.length).toBe(
+				backlogSize + 1 - SUBSCRIPTION_TICKET_NONCE_GC_BATCH_SIZE,
+			);
+
+			await worker.runOnce();
+			const remainingAfterSecondCycle = await db.select().from(subscriptionTicketNonces);
+			// The rest of the backlog is cleaned up on the next cycle; the live nonce
+			// (not yet expired) is untouched throughout.
+			expect(remainingAfterSecondCycle).toEqual([expect.objectContaining({ nonce: liveNonce })]);
+		});
+
+		test("concurrent replicas racing the same GC cycle converge without errors or double work", async () => {
+			const expiredNonces = Array.from({ length: 5 }, () => crypto.randomUUID());
+			const liveNonce = crypto.randomUUID();
+			await db.insert(subscriptionTicketNonces).values([
+				...expiredNonces.map((nonce) => ({ nonce, expiresAt: new Date(Date.now() - 1_000) })),
+				{ nonce: liveNonce, expiresAt: new Date(Date.now() + 60_000) },
+			]);
+
+			// Three GCWorker instances model three replicas racing the same advisory
+			// lock (pg_try_advisory_xact_lock is non-blocking, so at most one wins per
+			// cycle); the others return immediately having done no cleanup work.
+			const replicas = Array.from({ length: 3 }, () => new GCWorker({ db, interval: 60_000 }));
+			await Promise.all(replicas.map((replica) => replica.runOnce()));
+
+			for (const nonce of expiredNonces) {
+				expect(
+					await db
+						.select()
+						.from(subscriptionTicketNonces)
+						.where(eq(subscriptionTicketNonces.nonce, nonce)),
+				).toHaveLength(0);
+			}
+			expect(
+				await db
+					.select()
+					.from(subscriptionTicketNonces)
+					.where(eq(subscriptionTicketNonces.nonce, liveNonce)),
+			).toHaveLength(1);
 		});
 	});
 });

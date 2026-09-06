@@ -34,6 +34,7 @@ export {
 	projects,
 	schema,
 	stacks,
+	subscriptionTicketNonces,
 	updateEvents,
 	updates,
 	webhookDeliveries,
