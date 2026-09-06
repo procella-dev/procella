@@ -32,7 +32,7 @@ This allows `pulumi stack export` to work on newly created stacks.
 GET /api/stacks/{org}/{project}/{stack}/export/{version}
 ```
 
-Returns a specific checkpoint version. Useful for debugging or rolling back to a previous state.
+Returns the final canonical checkpoint for a specific non-preview stack update version. Useful for debugging or rolling back to a previous state.
 
 ## Import
 
@@ -67,15 +67,11 @@ pulumi stack import --stack org/project/target --force < state.json
 
 The `--force` flag is a client-side safety check; Procella accepts the import regardless.
 
-## Checkpoint Versioning
+## Update and Checkpoint Versioning
 
-Each checkpoint operation increments the stack's `last_checkpoint_version` counter. This version is:
+Each non-preview update increments the stack's update version. Preview updates reuse the version of the last succeeded non-preview update and are excluded from versioned export. `StartUpdateResponse.version` exposes this update version to the CLI, and `GET .../export/{version}` resolves it to that update's final canonical checkpoint.
 
-- Returned in `StartUpdateResponse.version` so the CLI knows the starting version
-- Used as the checkpoint `version` column in the `checkpoints` table
-- Available for versioned export via `GET .../export/{version}`
-
-The version counter is atomic — incremented within the same transaction as the checkpoint write.
+Checkpoint versions are separate: they start at 1 for each update and increase for every checkpoint write. They order checkpoints within an update so versioned export can select its final canonical state.
 
 ## Checkpoint Types
 

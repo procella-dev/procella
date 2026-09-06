@@ -63,7 +63,7 @@ This ensures `pulumi stack export` never fails on a new stack.
 GET /api/stacks/{org}/{project}/{stack}/export/{version}
 ```
 
-Returns a specific checkpoint version.
+Returns the final canonical checkpoint produced by the non-preview stack update with the requested update version.
 
 **Required role**: `viewer`
 
@@ -71,6 +71,7 @@ Returns a specific checkpoint version.
 
 **Errors**:
 - `404 Not Found` — version doesn't exist
+- `400 Bad Request` — version is not a positive integer
 
 Useful for inspecting previous states or debugging state issues.
 

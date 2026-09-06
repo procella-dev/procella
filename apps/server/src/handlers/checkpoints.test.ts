@@ -24,6 +24,7 @@ function mockUpdatesService(overrides?: Partial<UpdatesService>): UpdatesService
 		getHistory: mock(async () => ({}) as never),
 		exportStack: mock(async () => ({}) as never),
 		importStack: mock(async () => ({}) as never),
+		repairStack: mock(async () => []),
 		encryptValue: mock(async () => new Uint8Array()),
 		decryptValue: mock(async () => new Uint8Array()),
 		batchEncrypt: mock(async () => []),

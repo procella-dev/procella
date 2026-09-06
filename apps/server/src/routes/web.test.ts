@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { gzipSync } from "node:zlib";
 import type { AuditService } from "@procella/audit";
 import type { AuthConfig, AuthService } from "@procella/auth";
 import type { Database } from "@procella/db";
@@ -41,6 +42,7 @@ function mockAuthService(): AuthService {
 function makeApp(overrides?: {
 	issueSubscriptionTicket?: (caller: Caller) => Promise<string>;
 	verifySubscriptionTicket?: (ticket: string) => Promise<Caller>;
+	auth?: AuthService;
 	authConfig?: AuthConfig;
 }) {
 	const authConfig: AuthConfig = overrides?.authConfig ?? {
@@ -51,7 +53,7 @@ function makeApp(overrides?: {
 	};
 
 	return createWebApp({
-		auth: mockAuthService(),
+		auth: overrides?.auth ?? mockAuthService(),
 		authConfig,
 		audit: {} as AuditService,
 		db: {} as Database,
@@ -82,6 +84,35 @@ describe("createWebApp tRPC auth", () => {
 		expect(res.status).toBe(401);
 	});
 
+	test("rejects unauthorized compressed requests before inflation", async () => {
+		const app = makeApp();
+		const res = await app.request("/trpc/subscriptions.createTicket?batch=1", {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				"Content-Encoding": "gzip",
+			},
+			body: new Uint8Array([0x1f, 0x8b, 0x00, 0x00, 0xff, 0xff]),
+		});
+
+		expect(res.status).toBe(401);
+	});
+
+	test("inflates authenticated compressed requests", async () => {
+		const app = makeApp();
+		const res = await app.request("/trpc/subscriptions.createTicket?batch=1", {
+			method: "POST",
+			headers: {
+				Authorization: "token valid-token",
+				"Content-Type": "application/json",
+				"Content-Encoding": "gzip",
+			},
+			body: gzipSync(Buffer.from("{}")),
+		});
+
+		expect(res.status).toBe(200);
+	});
+
 	test("subscriptions.createTicket returns a signed short-lived ticket", async () => {
 		const app = makeApp();
 		const res = await app.request("/trpc/subscriptions.createTicket?batch=1", {
@@ -98,6 +129,26 @@ describe("createWebApp tRPC auth", () => {
 
 		expect(res.status).toBe(200);
 		expect(typeof body[0]?.result?.data?.json?.ticket).toBe("string");
+	});
+
+	test("preserves the auth service receiver when creating CLI access keys", async () => {
+		const auth = mockAuthService();
+		auth.createCliAccessKey = async function (this: AuthService) {
+			if (this !== auth) throw new Error("unbound auth service");
+			return "bound-cli-token";
+		};
+		const app = makeApp({ auth });
+		const res = await app.request("/api/auth/cli-token", {
+			method: "POST",
+			headers: {
+				Authorization: "token valid-token",
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({ name: "receiver-test" }),
+		});
+
+		expect(res.status).toBe(200);
+		expect(await res.json()).toEqual({ token: "bound-cli-token" });
 	});
 
 	test("SSE endpoint rejects wrong-signature tickets", async () => {

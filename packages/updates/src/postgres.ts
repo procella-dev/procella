@@ -77,6 +77,7 @@ import {
 	requireSequenceNumber,
 	safeTokenCompare,
 } from "./helpers.js";
+import { type RepairMutation, repairCheckpoint } from "./repair.js";
 import type {
 	DeltaCheckpointSave,
 	GitHubUpdateTarget,
@@ -90,6 +91,11 @@ import {
 	LEASE_DURATION_SECONDS,
 } from "./types.js";
 
+export const CHECKPOINT_HEAD_ORDER = [desc(checkpoints.createdAt), desc(checkpoints.id)] as const;
+
+function checkpointHeadWhere(stackId: string) {
+	return and(eq(checkpoints.stackId, stackId), eq(checkpoints.isDelta, false));
+}
 const MAX_JOURNAL_ENTRIES = 10_000;
 const MAX_EVENT_BATCH_SIZE = 1_000;
 
@@ -774,87 +780,156 @@ export class PostgresUpdatesService implements UpdatesService {
 			let checkpoint: typeof checkpoints.$inferSelect | undefined;
 
 			if (version !== undefined) {
-				const rows = await this.db
-					.select()
+				const [row] = await this.db
+					.select({ checkpoint: checkpoints })
 					.from(checkpoints)
+					.innerJoin(updates, eq(checkpoints.updateId, updates.id))
 					.where(
 						and(
-							eq(checkpoints.stackId, stackId),
-							eq(checkpoints.version, version),
+							eq(updates.stackId, stackId),
+							eq(updates.version, version),
+							ne(updates.kind, "preview"),
 							// Never export the delta baseline sidecar row.
 							eq(checkpoints.isDelta, false),
 						),
 					)
 					.orderBy(desc(checkpoints.version))
 					.limit(1);
-				checkpoint = rows[0];
+				checkpoint = row?.checkpoint;
 				if (!checkpoint) {
 					throw new CheckpointNotFoundError("", "", `version ${version}`);
 				}
 			} else {
-				const rows = await this.db
-					.select()
-					.from(checkpoints)
-					.where(and(eq(checkpoints.stackId, stackId), eq(checkpoints.isDelta, false)))
-					.orderBy(desc(checkpoints.createdAt))
-					.limit(1);
-				checkpoint = rows[0];
+				checkpoint = await this.readHeadCheckpoint(this.db, stackId);
 				if (!checkpoint) {
 					return emptyDeployment();
 				}
 			}
 
-			let deploymentData: unknown;
-			if (checkpoint.blobKey) {
-				const data = await this.storage.get(checkpoint.blobKey);
-				if (!data) {
-					throw new Error("Checkpoint blob data missing from storage");
-				}
-				deploymentData = JSON.parse(new TextDecoder().decode(data));
-			} else {
-				deploymentData = checkpoint.data;
-			}
+			return this.readCheckpointDeployment(checkpoint);
+		});
+	}
 
-			return {
-				version: 3,
-				deployment: deploymentData,
-			} as UntypedDeployment;
+	async repairStack(stackId: string): Promise<RepairMutation[]> {
+		return withDbSpan("repairStack", { "stack.id": stackId }, async () => {
+			const sourceCheckpoint = await this.readHeadCheckpoint(this.db, stackId);
+
+			if (!sourceCheckpoint) return [];
+
+			const checkpoint = await this.readCheckpointDeployment(sourceCheckpoint);
+			const inner = checkpoint.deployment as { resources?: unknown[] };
+			const resources = Array.isArray(inner.resources)
+				? (inner.resources as Parameters<typeof repairCheckpoint>[0])
+				: [];
+			const { resources: fixed, mutations } = repairCheckpoint(resources);
+
+			if (mutations.length === 0) return mutations;
+
+			const repaired: UntypedDeployment = {
+				...checkpoint,
+				deployment: {
+					...(checkpoint.deployment as Record<string, unknown>),
+					resources: fixed,
+				},
+			};
+			await this.importStackVersion(stackId, repaired, sourceCheckpoint.id);
+			return mutations;
 		});
 	}
 
 	async importStack(stackId: string, deployment: UntypedDeployment): Promise<ImportStackResponse> {
-		return withDbSpan("importStack", { "stack.id": stackId }, async () => {
-			const updateRow = await this.db.transaction(async (tx) => {
-				const stackLock = await this.lockStackForOperation(tx, stackId);
-				if (stackLock.activeUpdateId) {
-					throw new ImportConflictError();
+		return withDbSpan("importStack", { "stack.id": stackId }, () =>
+			this.importStackVersion(stackId, deployment),
+		);
+	}
+
+	private async importStackVersion(
+		stackId: string,
+		deployment: UntypedDeployment,
+		expectedCheckpointId?: string,
+	): Promise<ImportStackResponse> {
+		const updateRow = await this.db.transaction(async (tx) => {
+			const stackLock = await this.lockStackForOperation(tx, stackId);
+			if (stackLock.activeUpdateId) {
+				throw new ImportConflictError();
+			}
+			if (expectedCheckpointId !== undefined) {
+				const headCheckpointId = await this.readHeadCheckpointId(tx, stackId);
+				if (headCheckpointId !== expectedCheckpointId) {
+					throw new ImportConflictError("Cannot repair because the stack checkpoint changed");
 				}
-				const [versionRow] = await tx
-					.select({ maxVersion: max(updates.version) })
-					.from(updates)
-					.where(and(eq(updates.stackId, stackId), ne(updates.kind, "preview")));
-				const version = (versionRow?.maxVersion ?? 0) + 1;
+			}
+			const [versionRow] = await tx
+				.select({ maxVersion: max(updates.version) })
+				.from(updates)
+				.where(and(eq(updates.stackId, stackId), ne(updates.kind, "preview")));
+			const version = (versionRow?.maxVersion ?? 0) + 1;
 
-				const [row] = await tx
-					.insert(updates)
-					.values({
-						stackId,
-						kind: "import",
-						status: "succeeded",
-						version,
-						completedAt: sql`now()`,
-					})
-					.returning();
+			const [row] = await tx
+				.insert(updates)
+				.values({
+					stackId,
+					kind: "import",
+					status: "succeeded",
+					version,
+					completedAt: sql`now()`,
+				})
+				.returning();
 
-				await this.upsertCheckpointInTransaction(tx, row.id, deployment.deployment, {
-					requireRunningLease: false,
-				});
-
-				return row;
+			await this.upsertCheckpointInTransaction(tx, row.id, deployment.deployment, {
+				requireRunningLease: false,
 			});
 
-			return { updateId: updateRow.id } satisfies ImportStackResponse;
+			return row;
 		});
+
+		return { updateId: updateRow.id } satisfies ImportStackResponse;
+	}
+
+	private async readHeadCheckpoint(
+		db: Pick<Database, "select">,
+		stackId: string,
+	): Promise<typeof checkpoints.$inferSelect | undefined> {
+		const [checkpoint] = await db
+			.select()
+			.from(checkpoints)
+			.where(checkpointHeadWhere(stackId))
+			.orderBy(...CHECKPOINT_HEAD_ORDER)
+			.limit(1);
+		return checkpoint;
+	}
+
+	private async readHeadCheckpointId(
+		db: Pick<Database, "select">,
+		stackId: string,
+	): Promise<string | undefined> {
+		const [checkpoint] = await db
+			.select({ id: checkpoints.id })
+			.from(checkpoints)
+			.where(checkpointHeadWhere(stackId))
+			.orderBy(...CHECKPOINT_HEAD_ORDER)
+			.limit(1);
+		return checkpoint?.id;
+	}
+
+	private async readCheckpointDeployment(
+		checkpoint: typeof checkpoints.$inferSelect,
+	): Promise<UntypedDeployment> {
+		let deploymentData: unknown;
+		if (checkpoint.blobKey) {
+			const data = await this.storage.get(checkpoint.blobKey);
+			if (!data) {
+				throw new Error("Checkpoint blob data missing from storage");
+			}
+			deploymentData = JSON.parse(new TextDecoder().decode(data));
+		} else {
+			deploymentData = checkpoint.data;
+		}
+
+		return {
+			version: 3,
+			deployment: deploymentData,
+		} as UntypedDeployment;
 	}
 
 	async encryptValue(stack: StackCryptoInput, plaintext: Uint8Array): Promise<Uint8Array> {

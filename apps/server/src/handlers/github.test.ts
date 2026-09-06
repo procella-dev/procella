@@ -99,35 +99,92 @@ describe("githubHandlers", () => {
 				headers: {
 					"Content-Type": "application/json",
 					"X-GitHub-Event": "installation",
-					"X-Hub-Signature-256": "sha256=valid",
+					"X-Hub-Signature-256": `sha256=${"a".repeat(64)}`,
 				},
 				body: JSON.stringify({ action: "created" }),
 			});
 			expect(res.status).toBe(200);
 			expect(github.handleWebhookEvent).toHaveBeenCalledTimes(1);
+			expect(verifySignature).toHaveBeenCalledWith(
+				new TextEncoder().encode(JSON.stringify({ action: "created" })),
+				`sha256=${"a".repeat(64)}`,
+				"secret",
+			);
 		});
 
-		test("returns 401 for invalid signature", async () => {
-			const github = mockGitHubService();
+		test("rejects missing and malformed signatures before reading the body", async () => {
 			const verifySignature = mock(async () => false);
 			const app = new Hono<Env>();
 			const h = githubHandlers({
-				github,
+				github: mockGitHubService(),
 				webhookSecret: "secret",
 				verifySignature,
 			});
 			app.post("/webhooks/github", h.handleGitHubWebhook);
 
-			const res = await app.request("/webhooks/github", {
-				method: "POST",
-				headers: {
+			for (const signature of [undefined, "sha256=invalid"]) {
+				const headers = new Headers({
 					"Content-Type": "application/json",
 					"X-GitHub-Event": "push",
-					"X-Hub-Signature-256": "sha256=invalid",
-				},
-				body: JSON.stringify({}),
+				});
+				if (signature) headers.set("X-Hub-Signature-256", signature);
+				const request = new Request("http://localhost/webhooks/github", {
+					method: "POST",
+					headers,
+					body: JSON.stringify({}),
+				});
+				let bodyRead = false;
+				Object.defineProperty(request, "body", {
+					get() {
+						bodyRead = true;
+						throw new Error("body must not be read");
+					},
+				});
+
+				const res = await app.fetch(request);
+				expect(res.status).toBe(401);
+				expect(bodyRead).toBe(false);
+			}
+			expect(verifySignature).not.toHaveBeenCalled();
+		});
+
+		test("stops buffering webhooks at the raw byte limit", async () => {
+			const verifySignature = mock(async () => true);
+			const app = new Hono<Env>();
+			const h = githubHandlers({
+				github: mockGitHubService(),
+				webhookSecret: "secret",
+				verifySignature,
 			});
-			expect(res.status).toBe(401);
+			app.post("/webhooks/github", h.handleGitHubWebhook);
+
+			let chunksRead = 0;
+			let cancelled = false;
+			const body = new ReadableStream<Uint8Array>({
+				pull(controller) {
+					chunksRead += 1;
+					controller.enqueue(new Uint8Array(1024 * 1024));
+					if (chunksRead === 30) controller.close();
+				},
+				cancel() {
+					cancelled = true;
+				},
+			});
+			const res = await app.fetch(
+				new Request("http://localhost/webhooks/github", {
+					method: "POST",
+					headers: {
+						"X-GitHub-Event": "push",
+						"X-Hub-Signature-256": `sha256=${"a".repeat(64)}`,
+					},
+					body,
+				}),
+			);
+
+			expect(res.status).toBe(413);
+			expect(chunksRead).toBeLessThan(30);
+			expect(cancelled).toBe(true);
+			expect(verifySignature).not.toHaveBeenCalled();
 		});
 
 		test("returns error when X-GitHub-Event header missing", async () => {
@@ -143,7 +200,10 @@ describe("githubHandlers", () => {
 
 			const res = await app.request("/webhooks/github", {
 				method: "POST",
-				headers: { "Content-Type": "application/json" },
+				headers: {
+					"Content-Type": "application/json",
+					"X-Hub-Signature-256": `sha256=${"a".repeat(64)}`,
+				},
 				body: JSON.stringify({}),
 			});
 			expect(res.status).toBe(400);
