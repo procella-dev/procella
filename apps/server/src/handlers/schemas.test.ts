@@ -205,6 +205,26 @@ describe("Pulumi request schemas", () => {
 		).toBe(true);
 	});
 
+	test("rejects structurally invalid import deployments", () => {
+		for (const resources of [null, "not-an-array", {}, [null], ["not-a-resource"]]) {
+			expect(
+				UntypedDeploymentSchema.safeParse({
+					version: 3,
+					deployment: { resources },
+				}).success,
+			).toBe(false);
+		}
+	});
+
+	test("does not enforce resource semantics at the import boundary", () => {
+		expect(
+			UntypedDeploymentSchema.safeParse({
+				version: 3,
+				deployment: { resources: [{}] },
+			}).success,
+		).toBe(true);
+	});
+
 	test("accepts deployment schema v1 through v3", () => {
 		for (const version of [1, 2, 3]) {
 			expect(
@@ -217,7 +237,9 @@ describe("Pulumi request schemas", () => {
 					untypedDeployment: { version, deployment: {} },
 				}).success,
 			).toBe(true);
-			expect(UntypedDeploymentSchema.safeParse({ version, deployment: {} }).success).toBe(true);
+			expect(
+				UntypedDeploymentSchema.safeParse({ version, deployment: { resources: [] } }).success,
+			).toBe(true);
 		}
 	});
 

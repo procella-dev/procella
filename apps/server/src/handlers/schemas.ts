@@ -185,12 +185,18 @@ export const JournalEntriesSchema = withJsonBounds(
 		.strict(),
 );
 
+const DeploymentEnvelopeSchema = z
+	.object({
+		resources: z.array(z.object({}).passthrough()).optional(),
+	})
+	.passthrough();
+
 export const UntypedDeploymentSchema = withJsonBounds(
 	z
 		.object({
 			version: DeploymentSchemaVersion.min(1).optional(),
 			features: FeatureListSchema.optional(),
-			deployment: BoundedJSON,
+			deployment: DeploymentEnvelopeSchema,
 		})
 		.strict(),
 );
