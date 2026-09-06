@@ -5,6 +5,7 @@ export interface ErrorProjection {
 	type: string;
 	name: string;
 	message: string;
+	code?: string | number;
 	stack?: string;
 }
 
@@ -24,16 +25,28 @@ function stringifySafely(value: unknown, fallback: string): string {
 	}
 }
 
-function isDatabaseQueryError(value: unknown): boolean {
+function inspectErrorChain(value: unknown): { databaseQuery: boolean; code?: string | number } {
 	const seen = new Set<object>();
 	let current = value;
+	let code: string | number | undefined;
+	let databaseQuery = false;
 
 	for (let depth = 0; depth < MAX_CAUSE_DEPTH; depth++) {
 		if ((typeof current !== "object" && typeof current !== "function") || current === null) {
-			return false;
+			break;
 		}
-		if (seen.has(current)) return false;
+		if (seen.has(current)) break;
 		seen.add(current);
+
+		if (code === undefined) {
+			const candidate = readProperty(current, "code");
+			if (
+				(typeof candidate === "number" && Number.isFinite(candidate)) ||
+				(typeof candidate === "string" && /^[A-Za-z0-9_.:-]{1,64}$/.test(candidate))
+			) {
+				code = candidate;
+			}
+		}
 
 		const query = readProperty(current, "query");
 		const params = readProperty(current, "params");
@@ -44,13 +57,13 @@ function isDatabaseQueryError(value: unknown): boolean {
 				message.startsWith("Failed query:") &&
 				message.includes("\nparams:"))
 		) {
-			return true;
+			databaseQuery = true;
 		}
 
 		current = readProperty(current, "cause");
 	}
 
-	return false;
+	return code === undefined ? { databaseQuery } : { databaseQuery, code };
 }
 
 function sanitizeName(value: unknown): string {
@@ -81,7 +94,8 @@ export function projectError(value: unknown): ErrorProjection {
 		: typeof value === "string"
 			? value
 			: undefined;
-	const message = isDatabaseQueryError(value)
+	const chain = inspectErrorChain(value);
+	const message = chain.databaseQuery
 		? DATABASE_ERROR_MESSAGE
 		: typeof rawMessage === "string"
 			? rawMessage
@@ -92,5 +106,8 @@ export function projectError(value: unknown): ErrorProjection {
 		message,
 	);
 
-	return stack === undefined ? { type: name, name, message } : { type: name, name, message, stack };
+	const projected: ErrorProjection = { type: name, name, message };
+	if (chain.code !== undefined) projected.code = chain.code;
+	if (stack !== undefined) projected.stack = stack;
+	return projected;
 }

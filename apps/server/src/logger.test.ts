@@ -13,7 +13,7 @@ describe("server logger", () => {
 				output += chunk;
 			},
 		};
-		const testLogger = createLogger(destination);
+		const testLogger = createLogger(destination, "info");
 		const error = new DrizzleQueryError(
 			"insert into credentials (value) values ($1)",
 			[SECRET],

@@ -9,7 +9,9 @@ function drizzleError() {
 		{
 			query: "insert into credentials (value) values ($1)",
 			params: [SECRET],
-			cause: new Error(`password authentication failed for ${SECRET}`),
+			cause: Object.assign(new Error(`password authentication failed for ${SECRET}`), {
+				code: "23505",
+			}),
 		},
 	);
 	error.stack = `${error.message}\n    at executeQuery (/app/db.ts:10:2)\nCaused by: ${SECRET}`;
@@ -22,6 +24,7 @@ describe("projectError", () => {
 		const serialized = JSON.stringify(projected);
 
 		expect(projected.message).toBe("Database query failed");
+		expect(projected.code).toBe("23505");
 		expect(projected.stack).toBe(
 			"Error: Database query failed\n    at executeQuery (/app/db.ts:10:2)",
 		);
