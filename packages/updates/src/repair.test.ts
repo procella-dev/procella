@@ -32,6 +32,7 @@ describe("repairCheckpoint", () => {
 		const resources = [r("urn:a"), r("urn:b", "urn:missing")];
 		const { resources: fixed, mutations } = repairCheckpoint(resources);
 		expect(fixed.find((entry) => entry.urn === "urn:b")?.parent).toBeUndefined();
+		expect(fixed.find((entry) => entry.urn === "urn:b")).not.toHaveProperty("parent");
 		expect(mutations).toHaveLength(1);
 		expect(mutations[0].type).toBe("fix-dangling-parent");
 	});

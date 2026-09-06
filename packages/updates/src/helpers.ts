@@ -286,13 +286,21 @@ export function assertBoundedJson(value: unknown, depth = 1): void {
 	if (depth > MAX_JSON_DEPTH) {
 		throw new BadRequestError(`JSON body exceeds maximum depth of ${MAX_JSON_DEPTH}`);
 	}
+	if (value === null) return;
 	if (typeof value === "string") {
 		if (value.length > MAX_STRING_LENGTH) {
 			throw new BadRequestError(`String field exceeds maximum length of ${MAX_STRING_LENGTH}`);
 		}
 		return;
 	}
-	if (value === null || typeof value !== "object") return;
+	if (typeof value === "boolean") return;
+	if (typeof value === "number") {
+		if (!Number.isFinite(value)) throw new BadRequestError("JSON numbers must be finite");
+		return;
+	}
+	if (typeof value !== "object") {
+		throw new BadRequestError(`JSON body contains unsupported ${typeof value} value`);
+	}
 
 	if (Array.isArray(value)) {
 		for (const item of value) assertBoundedJson(item, depth + 1);
@@ -359,6 +367,11 @@ export function validateImportedDeployment(value: unknown): UntypedDeployment {
 	}
 
 	return value as unknown as UntypedDeployment;
+}
+
+/** Validate and detach an import envelope from caller-owned mutable objects. */
+export function snapshotImportedDeployment(value: unknown): UntypedDeployment {
+	return structuredClone(validateImportedDeployment(value));
 }
 
 /**

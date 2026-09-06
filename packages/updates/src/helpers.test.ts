@@ -32,6 +32,7 @@ import {
 	requireCheckpointHash,
 	requireSequenceNumber,
 	safeTokenCompare,
+	snapshotImportedDeployment,
 	validateImportedDeployment,
 } from "./helpers.js";
 import {
@@ -578,6 +579,21 @@ describe("@procella/updates helpers", () => {
 			expect((rejection as Error).message).not.toContain(marker);
 		});
 
+		test("snapshots validated deployments before persistence", () => {
+			const deployment = {
+				version: 3,
+				deployment: { resources: [], opaque: { value: "original" } },
+			};
+			const snapshot = snapshotImportedDeployment(deployment);
+
+			deployment.deployment.opaque.value = "mutated";
+
+			expect(snapshot).toEqual({
+				version: 3,
+				deployment: { resources: [], opaque: { value: "original" } },
+			});
+		});
+
 		test("rejects malformed deployments before persistence starts", async () => {
 			const transaction = mock(async () => {
 				throw new Error("persistence reached");
@@ -594,6 +610,12 @@ describe("@procella/updates helpers", () => {
 				{ version: 3, deployment: { resources: [null] } },
 				{ version: 3, deployment: new Date("2026-01-01T00:00:00Z") },
 				{ version: 3, deployment: { resources: [], opaque: new Map([["key", "value"]]) } },
+				{ version: 3, deployment: { resources: [], opaque: undefined } },
+				{ version: 3, deployment: { resources: [], opaque: 1n } },
+				{ version: 3, deployment: { resources: [], opaque: () => undefined } },
+				{ version: 3, deployment: { resources: [], opaque: Symbol("value") } },
+				{ version: 3, deployment: { resources: [], opaque: Number.NaN } },
+				{ version: 3, deployment: { resources: [], opaque: Number.POSITIVE_INFINITY } },
 			]) {
 				let rejection: unknown;
 				try {

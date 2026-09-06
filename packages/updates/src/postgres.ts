@@ -76,7 +76,7 @@ import {
 	requireCheckpointHash,
 	requireSequenceNumber,
 	safeTokenCompare,
-	validateImportedDeployment,
+	snapshotImportedDeployment,
 } from "./helpers.js";
 import { type RepairMutation, repairCheckpoint } from "./repair.js";
 import type {
@@ -852,7 +852,7 @@ export class PostgresUpdatesService implements UpdatesService {
 		deployment: unknown,
 		expectedCheckpointId?: string,
 	): Promise<ImportStackResponse> {
-		const validatedDeployment = validateImportedDeployment(deployment);
+		const validatedDeployment = snapshotImportedDeployment(deployment);
 		const updateRow = await this.db.transaction(async (tx) => {
 			const stackLock = await this.lockStackForOperation(tx, stackId);
 			if (stackLock.activeUpdateId) {
