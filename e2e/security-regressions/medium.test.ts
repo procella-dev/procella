@@ -23,6 +23,7 @@ import { ImportConflictError, PostgresUpdatesService } from "@procella/updates";
 import { asc, eq } from "drizzle-orm";
 import { requireExplicitEncryptionKey } from "../../apps/server/src/bootstrap.js";
 import { createApp } from "../../apps/server/src/routes/index.js";
+import { PostgresNotificationHub } from "../../packages/api/src/notifications.js";
 import { type JwksValidationError, JwksValidatorImpl } from "../../packages/oidc/src/jwks.js";
 import { LocalBlobStorage } from "../../packages/storage/src/index.js";
 import { GC_LEASE_GRACE_MS } from "../../packages/updates/src/types.js";
@@ -172,7 +173,7 @@ function makeRouteTestApp(opts?: { corsOrigins?: string[]; cronSecret?: string }
 		corsOrigins: opts?.corsOrigins,
 		cronSecret: opts?.cronSecret,
 		db: mockDb,
-		dbUrl: TEST_DB_URL,
+		notifications: new PostgresNotificationHub({ connectionString: TEST_DB_URL }),
 		stacks: mockStacks,
 		updates: {
 			createUpdate: async () => ({ updateID: "update-1" }),

@@ -14,7 +14,7 @@ function mockContext(deleteStack: TRPCContext["stacks"]["deleteStack"]): TRPCCon
 		},
 		resolveUserDisplayName: async () => null,
 		db: {} as never,
-		dbUrl: "",
+		notifications: {} as never,
 		stacks: { deleteStack } as never,
 		audit: {} as never,
 		updates: {} as never,

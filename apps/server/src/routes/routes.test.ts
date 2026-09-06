@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { PostgresNotificationHub } from "@procella/api/src/notifications.js";
 import type { AuditService } from "@procella/audit";
 import type { AuthService } from "@procella/auth";
 import type { Database } from "@procella/db";
@@ -249,7 +250,9 @@ describe("@procella/server routes", () => {
 				delete: async () => {},
 				exists: async () => false,
 			},
-			dbUrl: "postgres://test:test@localhost:5432/test",
+			notifications: new PostgresNotificationHub({
+				connectionString: "postgres://test:test@localhost:5432/test",
+			}),
 			cronSecret: opts?.cronSecret,
 			corsOrigins: opts?.corsOrigins,
 			github: opts?.github ?? null,

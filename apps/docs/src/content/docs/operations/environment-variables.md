@@ -11,6 +11,7 @@ All Procella configuration is via environment variables. Variables prefixed with
 |---|---|---|---|
 | `PROCELLA_LISTEN_ADDR` | `:9090` | No | Server listen address |
 | `PROCELLA_DATABASE_URL` | — | **Yes** | PostgreSQL connection string |
+| `PROCELLA_SUBSCRIPTION_MAX_CONCURRENT` | `500` | No | Per-replica ceiling on concurrent dashboard subscriptions |
 | `PROCELLA_AUTH_MODE` | `dev` | No | `dev` or `descope` |
 | `PROCELLA_DEV_AUTH_TOKEN` | — | If dev | Primary dev user token |
 | `PROCELLA_DEV_USER_LOGIN` | `dev-user` | No | Primary dev user name |
@@ -56,6 +57,14 @@ Common `sslmode` values:
 - `disable` — no SSL (development only)
 - `require` — encrypted connection, no certificate verification
 - `verify-full` — encrypted + verified certificate (production recommended)
+
+### PROCELLA_SUBSCRIPTION_MAX_CONCURRENT
+
+Maximum concurrent dashboard subscriptions (`updates.onEvents`, `updates.onStackActivity`) a single replica accepts. Subscriptions past the limit are rejected with tRPC `TOO_MANY_REQUESTS` (HTTP 429) instead of queueing, and the browser retries.
+
+Subscribers do not each hold a database connection: every replica keeps at most one PostgreSQL `LISTEN` connection per notification channel (`update_events`, `stack_updates`, so two at most) and fans notifications out in process. The connection is opened on the first subscriber and closed after the last one disconnects.
+
+The limit is per replica, not per cluster — with three replicas the fleet-wide ceiling is three times this value.
 
 ## Pulumi Compatibility
 

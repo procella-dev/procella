@@ -5,7 +5,6 @@ import { updateEvents, updates } from "@procella/db";
 
 import { TRPCError, tracked } from "@trpc/server";
 import { and, asc, desc, eq, gt, inArray, ne } from "drizzle-orm";
-import { Client } from "pg";
 import { z } from "zod/v4";
 import { protectedProcedure, router } from "../trpc.js";
 
@@ -18,6 +17,12 @@ const stackInput = z.object({
 	project: z.string(),
 	stack: z.string(),
 });
+
+/**
+ * Upper bound on a subscription's lifetime when the transport gives us no
+ * abort signal — matches the previous inline ceiling.
+ */
+const MAX_SUBSCRIPTION_LIFETIME_MS = 3_600_000;
 
 // ============================================================================
 // Helpers
@@ -241,73 +246,25 @@ export const updatesRouter = router({
 			const updateId = await resolveUpdateId(opts.ctx.db, stackInfo.id, rawUpdateId);
 
 			let lastSeq = lastEventId ?? 0;
-
-			const pg = new Client({ connectionString: opts.ctx.dbUrl });
-			await pg.connect();
-			await pg.query("LISTEN update_events");
-
-			const notify = new EventTarget();
-			pg.on("notification", (msg) => {
-				if (msg.payload === updateId) notify.dispatchEvent(new Event("ping"));
-			});
-			pg.on("error", (err) => {
-				notify.dispatchEvent(new CustomEvent("dberror", { detail: err }));
-			});
+			const signal = opts.signal ?? AbortSignal.timeout(MAX_SUBSCRIPTION_LIFETIME_MS);
+			const stream = await opts.ctx.notifications.subscribe("update_events", updateId, signal);
 
 			try {
-				const replay = await opts.ctx.db
-					.select({ sequence: updateEvents.sequence, fields: updateEvents.fields })
-					.from(updateEvents)
-					.where(and(eq(updateEvents.updateId, updateId), gt(updateEvents.sequence, lastSeq)))
-					.orderBy(asc(updateEvents.sequence));
-
-				for (const row of replay) {
-					lastSeq = row.sequence;
-					yield tracked(String(row.sequence), row.fields as Record<string, unknown>);
-				}
-
-				const signal = opts.signal ?? AbortSignal.timeout(3_600_000);
-				while (!signal.aborted) {
-					await new Promise<void>((resolve, reject) => {
-						const done = () => {
-							notify.removeEventListener("ping", done);
-							notify.removeEventListener("dberror", onErr);
-							signal.removeEventListener("abort", abort);
-							resolve();
-						};
-						const abort = () => {
-							notify.removeEventListener("ping", done);
-							notify.removeEventListener("dberror", onErr);
-							signal.removeEventListener("abort", abort);
-							reject(new DOMException("Aborted", "AbortError"));
-						};
-						const onErr = (e: Event) => {
-							notify.removeEventListener("ping", done);
-							notify.removeEventListener("dberror", onErr);
-							signal.removeEventListener("abort", abort);
-							reject((e as CustomEvent).detail ?? new Error("DB connection error"));
-						};
-						notify.addEventListener("ping", done, { once: true });
-						notify.addEventListener("dberror", onErr, { once: true });
-						signal.addEventListener("abort", abort, { once: true });
-					});
-
-					const newRows = await opts.ctx.db
+				// Replay first (resumes after lastEventId), then drain on every NOTIFY.
+				do {
+					const rows = await opts.ctx.db
 						.select({ sequence: updateEvents.sequence, fields: updateEvents.fields })
 						.from(updateEvents)
 						.where(and(eq(updateEvents.updateId, updateId), gt(updateEvents.sequence, lastSeq)))
 						.orderBy(asc(updateEvents.sequence));
 
-					for (const row of newRows) {
+					for (const row of rows) {
 						lastSeq = row.sequence;
 						yield tracked(String(row.sequence), row.fields as Record<string, unknown>);
 					}
-				}
-			} catch (e) {
-				if (e instanceof DOMException && e.name === "AbortError") return;
-				throw e;
+				} while (await stream.wait());
 			} finally {
-				await pg.end().catch(() => {});
+				stream.close();
 			}
 		}),
 
@@ -316,45 +273,11 @@ export const updatesRouter = router({
 
 		const stackInfo = await opts.ctx.stacks.getStack(opts.ctx.caller.tenantId, org, project, stack);
 
-		const pg = new Client({ connectionString: opts.ctx.dbUrl });
-		await pg.connect();
-		await pg.query("LISTEN stack_updates");
-
-		const notify = new EventTarget();
-		pg.on("notification", (msg) => {
-			if (msg.payload === stackInfo.id) notify.dispatchEvent(new Event("ping"));
-		});
-		pg.on("error", (err) => {
-			notify.dispatchEvent(new CustomEvent("dberror", { detail: err }));
-		});
+		const signal = opts.signal ?? AbortSignal.timeout(MAX_SUBSCRIPTION_LIFETIME_MS);
+		const stream = await opts.ctx.notifications.subscribe("stack_updates", stackInfo.id, signal);
 
 		try {
-			const signal = opts.signal ?? AbortSignal.timeout(3_600_000);
-			while (!signal.aborted) {
-				await new Promise<void>((resolve, reject) => {
-					const done = () => {
-						notify.removeEventListener("ping", done);
-						notify.removeEventListener("dberror", onErr);
-						signal.removeEventListener("abort", abort);
-						resolve();
-					};
-					const abort = () => {
-						notify.removeEventListener("ping", done);
-						notify.removeEventListener("dberror", onErr);
-						signal.removeEventListener("abort", abort);
-						reject(new DOMException("Aborted", "AbortError"));
-					};
-					const onErr = (e: Event) => {
-						notify.removeEventListener("ping", done);
-						notify.removeEventListener("dberror", onErr);
-						signal.removeEventListener("abort", abort);
-						reject((e as CustomEvent).detail ?? new Error("DB connection error"));
-					};
-					notify.addEventListener("ping", done, { once: true });
-					notify.addEventListener("dberror", onErr, { once: true });
-					signal.addEventListener("abort", abort, { once: true });
-				});
-
+			while (await stream.wait()) {
 				// Fetch the most recently changed update for this stack
 				const [row] = await opts.ctx.db
 					.select()
@@ -363,32 +286,29 @@ export const updatesRouter = router({
 					.orderBy(desc(updates.updatedAt))
 					.limit(1);
 
-				if (row) {
-					// Fetch summary event for resource changes
-					const [summaryRow] = await opts.ctx.db
-						.select({ fields: updateEvents.fields })
-						.from(updateEvents)
-						.where(and(eq(updateEvents.updateId, row.id), eq(updateEvents.kind, "summary")))
-						.orderBy(desc(updateEvents.sequence))
-						.limit(1);
+				if (!row) continue;
 
-					yield tracked(row.id, {
-						updateID: row.id,
-						kind: row.kind,
-						result: row.result ?? "",
-						version: row.version,
-						message: row.message ?? "",
-						startTime: row.startedAt ? Math.floor(row.startedAt.getTime() / 1000) : 0,
-						endTime: row.completedAt ? Math.floor(row.completedAt.getTime() / 1000) : 0,
-						resourceChanges: summaryRow ? parseResourceChanges(summaryRow.fields) : {},
-					});
-				}
+				// Fetch summary event for resource changes
+				const [summaryRow] = await opts.ctx.db
+					.select({ fields: updateEvents.fields })
+					.from(updateEvents)
+					.where(and(eq(updateEvents.updateId, row.id), eq(updateEvents.kind, "summary")))
+					.orderBy(desc(updateEvents.sequence))
+					.limit(1);
+
+				yield tracked(row.id, {
+					updateID: row.id,
+					kind: row.kind,
+					result: row.result ?? "",
+					version: row.version,
+					message: row.message ?? "",
+					startTime: row.startedAt ? Math.floor(row.startedAt.getTime() / 1000) : 0,
+					endTime: row.completedAt ? Math.floor(row.completedAt.getTime() / 1000) : 0,
+					resourceChanges: summaryRow ? parseResourceChanges(summaryRow.fields) : {},
+				});
 			}
-		} catch (e) {
-			if (e instanceof DOMException && e.name === "AbortError") return;
-			throw e;
 		} finally {
-			await pg.end().catch(() => {});
+			stream.close();
 		}
 	}),
 });

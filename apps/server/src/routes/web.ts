@@ -4,6 +4,7 @@
 // (auth config discovery, CLI token creation). No Pulumi CLI routes.
 // Served from the same origin as the UI — no CORS needed.
 
+import type { NotificationHub } from "@procella/api/src/notifications.js";
 import { appRouter } from "@procella/api/src/router/index.js";
 import type { TRPCContext } from "@procella/api/src/trpc.js";
 import type { AuditService } from "@procella/audit";
@@ -46,7 +47,7 @@ export interface WebAppDeps {
 	authConfig: AuthConfig;
 	audit: AuditService;
 	db: Database;
-	dbUrl: string;
+	notifications: NotificationHub;
 	stacks: StacksService;
 	updates: UpdatesService;
 	webhooks: WebhooksService;
@@ -159,7 +160,7 @@ export function createWebApp(deps: WebAppDeps): Hono<Env> {
 				resolveUserDisplayName: (subject) => deps.auth.resolveUserDisplayName(subject),
 				issueSubscriptionTicket: deps.issueSubscriptionTicket,
 				db: deps.db,
-				dbUrl: deps.dbUrl,
+				notifications: deps.notifications,
 				stacks: deps.stacks,
 				audit: deps.audit,
 				updates: deps.updates,

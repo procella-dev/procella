@@ -41,7 +41,7 @@ if (process.argv.includes("--healthz")) {
 		const { shutdownTelemetry } = await import("@procella/telemetry");
 		const { BlobCleanupWorker, GCWorker } = await import("@procella/updates");
 		const { bootstrap } = await import("./bootstrap.js");
-		const { app, auth, config, db, client, github, storage } = await bootstrap();
+		const { app, auth, config, db, client, github, notifications, storage } = await bootstrap();
 
 		const uiRoot = process.env.PROCELLA_UI_PATH || "/ui";
 		if (existsSync(`${uiRoot}/index.html`)) {
@@ -89,6 +89,7 @@ if (process.argv.includes("--healthz")) {
 			await blobCleanup.stop();
 			if (githubOutbox) await githubOutbox.stop();
 			await webhookOutbox.stop();
+			await notifications.close();
 			await shutdownTelemetry();
 			auth.dispose?.();
 			await client.close();

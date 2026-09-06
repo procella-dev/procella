@@ -9,6 +9,7 @@ import type { StacksService } from "@procella/stacks";
 import type { UpdatesService } from "@procella/updates";
 import type { WebhooksService } from "@procella/webhooks";
 import { createApp } from "../apps/server/src/routes/index.js";
+import { PostgresNotificationHub } from "../packages/api/src/notifications.js";
 
 const authConfig: AuthConfig = {
 	mode: "dev",
@@ -32,7 +33,9 @@ const baseDeps = {
 		delete: async () => {},
 		exists: async () => false,
 	},
-	dbUrl: "postgres://test:test@localhost:5432/test",
+	notifications: new PostgresNotificationHub({
+		connectionString: "postgres://test:test@localhost:5432/test",
+	}),
 	github: null as GitHubService | null,
 	githubWebhookSecret: undefined,
 	stacks: {} as StacksService,

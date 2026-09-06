@@ -40,7 +40,7 @@ function buildTrpcContext(overrides?: Partial<TRPCContext>): TRPCContext {
 			principalType: "user",
 		},
 		db: {} as never,
-		dbUrl: "",
+		notifications: {} as never,
 		stacks: {} as never,
 		audit: {} as never,
 		updates: {} as never,
