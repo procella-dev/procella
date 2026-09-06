@@ -22,7 +22,9 @@ interface RenovateWorkflow {
 		pull_request: {
 			paths: string[];
 		};
+		[event: string]: unknown;
 	};
+	env: Record<string, string>;
 	jobs: Record<string, WorkflowJob>;
 }
 
@@ -42,6 +44,8 @@ const privilegedJob = requireJob("renovate");
 
 describe("H13 Renovate workflow privilege boundary", () => {
 	test("marker-only pull requests cannot enter the privileged job or receive its App token", () => {
+		expect(Object.keys(workflow.on)).not.toContain("pull_request_target");
+		expect(Object.keys(workflow.jobs).sort()).toEqual(["renovate", "validate-config"]);
 		expect(workflow.on.pull_request.paths).toContain(".github/renovate-global.js");
 		expect(validationJob.if).toBe("github.event_name == 'pull_request'");
 		expect(validationJob.permissions).toEqual({ contents: "read" });
@@ -68,9 +72,10 @@ describe("H13 Renovate workflow privilege boundary", () => {
 		const validation = validationJob.steps.find((step) => step.name === "Validate Renovate config");
 		const renovate = privilegedJob.steps.find((step) => step.name === "Run Renovate");
 
+		expect(workflow.env.RENOVATE_VERSION).toBe(RENOVATE_VERSION);
 		expect(validation?.run).toBe(
-			`bunx --package renovate@${RENOVATE_VERSION} renovate-config-validator .github/renovate-global.js`,
+			'bunx --package "renovate@$RENOVATE_VERSION" renovate-config-validator .github/renovate-global.js',
 		);
-		expect(renovate?.run).toBe(`bunx renovate@${RENOVATE_VERSION}`);
+		expect(renovate?.run).toBe('bunx "renovate@$RENOVATE_VERSION"');
 	});
 });

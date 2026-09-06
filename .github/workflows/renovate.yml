@@ -52,6 +52,10 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  # Exact security pin. Update manually after validating a new Renovate release.
+  RENOVATE_VERSION: "44.65.5"
+
 jobs:
   validate-config:
     if: github.event_name == 'pull_request'
@@ -66,7 +70,7 @@ jobs:
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
 
       - name: Validate Renovate config
-        run: bunx --package renovate@44.65.5 renovate-config-validator .github/renovate-global.js
+        run: bunx --package "renovate@$RENOVATE_VERSION" renovate-config-validator .github/renovate-global.js
 
   renovate:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -107,4 +111,4 @@ jobs:
           RENOVATE_TOKEN: ${{ steps.get_token.outputs.token }}
           LOG_LEVEL: ${{ inputs.log_level || 'info' }}
           RENOVATE_DRY_RUN: ${{ inputs.dry_run == true && 'full' || '' }}
-        run: bunx renovate@44.65.5
+        run: bunx "renovate@$RENOVATE_VERSION"
