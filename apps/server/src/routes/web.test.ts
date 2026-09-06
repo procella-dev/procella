@@ -154,7 +154,7 @@ describe("createWebApp tRPC auth", () => {
 				"Content-Type": "application/json",
 				"Content-Encoding": "gzip",
 			},
-			body: gzipSync(Buffer.from("{}")),
+			body: gzipSync(Buffer.from(JSON.stringify({ 0: { json: subscriptionScope } }))),
 		});
 
 		expect(res.status).toBe(200);
