@@ -42,6 +42,7 @@ function mockAuthService(): AuthService {
 function makeApp(overrides?: {
 	issueSubscriptionTicket?: (caller: Caller) => Promise<string>;
 	verifySubscriptionTicket?: (ticket: string) => Promise<Caller>;
+	auth?: AuthService;
 	authConfig?: AuthConfig;
 }) {
 	const authConfig: AuthConfig = overrides?.authConfig ?? {
@@ -52,7 +53,7 @@ function makeApp(overrides?: {
 	};
 
 	return createWebApp({
-		auth: mockAuthService(),
+		auth: overrides?.auth ?? mockAuthService(),
 		authConfig,
 		audit: {} as AuditService,
 		db: {} as Database,
@@ -128,6 +129,26 @@ describe("createWebApp tRPC auth", () => {
 
 		expect(res.status).toBe(200);
 		expect(typeof body[0]?.result?.data?.json?.ticket).toBe("string");
+	});
+
+	test("preserves the auth service receiver when creating CLI access keys", async () => {
+		const auth = mockAuthService();
+		auth.createCliAccessKey = async function (this: AuthService) {
+			if (this !== auth) throw new Error("unbound auth service");
+			return "bound-cli-token";
+		};
+		const app = makeApp({ auth });
+		const res = await app.request("/api/auth/cli-token", {
+			method: "POST",
+			headers: {
+				Authorization: "token valid-token",
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({ name: "receiver-test" }),
+		});
+
+		expect(res.status).toBe(200);
+		expect(await res.json()).toEqual({ token: "bound-cli-token" });
 	});
 
 	test("SSE endpoint rejects wrong-signature tickets", async () => {
