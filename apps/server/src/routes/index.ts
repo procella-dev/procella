@@ -267,6 +267,7 @@ export function createApp(deps: {
 	app.post("/api/oauth/token", withOauthTokenRateLimit, withApiDecompress, oauth.tokenExchange);
 
 	app.post("/api/webhooks/github", githubH.handleGitHubWebhook);
+	app.get("/github/oauth/callback", githubH.completeAuthorization);
 	app.get("/github/setup", githubH.completeInstallation);
 
 	// ========================================================================

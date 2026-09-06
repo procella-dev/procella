@@ -88,6 +88,27 @@ export function githubHandlers(deps: {
 			return c.body(null, 200);
 		},
 
+		completeAuthorization: async (c: Context<Env>) => {
+			c.header("Cache-Control", "no-store");
+			if (!deps.github) {
+				return redirectToGitHubSettings(c, "not_configured");
+			}
+
+			const state = c.req.query("state");
+			const code = c.req.query("code");
+			if (!state || state.length > 4096 || !code || code.length > 1024) {
+				return redirectToGitHubSettings(c, "invalid_callback");
+			}
+
+			try {
+				const installationUrl = await deps.github.completeAuthorization(state, code);
+				return c.redirect(installationUrl, 303);
+			} catch (error) {
+				const reason = error instanceof GitHubSetupError ? error.code : "github_error";
+				return redirectToGitHubSettings(c, reason);
+			}
+		},
+
 		completeInstallation: async (c: Context<Env>) => {
 			c.header("Cache-Control", "no-store");
 			if (!deps.github) {
@@ -102,7 +123,7 @@ export function githubHandlers(deps: {
 				state.length > 4096 ||
 				!installationIdValue ||
 				!/^[1-9]\d*$/.test(installationIdValue) ||
-				(setupAction !== "install" && setupAction !== "update")
+				setupAction !== "install"
 			) {
 				return redirectToGitHubSettings(c, "invalid_callback");
 			}

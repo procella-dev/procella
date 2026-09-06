@@ -20,7 +20,9 @@ export const githubRouter = router({
 				message: "GitHub App is not configured on this server",
 			});
 		}
-		return { url: await ctx.github.issueInstallationUrl(ctx.caller.tenantId) };
+		return {
+			url: await ctx.github.issueAuthorizationUrl(ctx.caller.tenantId, ctx.caller.orgSlug),
+		};
 	}),
 
 	removeInstallation: adminProcedure

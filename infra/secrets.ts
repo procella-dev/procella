@@ -12,6 +12,8 @@ const githubAppSecretNames = resolveGitHubAppSecretNames(process.env);
 export const githubAppSecrets = githubAppSecretNames
 	? {
 			appId: new sst.Secret(githubAppSecretNames.appId),
+			clientId: new sst.Secret(githubAppSecretNames.clientId),
+			clientSecret: new sst.Secret(githubAppSecretNames.clientSecret),
 			privateKey: new sst.Secret(githubAppSecretNames.privateKey),
 			webhookSecret: new sst.Secret(githubAppSecretNames.webhookSecret),
 		}
@@ -20,6 +22,8 @@ export const githubAppSecrets = githubAppSecretNames
 export const githubAppEnvironment: Record<string, Input<string>> = githubAppSecrets
 	? {
 			PROCELLA_GITHUB_APP_ID: githubAppSecrets.appId.value,
+			PROCELLA_GITHUB_APP_CLIENT_ID: githubAppSecrets.clientId.value,
+			PROCELLA_GITHUB_APP_CLIENT_SECRET: githubAppSecrets.clientSecret.value,
 			PROCELLA_GITHUB_APP_PRIVATE_KEY: githubAppSecrets.privateKey.value,
 			PROCELLA_GITHUB_APP_WEBHOOK_SECRET: githubAppSecrets.webhookSecret.value,
 		}

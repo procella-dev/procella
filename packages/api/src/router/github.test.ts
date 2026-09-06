@@ -17,7 +17,8 @@ const mockInstallation = {
 function mockGitHubService(overrides?: Partial<GitHubService>): GitHubService {
 	return {
 		handleWebhookEvent: mock(async () => {}),
-		issueInstallationUrl: mock(async () => "https://github.com/apps/procella/installations/new"),
+		issueAuthorizationUrl: mock(async () => "https://github.com/apps/procella/installations/new"),
+		completeAuthorization: mock(async () => "https://github.com/apps/procella/installations/new"),
 		completeInstallation: mock(async () => mockInstallation),
 		listInstallations: mock(async () => [mockInstallation]),
 		resolveInstallation: mock(async () => mockInstallation),
@@ -80,7 +81,7 @@ describe("githubRouter", () => {
 		const ctx = mockContext();
 		const result = await githubRouter.createCaller(ctx).createInstallationUrl();
 		expect(result.url).toContain("github.com/apps/procella/installations/new");
-		expect(ctx.github?.issueInstallationUrl).toHaveBeenCalledWith("t-1");
+		expect(ctx.github?.issueAuthorizationUrl).toHaveBeenCalledWith("t-1", "my-org");
 	});
 
 	test("createInstallationUrl rejects non-admin callers", async () => {

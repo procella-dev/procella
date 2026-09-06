@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { createAppAuth } from "@octokit/auth-app";
 import { Octokit } from "@octokit/rest";
@@ -24,6 +25,8 @@ export interface GitHubInstallationInfo extends GitHubInstallationData {
 
 export interface GitHubAppConfig {
 	appId: string;
+	clientId: string;
+	clientSecret: string;
 	privateKey: string;
 	webhookSecret: string;
 	stateSigningKey: string;
@@ -87,7 +90,8 @@ export interface GitHubDeliveryService {
 
 export interface GitHubService extends GitHubDeliveryService {
 	handleWebhookEvent(event: string, payload: unknown): Promise<void>;
-	issueInstallationUrl(tenantId: string): Promise<string>;
+	issueAuthorizationUrl(tenantId: string, accountLogin: string): Promise<string>;
+	completeAuthorization(state: string, code: string): Promise<string>;
 	completeInstallation(state: string, installationId: number): Promise<GitHubInstallationInfo>;
 	listInstallations(tenantId: string): Promise<GitHubInstallationInfo[]>;
 	removeInstallation(tenantId: string, installationId: number): Promise<void>;
@@ -102,6 +106,8 @@ export type GitHubSetupErrorCode =
 	| "invalid_state"
 	| "expired_state"
 	| "replayed_state"
+	| "authorization_failed"
+	| "unauthorized_account"
 	| "installation_conflict"
 	| "invalid_installation";
 
@@ -112,14 +118,22 @@ export class GitHubSetupError extends Error {
 	}
 }
 
+export type GitHubSetupStatePhase = "authorize" | "install";
+
 export interface GitHubSetupStateClaims {
 	tenantId: string;
+	accountLogin: string;
+	phase: GitHubSetupStatePhase;
 	jti: string;
 	expiresAt: Date;
 }
 
 export interface GitHubSetupStateService {
-	issue(tenantId: string): Promise<{ state: string; claims: GitHubSetupStateClaims }>;
+	issue(
+		tenantId: string,
+		accountLogin: string,
+		phase: GitHubSetupStatePhase,
+	): Promise<{ state: string; claims: GitHubSetupStateClaims }>;
 	verify(state: string): Promise<GitHubSetupStateClaims>;
 }
 
@@ -132,11 +146,11 @@ export function createGitHubSetupStateService(
 	const ttlSeconds = options.ttlSeconds ?? GITHUB_SETUP_STATE_TTL_SECONDS;
 
 	return {
-		async issue(tenantId) {
+		async issue(tenantId, accountLogin, phase) {
 			const issuedAt = Math.floor(now().getTime() / 1000);
 			const expiresAt = issuedAt + ttlSeconds;
 			const jti = randomUUID();
-			const state = await new SignJWT({ tenantId })
+			const state = await new SignJWT({ tenantId, accountLogin, phase })
 				.setProtectedHeader({ alg: "HS256", typ: "JWT" })
 				.setIssuer(GITHUB_SETUP_STATE_ISSUER)
 				.setAudience(GITHUB_SETUP_STATE_AUDIENCE)
@@ -144,7 +158,10 @@ export function createGitHubSetupStateService(
 				.setIssuedAt(issuedAt)
 				.setExpirationTime(expiresAt)
 				.sign(secret);
-			return { state, claims: { tenantId, jti, expiresAt: new Date(expiresAt * 1000) } };
+			return {
+				state,
+				claims: { tenantId, accountLogin, phase, jti, expiresAt: new Date(expiresAt * 1000) },
+			};
 		},
 		async verify(state) {
 			try {
@@ -157,6 +174,9 @@ export function createGitHubSetupStateService(
 				if (
 					typeof payload.tenantId !== "string" ||
 					payload.tenantId.length === 0 ||
+					typeof payload.accountLogin !== "string" ||
+					payload.accountLogin.length === 0 ||
+					(payload.phase !== "authorize" && payload.phase !== "install") ||
 					typeof payload.jti !== "string" ||
 					!payload.exp
 				) {
@@ -164,6 +184,8 @@ export function createGitHubSetupStateService(
 				}
 				return {
 					tenantId: payload.tenantId,
+					accountLogin: payload.accountLogin,
+					phase: payload.phase,
 					jti: payload.jti,
 					expiresAt: new Date(payload.exp * 1000),
 				};
@@ -181,6 +203,8 @@ export function createGitHubSetupStateService(
 export function buildGitHubAppConfig(config: Config): GitHubAppConfig | null {
 	if (
 		!config.githubAppId ||
+		!config.githubAppClientId ||
+		!config.githubAppClientSecret ||
 		!config.githubAppPrivateKey ||
 		!config.githubAppWebhookSecret ||
 		!config.ticketSigningKey
@@ -190,6 +214,8 @@ export function buildGitHubAppConfig(config: Config): GitHubAppConfig | null {
 
 	return {
 		appId: config.githubAppId,
+		clientId: config.githubAppClientId,
+		clientSecret: config.githubAppClientSecret,
 		privateKey: config.githubAppPrivateKey,
 		webhookSecret: config.githubAppWebhookSecret,
 		stateSigningKey: config.ticketSigningKey,
@@ -500,6 +526,8 @@ export class OctokitGitHubDeliveryService implements GitHubDeliveryService {
 export class OctokitGitHubService extends OctokitGitHubDeliveryService implements GitHubService {
 	private readonly config: GitHubAppConfig;
 	private readonly setupStates: GitHubSetupStateService;
+	private readonly userClientFactory: (token: string) => Octokit;
+	private readonly oauthFetch: typeof fetch;
 
 	constructor({
 		db,
@@ -507,21 +535,26 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 		appClient,
 		installationClientFactory,
 		setupStates,
+		userClientFactory,
+		oauthFetch,
 	}: {
 		db: Database;
 		config: GitHubAppConfig;
 		appClient?: Octokit;
 		installationClientFactory?: (installationId: number) => Octokit;
 		setupStates?: GitHubSetupStateService;
+		userClientFactory?: (token: string) => Octokit;
+		oauthFetch?: typeof fetch;
 	}) {
 		super({ db, config, appClient, installationClientFactory });
 		this.config = config;
 		this.setupStates = setupStates ?? createGitHubSetupStateService(config.stateSigningKey);
+		this.userClientFactory = userClientFactory ?? ((token) => new Octokit({ auth: token }));
+		this.oauthFetch = oauthFetch ?? fetch;
 	}
 
-	async issueInstallationUrl(tenantId: string): Promise<string> {
-		const slug = await this.loadAppSlug();
-		const { state, claims } = await this.setupStates.issue(tenantId);
+	async issueAuthorizationUrl(tenantId: string, accountLogin: string): Promise<string> {
+		const { state, claims } = await this.setupStates.issue(tenantId, accountLogin, "authorize");
 		await this.db.delete(githubSetupStates).where(lt(githubSetupStates.expiresAt, sql`now()`));
 		await this.db.insert(githubSetupStates).values({
 			jti: claims.jti,
@@ -529,8 +562,36 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 			expiresAt: claims.expiresAt,
 		});
 
-		const url = new URL(`https://github.com/apps/${slug}/installations/new`);
+		const url = new URL("https://github.com/login/oauth/authorize");
+		url.searchParams.set("client_id", this.config.clientId);
 		url.searchParams.set("state", state);
+		return url.toString();
+	}
+
+	async completeAuthorization(state: string, code: string): Promise<string> {
+		const claims = await this.setupStates.verify(state);
+		if (claims.phase !== "authorize") throw new GitHubSetupError("invalid_state");
+
+		const slug = await this.loadAppSlug();
+		const token = await this.exchangeUserToken(code);
+		try {
+			await this.verifyAccountAdministrator(token, claims.accountLogin);
+		} finally {
+			await this.revokeUserToken(token);
+		}
+
+		const next = await this.setupStates.issue(claims.tenantId, claims.accountLogin, "install");
+		await this.db.transaction(async (tx) => {
+			await this.consumeSetupState(tx as Database, claims);
+			await tx.insert(githubSetupStates).values({
+				jti: next.claims.jti,
+				tenantId: next.claims.tenantId,
+				expiresAt: next.claims.expiresAt,
+			});
+		});
+
+		const url = new URL(`https://github.com/apps/${slug}/installations/new`);
+		url.searchParams.set("state", next.state);
 		return url.toString();
 	}
 
@@ -539,21 +600,14 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 		installationId: number,
 	): Promise<GitHubInstallationInfo> {
 		const claims = await this.setupStates.verify(state);
+		if (claims.phase !== "install") throw new GitHubSetupError("invalid_state");
 		const installation = await this.loadInstallation(installationId);
+		if (installation.accountLogin.toLowerCase() !== claims.accountLogin.toLowerCase()) {
+			throw new GitHubSetupError("unauthorized_account");
+		}
 
 		return this.db.transaction(async (tx) => {
-			const [consumed] = await tx
-				.delete(githubSetupStates)
-				.where(
-					and(
-						eq(githubSetupStates.jti, claims.jti),
-						eq(githubSetupStates.tenantId, claims.tenantId),
-						gt(githubSetupStates.expiresAt, sql`now()`),
-					),
-				)
-				.returning({ jti: githubSetupStates.jti });
-			if (!consumed) throw new GitHubSetupError("replayed_state");
-
+			await this.consumeSetupState(tx as Database, claims);
 			return this.saveInstallation(claims.tenantId, installation, tx as Database);
 		});
 	}
@@ -605,6 +659,99 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 					eq(githubInstallations.installationId, installationId),
 				),
 			);
+	}
+
+	private async consumeSetupState(
+		database: Database,
+		claims: GitHubSetupStateClaims,
+	): Promise<void> {
+		const [consumed] = await database
+			.delete(githubSetupStates)
+			.where(
+				and(
+					eq(githubSetupStates.jti, claims.jti),
+					eq(githubSetupStates.tenantId, claims.tenantId),
+					gt(githubSetupStates.expiresAt, sql`now()`),
+				),
+			)
+			.returning({ jti: githubSetupStates.jti });
+		if (!consumed) throw new GitHubSetupError("replayed_state");
+	}
+
+	private async exchangeUserToken(code: string): Promise<string> {
+		let response: Response;
+		try {
+			response = await this.oauthFetch("https://github.com/login/oauth/access_token", {
+				method: "POST",
+				headers: {
+					Accept: "application/json",
+					"Content-Type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					client_id: this.config.clientId,
+					client_secret: this.config.clientSecret,
+					code,
+				}),
+				signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
+			});
+		} catch {
+			throw new GitHubSetupError("authorization_failed");
+		}
+		if (!response.ok) throw new GitHubSetupError("authorization_failed");
+
+		const body = (await response.json().catch(() => null)) as {
+			access_token?: unknown;
+			token_type?: unknown;
+		} | null;
+		if (
+			typeof body?.access_token !== "string" ||
+			body.access_token.length === 0 ||
+			body.token_type !== "bearer"
+		) {
+			throw new GitHubSetupError("authorization_failed");
+		}
+		return body.access_token;
+	}
+
+	private async verifyAccountAdministrator(token: string, accountLogin: string): Promise<void> {
+		const client = this.userClientFactory(token);
+		try {
+			const request = { request: { signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS) } };
+			const { data: user } = await client.request("GET /user", request);
+			if (user.login.toLowerCase() === accountLogin.toLowerCase()) return;
+
+			const { data: membership } = await client.request("GET /user/memberships/orgs/{org}", {
+				org: accountLogin,
+				...request,
+			});
+			if (membership.state === "active" && membership.role === "admin") return;
+		} catch (error) {
+			if (error instanceof GitHubSetupError) throw error;
+		}
+		throw new GitHubSetupError("unauthorized_account");
+	}
+
+	private async revokeUserToken(token: string): Promise<void> {
+		let response: Response;
+		try {
+			response = await this.oauthFetch(
+				`https://api.github.com/applications/${encodeURIComponent(this.config.clientId)}/token`,
+				{
+					method: "DELETE",
+					headers: {
+						Accept: "application/vnd.github+json",
+						Authorization: `Basic ${Buffer.from(`${this.config.clientId}:${this.config.clientSecret}`).toString("base64")}`,
+						"Content-Type": "application/json",
+						"X-GitHub-Api-Version": "2022-11-28",
+					},
+					body: JSON.stringify({ access_token: token }),
+					signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
+				},
+			);
+		} catch {
+			throw new GitHubSetupError("authorization_failed");
+		}
+		if (!response.ok) throw new GitHubSetupError("authorization_failed");
 	}
 
 	private async saveInstallation(

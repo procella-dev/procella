@@ -216,7 +216,7 @@ function GitHubSettingsTab() {
 							disabled={createUrlMutation.isPending}
 							className="btn-primary shrink-0"
 						>
-							{createUrlMutation.isPending ? "Opening GitHub…" : "Connect or Configure"}
+							{createUrlMutation.isPending ? "Opening GitHub…" : "Verify or Configure"}
 						</button>
 					</div>
 
@@ -298,6 +298,10 @@ function githubCallbackError(reason: string | null): string {
 			return "This GitHub installation is already connected to another tenant.";
 		case "invalid_installation":
 			return "GitHub did not return a valid installation for this app.";
+		case "authorization_failed":
+			return "GitHub user authorization failed. Start the connection again.";
+		case "unauthorized_account":
+			return "Your GitHub user must own the account or be an active organization administrator.";
 		case "not_configured":
 			return "The GitHub App is not configured on this server.";
 		default:
@@ -310,10 +314,13 @@ function GitHubNotConfigured() {
 		<div className="bg-slate-brand/30 border border-slate-brand/60 rounded-xl p-8">
 			<h3 className="text-sm font-semibold text-cloud mb-1.5">GitHub App is not configured</h3>
 			<p className="text-sm text-cloud/60 leading-relaxed mb-4">
-				A server administrator must configure the GitHub App before tenants can connect it.
+				A server administrator must configure the GitHub App, including OAuth credentials, before
+				tenants can connect it.
 			</p>
 			<div className="bg-deep-sky border border-cloud/15 rounded-lg px-3 py-2.5 font-mono text-xs text-cloud overflow-x-auto whitespace-pre leading-relaxed">
 				{`PROCELLA_GITHUB_APP_ID=<your-app-id>
+PROCELLA_GITHUB_APP_CLIENT_ID=<your-client-id>
+PROCELLA_GITHUB_APP_CLIENT_SECRET=<your-client-secret>
 PROCELLA_GITHUB_APP_PRIVATE_KEY=<your-private-key>
 PROCELLA_GITHUB_APP_WEBHOOK_SECRET=<your-webhook-secret>`}
 			</div>
@@ -326,10 +333,11 @@ function GitHubNotConnected({ onConnect, pending }: { onConnect: () => void; pen
 		<div className="bg-slate-brand/30 border border-slate-brand/60 rounded-xl p-8">
 			<h3 className="text-sm font-semibold text-mist mb-1.5">GitHub App is not installed</h3>
 			<p className="text-sm text-cloud leading-relaxed mb-5">
-				The server is configured, but this tenant has no connected GitHub installation.
+				Verify that your GitHub user administers this tenant&apos;s GitHub account, then install the
+				app.
 			</p>
 			<button type="button" onClick={onConnect} disabled={pending} className="btn-primary">
-				{pending ? "Opening GitHub…" : "Connect GitHub App"}
+				{pending ? "Opening GitHub…" : "Verify & Connect GitHub App"}
 			</button>
 		</div>
 	);

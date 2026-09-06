@@ -174,6 +174,10 @@ describe("createWebApp GitHub setup callback", () => {
 		expect(callback.status).toBe(303);
 		expect(callback.headers.get("location")).toContain("reason=not_configured");
 
+		const oauthCallback = await app.request("/github/oauth/callback?code=code&state=signed");
+		expect(oauthCallback.status).toBe(303);
+		expect(oauthCallback.headers.get("location")).toContain("reason=not_configured");
+
 		const sacredApiPath = await app.request(
 			"/api/github/setup?installation_id=123&setup_action=install&state=signed",
 		);

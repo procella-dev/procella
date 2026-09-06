@@ -72,6 +72,7 @@ export function createWebApp(deps: WebAppDeps): Hono<Env> {
 		github: deps.github,
 		verifySignature: verifyGitHubWebhookSignature,
 	});
+	app.get("/github/oauth/callback", github.completeAuthorization);
 	app.get("/github/setup", github.completeInstallation);
 	app.get("/healthz", health.health);
 

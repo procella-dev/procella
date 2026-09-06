@@ -6,6 +6,8 @@ import { getTestDb, truncateTables } from "./setup.js";
 
 const config = {
 	appId: "123",
+	clientId: "Iv1.test-client-id",
+	clientSecret: "oauth-client-secret",
 	privateKey: "unused-in-tests",
 	webhookSecret: "webhook-secret",
 	stateSigningKey: "state-signing-key-state-signing-key",
@@ -64,32 +66,69 @@ function createService() {
 			return { data };
 		},
 	} as unknown as Octokit;
-	return new OctokitGitHubService({ db, config, appClient });
+	const oauthFetch = async (input: string | URL | Request, init?: RequestInit) => {
+		if (String(input).includes("login/oauth/access_token")) {
+			const code = (init?.body as URLSearchParams).get("code");
+			return new Response(
+				JSON.stringify({ access_token: `user-token-${code}`, token_type: "bearer" }),
+			);
+		}
+		return new Response(null, { status: 204 });
+	};
+	const userClientFactory = (token: string) => {
+		const accountLogin = token.replace("user-token-", "");
+		return {
+			request: async (route: string) => {
+				if (route === "GET /user") {
+					return { data: { login: accountLogin === "octocat" ? "octocat" : "tenant-admin" } };
+				}
+				return { data: { state: "active", role: "admin" } };
+			},
+		} as unknown as Octokit;
+	};
+	return new OctokitGitHubService({
+		db,
+		config,
+		appClient,
+		oauthFetch: oauthFetch as typeof fetch,
+		userClientFactory,
+	});
 }
 
-async function issueState(service: OctokitGitHubService, tenantId: string): Promise<string> {
-	const url = new URL(await service.issueInstallationUrl(tenantId));
-	const state = url.searchParams.get("state");
-	if (!state) throw new Error("Installation URL did not include state");
-	return state;
+async function issueState(
+	service: OctokitGitHubService,
+	tenantId: string,
+	accountLogin: string,
+): Promise<string> {
+	const authorizationUrl = new URL(await service.issueAuthorizationUrl(tenantId, accountLogin));
+	const authorizationState = authorizationUrl.searchParams.get("state");
+	if (!authorizationState) throw new Error("Authorization URL did not include state");
+	const installationUrl = new URL(
+		await service.completeAuthorization(authorizationState, accountLogin),
+	);
+	const installationState = installationUrl.searchParams.get("state");
+	if (!installationState) throw new Error("Installation URL did not include state");
+	return installationState;
 }
 
 async function bind(service: OctokitGitHubService, tenantId: string, installationId: number) {
-	return service.completeInstallation(await issueState(service, tenantId), installationId);
+	const installation = installations.get(installationId as 101 | 102 | 201);
+	if (!installation) throw new Error("Unknown test installation");
+	return service.completeInstallation(
+		await issueState(service, tenantId, installation.account.login),
+		installationId,
+	);
 }
 
 describe("GitHub installation binding integration", () => {
-	test("isolates multiple installations across multiple tenants", async () => {
+	test("isolates authorized installations across tenants", async () => {
 		const service = createService();
 		await bind(service, "tenant-a", 101);
-		await bind(service, "tenant-a", 102);
 		await bind(service, "tenant-b", 201);
 
-		expect(
-			(await service.listInstallations("tenant-a"))
-				.map((row) => row.installationId)
-				.sort((a, b) => a - b),
-		).toEqual([101, 102]);
+		expect((await service.listInstallations("tenant-a")).map((row) => row.installationId)).toEqual([
+			101,
+		]);
 		expect((await service.listInstallations("tenant-b")).map((row) => row.installationId)).toEqual([
 			201,
 		]);
@@ -108,7 +147,7 @@ describe("GitHub installation binding integration", () => {
 
 	test("consumes setup state exactly once under concurrent callbacks", async () => {
 		const service = createService();
-		const state = await issueState(service, "tenant-a");
+		const state = await issueState(service, "tenant-a", "acme");
 		const results = await Promise.allSettled([
 			service.completeInstallation(state, 101),
 			service.completeInstallation(state, 101),
