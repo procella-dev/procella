@@ -1,17 +1,37 @@
+import { destinationIdentity, destinationRef, findDestinationCollisions } from "./destination.js";
 import * as log from "./log.js";
 import { discoverStacks, exportState, filterStacks } from "./procella.js";
 import type { DiscoveredStack, StackRef, ValidateOptions, ValidationResult } from "./types.js";
 
-export async function validate(opts: ValidateOptions): Promise<ValidationResult[]> {
+interface ValidationOperations {
+	discoverStacks: typeof discoverStacks;
+	exportState: typeof exportState;
+	exportFromBackend: typeof exportFromBackend;
+}
+
+const defaultValidationOperations: ValidationOperations = {
+	discoverStacks,
+	exportState,
+	exportFromBackend,
+};
+
+export async function validate(
+	opts: ValidateOptions,
+	operations: ValidationOperations = defaultValidationOperations,
+): Promise<ValidationResult[]> {
 	log.heading("Validating migration");
 
 	// Discover stacks on both sides
 	const [sourceStacks, targetStacks] = await Promise.all([
-		discoverStacks(opts.sourceUrl, opts.sourceToken),
-		discoverStacks(opts.targetUrl, opts.targetToken),
+		operations.discoverStacks(opts.sourceUrl, opts.sourceToken),
+		operations.discoverStacks(opts.targetUrl, opts.targetToken),
 	]);
 
 	const filteredSource = filterStacks(sourceStacks, opts.filter, opts.exclude || undefined);
+	const sourceCollisions = findDestinationCollisions(filteredSource);
+	const collisionByIdentity = new Map(
+		sourceCollisions.map((collision) => [collision.key, collision]),
+	);
 
 	// Build target lookup once. `findMatchingTargetStack` would otherwise
 	// rebuild it on every iteration, making validation O(n²) over stacks.
@@ -20,6 +40,20 @@ export async function validate(opts: ValidateOptions): Promise<ValidationResult[
 	const results: ValidationResult[] = [];
 
 	for (const source of filteredSource) {
+		const sourceCollision = collisionByIdentity.get(destinationIdentity(source.ref));
+		if (sourceCollision) {
+			results.push({
+				fqn: source.fqn,
+				status: "error",
+				sourceResourceCount: source.resourceCount ?? 0,
+				targetResourceCount: 0,
+				missingOnTarget: [],
+				missingOnSource: [],
+				error: `Ambiguous target ${sourceCollision.identity}: conflicting sources ${sourceCollision.sourceFqns.join(", ")}`,
+			});
+			continue;
+		}
+
 		const target = findMatchingTargetStack(source, targetLookup);
 
 		if (!target) {
@@ -37,8 +71,8 @@ export async function validate(opts: ValidateOptions): Promise<ValidationResult[
 		// Deep comparison: export state from both and compare URNs
 		try {
 			const [sourceState, targetState] = await Promise.all([
-				exportFromBackend(opts.sourceUrl, opts.sourceToken, source.ref),
-				exportState(
+				operations.exportFromBackend(opts.sourceUrl, opts.sourceToken, source.ref),
+				operations.exportState(
 					{ url: opts.targetUrl, token: opts.targetToken },
 					target.ref.org,
 					target.ref.project,
@@ -80,6 +114,7 @@ export async function validate(opts: ValidateOptions): Promise<ValidationResult[
 	// Build source lookup once. Same O(n²) hazard as the target loop above.
 	const sourceLookup = buildSourceLookup(filteredSource);
 	for (const target of filteredTarget) {
+		if (collisionByIdentity.has(destinationIdentity(target.ref))) continue;
 		if (!hasMatchingSourceStack(target, sourceLookup)) {
 			results.push({
 				fqn: target.fqn,
@@ -177,6 +212,8 @@ export interface SourceLookup {
 	readonly fqns: ReadonlySet<string>;
 	readonly normalizedFqns: ReadonlySet<string>;
 	readonly projectStackKeys: ReadonlySet<string>;
+	/** Project/stack keys owned by more than one distinct source FQN. */
+	readonly ambiguousProjectStackKeys: ReadonlySet<string>;
 }
 
 /** Build a `SourceLookup` from a list of source stacks. O(n). */
@@ -184,12 +221,21 @@ export function buildSourceLookup(sourceStacks: DiscoveredStack[]): SourceLookup
 	const fqns = new Set<string>();
 	const normalizedFqns = new Set<string>();
 	const projectStackKeys = new Set<string>();
+	const sourceFqnByProjectStack = new Map<string, string>();
+	const ambiguousProjectStackKeys = new Set<string>();
 	for (const source of sourceStacks) {
 		fqns.add(source.fqn);
 		normalizedFqns.add(stackFqn(normalizeStackRef(source.ref)));
-		projectStackKeys.add(projectStackKey(source.ref));
+		const key = projectStackKey(source.ref);
+		projectStackKeys.add(key);
+		const previousSource = sourceFqnByProjectStack.get(key);
+		if (previousSource !== undefined && previousSource !== source.fqn) {
+			ambiguousProjectStackKeys.add(key);
+		} else {
+			sourceFqnByProjectStack.set(key, source.fqn);
+		}
 	}
-	return { fqns, normalizedFqns, projectStackKeys };
+	return { fqns, normalizedFqns, projectStackKeys, ambiguousProjectStackKeys };
 }
 
 export function hasMatchingSourceStack(
@@ -199,6 +245,7 @@ export function hasMatchingSourceStack(
 	const lookup = Array.isArray(sourceStacksOrLookup)
 		? buildSourceLookup(sourceStacksOrLookup)
 		: sourceStacksOrLookup;
+	if (lookup.ambiguousProjectStackKeys.has(projectStackKey(target.ref))) return false;
 	return (
 		lookup.fqns.has(target.fqn) ||
 		lookup.normalizedFqns.has(target.fqn) ||
@@ -207,11 +254,7 @@ export function hasMatchingSourceStack(
 }
 
 function normalizeStackRef(ref: StackRef): StackRef {
-	return {
-		org: ref.org || "imported",
-		project: ref.project || ref.stack || "default",
-		stack: ref.stack,
-	};
+	return destinationRef(ref);
 }
 
 function stackFqn(ref: StackRef): string {
@@ -219,14 +262,16 @@ function stackFqn(ref: StackRef): string {
 }
 
 function projectStackKey(ref: StackRef): string {
-	return `${ref.project || ref.stack || "default"}/${ref.stack}`;
+	return destinationIdentity(ref);
 }
 
 function buildProjectStackLookup(stacks: DiscoveredStack[]): Map<string, DiscoveredStack | null> {
 	const lookup = new Map<string, DiscoveredStack | null>();
 	for (const stack of stacks) {
 		const key = projectStackKey(stack.ref);
-		if (lookup.has(key)) {
+		const previous = lookup.get(key);
+		if (previous === null) continue;
+		if (previous !== undefined && previous.fqn !== stack.fqn) {
 			lookup.set(key, null);
 			continue;
 		}

@@ -1,6 +1,7 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
 import { createAuditLog, finalizeAuditLog, recordResult, writeAuditLog } from "./audit.js";
+import { assertUniqueDestinationIdentities, destinationRef } from "./destination.js";
 import * as log from "./log.js";
 import { createStack, discoverStacks, exportState, filterStacks, healthCheck } from "./procella.js";
 import * as pulumi from "./pulumi.js";
@@ -27,7 +28,22 @@ const defaultMigrationOperations: MigrationOperations = {
 	exportState,
 };
 
-export async function run(opts: RunOptions): Promise<AuditLog> {
+export interface RunOperations {
+	discoverStacks: typeof discoverStacks;
+	healthCheck: typeof healthCheck;
+	migrateOne: typeof migrateOne;
+}
+
+const defaultRunOperations: RunOperations = {
+	discoverStacks,
+	healthCheck,
+	migrateOne,
+};
+
+export async function run(
+	opts: RunOptions,
+	operations: RunOperations = defaultRunOperations,
+): Promise<AuditLog> {
 	const audit = createAuditLog(opts.sourceUrl, opts.targetUrl);
 
 	log.heading("Procella Migration");
@@ -37,7 +53,7 @@ export async function run(opts: RunOptions): Promise<AuditLog> {
 
 	// 1. Discover stacks
 	log.step(1, 4, "Discovering stacks on source backend...");
-	const sourceStacks = await discoverStacks(opts.sourceUrl, opts.sourceToken);
+	const sourceStacks = await operations.discoverStacks(opts.sourceUrl, opts.sourceToken);
 	const filtered = filterStacks(sourceStacks, opts.filter, opts.exclude || undefined);
 
 	if (filtered.length === 0) {
@@ -46,11 +62,16 @@ export async function run(opts: RunOptions): Promise<AuditLog> {
 		return audit;
 	}
 
+	// Procella ignores the source org path segment for persistence and scopes
+	// destination stacks to the authenticated tenant. Reject collapses before
+	// any target-side create/import can overwrite another selected source.
+	assertUniqueDestinationIdentities(filtered);
+
 	log.success(`Found ${filtered.length} stacks to migrate`);
 
 	// Warn but don't abort — target may come online during a long migration,
 	// and each stack import fails individually with a clear error in the audit log.
-	const targetOk = await healthCheck(opts.targetUrl);
+	const targetOk = await operations.healthCheck(opts.targetUrl);
 	if (!targetOk) {
 		log.warn(
 			`Target ${opts.targetUrl} is not reachable. ${opts.dryRun ? "Real migration will fail." : "Migration may fail."}`,
@@ -66,7 +87,7 @@ export async function run(opts: RunOptions): Promise<AuditLog> {
 	let lastProcessed = filtered.length;
 	if (opts.concurrency <= 1) {
 		for (let i = 0; i < filtered.length; i++) {
-			const result = await migrateOne(filtered[i], i + 1, filtered.length, opts);
+			const result = await operations.migrateOne(filtered[i], i + 1, filtered.length, opts);
 			recordResult(audit, result);
 
 			if (result.status === "failed" && !opts.continueOnError) {
@@ -86,7 +107,7 @@ export async function run(opts: RunOptions): Promise<AuditLog> {
 				const index = cursor++;
 				if (index >= filtered.length) break;
 				const stack = filtered[index];
-				const result = await migrateOne(stack, index + 1, filtered.length, opts);
+				const result = await operations.migrateOne(stack, index + 1, filtered.length, opts);
 				recordResult(audit, result);
 				processedIndices.add(index);
 
@@ -214,9 +235,10 @@ export async function migrateOne(
 	const start = Date.now();
 	// Use directory hierarchy to avoid filename collisions.
 	// Always create org/project dirs, defaulting the same way migration does.
-	const org = stack.ref.org || "imported";
-	const project = stack.ref.project || stack.ref.stack || "default";
-	const stackName = stack.ref.stack || stack.fqn;
+	const targetRef = destinationRef(stack.ref);
+	const org = targetRef.org;
+	const project = targetRef.project;
+	const stackName = targetRef.stack || stack.fqn;
 	const targetUrl = opts.targetUrl.replace(/\/$/, "");
 
 	// Path-traversal guard: source-backend stack names may legitimately contain
