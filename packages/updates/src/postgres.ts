@@ -45,6 +45,7 @@ import type {
 import {
 	BadRequestError,
 	CheckpointNotFoundError,
+	isTerminalUpdateStatus,
 	JournalEntryBegin,
 	JournalEntryFailure,
 	JournalEntryOutputs,
@@ -349,6 +350,9 @@ export class PostgresUpdatesService implements UpdatesService {
 	}
 
 	async completeUpdate(updateId: string, request: CompleteUpdateRequest): Promise<void> {
+		if (!isTerminalUpdateStatus(request.status)) {
+			throw new BadRequestError(`Invalid terminal update status: ${request.status}`);
+		}
 		let notifyStackId: string | undefined;
 		let deltaBaseBlobKey: string | null = null;
 		await withDbSpan(

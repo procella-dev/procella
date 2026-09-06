@@ -103,6 +103,10 @@ export const updates = pgTable(
 			"chk_updates_kind",
 			sql`${table.kind} IN ('update', 'preview', 'refresh', 'destroy', 'import')`,
 		),
+		check(
+			"chk_updates_completed_terminal",
+			sql`${table.completedAt} IS NULL OR ${table.status} IN ('succeeded', 'failed', 'cancelled')`,
+		),
 		uniqueIndex("idx_updates_active")
 			.on(table.stackId)
 			.where(sql`status IN ('not started', 'requested', 'running')`),
