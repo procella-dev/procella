@@ -579,6 +579,22 @@ describe("@procella/updates helpers", () => {
 			expect((rejection as Error).message).not.toContain(marker);
 		});
 
+		test("does not reflect unknown envelope keys in errors", () => {
+			const marker = "sensitive-unknown-key";
+			let rejection: unknown;
+			try {
+				validateImportedDeployment({
+					version: 3,
+					deployment: {},
+					[marker]: true,
+				});
+			} catch (error) {
+				rejection = error;
+			}
+			expect(rejection).toBeInstanceOf(BadRequestError);
+			expect((rejection as Error).message).not.toContain(marker);
+		});
+
 		test("snapshots validated deployments before persistence", () => {
 			const deployment = {
 				version: 3,

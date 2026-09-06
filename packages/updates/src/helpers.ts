@@ -312,6 +312,11 @@ export function assertBoundedJson(value: unknown, depth = 1): void {
 	}
 
 	for (const [key, nestedValue] of Object.entries(value)) {
+		if (key.length > MAX_STRING_LENGTH) {
+			throw new BadRequestError(
+				`JSON property name exceeds maximum length of ${MAX_STRING_LENGTH}`,
+			);
+		}
 		if (key === "__proto__" || key === "constructor" || key === "prototype") {
 			throw new BadRequestError(`Forbidden JSON key: ${key}`);
 		}
@@ -327,7 +332,7 @@ export function validateImportedDeployment(value: unknown): UntypedDeployment {
 	}
 	for (const key of Object.keys(value)) {
 		if (key !== "version" && key !== "features" && key !== "deployment") {
-			throw new BadRequestError(`Imported deployment envelope contains unknown key: ${key}`);
+			throw new BadRequestError("Imported deployment envelope contains an unknown key");
 		}
 	}
 
