@@ -256,6 +256,7 @@ export function createApp(deps: {
 
 	app.post(
 		"/api/auth/cli-token",
+		withCliTokenRateLimit,
 		async (c, next) => {
 			if (!deps.auth.createCliAccessKey) {
 				return c.json({ error: "CLI token creation not available in this auth mode" }, 400);
@@ -274,7 +275,6 @@ export function createApp(deps: {
 			await next();
 		},
 		withApiDecompress,
-		withCliTokenRateLimit,
 		async (c) => {
 			if (!deps.auth.createCliAccessKey) {
 				return c.json({ error: "CLI token creation not available in this auth mode" }, 400);

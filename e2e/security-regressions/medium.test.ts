@@ -427,7 +427,7 @@ describe("[security] MEDIUM regressions (vulns.txt M1-M15)", () => {
 		// Exploit attempt (vulns.txt M11): send a gzip bomb to a normal /api/* route and exhaust process memory.
 		// Regression mirrors apps/server/src/middleware/decompress.test.ts against the running e2e server.
 		const compressed = gzipSync(Buffer.from(createSizedPayload(33 * 1024 * 1024)));
-		const res = await fetch(`${BACKEND_URL}/api/auth/cli-token`, {
+		const res = await fetch(`${BACKEND_URL}/api/stacks/dev-org/security/m11-body-limit`, {
 			method: "POST",
 			headers: {
 				Authorization: `token ${TEST_TOKEN}`,

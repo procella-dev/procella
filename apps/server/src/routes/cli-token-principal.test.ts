@@ -65,10 +65,14 @@ const callersByToken: Record<string, Caller> = {
 	"workload-token": workloadCaller,
 };
 
-function mockAuthService(mintedKeyNames: string[]): AuthService {
+function mockAuthService(
+	mintedKeyNames: string[],
+	authenticatedHeaders: string[] = [],
+): AuthService {
 	return {
 		authenticate: async (request: Request) => {
 			const header = request.headers.get("Authorization") ?? "";
+			authenticatedHeaders.push(header);
 			const caller = callersByToken[header.replace(/^token /, "")];
 			if (!caller) {
 				throw new UnauthorizedError("Invalid token");
@@ -312,6 +316,35 @@ for (const assembly of assemblies) {
 			const res = await app.request(...cliTokenRequest("token bogus-token"));
 
 			expect(res.status).toBe(401);
+			expect(minted).toEqual([]);
+		});
+
+		test("counts unauthorized attempts and rejects an exhausted request before auth, inflation, or minting", async () => {
+			const minted: string[] = [];
+			const authenticatedHeaders: string[] = [];
+			const auth = mockAuthService(minted, authenticatedHeaders);
+			const app = assembly.make(minted, auth);
+
+			for (let attempt = 1; attempt <= 10; attempt++) {
+				const res = await app.request(...cliTokenRequest("token bogus-token"));
+				expect(res.status).toBe(401);
+			}
+			expect(authenticatedHeaders).toHaveLength(10);
+
+			// If decompression runs, this malformed gzip body returns 400 instead of 429.
+			const limited = await app.request("/api/auth/cli-token", {
+				method: "POST",
+				headers: {
+					Authorization: "token session-token",
+					"Content-Type": "application/json",
+					"Content-Encoding": "gzip",
+				},
+				body: new Uint8Array([0x1f, 0x8b, 0x08]),
+			});
+
+			expect(limited.status).toBe(429);
+			expect(await limited.json()).toEqual({ error: "Too many requests" });
+			expect(authenticatedHeaders).toHaveLength(10);
 			expect(minted).toEqual([]);
 		});
 	});
