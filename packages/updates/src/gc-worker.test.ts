@@ -60,16 +60,21 @@ describe("@procella/updates GCWorker", () => {
 		test("functional: runOnce completes the GC cycle without throwing (PR #149 review — invoke the actual cycle, not just constants)", async () => {
 			const mockDb: Record<string, unknown> = {};
 			Object.assign(mockDb, {
-				execute: async (query: unknown) => {
-					const queryStr = String(query);
-					if (queryStr.includes("pg_try_advisory_xact_lock")) {
-						return { rows: [{ acquired: true }] };
-					}
-					return { rows: [] };
-				},
+				execute: async () => ({ rows: [{ acquired: true }] }),
+				selectDistinct: () => ({
+					from: () => ({
+						where: () => ({
+							orderBy: () => Promise.resolve([{ stackId: "stack-1" }]),
+						}),
+					}),
+				}),
 				select: () => ({
 					from: () => ({
-						where: () => Promise.resolve([]),
+						where: () => ({
+							orderBy: () => ({
+								for: () => Promise.resolve([{ id: "stack-1" }]),
+							}),
+						}),
 					}),
 				}),
 				update: () => ({
