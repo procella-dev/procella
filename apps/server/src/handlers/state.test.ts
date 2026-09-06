@@ -117,6 +117,26 @@ describe("stateHandlers", () => {
 		expect(updates.exportStack).toHaveBeenCalledWith("stack-uuid-1", 7);
 	});
 
+	test("exportStack rejects malformed and non-positive versions", async () => {
+		const updates = mockUpdatesService();
+		const stacks = mockStacksService();
+		const app = new Hono<Env>();
+		app.use("*", injectCaller(validCaller));
+		const h = stateHandlers(updates, stacks);
+		app.get("/stacks/:org/:project/:stack/export/:version", h.exportStack);
+
+		for (const version of ["0", "-1", "1.5", "7junk", "NaN", "9007199254740992"]) {
+			const res = await app.request(`/stacks/myorg/myproj/dev/export/${version}`);
+			expect(res.status).toBe(400);
+			expect(await res.json()).toEqual({
+				code: "invalid_request",
+				message: "Version must be a positive integer",
+			});
+		}
+		expect(stacks.getStack).not.toHaveBeenCalled();
+		expect(updates.exportStack).not.toHaveBeenCalled();
+	});
+
 	test("importStack returns updateID", async () => {
 		const updates = mockUpdatesService();
 		const stacks = mockStacksService();

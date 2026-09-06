@@ -774,20 +774,22 @@ export class PostgresUpdatesService implements UpdatesService {
 			let checkpoint: typeof checkpoints.$inferSelect | undefined;
 
 			if (version !== undefined) {
-				const rows = await this.db
-					.select()
+				const [row] = await this.db
+					.select({ checkpoint: checkpoints })
 					.from(checkpoints)
+					.innerJoin(updates, eq(checkpoints.updateId, updates.id))
 					.where(
 						and(
-							eq(checkpoints.stackId, stackId),
-							eq(checkpoints.version, version),
+							eq(updates.stackId, stackId),
+							eq(updates.version, version),
+							ne(updates.kind, "preview"),
 							// Never export the delta baseline sidecar row.
 							eq(checkpoints.isDelta, false),
 						),
 					)
 					.orderBy(desc(checkpoints.version))
 					.limit(1);
-				checkpoint = rows[0];
+				checkpoint = row?.checkpoint;
 				if (!checkpoint) {
 					throw new CheckpointNotFoundError("", "", `version ${version}`);
 				}

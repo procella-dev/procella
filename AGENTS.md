@@ -128,7 +128,7 @@ The sequence the CLI follows during `pulumi up`:
 ### State Operations Protocol (Phase 4)
 
 **Export**: `GET /api/stacks/{org}/{project}/{stack}/export` returns latest checkpoint as `apitype.UntypedDeployment`.
-- `GET .../export/{version}` returns specific version checkpoint.
+- `GET .../export/{version}` returns the final canonical checkpoint of the non-preview update with that stack update version; non-positive-integer versions are rejected with 400.
 - Empty stacks return valid `UntypedDeployment` with `version: 3` and non-null deployment JSON.
 
 **Import**: `POST /api/stacks/{org}/{project}/{stack}/import` — body is `apitype.UntypedDeployment`, response is `apitype.ImportStackResponse{UpdateID}`.
