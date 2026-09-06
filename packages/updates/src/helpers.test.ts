@@ -592,6 +592,8 @@ describe("@procella/updates helpers", () => {
 				{ version: 3 },
 				{ version: 3, deployment: { resources: "not-an-array" } },
 				{ version: 3, deployment: { resources: [null] } },
+				{ version: 3, deployment: new Date("2026-01-01T00:00:00Z") },
+				{ version: 3, deployment: { resources: [], opaque: new Map([["key", "value"]]) } },
 			]) {
 				let rejection: unknown;
 				try {

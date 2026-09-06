@@ -298,6 +298,10 @@ export function assertBoundedJson(value: unknown, depth = 1): void {
 		for (const item of value) assertBoundedJson(item, depth + 1);
 		return;
 	}
+	const prototype = Object.getPrototypeOf(value);
+	if (prototype !== Object.prototype && prototype !== null) {
+		throw new BadRequestError("JSON body contains a non-JSON object");
+	}
 
 	for (const [key, nestedValue] of Object.entries(value)) {
 		if (key === "__proto__" || key === "constructor" || key === "prototype") {
