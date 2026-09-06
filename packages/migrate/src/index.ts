@@ -4,6 +4,14 @@
  * For CLI usage, run: bunx @procella/migrate --help
  */
 
+export type {
+	BatchSecretDecrypter,
+	CompareDeploymentsOptions,
+	DeploymentComparisonResult,
+	DeploymentMismatch,
+	DeploymentMismatchKind,
+} from "./compare.js";
+export { compareDeploymentState, describeFirstMismatch } from "./compare.js";
 export { discover } from "./discover.js";
 export { run } from "./migrate.js";
 export { preflight } from "./preflight.js";

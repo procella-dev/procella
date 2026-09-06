@@ -81,6 +81,9 @@ describe("hasMatchingSourceStack", () => {
 					exports++;
 					throw new Error("must not export ambiguous target");
 				},
+				batchDecrypt: async () => {
+					throw new Error("must not decrypt ambiguous stack secrets");
+				},
 			},
 		);
 

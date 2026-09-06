@@ -146,6 +146,8 @@ describe("migration destination identity", () => {
 						imports++;
 					},
 					exportState: async () => deployment,
+					batchDecrypt: async () => new Map(),
+					getCallerOrg: async () => "org-a",
 				});
 				expect(result.status).toBe("succeeded");
 			}

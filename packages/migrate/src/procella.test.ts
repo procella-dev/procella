@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
-import { filterStacks } from "./procella.js";
+import { batchDecrypt, filterStacks } from "./procella.js";
 import type { DiscoveredStack } from "./types.js";
 
 function makeStack(fqn: string): DiscoveredStack {
@@ -133,6 +133,60 @@ describe("Procella HTTP client", () => {
 			const { healthCheck } = await import("./procella.js");
 			const result = await healthCheck("http://localhost:9090");
 			expect(result).toBe(false);
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
+	});
+});
+
+describe("batchDecrypt", () => {
+	test("splits requests larger than the server's per-batch item limit", async () => {
+		const originalFetch = globalThis.fetch;
+		const requestSizes: number[] = [];
+		mockFetch(async (_url, init) => {
+			const body = JSON.parse(String(init?.body)) as { ciphertexts: string[] };
+			requestSizes.push(body.ciphertexts.length);
+			const plaintexts: Record<string, string> = {};
+			for (const ct of body.ciphertexts) {
+				plaintexts[ct] = Buffer.from(`plain-${ct}`).toString("base64");
+			}
+			return new Response(JSON.stringify({ plaintexts }), { status: 200 });
+		});
+		try {
+			const ciphertexts = Array.from({ length: 1500 }, (_, i) => `ct-${i}`);
+			const result = await batchDecrypt(
+				{ url: "http://localhost:9090", token: "t" },
+				"org",
+				"proj",
+				"stack",
+				ciphertexts,
+			);
+			expect(requestSizes).toEqual([1000, 500]);
+			expect(result.size).toBe(1500);
+			expect(result.get("ct-0")).toBe("plain-ct-0");
+			expect(result.get("ct-1499")).toBe("plain-ct-1499");
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
+	});
+
+	test("returns an empty map for an empty ciphertext list without any request", async () => {
+		const originalFetch = globalThis.fetch;
+		let calls = 0;
+		mockFetch(async () => {
+			calls++;
+			return new Response("{}", { status: 200 });
+		});
+		try {
+			const result = await batchDecrypt(
+				{ url: "http://localhost:9090", token: "t" },
+				"org",
+				"proj",
+				"stack",
+				[],
+			);
+			expect(result.size).toBe(0);
+			expect(calls).toBe(0);
 		} finally {
 			globalThis.fetch = originalFetch;
 		}
