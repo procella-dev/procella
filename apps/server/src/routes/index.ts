@@ -1,6 +1,7 @@
 // @procella/server — Hono route registration.
 
 import { timingSafeEqual } from "node:crypto";
+import type { NotificationHub } from "@procella/api/src/notifications.js";
 import { appRouter } from "@procella/api/src/router/index.js";
 import type { TRPCContext } from "@procella/api/src/trpc.js";
 import type { AuditService } from "@procella/audit";
@@ -70,7 +71,7 @@ export function createApp(deps: {
 	corsOrigins?: string[];
 	cronSecret?: string;
 	db: Database;
-	dbUrl: string;
+	notifications: NotificationHub;
 	storage: BlobStorage;
 	stacks: StacksService;
 	updates: UpdatesService;
@@ -173,7 +174,7 @@ export function createApp(deps: {
 				resolveUserDisplayName: (subject) => deps.auth.resolveUserDisplayName(subject),
 				issueSubscriptionTicket: deps.issueSubscriptionTicket,
 				db: deps.db,
-				dbUrl: deps.dbUrl,
+				notifications: deps.notifications,
 				stacks: deps.stacks,
 				audit: deps.audit,
 				updates: deps.updates,

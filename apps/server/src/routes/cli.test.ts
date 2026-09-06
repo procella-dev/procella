@@ -2,6 +2,7 @@
 
 import { describe, expect, mock, test } from "bun:test";
 import { gzipSync } from "node:zlib";
+import { PostgresNotificationHub } from "@procella/api/src/notifications.js";
 import type { AuditService } from "@procella/audit";
 import { type AuthService, DevAuthService } from "@procella/auth";
 import type { Database } from "@procella/db";
@@ -189,7 +190,6 @@ function baseDeps(deltaCheckpointsEnabled?: boolean): CliAppDeps {
 		},
 		audit: mockAuditService(),
 		db: { execute: async () => ({ rows: [{ acquired: false }] }) } as unknown as Database,
-		dbUrl: "postgres://test:test@localhost:5432/test",
 		github: null,
 		githubWebhookSecret: undefined,
 		stacks: mockStacksService(),
@@ -216,7 +216,9 @@ function makeWebApp(deltaCheckpointsEnabled?: boolean) {
 		},
 		audit: mockAuditService(),
 		db: { execute: async () => ({ rows: [{ acquired: false }] }) } as unknown as Database,
-		dbUrl: "postgres://test:test@localhost:5432/test",
+		notifications: new PostgresNotificationHub({
+			connectionString: "postgres://test:test@localhost:5432/test",
+		}),
 		storage: {
 			get: async () => null,
 			put: async () => {},

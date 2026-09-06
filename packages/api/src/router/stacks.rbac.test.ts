@@ -59,7 +59,7 @@ function fixtureFor(role: Role): RbacFixture {
 			caller,
 			resolveUserDisplayName: async () => null,
 			db: {} as never,
-			dbUrl: "",
+			notifications: {} as never,
 			stacks: {
 				replaceStackTags,
 				renameStack,

@@ -1,4 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
+import { PostgresNotificationHub } from "@procella/api/src/notifications.js";
 import type { AuditService } from "@procella/audit";
 import type { AuthService } from "@procella/auth";
 import type { Database } from "@procella/db";
@@ -233,7 +234,6 @@ function dependenciesFor(role: Role): { deps: CliAppDeps; tracker: ServiceTracke
 				execute: async () => ({ rows: [{ acquired: false }] }),
 				transaction: async (callback: (tx: unknown) => unknown) => callback({}),
 			} as unknown as Database,
-			dbUrl: "postgres://test:test@example.invalid/test",
 			stacks,
 			updates,
 			webhooks,
@@ -497,6 +497,9 @@ const appFactories = [
 		create: (deps: CliAppDeps) =>
 			createApp({
 				...deps,
+				notifications: new PostgresNotificationHub({
+					connectionString: "postgres://test:test@example.invalid/test",
+				}),
 				storage: {
 					get: async () => null,
 					put: async () => {},

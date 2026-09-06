@@ -4,6 +4,7 @@
 // route assemblies, which register the handler independently.
 
 import { beforeAll, describe, expect, test } from "bun:test";
+import { PostgresNotificationHub } from "@procella/api/src/notifications.js";
 import type { AuditService } from "@procella/audit";
 import { type AuthConfig, type AuthService, DescopeAuthService } from "@procella/auth";
 import type { Database } from "@procella/db";
@@ -97,7 +98,9 @@ function makeApiApp(
 		authConfig,
 		audit: {} as AuditService,
 		db: {} as Database,
-		dbUrl: "postgres://test:test@localhost:5432/test",
+		notifications: new PostgresNotificationHub({
+			connectionString: "postgres://test:test@localhost:5432/test",
+		}),
 		storage: {
 			get: async () => null,
 			put: async () => {},
@@ -121,7 +124,9 @@ function makeWebApp(
 		authConfig,
 		audit: {} as AuditService,
 		db: {} as Database,
-		dbUrl: "postgres://test:test@localhost:5432/test",
+		notifications: new PostgresNotificationHub({
+			connectionString: "postgres://test:test@localhost:5432/test",
+		}),
 		stacks: {} as StacksService,
 		updates: {} as UpdatesService,
 		webhooks: {} as WebhooksService,

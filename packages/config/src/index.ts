@@ -38,6 +38,9 @@ const configSchema = z
 		databaseUrl: z.string().url(),
 		databasePoolMax: z.coerce.number().int().min(1).max(100).default(10),
 
+		// Dashboard subscriptions — per-process ceiling on concurrent SSE subscribers
+		subscriptionMaxConcurrent: z.coerce.number().int().min(1).max(10_000).default(500),
+
 		// Auth
 		authMode: authModeSchema,
 		devAuthToken: z.string().optional(),
@@ -240,6 +243,7 @@ const envMapping = {
 	listenAddr: "PROCELLA_LISTEN_ADDR",
 	databaseUrl: "PROCELLA_DATABASE_URL",
 	databasePoolMax: "PROCELLA_DATABASE_POOL_MAX",
+	subscriptionMaxConcurrent: "PROCELLA_SUBSCRIPTION_MAX_CONCURRENT",
 	authMode: "PROCELLA_AUTH_MODE",
 	devAuthToken: "PROCELLA_DEV_AUTH_TOKEN",
 	devUserLogin: "PROCELLA_DEV_USER_LOGIN",

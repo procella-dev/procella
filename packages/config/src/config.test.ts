@@ -79,6 +79,7 @@ describe("@procella/config", () => {
 			expect(config.deltaCheckpointsEnabled).toBe(false);
 			expect(config.legacyDecryptionEnabled).toBe(true);
 			expect(config.legacyOrgMappings).toEqual({});
+			expect(config.subscriptionMaxConcurrent).toBe(500);
 		});
 
 		test("loads full config with all overrides", () => {
@@ -130,6 +131,21 @@ describe("@procella/config", () => {
 
 			Bun.env.PROCELLA_LEGACY_DECRYPTION_ENABLED = "1";
 			expect(loadConfig().legacyDecryptionEnabled).toBe(true);
+		});
+
+		test("parses PROCELLA_SUBSCRIPTION_MAX_CONCURRENT and rejects non-positive limits", () => {
+			clearProcellaEnv();
+			setMinimalEnv();
+			expect(loadConfig().subscriptionMaxConcurrent).toBe(500);
+
+			Bun.env.PROCELLA_SUBSCRIPTION_MAX_CONCURRENT = "25";
+			expect(loadConfig().subscriptionMaxConcurrent).toBe(25);
+
+			Bun.env.PROCELLA_SUBSCRIPTION_MAX_CONCURRENT = "0";
+			expect(tryLoadConfig().ok).toBe(false);
+
+			Bun.env.PROCELLA_SUBSCRIPTION_MAX_CONCURRENT = "not-a-number";
+			expect(tryLoadConfig().ok).toBe(false);
 		});
 
 		test("parses unique legacy org mappings and rejects collisions", () => {

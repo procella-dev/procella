@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
 import { gzipSync } from "node:zlib";
+import { PostgresNotificationHub } from "@procella/api/src/notifications.js";
 import type { AuditService } from "@procella/audit";
 import type { AuthConfig, AuthService } from "@procella/auth";
 import type { Database } from "@procella/db";
@@ -105,7 +106,9 @@ function makeApp(overrides?: {
 		authConfig,
 		audit: {} as AuditService,
 		db: {} as Database,
-		dbUrl: "postgres://test:test@localhost:5432/test",
+		notifications: new PostgresNotificationHub({
+			connectionString: "postgres://test:test@localhost:5432/test",
+		}),
 		stacks: {} as StacksService,
 		updates: {} as UpdatesService,
 		webhooks: {} as WebhooksService,

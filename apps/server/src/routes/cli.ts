@@ -49,7 +49,6 @@ export interface CliAppDeps {
 	authConfig: AuthConfig;
 	audit: AuditService;
 	db: Database;
-	dbUrl: string;
 	stacks: StacksService;
 	updates: UpdatesService;
 	webhooks: WebhooksService;

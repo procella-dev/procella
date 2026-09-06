@@ -99,6 +99,7 @@ All configuration is via `PROCELLA_*` environment variables. Set these as Vercel
 |---|---|---|
 | `PROCELLA_LISTEN_ADDR` | `:9090` | Server listen address |
 | `PROCELLA_DATABASE_URL` | *(required)* | PostgreSQL connection string (Neon on Vercel, any PostgreSQL locally) |
+| `PROCELLA_SUBSCRIPTION_MAX_CONCURRENT` | `500` | Per-replica ceiling on concurrent dashboard subscriptions |
 | `PROCELLA_AUTH_MODE` | *(required)* | `dev` (static tokens) or `descope` (Descope access keys) |
 | `PROCELLA_DEV_AUTH_TOKEN` | *(required if dev)* | Static auth token for dev mode |
 | `PROCELLA_DEV_USER_LOGIN` | `dev-user` | Dev user login name |

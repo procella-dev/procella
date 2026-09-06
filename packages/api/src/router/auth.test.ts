@@ -7,7 +7,7 @@ function mockContext(caller: TRPCContext["caller"]): TRPCContext {
 		caller,
 		resolveUserDisplayName: async () => null,
 		db: {} as never,
-		dbUrl: "",
+		notifications: {} as never,
 		stacks: {} as never,
 		audit: {} as never,
 		updates: {} as never,

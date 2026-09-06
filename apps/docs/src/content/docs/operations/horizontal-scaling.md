@@ -48,6 +48,7 @@ bun run e2e:cluster       # Run full E2E tests against the cluster
 | GC worker | One active | Advisory lock ensures only one runs at a time |
 | GitHub publication worker | PostgreSQL outbox | Leased `SKIP LOCKED` claims prevent duplicate concurrent delivery |
 | Webhook delivery worker | PostgreSQL outbox | Leased `SKIP LOCKED` claims prevent duplicate concurrent delivery |
+| Dashboard subscriptions | Per replica | Each replica keeps one `LISTEN` connection per channel and caps concurrent subscribers via `PROCELLA_SUBSCRIPTION_MAX_CONCURRENT` |
 
 ## Cluster-Safe GC
 

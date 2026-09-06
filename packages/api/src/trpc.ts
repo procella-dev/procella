@@ -13,6 +13,7 @@ import type { WebhooksService } from "@procella/webhooks";
 import { initTRPC, type TRPC_ERROR_CODE_KEY, TRPCError } from "@trpc/server";
 import { TRPC_ERROR_CODES_BY_KEY } from "@trpc/server/rpc";
 import superjson from "superjson";
+import type { NotificationHub } from "./notifications.js";
 
 // ============================================================================
 // Context
@@ -25,7 +26,7 @@ export interface TRPCContext {
 	githubSetupCookies?: { nonce?: string; authorizationState?: string };
 	resolveUserDisplayName: (subject: string) => Promise<string | null>;
 	db: Database;
-	dbUrl: string;
+	notifications: NotificationHub;
 	stacks: StacksService;
 	audit: AuditService;
 	updates: UpdatesService;

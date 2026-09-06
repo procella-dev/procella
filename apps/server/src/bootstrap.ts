@@ -4,6 +4,7 @@
 // in both entry points (index.ts for local dev, vercel.ts for production).
 
 import { createHash } from "node:crypto";
+import { PostgresNotificationHub } from "@procella/api/src/notifications.js";
 import { DescopeAuditService, NoopAuditService } from "@procella/audit";
 import { createAuthService, DescopeAuthService } from "@procella/auth";
 import { loadConfig } from "@procella/config";
@@ -76,6 +77,13 @@ async function bootstrapServices() {
 	logCompatibilityPolicy(config.deltaCheckpointsEnabled);
 
 	const { db, client } = await createDb({ url: config.databaseUrl, max: config.databasePoolMax });
+
+	// One listener connection per NOTIFY channel per process, shared by every
+	// dashboard subscriber, with a bounded per-process subscription ceiling.
+	const notifications = new PostgresNotificationHub({
+		connectionString: config.databaseUrl,
+		maxConcurrent: config.subscriptionMaxConcurrent,
+	});
 
 	// Auth
 	const authConfig =
@@ -168,7 +176,7 @@ async function bootstrapServices() {
 		cronSecret: config.cronSecret,
 		deltaCheckpointsEnabled: config.deltaCheckpointsEnabled,
 		db,
-		dbUrl: config.databaseUrl,
+		notifications,
 		client,
 		config,
 		stacks: stacksService,
@@ -202,6 +210,7 @@ export async function bootstrap() {
 		db: services.db,
 		storage: services.storage,
 		client: services.client,
+		notifications: services.notifications,
 		github: services.github,
 	};
 }

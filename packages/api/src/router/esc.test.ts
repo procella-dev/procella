@@ -16,7 +16,7 @@ function mockContext(overrides?: Partial<TRPCContext>): TRPCContext {
 		},
 		resolveUserDisplayName: (subject) => Promise.resolve(subject),
 		db: {} as never,
-		dbUrl: "",
+		notifications: {} as never,
 		stacks: {} as never,
 		audit: {} as never,
 		updates: {} as never,
