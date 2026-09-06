@@ -239,6 +239,9 @@
         "@procella/types": "workspace:*",
         "hono": "^4.12.14",
       },
+      "devDependencies": {
+        "drizzle-orm": "catalog:",
+      },
     },
     "packages/types": {
       "name": "@procella/types",

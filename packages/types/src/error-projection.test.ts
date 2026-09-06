@@ -25,9 +25,7 @@ describe("projectError", () => {
 
 		expect(projected.message).toBe("Database query failed");
 		expect(projected.code).toBe("23505");
-		expect(projected.stack).toBe(
-			"Error: Database query failed\n    at executeQuery (/app/db.ts:10:2)",
-		);
+		expect(projected).not.toHaveProperty("stack");
 		expect(projected).not.toHaveProperty("query");
 		expect(projected).not.toHaveProperty("params");
 		expect(projected).not.toHaveProperty("cause");

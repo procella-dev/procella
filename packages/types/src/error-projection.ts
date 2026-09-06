@@ -71,6 +71,31 @@ function sanitizeName(value: unknown): string {
 	return name.split(/\r?\n/, 1)[0]?.trim() || "Error";
 }
 
+function deriveType(value: object | undefined, name: string): string {
+	if (!value) return name;
+
+	const errorConstructor = readProperty(value, "constructor");
+	if (
+		(typeof errorConstructor === "object" || typeof errorConstructor === "function") &&
+		errorConstructor !== null
+	) {
+		const constructorName = readProperty(errorConstructor, "name");
+		if (
+			typeof constructorName === "string" &&
+			constructorName !== "Object" &&
+			/^[A-Za-z_$][A-Za-z0-9_$.-]{0,127}$/.test(constructorName)
+		) {
+			return constructorName;
+		}
+	}
+
+	const projectedType = readProperty(value, "type");
+	return typeof projectedType === "string" &&
+		/^[A-Za-z_$][A-Za-z0-9_$.-]{0,127}$/.test(projectedType)
+		? projectedType
+		: name;
+}
+
 function sanitizeStack(stack: unknown, name: string, message: string): string | undefined {
 	if (typeof stack !== "string") return undefined;
 
@@ -89,6 +114,7 @@ export function projectError(value: unknown): ErrorProjection {
 			? value
 			: undefined;
 	const name = sanitizeName(objectValue ? readProperty(objectValue, "name") : undefined);
+	const type = deriveType(objectValue, name);
 	const rawMessage = objectValue
 		? readProperty(objectValue, "message")
 		: typeof value === "string"
@@ -100,13 +126,11 @@ export function projectError(value: unknown): ErrorProjection {
 		: typeof rawMessage === "string"
 			? rawMessage
 			: stringifySafely(value, "Unknown error");
-	const stack = sanitizeStack(
-		objectValue ? readProperty(objectValue, "stack") : undefined,
-		name,
-		message,
-	);
+	const stack = chain.databaseQuery
+		? undefined
+		: sanitizeStack(objectValue ? readProperty(objectValue, "stack") : undefined, name, message);
 
-	const projected: ErrorProjection = { type: name, name, message };
+	const projected: ErrorProjection = { type, name, message };
 	if (chain.code !== undefined) projected.code = chain.code;
 	if (stack !== undefined) projected.stack = stack;
 	return projected;

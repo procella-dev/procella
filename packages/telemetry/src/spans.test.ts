@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { trace } from "@opentelemetry/api";
 import { InMemorySpanExporter, SimpleSpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
+import { DrizzleQueryError } from "drizzle-orm";
 import { getTracer, withDbSpan, withSpan } from "./spans.js";
 
 describe("@procella/telemetry spans", () => {
@@ -44,13 +45,12 @@ describe("@procella/telemetry spans", () => {
 			});
 			provider.register();
 			const secret = "m6-canary-span-secret";
-			const error = Object.assign(
-				new Error(`Failed query: select * from credentials where value = $1\nparams: ${secret}`),
-				{
-					query: "select * from credentials where value = $1",
-					params: [secret],
-					cause: new Error(`database rejected ${secret}`),
-				},
+			const queryFrameSecret = "m6-span-query-frame-secret";
+			const paramFrameSecret = "m6-span-param-frame-secret";
+			const error = new DrizzleQueryError(
+				`select * from credentials where value = $1\n    at ${queryFrameSecret}`,
+				[`${secret}\n    at ${paramFrameSecret}`],
+				new Error(`database rejected ${secret}`),
 			);
 
 			try {
@@ -65,8 +65,11 @@ describe("@procella/telemetry spans", () => {
 				const serialized = JSON.stringify({ status: span?.status, events: span?.events });
 				expect(serialized).not.toContain(secret);
 				expect(serialized).not.toContain("select * from credentials");
+				expect(serialized).not.toContain(queryFrameSecret);
+				expect(serialized).not.toContain(paramFrameSecret);
 				expect(span?.status.message).toBe("Database query failed");
 				expect(span?.events[0]?.attributes?.["exception.message"]).toBe("Database query failed");
+				expect(span?.events[0]?.attributes).not.toHaveProperty("exception.stacktrace");
 			} finally {
 				await provider.shutdown();
 				trace.disable();
