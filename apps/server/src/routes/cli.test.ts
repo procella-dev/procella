@@ -1,9 +1,9 @@
 // @procella/server — createCliApp route parity + delta-checkpoint capability tests.
 
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import { gzipSync } from "node:zlib";
 import type { AuditService } from "@procella/audit";
-import type { AuthService } from "@procella/auth";
+import { type AuthService, DevAuthService } from "@procella/auth";
 import type { Database } from "@procella/db";
 import type { EscService } from "@procella/esc";
 import type { StackInfo, StacksService } from "@procella/stacks";
@@ -95,7 +95,7 @@ function mockUpdatesService(): UpdatesService {
 			tokenExpiration: Date.now() + 300_000,
 		}),
 		completeUpdate: async () => {},
-		cancelUpdate: async () => {},
+		cancelUpdate: async () => true,
 		patchCheckpoint: async () => {},
 		patchCheckpointVerbatim: async () => {},
 		patchCheckpointDelta: async () => {},
@@ -276,6 +276,42 @@ describe("@procella/server createCliApp", () => {
 		}
 	}, 30_000);
 
+	test("update-token completion emits a terminal webhook", async () => {
+		const deps = baseDeps();
+		deps.auth = new DevAuthService({
+			token: "valid-token",
+			userLogin: "test-user",
+			orgLogin: "my-org",
+		});
+		const emitAndWait = mock(async () => {});
+		deps.webhooks = { ...deps.webhooks, emitAndWait };
+		const updateToken = `update:upd-1:stack-uuid-1:${"a".repeat(64)}`;
+
+		const res = await createCliApp(deps).request(
+			"/api/stacks/myorg/myproj/dev/update/upd-1/complete",
+			{
+				method: "POST",
+				headers: {
+					Authorization: `update-token ${updateToken}`,
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({ status: "succeeded" }),
+			},
+		);
+
+		expect(res.status).toBe(204);
+		expect(emitAndWait).toHaveBeenCalledWith({
+			tenantId: "t-1",
+			event: "update.succeeded",
+			data: {
+				org: "myorg",
+				project: "myproj",
+				stack: "dev",
+				updateId: "upd-1",
+				status: "succeeded",
+			},
+		});
+	});
 	describe("delta-checkpoint capability advertisement", () => {
 		test("createApp and createCliApp return identical capability bodies when disabled (default)", async () => {
 			const cliBody = await (await makeCliApp().request("/api/capabilities")).json();
