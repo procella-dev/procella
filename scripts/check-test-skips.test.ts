@@ -39,4 +39,13 @@ describe("CI skipped-test guard", () => {
 
 		expect(collectSkippedTests(xml)).toEqual([]);
 	});
+
+	test("does not pair self-closing passing cases with later skips", () => {
+		const xml = report(
+			'<testcase name="passes" file="e2e/cancel.test.ts" />' +
+				skippedTest("e2e/oidc.test.ts", "secret-gated"),
+		);
+
+		expect(collectSkippedTests(xml)).toEqual([{ file: "e2e/oidc.test.ts", name: "secret-gated" }]);
+	});
 });

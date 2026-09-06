@@ -31,10 +31,15 @@ function readAttribute(attributes: string, name: string): string | undefined {
 
 export function collectSkippedTests(xml: string): SkippedTest[] {
 	const skipped: SkippedTest[] = [];
-	const testCasePattern = /<testcase\b([^>]*)>([\s\S]*?)<\/testcase>/g;
+	const openingTagPattern = /<testcase\b([^>]*)>/g;
 
-	for (const match of xml.matchAll(testCasePattern)) {
-		if (!/<skipped(?:\s[^>]*)?\s*\/?>/.test(match[2])) continue;
+	for (const match of xml.matchAll(openingTagPattern)) {
+		if (match[0].endsWith("/>")) continue;
+		const bodyStart = (match.index ?? 0) + match[0].length;
+		const bodyEnd = xml.indexOf("</testcase>", bodyStart);
+		if (bodyEnd === -1) continue;
+		const body = xml.slice(bodyStart, bodyEnd);
+		if (!/<skipped(?:\s[^>]*)?\s*\/?>/.test(body)) continue;
 		skipped.push({
 			file: readAttribute(match[1], "file") ?? "(missing file)",
 			name: readAttribute(match[1], "name") ?? "(unnamed)",
