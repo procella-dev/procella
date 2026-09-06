@@ -271,7 +271,7 @@ export class PostgresUpdatesService implements UpdatesService {
 		return withDbSpan("startUpdate", { "update.id": updateId }, async () => {
 			let notifyStackId: string | undefined;
 			const result = await this.db.transaction(async (tx) => {
-				const row = await this.lockUpdateForWrite(tx, updateId, {
+				const row = await this.lockLifecycleUpdateForWrite(tx, updateId, {
 					requireRunningLease: false,
 				});
 
@@ -366,7 +366,7 @@ export class PostgresUpdatesService implements UpdatesService {
 			{ "update.id": updateId, "update.status": request.status },
 			() =>
 				this.db.transaction(async (tx) => {
-					const row = await this.lockUpdateForWrite(tx, updateId, {
+					const row = await this.lockLifecycleUpdateForWrite(tx, updateId, {
 						requireRunningLease: false,
 					});
 
@@ -415,7 +415,9 @@ export class PostgresUpdatesService implements UpdatesService {
 		let deltaBaseBlobKey: string | null = null;
 		const wasRunning = await withDbSpan("cancelUpdate", { "update.id": updateId }, () =>
 			this.db.transaction(async (tx) => {
-				const row = await this.lockUpdateForWrite(tx, updateId, { requireRunningLease: false });
+				const row = await this.lockLifecycleUpdateForWrite(tx, updateId, {
+					requireRunningLease: false,
+				});
 				deltaBaseBlobKey = await this.deleteDeltaBaseInTransaction(tx, updateId);
 
 				if (row.status === "cancelled" || row.status === "succeeded" || row.status === "failed") {
@@ -1215,6 +1217,27 @@ export class PostgresUpdatesService implements UpdatesService {
 				updatedAt: sql`now()`,
 			},
 		});
+	}
+
+	private async lockLifecycleUpdateForWrite(
+		tx: DbTransaction,
+		updateId: string,
+		options?: { requireRunningLease?: boolean },
+	): Promise<LockedUpdateRow> {
+		// Stack deletion and GC lock stack rows before update rows. Lock only the
+		// owning stack through the join, then revalidate the update under its row lock.
+		const [owner] = this.readExecuteRows<{ stackId: string }>(
+			await tx.execute(sql`
+				SELECT u.stack_id AS "stackId"
+				FROM updates u
+				JOIN stacks s ON s.id = u.stack_id
+				WHERE u.id = ${updateId}
+				FOR UPDATE OF s
+			`),
+		);
+		if (!owner) throw new UpdateNotFoundError(updateId);
+
+		return this.lockUpdateForWrite(tx, updateId, options);
 	}
 
 	private async lockUpdateForWrite(

@@ -4,7 +4,7 @@ import type { Database } from "@procella/db";
 import { githubUpdateOutbox, stacks, updates } from "@procella/db";
 import { activeUpdatesGauge, gcCycleCount, gcOrphansCleanedCount } from "@procella/telemetry";
 import { projectError } from "@procella/types";
-import { and, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
 import {
 	GC_ADVISORY_LOCK_ID,
 	GC_INTERVAL_MS,
@@ -80,6 +80,44 @@ export class GCWorker {
 
 				const now = new Date();
 				const graceThreshold = new Date(now.getTime() - GC_LEASE_GRACE_MS);
+				const staleThreshold = new Date(now.getTime() - GC_STALE_THRESHOLD_MS);
+				const candidateStacks = await tx
+					.selectDistinct({ stackId: updates.stackId })
+					.from(updates)
+					.where(
+						or(
+							and(eq(updates.status, "running"), lt(updates.leaseExpiresAt, graceThreshold)),
+							and(
+								inArray(updates.status, ["not started", "requested"]),
+								lt(updates.createdAt, staleThreshold),
+							),
+						),
+					)
+					.orderBy(updates.stackId);
+
+				if (candidateStacks.length === 0) {
+					return { orphanCount: 0, expiredRunningCount: 0 };
+				}
+
+				// Stack deletion and every update lifecycle writer acquire stack rows before
+				// update rows. Lock the candidate stacks in deterministic order, then limit
+				// both updates below to that locked set so GC follows the same ordering.
+				const lockedStacks = await tx
+					.select({ id: stacks.id })
+					.from(stacks)
+					.where(
+						inArray(
+							stacks.id,
+							candidateStacks.map(({ stackId }) => stackId),
+						),
+					)
+					.orderBy(stacks.id)
+					.for("update");
+				const lockedStackIds = lockedStacks.map(({ id }) => id);
+				if (lockedStackIds.length === 0) {
+					return { orphanCount: 0, expiredRunningCount: 0 };
+				}
+
 				const expiredLeaseUpdates = await tx
 					.update(updates)
 					.set({
@@ -89,14 +127,19 @@ export class GCWorker {
 						completedAt: sql`now()`,
 						updatedAt: sql`now()`,
 					})
-					.where(and(eq(updates.status, "running"), lt(updates.leaseExpiresAt, graceThreshold)))
+					.where(
+						and(
+							inArray(updates.stackId, lockedStackIds),
+							eq(updates.status, "running"),
+							lt(updates.leaseExpiresAt, graceThreshold),
+						),
+					)
 					.returning({
 						id: updates.id,
 						stackId: updates.stackId,
 						githubTarget: updates.githubTarget,
 					});
 
-				const staleThreshold = new Date(now.getTime() - GC_STALE_THRESHOLD_MS);
 				const staleUpdates = await tx
 					.update(updates)
 					.set({
@@ -108,6 +151,7 @@ export class GCWorker {
 					})
 					.where(
 						and(
+							inArray(updates.stackId, lockedStackIds),
 							inArray(updates.status, ["not started", "requested"]),
 							lt(updates.createdAt, staleThreshold),
 						),

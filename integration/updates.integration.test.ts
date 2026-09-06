@@ -1,6 +1,14 @@
+import { SQL } from "bun";
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { AesCryptoService } from "@procella/crypto";
-import { checkpoints, type Database, journalEntries, stacks, updates } from "@procella/db";
+import {
+	blobCleanupQueue,
+	checkpoints,
+	type Database,
+	journalEntries,
+	stacks,
+	updates,
+} from "@procella/db";
 import { PostgresStacksService, type StackInfo } from "@procella/stacks";
 import { type BlobStorage, LocalBlobStorage } from "@procella/storage";
 import {
@@ -24,7 +32,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { getTestDb, truncateTables } from "./setup.js";
+import { getTestDb, getTestDbUrl, truncateTables } from "./setup.js";
 import { resolveUpdateId } from "../packages/api/src/router/updates.js";
 
 let db: Database;
@@ -379,6 +387,109 @@ describe("PostgresUpdatesService — integration", () => {
 			// Should allow new update
 			const second = await updatesService.createUpdate(stack.id, "update");
 			expect(second.updateID).toBeTruthy();
+		});
+
+		test("forced deletion wins without deadlocking a concurrent completion", async () => {
+			const stackName = `stack-${Date.now()}`;
+			const stack = await stacksService.createStack(
+				"tenant-1",
+				"org-1",
+				"test-project",
+				stackName,
+			);
+			const created = await updatesService.createUpdate(stack.id, "update");
+			await updatesService.startUpdate(created.updateID, {});
+			const blobKey = `checkpoints/${stack.id}/${created.updateID}/1`;
+			await db.insert(checkpoints).values({
+				updateId: created.updateID,
+				stackId: stack.id,
+				version: 1,
+				blobKey,
+			});
+
+			const lockPool = new SQL({ url: getTestDbUrl(), max: 2 });
+			const holder = await lockPool.reserve();
+			const observer = await lockPool.reserve();
+			let lockHeld = false;
+			let deletion: Promise<void> | undefined;
+			let completion: Promise<void> | undefined;
+
+			try {
+				await holder.unsafe("BEGIN");
+				lockHeld = true;
+				const holderRows = (await holder.unsafe(
+					"SELECT pg_backend_pid()::int AS pid",
+				)) as unknown as Array<{ pid: number }>;
+				const holderPid = holderRows[0]?.pid;
+				expect(holderPid).toBeNumber();
+				await holder.unsafe("SELECT id FROM updates WHERE id = $1 FOR UPDATE", [
+					created.updateID,
+				]);
+
+				deletion = stacksService.deleteStack(
+					"tenant-1",
+					"org-1",
+					"test-project",
+					stackName,
+					true,
+				);
+
+				let deletePid: number | undefined;
+				const deleteDeadline = Date.now() + 5_000;
+				while (deletePid === undefined && Date.now() < deleteDeadline) {
+					const rows = (await observer.unsafe(
+						`SELECT pid::int AS pid
+						FROM pg_stat_activity
+						WHERE $1::int = ANY(pg_blocking_pids(pid))`,
+						[holderPid],
+					)) as unknown as Array<{ pid: number }>;
+					deletePid = rows[0]?.pid;
+				}
+				expect(deletePid).toBeNumber();
+
+				completion = updatesService.completeUpdate(created.updateID, { status: "succeeded" });
+
+				let completionBlockedOnDelete = false;
+				const completionDeadline = Date.now() + 5_000;
+				while (!completionBlockedOnDelete && Date.now() < completionDeadline) {
+					const rows = (await observer.unsafe(
+						`SELECT pid::int AS pid
+						FROM pg_stat_activity
+						WHERE $1::int = ANY(pg_blocking_pids(pid))`,
+						[deletePid],
+					)) as unknown as Array<{ pid: number }>;
+					completionBlockedOnDelete = rows.length === 1;
+				}
+				expect(completionBlockedOnDelete).toBe(true);
+
+				await holder.unsafe("COMMIT");
+				lockHeld = false;
+
+				const [deletionResult, completionResult] = await Promise.allSettled([
+					deletion,
+					completion,
+				]);
+				expect(deletionResult.status).toBe("fulfilled");
+				expect(completionResult.status).toBe("rejected");
+				if (completionResult.status === "rejected") {
+					expect(completionResult.reason).toBeInstanceOf(UpdateNotFoundError);
+				}
+
+				expect(await db.select().from(stacks).where(eq(stacks.id, stack.id))).toHaveLength(0);
+				expect(await db.select().from(updates).where(eq(updates.id, created.updateID))).toHaveLength(0);
+				expect(
+					await db
+						.select({ blobKey: blobCleanupQueue.blobKey })
+						.from(blobCleanupQueue)
+						.where(eq(blobCleanupQueue.blobKey, blobKey)),
+				).toEqual([{ blobKey }]);
+			} finally {
+				if (lockHeld) await holder.unsafe("ROLLBACK");
+				await Promise.allSettled([deletion, completion].filter(Boolean));
+				holder.release();
+				observer.release();
+				await lockPool.close();
+			}
 		});
 
 		test("rejects non-terminal and unknown statuses without changing active update state", async () => {
