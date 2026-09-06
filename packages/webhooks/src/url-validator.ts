@@ -50,7 +50,8 @@ function parseIpv4(address: string): number {
 }
 
 function parseIpv6(address: string): bigint {
-	let normalized = address;
+	const zoneIndex = address.indexOf("%");
+	let normalized = zoneIndex === -1 ? address : address.slice(0, zoneIndex);
 	const lastColon = normalized.lastIndexOf(":");
 	if (normalized.includes(".")) {
 		const ipv4 = parseIpv4(normalized.slice(lastColon + 1));

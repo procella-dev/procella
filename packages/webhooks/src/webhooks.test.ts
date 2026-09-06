@@ -1,6 +1,11 @@
 import { describe, expect, mock, test } from "bun:test";
 import { BadRequestError } from "@procella/types";
-import { resolveAndValidateWebhookUrl, signPayload, validateWebhookUrl } from "./index.js";
+import {
+	isPrivateIp,
+	resolveAndValidateWebhookUrl,
+	signPayload,
+	validateWebhookUrl,
+} from "./index.js";
 
 describe("@procella/webhooks", () => {
 	test("signPayload is deterministic for same payload + secret", async () => {
@@ -82,6 +87,11 @@ describe("@procella/webhooks", () => {
 
 		test("blocks IPv4-mapped IPv6 loopback", () => {
 			expect(() => validateWebhookUrl("http://[::ffff:127.0.0.1]/")).toThrow(BadRequestError);
+		});
+
+		test("classifies scoped IPv6 addresses without throwing", () => {
+			expect(isPrivateIp("fe80::1%eth0")).toBe(true);
+			expect(isPrivateIp("2606:4700:4700::1111%eth0")).toBe(false);
 		});
 
 		test.each([
