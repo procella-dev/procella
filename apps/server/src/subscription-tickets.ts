@@ -1,4 +1,9 @@
-import type { Caller, SubscriptionTicketScope, WorkloadIdentity } from "@procella/types";
+import {
+	type Caller,
+	type SubscriptionTicketScope,
+	subscriptionTicketScopeSchema,
+	type WorkloadIdentity,
+} from "@procella/types";
 import { jwtVerify, SignJWT } from "jose";
 import { z } from "zod/v4";
 
@@ -37,22 +42,10 @@ const callerClaimsSchema = z.object({
 });
 type CallerClaims = z.infer<typeof callerClaimsSchema>;
 
-const stackResourceSchema = z.object({
-	org: z.string().min(1),
-	project: z.string().min(1),
-	stack: z.string().min(1),
-});
-
-const subscriptionTicketClaimsSchema = z.discriminatedUnion("procedure", [
-	callerClaimsSchema.extend({
-		procedure: z.literal("updates.onEvents"),
-		resource: stackResourceSchema.extend({ updateId: z.string().min(1) }),
-	}),
-	callerClaimsSchema.extend({
-		procedure: z.literal("updates.onStackActivity"),
-		resource: stackResourceSchema,
-	}),
-]);
+const subscriptionTicketClaimsSchema = z.intersection(
+	callerClaimsSchema,
+	subscriptionTicketScopeSchema,
+);
 
 type SubscriptionTicketClaims = z.infer<typeof subscriptionTicketClaimsSchema>;
 

@@ -1,15 +1,11 @@
 import type { AuthService } from "@procella/auth";
-import type { Caller, SubscriptionTicketScope } from "@procella/types";
+import {
+	type Caller,
+	type SubscriptionTicketScope,
+	subscriptionTicketScopeSchema,
+} from "@procella/types";
 import type { MiddlewareHandler } from "hono";
-import { z } from "zod/v4";
 import type { Env } from "../types.js";
-
-const stackResourceSchema = z.object({
-	org: z.string().min(1),
-	project: z.string().min(1),
-	stack: z.string().min(1),
-});
-const updateResourceSchema = stackResourceSchema.extend({ updateId: z.string().min(1) });
 
 export interface TrpcAuthDeps {
 	auth: AuthService;
@@ -68,9 +64,6 @@ function subscriptionScopeFromRequest(req: Request): SubscriptionTicketScope | n
 	const trpcPathIndex = url.pathname.lastIndexOf("/trpc/");
 	const procedure =
 		trpcPathIndex === -1 ? "" : decodeURIComponent(url.pathname.slice(trpcPathIndex + 6));
-	if (procedure !== "updates.onEvents" && procedure !== "updates.onStackActivity") {
-		return null;
-	}
 
 	const input = url.searchParams.get("input");
 	if (!input) {
@@ -83,12 +76,5 @@ function subscriptionScopeFromRequest(req: Request): SubscriptionTicketScope | n
 			? (parsed as { json: unknown }).json
 			: parsed;
 
-	if (procedure === "updates.onEvents") {
-		return {
-			procedure,
-			resource: updateResourceSchema.parse(resourceInput),
-		};
-	}
-
-	return { procedure, resource: stackResourceSchema.parse(resourceInput) };
+	return subscriptionTicketScopeSchema.parse({ procedure, resource: resourceInput });
 }

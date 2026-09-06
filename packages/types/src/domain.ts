@@ -48,22 +48,6 @@ export interface WorkloadIdentity {
 	jti?: string;
 }
 
-interface SubscriptionStackResource {
-	readonly org: string;
-	readonly project: string;
-	readonly stack: string;
-}
-
-export type SubscriptionTicketScope =
-	| {
-			readonly procedure: "updates.onEvents";
-			readonly resource: SubscriptionStackResource & { readonly updateId: string };
-	  }
-	| {
-			readonly procedure: "updates.onStackActivity";
-			readonly resource: SubscriptionStackResource;
-	  };
-
 /** Check if a caller has a specific role. */
 export function hasRole(caller: Caller, role: Role): boolean {
 	return caller.roles.includes(role);
