@@ -26,7 +26,7 @@ services:
     # Or use a pre-built image:
     # image: ghcr.io/your-org/procella:latest
 
-    environment:
+    environment: &procella-environment
       # Non-sensitive config (set here or override in Coolify UI)
       PROCELLA_LISTEN_ADDR: ":9090"
       PROCELLA_AUTH_MODE: "descope"     # or dev
@@ -77,8 +77,7 @@ services:
       context: .
       dockerfile: Dockerfile
     command: ["--migrate", "/migrations"]
-    environment:
-      PROCELLA_DATABASE_URL: "${PROCELLA_DATABASE_URL}"
+    environment: *procella-environment
     depends_on:
       db:
         condition: service_healthy
@@ -108,6 +107,10 @@ volumes:
 
 <Aside type="note">
 The `POSTGRES_PASSWORD` and `PROCELLA_DATABASE_URL` should be set as environment variables in the Coolify UI under your service's **Environment Variables** tab. Coolify substitutes `${VAR}` placeholders at deploy time.
+</Aside>
+
+<Aside type="caution" title="Upgrading an existing PostgreSQL 18 service">
+Earlier versions mounted `procella_pgdata` at `/var/lib/postgresql/data`, while the PostgreSQL 18 image stores its cluster under `/var/lib/postgresql/18/docker`. Before the first redeploy with this file, use the terminal on the currently running `db` service to create a `pg_dumpall` backup. Restore that backup into the database after Coolify recreates the service with the corrected `/var/lib/postgresql` mount. Keep the old container and its anonymous volume until the restored data is verified.
 </Aside>
 
 ---

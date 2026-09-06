@@ -67,13 +67,17 @@ The `caddy` service mounts the repo-root `Caddyfile` read-only. It routes by pat
     handle /healthz {
         reverse_proxy procella-cluster:9090
     }
+    @server_root_routes path /github/setup /cron/gc
+    handle @server_root_routes {
+        reverse_proxy procella-cluster:9090
+    }
     handle {
         reverse_proxy procella-ui:80
     }
 }
 ```
 
-`/api/*` (Pulumi CLI protocol), `/trpc/*` (dashboard API), and `/healthz` route to the Procella server replicas. All other paths route to the UI container, which serves the React SPA with client-side routing fallback.
+`/api/*` (Pulumi CLI protocol), `/trpc/*` (dashboard API), `/healthz`, `/github/setup` (GitHub App callback), and `/cron/gc` route to the Procella server replicas. All other paths route to the UI container, which serves the React SPA with client-side routing fallback.
 
 ## Healthcheck
 
@@ -99,6 +103,23 @@ healthcheck:
 ## Database Migrations
 
 Migrations run automatically via a one-shot `migrate` container that executes `drizzle-kit migrate` before the server starts. Both the dev and cluster profiles depend on the migrate container completing successfully.
+
+## Upgrading the PostgreSQL 18 volume
+
+Earlier compose revisions mounted the named volume at `/var/lib/postgresql/data`, but the PostgreSQL 18 image stores its cluster under `/var/lib/postgresql/18/docker`. Before the first update to this revision, export the running database:
+
+```bash
+docker compose exec -T postgres pg_dumpall -U procella > procella-postgres-backup.sql
+```
+
+After updating and starting PostgreSQL with the corrected mount, restore that backup:
+
+```bash
+docker compose up -d postgres
+docker compose exec -T postgres psql -U procella < procella-postgres-backup.sql
+```
+
+Do not remove the old container or anonymous volume until the restored database has been verified.
 
 ## Bun Scripts
 

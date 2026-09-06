@@ -267,10 +267,10 @@ const envMapping = {
  */
 export const BOOTSTRAP_REQUIRED_ENV_VARS = [
 	envMapping.databaseUrl,
+	envMapping.authMode,
 	envMapping.encryptionKey,
 	envMapping.ticketSigningKey,
 ] as const;
-
 function envToConfig(): Record<string, unknown> {
 	const result: Record<string, unknown> = {};
 	for (const [key, envVar] of Object.entries(envMapping)) {

@@ -37,6 +37,12 @@
 		reverse_proxy procella-cluster:9090
 	}
 
+	# Server routes outside the API prefixes.
+	@server_root_routes path /github/setup /cron/gc
+	handle @server_root_routes {
+		reverse_proxy procella-cluster:9090
+	}
+
 	# Everything else is the React SPA, which handles client-side routing.
 	handle {
 		reverse_proxy procella-ui:80

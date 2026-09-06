@@ -16,7 +16,7 @@ services:
     # Or use a pre-built image:
     # image: ghcr.io/your-org/procella:latest
 
-    environment:
+    environment: &procella-environment
       PROCELLA_LISTEN_ADDR: ":9090"
       PROCELLA_AUTH_MODE: "dev"
       PROCELLA_BLOB_BACKEND: "s3"
@@ -64,8 +64,7 @@ services:
       context: .
       dockerfile: Dockerfile
     command: ["--migrate", "/migrations"]
-    environment:
-      PROCELLA_DATABASE_URL: "${PROCELLA_DATABASE_URL}"
+    environment: *procella-environment
     depends_on:
       db:
         condition: service_healthy
