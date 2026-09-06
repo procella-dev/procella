@@ -2,7 +2,8 @@ import { afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { escEnvironments, type Database } from "@procella/db";
 import { PostgresEscService, UnimplementedEvaluatorClient } from "@procella/esc";
 import { eq, sql } from "drizzle-orm";
-import { getTestDb, truncateTables } from "./setup.js";
+import { runBehindRowLock } from "../packages/esc/src/concurrency.test-helper.js";
+import { getTestDb, getTestDbUrl, truncateTables } from "./setup.js";
 
 const TENANT_ID = "integ-esc-concurrency";
 const USER_ID = "test-user";
@@ -23,24 +24,6 @@ afterEach(async () => {
 	await truncateTables();
 });
 
-async function waitForBlockedTransactions(
-	blockerPid: number,
-	expectedCount: number,
-): Promise<void> {
-	while (true) {
-		const [row] = await db.select({ count: sql<number>`count(*)::int` }).from(sql`(
-				WITH RECURSIVE blocked(pid) AS (
-					SELECT pid FROM pg_stat_activity WHERE ${blockerPid} = ANY(pg_blocking_pids(pid))
-					UNION
-					SELECT activity.pid
-					FROM pg_stat_activity activity
-					INNER JOIN blocked ON blocked.pid = ANY(pg_blocking_pids(activity.pid))
-				)
-				SELECT pid FROM blocked
-			) AS blocked_transactions`);
-		if (Number(row?.count) >= expectedCount) return;
-	}
-}
 
 describe("ESC transactional writes", () => {
 	test("serializes contending writers and applies revision preconditions only when supplied", async () => {
@@ -49,14 +32,18 @@ describe("ESC transactional writes", () => {
 			{ projectName: "demo", name: "env", yamlBody: "values: {n: 0}" },
 			USER_ID,
 		);
-		let writes: Promise<unknown>[] = [];
-		await db.transaction(async (tx) => {
-			const [locked] = await tx
-				.select({ pid: sql<number>`pg_backend_pid()` })
-				.from(escEnvironments)
-				.where(eq(escEnvironments.id, env.id))
-				.for("update", { of: escEnvironments });
-			writes = [
+		const results = await runBehindRowLock(
+			db,
+			getTestDbUrl(),
+			async (tx) => {
+				const [locked] = await tx
+					.select({ pid: sql<number>`pg_backend_pid()` })
+					.from(escEnvironments)
+					.where(eq(escEnvironments.id, env.id))
+					.for("update", { of: escEnvironments });
+				return locked.pid;
+			},
+			() => [
 				service.updateEnvironment(
 					TENANT_ID,
 					"demo",
@@ -71,19 +58,8 @@ describe("ESC transactional writes", () => {
 					{ yamlBody: "values: {n: 2}", expectedRevisionNumber: 1 },
 					USER_ID,
 				),
-			];
-			const earlySettlement = Promise.race(
-				writes.map((write, index) =>
-					write.then(
-						() => Promise.reject(new Error(`Write ${index + 1} completed before blocking`)),
-						(error) => Promise.reject(error),
-					),
-				),
-			);
-			await Promise.race([waitForBlockedTransactions(locked.pid, writes.length), earlySettlement]);
-		});
-
-		const results = await Promise.allSettled(writes);
+			],
+		);
 		expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
 		const [rejected] = results.filter((result) => result.status === "rejected");
 		expect(rejected).toMatchObject({ reason: { code: "PRECONDITION_FAILED", statusCode: 412 } });
