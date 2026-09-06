@@ -138,6 +138,30 @@ describe("stateHandlers", () => {
 		expect(updates.importStack).toHaveBeenCalledWith("stack-uuid-1", deployment);
 	});
 
+	test("importStack rejects malformed deployments with 400", async () => {
+		for (const body of [
+			{ version: 3 },
+			{ version: 3, deployment: { resources: "not-an-array" } },
+			{ version: 3, deployment: { resources: {} } },
+			{ version: 3, deployment: { resources: [null] } },
+		]) {
+			const updates = mockUpdatesService();
+			const app = new Hono<Env>();
+			app.use("*", injectCaller(validCaller));
+			const h = stateHandlers(updates, mockStacksService());
+			app.post("/stacks/:org/:project/:stack/import", h.importStack);
+
+			const res = await app.request("/stacks/myorg/myproj/dev/import", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(body),
+			});
+
+			expect(res.status).toBe(400);
+			expect(updates.importStack).not.toHaveBeenCalled();
+		}
+	});
+
 	test("exportStack looks up stack by caller tenant", async () => {
 		const stacks = mockStacksService();
 		const updates = mockUpdatesService();

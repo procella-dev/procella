@@ -205,6 +205,41 @@ describe("Pulumi request schemas", () => {
 		).toBe(true);
 	});
 
+	test("requires the import deployment payload", () => {
+		expect(UntypedDeploymentSchema.safeParse({ version: 3 }).success).toBe(false);
+	});
+
+	test("rejects structurally invalid import deployments", () => {
+		for (const resources of ["not-an-array", {}, [null], ["not-a-resource"]]) {
+			expect(
+				UntypedDeploymentSchema.safeParse({
+					version: 3,
+					deployment: { resources },
+				}).success,
+			).toBe(false);
+		}
+	});
+
+	test("accepts structurally valid legacy-compatible imports", () => {
+		for (const resources of [null, [{}]]) {
+			expect(
+				UntypedDeploymentSchema.safeParse({
+					version: 3,
+					deployment: { resources },
+				}).success,
+			).toBe(true);
+		}
+	});
+
+	test("rejects forbidden keys before passthrough parsing", () => {
+		for (const body of [
+			'{"version":3,"deployment":{"__proto__":{"polluted":true}}}',
+			'{"version":3,"deployment":{"resources":[{"__proto__":{"polluted":true}}]}}',
+		]) {
+			expect(UntypedDeploymentSchema.safeParse(JSON.parse(body)).success).toBe(false);
+		}
+	});
+
 	test("accepts deployment schema v1 through v3", () => {
 		for (const version of [1, 2, 3]) {
 			expect(
@@ -217,7 +252,9 @@ describe("Pulumi request schemas", () => {
 					untypedDeployment: { version, deployment: {} },
 				}).success,
 			).toBe(true);
-			expect(UntypedDeploymentSchema.safeParse({ version, deployment: {} }).success).toBe(true);
+			expect(
+				UntypedDeploymentSchema.safeParse({ version, deployment: { resources: [] } }).success,
+			).toBe(true);
 		}
 	});
 
