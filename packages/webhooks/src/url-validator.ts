@@ -6,16 +6,29 @@ import { BadRequestError } from "@procella/types";
 // SSRF Protection — shared URL validator
 // ============================================================================
 
-const PRIVATE_IPV4_PATTERNS = [
-	/^127\./,
-	/^10\./,
-	/^172\.(1[6-9]|2\d|3[01])\./,
-	/^192\.168\./,
-	/^169\.254\./,
-	/^0\./,
-];
+const NON_GLOBAL_IPV4_RANGES = [
+	[0x00000000, 8], // Current network
+	[0x0a000000, 8], // Private-use
+	[0x64400000, 10], // Shared address space
+	[0x7f000000, 8], // Loopback
+	[0xa9fe0000, 16], // Link-local
+	[0xac100000, 12], // Private-use
+	[0xc0000000, 24], // IETF protocol assignments
+	[0xc0000200, 24], // TEST-NET-1
+	[0xc0586300, 24], // Deprecated 6to4 relay anycast
+	[0xc0a80000, 16], // Private-use
+	[0xc6120000, 15], // Benchmarking
+	[0xc6336400, 24], // TEST-NET-2
+	[0xcb007100, 24], // TEST-NET-3
+	[0xe0000000, 3], // Multicast and reserved space
+] as const;
 
-const PRIVATE_IPV6_PATTERNS = [/^::1$/, /^fc00:/i, /^fe80:/i, /^fd[0-9a-f]{2}:/i];
+const NON_GLOBAL_IPV6_RANGES = [
+	[0x20010000000000000000000000000000n, 23], // IETF protocol assignments
+	[0x20010db8000000000000000000000000n, 32], // Documentation
+	[0x20020000000000000000000000000000n, 16], // 6to4
+	[0x3fff0000000000000000000000000000n, 20], // Documentation
+] as const;
 
 const BLOCKED_HOSTNAMES = new Set([
 	"localhost",
@@ -32,29 +45,65 @@ function stripBrackets(hostname: string): string {
 	return hostname;
 }
 
-function ipv4MappedToIpv4(ipv6: string): string | null {
-	const match = ipv6.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
-	if (!match) return null;
-	const hi = Number.parseInt(match[1], 16);
-	const lo = Number.parseInt(match[2], 16);
-	return `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`;
+function parseIpv4(address: string): number {
+	return address.split(".").reduce((value, octet) => value * 256 + Number(octet), 0);
+}
+
+function parseIpv6(address: string): bigint {
+	const zoneIndex = address.indexOf("%");
+	let normalized = zoneIndex === -1 ? address : address.slice(0, zoneIndex);
+	const lastColon = normalized.lastIndexOf(":");
+	if (normalized.includes(".")) {
+		const ipv4 = parseIpv4(normalized.slice(lastColon + 1));
+		normalized = `${normalized.slice(0, lastColon)}:${(ipv4 >>> 16).toString(16)}:${(
+			ipv4 & 0xffff
+		).toString(16)}`;
+	}
+
+	const halves = normalized.split("::");
+	const left = halves[0] ? halves[0].split(":") : [];
+	const right = halves[1] ? halves[1].split(":") : [];
+	const groups =
+		halves.length === 1
+			? left
+			: [...left, ...Array(8 - left.length - right.length).fill("0"), ...right];
+
+	return groups.reduce((value, group) => (value << 16n) | BigInt(`0x${group}`), 0n);
+}
+
+function isInIpv4Range(address: number, start: number, prefixLength: number): boolean {
+	return address >= start && address < start + 2 ** (32 - prefixLength);
+}
+
+function isInIpv6Range(address: bigint, start: bigint, prefixLength: number): boolean {
+	return address >= start && address < start + (1n << BigInt(128 - prefixLength));
+}
+
+function isGlobalUnicastIp(raw: string): boolean {
+	const bare = stripBrackets(raw);
+	const family = isIP(bare);
+	if (family === 4) {
+		const address = parseIpv4(bare);
+		return !NON_GLOBAL_IPV4_RANGES.some(([start, prefix]) => isInIpv4Range(address, start, prefix));
+	}
+
+	if (family === 6) {
+		const address = parseIpv6(bare);
+		const isAllocatedGlobalUnicast =
+			address >= 0x20000000000000000000000000000000n &&
+			address < 0x40000000000000000000000000000000n;
+		return (
+			isAllocatedGlobalUnicast &&
+			!NON_GLOBAL_IPV6_RANGES.some(([start, prefix]) => isInIpv6Range(address, start, prefix))
+		);
+	}
+
+	return false;
 }
 
 export function isPrivateIp(raw: string): boolean {
 	const bare = stripBrackets(raw);
-
-	if (isIP(bare) === 4) {
-		return PRIVATE_IPV4_PATTERNS.some((p) => p.test(bare));
-	}
-
-	if (isIP(bare) === 6) {
-		if (PRIVATE_IPV6_PATTERNS.some((p) => p.test(bare))) return true;
-		const mapped = ipv4MappedToIpv4(bare);
-		if (mapped) return PRIVATE_IPV4_PATTERNS.some((p) => p.test(mapped));
-		return false;
-	}
-
-	return false;
+	return isIP(bare) !== 0 && !isGlobalUnicastIp(bare);
 }
 
 export function isBlockedHostname(hostname: string): boolean {
@@ -109,7 +158,7 @@ export async function resolveAndValidateUrl(url: string, label: string): Promise
 	}
 
 	for (const addr of addresses) {
-		if (isPrivateIp(addr)) {
+		if (!isGlobalUnicastIp(addr)) {
 			throw new BadRequestError(
 				`${label} URL hostname resolves to a private or reserved IP address`,
 			);
