@@ -55,7 +55,7 @@ async function waitForBlockedTransactions(
 	blockerPid: number,
 	expectedCount: number,
 ): Promise<void> {
-	for (let attempt = 0; attempt < 1_000; attempt++) {
+	while (true) {
 		const [row] = await db.select({ count: sql<number>`count(*)::int` }).from(sql`(
 				WITH RECURSIVE blocked(pid) AS (
 					SELECT pid FROM pg_stat_activity WHERE ${blockerPid} = ANY(pg_blocking_pids(pid))
@@ -68,7 +68,6 @@ async function waitForBlockedTransactions(
 			) AS blocked_transactions`);
 		if (Number(row?.count) >= expectedCount) return;
 	}
-	throw new Error(`Timed out waiting for ${expectedCount} blocked transactions`);
 }
 
 async function runBehindRowLock(
@@ -85,16 +84,28 @@ async function runBehindRowLock(
 	});
 	void blocker.catch(acquired.reject);
 
-	const blockerPid = await acquired.promise;
-	const operations = startOperations();
+	const operations: Promise<unknown>[] = [];
 	let waitFailure: unknown;
 	try {
-		await waitForBlockedTransactions(monitorDb, blockerPid, operations.length);
+		const blockerPid = await acquired.promise;
+		operations.push(...startOperations());
+		const earlySettlement = Promise.race(
+			operations.map((operation, index) =>
+				operation.then(
+					() => Promise.reject(new Error(`Operation ${index + 1} completed before blocking`)),
+					(error) => Promise.reject(error),
+				),
+			),
+		);
+		await Promise.race([
+			waitForBlockedTransactions(monitorDb, blockerPid, operations.length),
+			earlySettlement,
+		]);
 	} catch (error) {
 		waitFailure = error;
 	} finally {
 		release.resolve();
-		await blocker;
+		await blocker.catch(() => {});
 		await lockClient.close();
 	}
 	const results = await Promise.allSettled(operations);

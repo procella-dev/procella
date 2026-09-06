@@ -1203,7 +1203,7 @@ export class PostgresEscService implements EscService {
 						.where(and(eq(escDrafts.id, draftId), eq(escDrafts.status, "open")))
 						.returning();
 					if (!updated) {
-						throw new BadRequestError("Draft is no longer open");
+						throw new ConflictError("Draft changed while updating");
 					}
 					return toDraftInfo(updated);
 				}),
@@ -1309,7 +1309,7 @@ export class PostgresEscService implements EscService {
 						.returning();
 
 					if (!updated) {
-						throw new BadRequestError("Draft is no longer open");
+						throw new ConflictError("Draft changed while applying");
 					}
 
 					return toDraftInfo(updated);
@@ -1351,7 +1351,7 @@ export class PostgresEscService implements EscService {
 						.where(and(eq(escDrafts.id, draftId), eq(escDrafts.status, "open")))
 						.returning({ id: escDrafts.id });
 					if (!updated) {
-						throw new BadRequestError("Draft is no longer open");
+						throw new ConflictError("Draft changed while discarding");
 					}
 				}),
 		);
