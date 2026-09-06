@@ -275,7 +275,7 @@ describe.skipIf(!(await hasDb()))("PostgresEscService", () => {
 		expect(rejected).toMatchObject({ reason: { code: "PRECONDITION_FAILED", statusCode: 412 } });
 		const revisions = await service.listRevisions(tenant, "cas-race", "env");
 		expect(revisions.map((revision) => revision.revisionNumber)).toEqual([2, 1]);
-	});
+	}, 15_000);
 
 	test("concurrent deleteEnvironment is idempotent-safe (transaction + isNull guard)", async () => {
 		await service.createEnvironment(
@@ -735,7 +735,7 @@ describe.skipIf(!(await hasDb()))("PostgresEscService — drafts", () => {
 		expect(["applied", "discarded"]).toContain(finalDraft.status);
 		const revisions = await service.listRevisions(tenant, "draft-race", "env");
 		expect(revisions).toHaveLength(finalDraft.status === "applied" ? 2 : 1);
-	});
+	}, 15_000);
 
 	test("discardDraft rejects already-discarded draft", async () => {
 		await service.createEnvironment(

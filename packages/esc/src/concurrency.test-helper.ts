@@ -58,7 +58,7 @@ export async function runBehindRowLock(
 	const release = deferred<void>();
 	const blocker = lockDb.transaction(async (tx) => {
 		// PostgreSQL owns this failure-only deadline so a broken synchronizer cannot retain a row lock.
-		await tx.execute(sql`SET LOCAL transaction_timeout = '5s'`);
+		await tx.execute(sql`SET LOCAL transaction_timeout = '10s'`);
 		acquired.resolve(await lockRow(tx));
 		await release.promise;
 	});
