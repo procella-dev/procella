@@ -296,11 +296,11 @@ export function createApp(deps: {
 	const api = new Hono<Env>();
 	api.use("*", withApiAuth);
 	api.use("*", withAudit);
-	const roleMiddlewareByMethod = Object.fromEntries(
+	const roleMiddlewareByMethod = new Map<string, MiddlewareHandler<Env>>(
 		Object.entries(METHOD_ROLE_MAP).map(([method, role]) => [method, requireRoleMiddleware(role)]),
 	);
 	const withMethodRole: MiddlewareHandler<Env> = (c, next) =>
-		roleMiddlewareByMethod[c.req.method]?.(c, next) ?? next();
+		roleMiddlewareByMethod.get(c.req.method)?.(c, next) ?? next();
 	api.use("/stacks/*", withMethodRole);
 	api.use("/esc/*", withMethodRole);
 

@@ -1,4 +1,4 @@
-// @procella/api — finding C1 regression: mutating stack procedures require member role.
+// @procella/api — finding C1 regression: mutating stack procedures enforce caller roles.
 
 import { describe, expect, mock, test } from "bun:test";
 import type { StackInfo, StacksService } from "@procella/stacks";
@@ -18,6 +18,7 @@ interface RbacFixture {
 
 interface MutationCase {
 	name: string;
+	requiredRole: "member" | "admin";
 	run: (ctx: TRPCContext) => Promise<unknown>;
 }
 
@@ -77,6 +78,7 @@ function fixtureFor(role: Role): RbacFixture {
 const mutationCases: MutationCase[] = [
 	{
 		name: "updateTags",
+		requiredRole: "member",
 		run: (ctx) =>
 			stacksRouter
 				.createCaller(ctx)
@@ -84,6 +86,7 @@ const mutationCases: MutationCase[] = [
 	},
 	{
 		name: "rename",
+		requiredRole: "member",
 		run: (ctx) =>
 			stacksRouter
 				.createCaller(ctx)
@@ -91,11 +94,13 @@ const mutationCases: MutationCase[] = [
 	},
 	{
 		name: "delete",
+		requiredRole: "admin",
 		run: (ctx) =>
 			stacksRouter.createCaller(ctx).delete({ org: "org", project: "project", stack: "stack" }),
 	},
 	{
 		name: "import",
+		requiredRole: "member",
 		run: (ctx) =>
 			stacksRouter.createCaller(ctx).import({
 				org: "org",
@@ -105,6 +110,7 @@ const mutationCases: MutationCase[] = [
 			}),
 	},
 	{
+		requiredRole: "member",
 		name: "repair",
 		run: (ctx) =>
 			stacksRouter.createCaller(ctx).repair({ org: "org", project: "project", stack: "stack" }),
@@ -118,12 +124,13 @@ describe("stacksRouter mutation RBAC", () => {
 				const { ctx, serviceMocks } = fixtureFor(role);
 				const result = mutation.run(ctx);
 
-				if (role === "viewer") {
+				const allowed =
+					role === "admin" || (role === "member" && mutation.requiredRole === "member");
+				if (!allowed) {
 					await expect(result).rejects.toMatchObject({ code: "FORBIDDEN" });
 					expect(serviceMocks.reduce((total, item) => total + item.mock.calls.length, 0)).toBe(0);
 					return;
 				}
-
 				await result;
 				expect(
 					serviceMocks.reduce((total, item) => total + item.mock.calls.length, 0),

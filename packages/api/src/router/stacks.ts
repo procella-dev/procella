@@ -5,7 +5,7 @@ import type { DeploymentV3, ResourceV3, UntypedDeployment } from "@procella/type
 import { type RepairMutation, repairCheckpoint } from "@procella/updates";
 import { and, desc, eq, max, sql } from "drizzle-orm";
 import { z } from "zod/v4";
-import { memberProcedure, protectedProcedure, router } from "../trpc.js";
+import { adminProcedure, memberProcedure, protectedProcedure, router } from "../trpc.js";
 
 // ============================================================================
 // Input Schema
@@ -266,7 +266,7 @@ export const stacksRouter = router({
 			);
 		}),
 
-	delete: memberProcedure.input(stackInput).mutation(async ({ ctx, input }) => {
+	delete: adminProcedure.input(stackInput).mutation(async ({ ctx, input }) => {
 		await ctx.stacks.deleteStack(ctx.caller.tenantId, input.org, input.project, input.stack);
 	}),
 

@@ -518,3 +518,18 @@ describe("REST mutation RBAC", () => {
 		}
 	}
 });
+
+describe("REST method-role dispatch", () => {
+	for (const appFactory of appFactories) {
+		test(`${appFactory.name}: prototype-named methods fall through safely`, async () => {
+			const { deps, tracker } = dependenciesFor("viewer");
+			const response = await appFactory.create(deps).request(`${base}/unknown`, {
+				method: "constructor",
+				headers: { Authorization: "token viewer-token" },
+			});
+
+			expect(response.status).toBe(404);
+			expect(tracker.calls).toEqual([]);
+		});
+	}
+});
