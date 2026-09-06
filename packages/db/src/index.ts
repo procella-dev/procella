@@ -8,12 +8,12 @@
 // Neon connection strings use *.neon.tech hosts; everything else (localhost,
 // 127.0.0.1, Docker hostnames, RDS, Supabase) uses Bun's native driver.
 
+import migrationJournal from "../drizzle/meta/_journal.json";
 import {
 	getDirectNeonMigrationUrl,
 	MIGRATIONS_ADVISORY_LOCK_ID,
 	releaseMigrationLock,
 } from "./migration-lock.js";
-import migrationJournal from "../drizzle/meta/_journal.json";
 import { schema } from "./schema.js";
 
 // Re-export schema for consumers

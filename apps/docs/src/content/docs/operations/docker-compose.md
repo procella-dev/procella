@@ -67,8 +67,7 @@ The `caddy` service mounts the repo-root `Caddyfile` read-only. It routes by pat
     handle /healthz {
         reverse_proxy procella-cluster:9090
     }
-    @server_root_routes path /github/setup
-    handle @server_root_routes {
+    handle /github/setup {
         reverse_proxy procella-cluster:9090
     }
     handle {

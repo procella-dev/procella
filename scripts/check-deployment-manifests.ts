@@ -4,27 +4,47 @@
 
 import { BOOTSTRAP_REQUIRED_ENV_VARS } from "@procella/config";
 
+interface ComposeMigrationContract {
+	service: string;
+	expectedInvocation: readonly string[];
+	defaultEntrypoint?: readonly string[];
+}
+
 export interface DeploymentManifest {
 	path: string;
 	migrationPatterns?: readonly RegExp[];
+	composeMigration?: ComposeMigrationContract;
+	serverServices?: readonly string[];
 	provisioningCommand?: string;
 	bootstrapServices?: readonly string[];
 	render?: boolean;
 	sampleSecrets?: boolean;
 }
 
-const MIGRATE_COMMAND = /(?:--migrate|drizzle-kit["',\s]+migrate)/;
-const COMPLETED_MIGRATION = /migrate:\s*\n\s*condition:\s*service_completed_successfully/;
-
 export const DEPLOYMENT_MANIFESTS: readonly DeploymentManifest[] = [
 	{
 		path: "docker-compose.yml",
-		migrationPatterns: [MIGRATE_COMMAND, COMPLETED_MIGRATION],
+		composeMigration: {
+			service: "migrate",
+			expectedInvocation: [
+				"bun",
+				"drizzle-kit",
+				"migrate",
+				"--config",
+				"packages/db/drizzle.config.ts",
+			],
+		},
+		serverServices: ["procella", "procella-cluster"],
 		bootstrapServices: ["procella", "procella-cluster"],
 	},
 	{
 		path: "docker-compose.coolify.yml",
-		migrationPatterns: [MIGRATE_COMMAND, COMPLETED_MIGRATION],
+		composeMigration: {
+			service: "migrate",
+			defaultEntrypoint: ["/procella"],
+			expectedInvocation: ["/procella", "--migrate", "/migrations"],
+		},
+		serverServices: ["procella"],
 		bootstrapServices: ["procella", "migrate"],
 	},
 	{
@@ -80,6 +100,56 @@ function environmentNames(environment: unknown): Set<string> {
 	return new Set();
 }
 
+function commandParts(command: unknown): string[] {
+	return Array.isArray(command) && command.every((part) => typeof part === "string") ? command : [];
+}
+
+function checkComposeMigration(
+	manifest: DeploymentManifest,
+	text: string,
+	problems: string[],
+): void {
+	const contract = manifest.composeMigration;
+	if (!contract) return;
+	const document = Bun.YAML.parse(text) as {
+		services?: Record<
+			string,
+			{
+				command?: unknown;
+				entrypoint?: unknown;
+				depends_on?: Record<string, { condition?: string }> | string[];
+			}
+		>;
+	};
+	const migration = document.services?.[contract.service];
+	if (!migration) {
+		problems.push(`${manifest.path}: missing migration service ${contract.service}`);
+		return;
+	}
+
+	const configuredEntrypoint = commandParts(migration.entrypoint);
+	const entrypoint =
+		configuredEntrypoint.length > 0
+			? configuredEntrypoint
+			: [...(contract.defaultEntrypoint ?? [])];
+	const invocation = [...entrypoint, ...commandParts(migration.command)];
+	if (invocation.join("\0") !== contract.expectedInvocation.join("\0")) {
+		problems.push(
+			`${manifest.path} -> ${contract.service}: expected migration invocation ${contract.expectedInvocation.join(" ")}`,
+		);
+	}
+
+	for (const serverName of manifest.serverServices ?? []) {
+		const dependsOn = document.services?.[serverName]?.depends_on;
+		const dependencies = Array.isArray(dependsOn) ? {} : (dependsOn ?? {});
+		if (dependencies[contract.service]?.condition !== "service_completed_successfully") {
+			problems.push(
+				`${manifest.path} -> ${serverName}: must depend on ${contract.service} completing successfully`,
+			);
+		}
+	}
+}
+
 function checkBootstrapServices(
 	manifest: DeploymentManifest,
 	text: string,
@@ -123,6 +193,8 @@ export function checkManifest(manifest: DeploymentManifest, text: string): strin
 		}
 	}
 
+	checkComposeMigration(manifest, text, problems);
+
 	checkBootstrapServices(manifest, text, problems);
 
 	if (manifest.render) {
@@ -151,9 +223,14 @@ export function checkManifest(manifest: DeploymentManifest, text: string): strin
 
 export function checkProxyConfig(text: string): string[] {
 	const active = activeText(text);
-	return ["/api/*", "/trpc/*", "/healthz", "/github/setup"]
-		.filter((route) => !active.includes(route))
-		.map((route) => `Caddyfile: missing server route ${route}`);
+	const backend = /\breverse_proxy\s+procella-cluster:9090\b/;
+	return ["/api/*", "/trpc/*", "/healthz", "/github/setup"].flatMap((route) => {
+		const escapedRoute = route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+		const body = new RegExp(`\\bhandle\\s+${escapedRoute}\\s*\\{([^{}]*)\\}`, "m").exec(
+			active,
+		)?.[1];
+		return body && backend.test(body) ? [] : [`Caddyfile: invalid server route ${route}`];
+	});
 }
 
 export async function checkDeploymentManifests(): Promise<string[]> {

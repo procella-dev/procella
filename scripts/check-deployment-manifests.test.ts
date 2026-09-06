@@ -16,6 +16,23 @@ const RENDER: DeploymentManifest = {
 	migrationPatterns: [/preDeployCommand:.*--migrate/],
 	render: true,
 };
+const COMPOSE_WITH_MIGRATION: DeploymentManifest = {
+	path: "compose.yml",
+	composeMigration: {
+		service: "migrate",
+		defaultEntrypoint: ["/procella"],
+		expectedInvocation: ["/procella", "--migrate", "/migrations"],
+	},
+	serverServices: ["procella"],
+};
+
+const VALID_CADDY = `
+handle /api/* { reverse_proxy procella-cluster:9090 }
+handle /trpc/* { reverse_proxy procella-cluster:9090 }
+handle /healthz { reverse_proxy procella-cluster:9090 }
+handle /github/setup { reverse_proxy procella-cluster:9090 }
+`;
+
 const VALID_ENV = `
 PROCELLA_DATABASE_URL: postgres://db
 PROCELLA_AUTH_MODE: dev
@@ -87,6 +104,35 @@ services:
 		]);
 	});
 
+	test("a no-op command cannot masquerade as the migration service", () => {
+		const text = `${VALID_ENV}
+services:
+  procella:
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+  migrate:
+    entrypoint: ["echo", "--migrate"]
+`;
+		expect(checkManifest(COMPOSE_WITH_MIGRATION, text)).toContain(
+			"compose.yml -> migrate: expected migration invocation /procella --migrate /migrations",
+		);
+	});
+
+	test("an unrelated migration dependency cannot satisfy the server gate", () => {
+		const text = `${VALID_ENV}
+services:
+  procella: {}
+  unrelated:
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+  migrate:
+    command: ["--migrate", "/migrations"]
+`;
+		expect(checkManifest(COMPOSE_WITH_MIGRATION, text)).toContain(
+			"compose.yml -> procella: must depend on migrate completing successfully",
+		);
+	});
+
 	test("Render rejects grouped sync:false secrets", () => {
 		const text = `${VALID_ENV}
 preDeployCommand: "/procella --migrate"
@@ -112,10 +158,18 @@ envVarGroups:
 		);
 	});
 
-	test("the cluster proxy retains every public server route", () => {
-		expect(checkProxyConfig("/api/* /trpc/* /healthz /github/setup")).toEqual([]);
-		expect(checkProxyConfig("/api/* /trpc/* /healthz\n# /github/setup")).toEqual([
-			"Caddyfile: missing server route /github/setup",
-		]);
+	test("the cluster proxy binds each public route to the server backend", () => {
+		expect(checkProxyConfig(VALID_CADDY)).toEqual([]);
+		expect(
+			checkProxyConfig(VALID_CADDY.replace("reverse_proxy procella-cluster:9090", "respond 404")),
+		).toContain("Caddyfile: invalid server route /api/*");
+		expect(
+			checkProxyConfig(
+				VALID_CADDY.replace(
+					"handle /github/setup { reverse_proxy procella-cluster:9090 }",
+					"# handle /github/setup { reverse_proxy procella-cluster:9090 }",
+				),
+			),
+		).toContain("Caddyfile: invalid server route /github/setup");
 	});
 });

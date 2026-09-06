@@ -38,8 +38,7 @@
 	}
 
 	# GitHub App callback outside the API prefixes.
-	@server_root_routes path /github/setup
-	handle @server_root_routes {
+	handle /github/setup {
 		reverse_proxy procella-cluster:9090
 	}
 
