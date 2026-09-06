@@ -100,8 +100,10 @@ function environmentNames(environment: unknown): Set<string> {
 	return new Set();
 }
 
-function commandParts(command: unknown): string[] {
-	return Array.isArray(command) && command.every((part) => typeof part === "string") ? command : [];
+function commandParts(command: unknown): string[] | undefined {
+	return Array.isArray(command) && command.every((part) => typeof part === "string")
+		? command
+		: undefined;
 }
 
 function checkComposeMigration(
@@ -127,15 +129,23 @@ function checkComposeMigration(
 		return;
 	}
 
-	const entrypoint =
-		migration.entrypoint === undefined || migration.entrypoint === null
-			? [...(contract.defaultEntrypoint ?? [])]
-			: commandParts(migration.entrypoint);
-	const invocation = [...entrypoint, ...commandParts(migration.command)];
-	if (invocation.join("\0") !== contract.expectedInvocation.join("\0")) {
-		problems.push(
-			`${manifest.path} -> ${contract.service}: expected migration invocation ${contract.expectedInvocation.join(" ")}`,
-		);
+	const hasEntrypointOverride = migration.entrypoint !== undefined && migration.entrypoint !== null;
+	const hasCommandOverride = migration.command !== undefined && migration.command !== null;
+	const configuredEntrypoint = hasEntrypointOverride
+		? commandParts(migration.entrypoint)
+		: [...(contract.defaultEntrypoint ?? [])];
+	const configuredCommand = hasCommandOverride ? commandParts(migration.command) : [];
+	if (configuredEntrypoint === undefined) {
+		problems.push(`${manifest.path} -> ${contract.service}: entrypoint must use list form`);
+	} else if (configuredCommand === undefined) {
+		problems.push(`${manifest.path} -> ${contract.service}: command must use list form`);
+	} else {
+		const invocation = [...configuredEntrypoint, ...configuredCommand];
+		if (invocation.join("\0") !== contract.expectedInvocation.join("\0")) {
+			problems.push(
+				`${manifest.path} -> ${contract.service}: expected migration invocation ${contract.expectedInvocation.join(" ")}`,
+			);
+		}
 	}
 
 	for (const serverName of manifest.serverServices ?? []) {

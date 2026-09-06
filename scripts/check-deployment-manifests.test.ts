@@ -129,7 +129,22 @@ services:
     command: ["--migrate", "/migrations"]
 `;
 		expect(checkManifest(COMPOSE_WITH_MIGRATION, text)).toContain(
-			"compose.yml -> migrate: expected migration invocation /procella --migrate /migrations",
+			"compose.yml -> migrate: entrypoint must use list form",
+		);
+	});
+
+	test("a string entrypoint cannot be discarded before a full migration command", () => {
+		const text = `${VALID_ENV}
+services:
+  procella:
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+  migrate:
+    entrypoint: echo
+    command: ["/procella", "--migrate", "/migrations"]
+`;
+		expect(checkManifest(COMPOSE_WITH_MIGRATION, text)).toContain(
+			"compose.yml -> migrate: entrypoint must use list form",
 		);
 	});
 
@@ -146,6 +161,19 @@ services:
 		expect(checkManifest(COMPOSE_WITH_MIGRATION, text)).toContain(
 			"compose.yml -> migrate: expected migration invocation /procella --migrate /migrations",
 		);
+	});
+
+	test("an empty entrypoint allows a full executable command", () => {
+		const text = `${VALID_ENV}
+services:
+  procella:
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+  migrate:
+    entrypoint: []
+    command: ["/procella", "--migrate", "/migrations"]
+`;
+		expect(checkManifest(COMPOSE_WITH_MIGRATION, text)).toEqual([]);
 	});
 
 	test("an unrelated migration dependency cannot satisfy the server gate", () => {
