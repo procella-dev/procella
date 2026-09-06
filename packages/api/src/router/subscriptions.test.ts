@@ -27,18 +27,40 @@ function mockContext(overrides?: Partial<TRPCContext>): TRPCContext {
 }
 
 describe("subscriptionsRouter", () => {
+	const scope = {
+		procedure: "updates.onEvents" as const,
+		resource: {
+			org: "my-org",
+			project: "my-project",
+			stack: "dev",
+			updateId: "update-1",
+		},
+	};
+
 	test("createTicket requires authenticated caller", async () => {
 		const caller = subscriptionsRouter.createCaller(mockContext({ caller: null }));
 
-		await expect(caller.createTicket()).rejects.toThrow("Authentication required");
+		await expect(caller.createTicket(scope)).rejects.toThrow("Authentication required");
 	});
 
 	test("createTicket delegates to the configured ticket issuer", async () => {
 		const ctx = mockContext();
 		const caller = subscriptionsRouter.createCaller(ctx);
 
-		expect(await caller.createTicket()).toEqual({ ticket: "signed-ticket" });
+		expect(await caller.createTicket(scope)).toEqual({ ticket: "signed-ticket" });
 		expect(ctx.issueSubscriptionTicket).toHaveBeenCalledTimes(1);
-		expect(ctx.issueSubscriptionTicket).toHaveBeenCalledWith(ctx.caller);
+		expect(ctx.issueSubscriptionTicket).toHaveBeenCalledWith(ctx.caller, scope);
+	});
+
+	test("issues a ticket for stack activity subscriptions", async () => {
+		const ctx = mockContext();
+		const caller = subscriptionsRouter.createCaller(ctx);
+		const stackScope = {
+			procedure: "updates.onStackActivity" as const,
+			resource: { org: "my-org", project: "my-project", stack: "dev" },
+		};
+
+		expect(await caller.createTicket(stackScope)).toEqual({ ticket: "signed-ticket" });
+		expect(ctx.issueSubscriptionTicket).toHaveBeenCalledWith(ctx.caller, stackScope);
 	});
 });

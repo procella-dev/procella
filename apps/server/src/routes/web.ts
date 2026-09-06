@@ -52,10 +52,16 @@ export interface WebAppDeps {
 	webhooks: WebhooksService;
 	esc: EscService;
 	github: GitHubService | null;
-	issueSubscriptionTicket?: (caller: import("@procella/types").Caller) => Promise<string>;
+	issueSubscriptionTicket?: (
+		caller: import("@procella/types").Caller,
+		scope: import("@procella/types").SubscriptionTicketScope,
+	) => Promise<string>;
 	oidc?: OidcService | null;
 	oidcPolicies?: TrustPolicyRepository | null;
-	verifySubscriptionTicket?: (ticket: string) => Promise<import("@procella/types").Caller>;
+	verifySubscriptionTicket?: (
+		ticket: string,
+		scope: import("@procella/types").SubscriptionTicketScope,
+	) => Promise<import("@procella/types").Caller>;
 }
 
 export function createWebApp(deps: WebAppDeps): Hono<Env> {

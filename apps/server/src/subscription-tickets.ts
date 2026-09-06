@@ -1,4 +1,9 @@
-import type { Caller, WorkloadIdentity } from "@procella/types";
+import {
+	type Caller,
+	type SubscriptionTicketScope,
+	subscriptionTicketScopeSchema,
+	type WorkloadIdentity,
+} from "@procella/types";
 import { jwtVerify, SignJWT } from "jose";
 import { z } from "zod/v4";
 
@@ -26,7 +31,7 @@ const workloadIdentitySchema = z.object({
 	jti: z.string().optional(),
 });
 
-const subscriptionTicketClaimsSchema = z.object({
+const callerClaimsSchema = z.object({
 	tenantId: z.string().min(1),
 	orgSlug: z.string().min(1),
 	userId: z.string(),
@@ -35,20 +40,26 @@ const subscriptionTicketClaimsSchema = z.object({
 	principalType: z.enum(["user", "token", "workload"]),
 	workload: workloadIdentitySchema.optional(),
 });
+type CallerClaims = z.infer<typeof callerClaimsSchema>;
+
+const subscriptionTicketClaimsSchema = z.intersection(
+	callerClaimsSchema,
+	subscriptionTicketScopeSchema,
+);
 
 type SubscriptionTicketClaims = z.infer<typeof subscriptionTicketClaimsSchema>;
 
 export interface SubscriptionTicketService {
-	issueTicket(caller: Caller): Promise<string>;
-	verifyTicket(ticket: string): Promise<Caller>;
+	issueTicket(caller: Caller, scope: SubscriptionTicketScope): Promise<string>;
+	verifyTicket(ticket: string, scope: SubscriptionTicketScope): Promise<Caller>;
 }
 
 export function createSubscriptionTicketService(signingKey: string): SubscriptionTicketService {
 	const secret = new TextEncoder().encode(signingKey);
 
 	return {
-		async issueTicket(caller) {
-			const claims = callerToClaims(caller);
+		async issueTicket(caller, scope) {
+			const claims = { ...callerToClaims(caller), ...scope };
 			return await new SignJWT(claims)
 				.setProtectedHeader({ alg: "HS256", typ: "JWT" })
 				.setIssuer(SUBSCRIPTION_TICKET_ISSUER)
@@ -57,19 +68,36 @@ export function createSubscriptionTicketService(signingKey: string): Subscriptio
 				.setExpirationTime(`${SUBSCRIPTION_TICKET_TTL_SECONDS}s`)
 				.sign(secret);
 		},
-		async verifyTicket(ticket) {
+		async verifyTicket(ticket, scope) {
 			const { payload } = await jwtVerify(ticket, secret, {
 				algorithms: ["HS256"],
 				audience: SUBSCRIPTION_TICKET_AUDIENCE,
 				issuer: SUBSCRIPTION_TICKET_ISSUER,
 			});
 
-			return claimsToCaller(subscriptionTicketClaimsSchema.parse(payload));
+			const claims = subscriptionTicketClaimsSchema.parse(payload);
+			if (
+				claims.procedure !== scope.procedure ||
+				claims.resource.org !== scope.resource.org ||
+				claims.resource.project !== scope.resource.project ||
+				claims.resource.stack !== scope.resource.stack
+			) {
+				throw new Error("Subscription ticket scope does not match request");
+			}
+			if (
+				claims.procedure === "updates.onEvents" &&
+				(scope.procedure !== "updates.onEvents" ||
+					claims.resource.updateId !== scope.resource.updateId)
+			) {
+				throw new Error("Subscription ticket scope does not match request");
+			}
+
+			return claimsToCaller(claims);
 		},
 	};
 }
 
-function callerToClaims(caller: Caller): SubscriptionTicketClaims {
+function callerToClaims(caller: Caller): CallerClaims {
 	return {
 		tenantId: caller.tenantId,
 		orgSlug: caller.orgSlug,

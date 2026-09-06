@@ -246,6 +246,9 @@
     },
     "packages/types": {
       "name": "@procella/types",
+      "dependencies": {
+        "zod": "catalog:",
+      },
     },
     "packages/updates": {
       "name": "@procella/updates",

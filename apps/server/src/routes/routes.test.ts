@@ -5,7 +5,7 @@ import type { Database } from "@procella/db";
 import type { EscService } from "@procella/esc";
 import type { GitHubService } from "@procella/github";
 import type { StackInfo, StacksService } from "@procella/stacks";
-import type { Caller } from "@procella/types";
+import type { Caller, SubscriptionTicketScope } from "@procella/types";
 import { UnauthorizedError } from "@procella/types";
 import type { UpdatesService } from "@procella/updates";
 import type { CreateWebhookInput, WebhookEventValue, WebhooksService } from "@procella/webhooks";
@@ -30,6 +30,16 @@ const validCaller: Caller = {
 	login: "test-user",
 	roles: ["admin"],
 	principalType: "user",
+};
+
+const subscriptionScope: SubscriptionTicketScope = {
+	procedure: "updates.onEvents",
+	resource: {
+		org: "my-org",
+		project: "myproj",
+		stack: "dev",
+		updateId: "upd-1",
+	},
 };
 
 const mockStackInfo: StackInfo = {
@@ -204,8 +214,11 @@ describe("@procella/server routes", () => {
 			cronSecret?: string;
 			db?: Database;
 			github?: GitHubService | null;
-			issueSubscriptionTicket?: (caller: Caller) => Promise<string>;
-			verifySubscriptionTicket?: (ticket: string) => Promise<Caller>;
+			issueSubscriptionTicket?: (caller: Caller, scope: SubscriptionTicketScope) => Promise<string>;
+			verifySubscriptionTicket?: (
+				ticket: string,
+				scope: SubscriptionTicketScope,
+			) => Promise<Caller>;
 			deltaCheckpointsEnabled?: boolean;
 		},
 	) {
@@ -239,14 +252,16 @@ describe("@procella/server routes", () => {
 			githubWebhookSecret: undefined,
 			issueSubscriptionTicket:
 				opts?.issueSubscriptionTicket ??
-				((caller: Caller) => subscriptionTickets.issueTicket(caller)),
+				((caller: Caller, scope: SubscriptionTicketScope) =>
+					subscriptionTickets.issueTicket(caller, scope)),
 			stacks: mockStacksService(),
 			updates: mockUpdatesService(),
 			webhooks: mockWebhooksService(),
 			deltaCheckpointsEnabled: opts?.deltaCheckpointsEnabled,
 			verifySubscriptionTicket:
 				opts?.verifySubscriptionTicket ??
-				((ticket: string) => subscriptionTickets.verifyTicket(ticket)),
+				((ticket: string, scope: SubscriptionTicketScope) =>
+					subscriptionTickets.verifyTicket(ticket, scope)),
 			esc: {
 				listProjects: async () => [],
 				listAllEnvironments: async () => ({ environments: [], nextToken: "" }),
@@ -486,11 +501,12 @@ describe("@procella/server routes", () => {
 
 		test("GET /trpc SSE endpoint returns invalid_ticket for bad signatures", async () => {
 			const app = makeApp(undefined, {
-				verifySubscriptionTicket: (ticket: string) => subscriptionTickets.verifyTicket(ticket),
+				verifySubscriptionTicket: (ticket: string, scope: SubscriptionTicketScope) =>
+					subscriptionTickets.verifyTicket(ticket, scope),
 			});
 			const badTicket = await createSubscriptionTicketService(
 				"wrong-ticket-signing-key-wrong-key",
-			).issueTicket(validCaller);
+			).issueTicket(validCaller, subscriptionScope);
 			const res = await app.request(
 				`/trpc/updates.onEvents?ticket=${encodeURIComponent(badTicket)}&input=%7B%22org%22%3A%22my-org%22%2C%22project%22%3A%22myproj%22%2C%22stack%22%3A%22dev%22%2C%22updateId%22%3A%22upd-1%22%7D`,
 			);
@@ -501,7 +517,8 @@ describe("@procella/server routes", () => {
 
 		test("GET /trpc SSE endpoint returns invalid_ticket for expired tickets", async () => {
 			const app = makeApp(undefined, {
-				verifySubscriptionTicket: (ticket: string) => subscriptionTickets.verifyTicket(ticket),
+				verifySubscriptionTicket: (ticket: string, scope: SubscriptionTicketScope) =>
+					subscriptionTickets.verifyTicket(ticket, scope),
 			});
 			const expiredTicket = await new SignJWT({
 				tenantId: validCaller.tenantId,
@@ -510,6 +527,7 @@ describe("@procella/server routes", () => {
 				login: validCaller.login,
 				roles: [...validCaller.roles],
 				principalType: validCaller.principalType,
+				...subscriptionScope,
 			})
 				.setProtectedHeader({ alg: "HS256", typ: "JWT" })
 				.setIssuer("procella")

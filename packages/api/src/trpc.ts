@@ -7,7 +7,7 @@ import type { GitHubService } from "@procella/github";
 import type { TrustPolicyRepository } from "@procella/oidc";
 import type { StacksService } from "@procella/stacks";
 import { trpcProcedureDuration, withSpan } from "@procella/telemetry";
-import { type Caller, ProcellaError } from "@procella/types";
+import { type Caller, ProcellaError, type SubscriptionTicketScope } from "@procella/types";
 import type { UpdatesService } from "@procella/updates";
 import type { WebhooksService } from "@procella/webhooks";
 import { initTRPC, type TRPC_ERROR_CODE_KEY, TRPCError } from "@trpc/server";
@@ -20,7 +20,7 @@ import superjson from "superjson";
 
 export interface TRPCContext {
 	caller: Caller | null;
-	issueSubscriptionTicket?: (caller: Caller) => Promise<string>;
+	issueSubscriptionTicket?: (caller: Caller, scope: SubscriptionTicketScope) => Promise<string>;
 	setGitHubSetupCookie?: (nonce: string) => void;
 	githubSetupCookies?: { nonce?: string; authorizationState?: string };
 	resolveUserDisplayName: (subject: string) => Promise<string | null>;
@@ -39,6 +39,8 @@ export interface TRPCContext {
 // tRPC Instance
 // ============================================================================
 
+export const trpcTransformer = superjson;
+
 const TRPC_CODE_BY_STATUS: Partial<Record<number, TRPC_ERROR_CODE_KEY>> = {
 	400: "BAD_REQUEST",
 	401: "UNAUTHORIZED",
@@ -49,7 +51,7 @@ const TRPC_CODE_BY_STATUS: Partial<Record<number, TRPC_ERROR_CODE_KEY>> = {
 };
 
 const t = initTRPC.context<TRPCContext>().create({
-	transformer: superjson,
+	transformer: trpcTransformer,
 	errorFormatter({ error, shape }) {
 		const domainError = error.cause instanceof ProcellaError ? error.cause : undefined;
 		let code: TRPC_ERROR_CODE_KEY = error.code;

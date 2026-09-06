@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { Caller } from "@procella/types";
+import type { Caller, SubscriptionTicketScope } from "@procella/types";
 import { decodeJwt } from "jose";
 import {
 	createSubscriptionTicketService,
@@ -17,10 +17,20 @@ const caller: Caller = {
 	principalType: "user",
 };
 
+const scope: SubscriptionTicketScope = {
+	procedure: "updates.onEvents",
+	resource: {
+		org: "my-org",
+		project: "myproj",
+		stack: "dev",
+		updateId: "upd-1",
+	},
+};
+
 describe("subscription ticket service", () => {
 	test("issues a valid JWT with a 60 second expiration", async () => {
 		const service = createSubscriptionTicketService(SIGNING_KEY);
-		const ticket = await service.issueTicket(caller);
+		const ticket = await service.issueTicket(caller, scope);
 		const payload = decodeJwt(ticket);
 		const issuedAt = payload.iat;
 		const expiresAt = payload.exp;
@@ -34,12 +44,14 @@ describe("subscription ticket service", () => {
 		expect(payload.tenantId).toBe(caller.tenantId);
 		expect(payload.userId).toBe(caller.userId);
 		expect(payload.login).toBe(caller.login);
+		expect(payload.procedure).toBe(scope.procedure);
+		expect(payload.resource).toEqual(scope.resource);
 	});
 
 	test("reconstructs the caller from a valid ticket", async () => {
 		const service = createSubscriptionTicketService(SIGNING_KEY);
-		const ticket = await service.issueTicket(caller);
+		const ticket = await service.issueTicket(caller, scope);
 
-		expect(await service.verifyTicket(ticket)).toEqual(caller);
+		expect(await service.verifyTicket(ticket, scope)).toEqual(caller);
 	});
 });

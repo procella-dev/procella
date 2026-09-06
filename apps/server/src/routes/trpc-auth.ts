@@ -1,11 +1,16 @@
+import { trpcTransformer } from "@procella/api/src/trpc.js";
 import type { AuthService } from "@procella/auth";
-import type { Caller } from "@procella/types";
+import {
+	type Caller,
+	type SubscriptionTicketScope,
+	subscriptionTicketScopeSchema,
+} from "@procella/types";
 import type { MiddlewareHandler } from "hono";
 import type { Env } from "../types.js";
 
 export interface TrpcAuthDeps {
 	auth: AuthService;
-	verifySubscriptionTicket?: (ticket: string) => Promise<Caller>;
+	verifySubscriptionTicket?: (ticket: string, scope: SubscriptionTicketScope) => Promise<Caller>;
 }
 
 export async function authenticateTrpcCaller(
@@ -18,8 +23,12 @@ export async function authenticateTrpcCaller(
 			return { caller: null, invalidTicket: false };
 		}
 		try {
+			const scope = subscriptionScopeFromRequest(req);
+			if (!scope) {
+				return { caller: null, invalidTicket: true };
+			}
 			return {
-				caller: await deps.verifySubscriptionTicket(ticket),
+				caller: await deps.verifySubscriptionTicket(ticket, scope),
 				invalidTicket: false,
 			};
 		} catch {
@@ -49,4 +58,35 @@ export function trpcAuth(deps: TrpcAuthDeps): MiddlewareHandler<Env> {
 		c.set("caller", caller);
 		await next();
 	};
+}
+
+function subscriptionScopeFromRequest(req: Request): SubscriptionTicketScope | null {
+	const url = new URL(req.url);
+	if (url.searchParams.get("batch") === "1") {
+		return null;
+	}
+
+	const trpcPathIndex = url.pathname.lastIndexOf("/trpc/");
+	const procedure =
+		trpcPathIndex === -1 ? "" : decodeURIComponent(url.pathname.slice(trpcPathIndex + 6));
+
+	const input = url.searchParams.get("input");
+	if (!input) {
+		return null;
+	}
+
+	const envelope: unknown = JSON.parse(input);
+	if (
+		typeof envelope !== "object" ||
+		envelope === null ||
+		Array.isArray(envelope) ||
+		!Object.hasOwn(envelope, "json")
+	) {
+		return null;
+	}
+
+	const resourceInput = trpcTransformer.deserialize(
+		envelope as Parameters<typeof trpcTransformer.deserialize>[0],
+	);
+	return subscriptionTicketScopeSchema.parse({ procedure, resource: resourceInput });
 }
