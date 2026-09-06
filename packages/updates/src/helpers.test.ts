@@ -753,6 +753,7 @@ describe("@procella/updates helpers", () => {
 				getHistory: noop,
 				exportStack: noop,
 				importStack: noop,
+				repairStack: noop,
 				encryptValue: noop,
 				decryptValue: noop,
 				batchEncrypt: noop,
@@ -760,7 +761,7 @@ describe("@procella/updates helpers", () => {
 				verifyLeaseToken: noop,
 				verifyUpdateOwnership: noop,
 			};
-			expect(Object.keys(mock)).toHaveLength(21);
+			expect(Object.keys(mock)).toHaveLength(22);
 		});
 	});
 

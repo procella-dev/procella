@@ -188,6 +188,7 @@ function makeRouteTestApp(opts?: { corsOrigins?: string[]; cronSecret?: string }
 			getHistory: async () => ({ updates: [] }),
 			exportStack: async () => ({ version: 3, deployment: {} }),
 			importStack: async () => ({ updateId: "import-1" }),
+			repairStack: async () => [],
 			encryptValue: async () => new Uint8Array([1]),
 			decryptValue: async () => new Uint8Array([1]),
 			batchEncrypt: async () => [new Uint8Array([1])],
