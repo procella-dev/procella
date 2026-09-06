@@ -26,7 +26,7 @@ const workloadIdentitySchema = z.object({
 	jti: z.string().optional(),
 });
 
-const subscriptionTicketClaimsSchema = z.object({
+const callerClaimsSchema = z.object({
 	tenantId: z.string().min(1),
 	orgSlug: z.string().min(1),
 	userId: z.string(),
@@ -34,14 +34,25 @@ const subscriptionTicketClaimsSchema = z.object({
 	roles: z.array(z.enum(["admin", "member", "viewer"])).min(1),
 	principalType: z.enum(["user", "token", "workload"]),
 	workload: workloadIdentitySchema.optional(),
-	procedure: z.literal("updates.onEvents"),
-	resource: z.object({
-		org: z.string().min(1),
-		project: z.string().min(1),
-		stack: z.string().min(1),
-		updateId: z.string().min(1),
-	}),
 });
+type CallerClaims = z.infer<typeof callerClaimsSchema>;
+
+const stackResourceSchema = z.object({
+	org: z.string().min(1),
+	project: z.string().min(1),
+	stack: z.string().min(1),
+});
+
+const subscriptionTicketClaimsSchema = z.discriminatedUnion("procedure", [
+	callerClaimsSchema.extend({
+		procedure: z.literal("updates.onEvents"),
+		resource: stackResourceSchema.extend({ updateId: z.string().min(1) }),
+	}),
+	callerClaimsSchema.extend({
+		procedure: z.literal("updates.onStackActivity"),
+		resource: stackResourceSchema,
+	}),
+]);
 
 type SubscriptionTicketClaims = z.infer<typeof subscriptionTicketClaimsSchema>;
 
@@ -76,8 +87,14 @@ export function createSubscriptionTicketService(signingKey: string): Subscriptio
 				claims.procedure !== scope.procedure ||
 				claims.resource.org !== scope.resource.org ||
 				claims.resource.project !== scope.resource.project ||
-				claims.resource.stack !== scope.resource.stack ||
-				claims.resource.updateId !== scope.resource.updateId
+				claims.resource.stack !== scope.resource.stack
+			) {
+				throw new Error("Subscription ticket scope does not match request");
+			}
+			if (
+				claims.procedure === "updates.onEvents" &&
+				(scope.procedure !== "updates.onEvents" ||
+					claims.resource.updateId !== scope.resource.updateId)
 			) {
 				throw new Error("Subscription ticket scope does not match request");
 			}
@@ -87,9 +104,7 @@ export function createSubscriptionTicketService(signingKey: string): Subscriptio
 	};
 }
 
-function callerToClaims(
-	caller: Caller,
-): Omit<SubscriptionTicketClaims, keyof SubscriptionTicketScope> {
+function callerToClaims(caller: Caller): CallerClaims {
 	return {
 		tenantId: caller.tenantId,
 		orgSlug: caller.orgSlug,

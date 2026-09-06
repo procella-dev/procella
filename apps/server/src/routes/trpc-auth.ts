@@ -4,12 +4,12 @@ import type { MiddlewareHandler } from "hono";
 import { z } from "zod/v4";
 import type { Env } from "../types.js";
 
-const subscriptionResourceSchema = z.object({
+const stackResourceSchema = z.object({
 	org: z.string().min(1),
 	project: z.string().min(1),
 	stack: z.string().min(1),
-	updateId: z.string().min(1),
 });
+const updateResourceSchema = stackResourceSchema.extend({ updateId: z.string().min(1) });
 
 export interface TrpcAuthDeps {
 	auth: AuthService;
@@ -68,7 +68,7 @@ function subscriptionScopeFromRequest(req: Request): SubscriptionTicketScope | n
 	const trpcPathIndex = url.pathname.lastIndexOf("/trpc/");
 	const procedure =
 		trpcPathIndex === -1 ? "" : decodeURIComponent(url.pathname.slice(trpcPathIndex + 6));
-	if (procedure !== "updates.onEvents") {
+	if (procedure !== "updates.onEvents" && procedure !== "updates.onStackActivity") {
 		return null;
 	}
 
@@ -83,8 +83,12 @@ function subscriptionScopeFromRequest(req: Request): SubscriptionTicketScope | n
 			? (parsed as { json: unknown }).json
 			: parsed;
 
-	return {
-		procedure,
-		resource: subscriptionResourceSchema.parse(resourceInput),
-	};
+	if (procedure === "updates.onEvents") {
+		return {
+			procedure,
+			resource: updateResourceSchema.parse(resourceInput),
+		};
+	}
+
+	return { procedure, resource: stackResourceSchema.parse(resourceInput) };
 }

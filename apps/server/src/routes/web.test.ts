@@ -125,7 +125,7 @@ describe("createWebApp tRPC auth", () => {
 		const res = await app.request("/trpc/subscriptions.createTicket?batch=1", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ 0: { json: subscriptionScope.resource } }),
+			body: JSON.stringify({ 0: { json: subscriptionScope } }),
 		});
 
 		expect(res.status).toBe(401);
@@ -168,7 +168,7 @@ describe("createWebApp tRPC auth", () => {
 				Authorization: "token valid-token",
 				"Content-Type": "application/json",
 			},
-			body: JSON.stringify({ 0: { json: subscriptionScope.resource } }),
+			body: JSON.stringify({ 0: { json: subscriptionScope } }),
 		});
 		const body = (await res.json()) as Array<{
 			result?: { data?: { json?: { ticket?: string } } };

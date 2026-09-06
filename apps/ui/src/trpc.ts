@@ -1,4 +1,5 @@
 import type { AppRouter } from "@procella/api/src/router/index.js";
+import type { SubscriptionTicketScope } from "@procella/types";
 import {
 	createTRPCUntypedClient,
 	httpBatchLink,
@@ -10,14 +11,9 @@ import superjson from "superjson";
 import { getStoredDescopeSessionToken } from "./auth/sessionToken";
 import { apiBase } from "./config";
 import { getAuthConfig } from "./hooks/useAuthConfig";
+import { subscriptionScopeFromUrl } from "./subscription-scope";
 
 type TicketResponse = { ticket: string };
-type SubscriptionResource = {
-	org: string;
-	project: string;
-	stack: string;
-	updateId: string;
-};
 
 type EventSourceListener = EventListenerOrEventListenerObject;
 
@@ -65,8 +61,8 @@ function isTicketResponse(value: unknown): value is TicketResponse {
 	return "ticket" in value && typeof value.ticket === "string";
 }
 
-async function fetchSubscriptionTicket(resource: SubscriptionResource): Promise<string> {
-	const result = await getTicketClient().mutation("subscriptions.createTicket", resource);
+async function fetchSubscriptionTicket(scope: SubscriptionTicketScope): Promise<string> {
+	const result = await getTicketClient().mutation("subscriptions.createTicket", scope);
 	if (!isTicketResponse(result)) {
 		throw new Error("Invalid subscription ticket response");
 	}
@@ -76,32 +72,6 @@ async function fetchSubscriptionTicket(resource: SubscriptionResource): Promise<
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function subscriptionResourceFromUrl(url: URL): SubscriptionResource {
-	const rawInput = url.searchParams.get("input");
-	if (!rawInput) {
-		throw new Error("Subscription URL is missing input");
-	}
-
-	const parsed: unknown = JSON.parse(rawInput);
-	const input = isRecord(parsed) && "json" in parsed ? parsed.json : parsed;
-	if (
-		!isRecord(input) ||
-		typeof input.org !== "string" ||
-		typeof input.project !== "string" ||
-		typeof input.stack !== "string" ||
-		typeof input.updateId !== "string"
-	) {
-		throw new Error("Subscription URL has invalid resource input");
-	}
-
-	return {
-		org: input.org,
-		project: input.project,
-		stack: input.stack,
-		updateId: input.updateId,
-	};
 }
 
 function coerceLastEventId(lastEventId: string): number | string {
@@ -140,7 +110,7 @@ function withLastEventId(url: URL, lastEventId: string | undefined): void {
 async function buildSubscriptionUrl(baseUrl: string, lastEventId?: string): Promise<string> {
 	const url = new URL(baseUrl);
 	withLastEventId(url, lastEventId);
-	url.searchParams.set("ticket", await fetchSubscriptionTicket(subscriptionResourceFromUrl(url)));
+	url.searchParams.set("ticket", await fetchSubscriptionTicket(subscriptionScopeFromUrl(url)));
 	return url.toString();
 }
 

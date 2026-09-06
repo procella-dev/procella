@@ -27,6 +27,15 @@ const scope: SubscriptionTicketScope = {
 	},
 };
 
+const stackActivityScope: SubscriptionTicketScope = {
+	procedure: "updates.onStackActivity",
+	resource: {
+		org: "my-org",
+		project: "myproj",
+		stack: "dev",
+	},
+};
+
 function subscriptionRequest(
 	procedure: string = scope.procedure,
 	resource: SubscriptionTicketScope["resource"] = scope.resource,
@@ -118,10 +127,14 @@ describe("authenticateTrpcCaller", () => {
 		const service = createSubscriptionTicketService(SIGNING_KEY);
 		const ticket = await service.issueTicket(caller, scope);
 
-		const result = await authenticateTrpcCaller(subscriptionRequest("events.list"), ticket, {
-			auth: mockAuthService(null),
-			verifySubscriptionTicket: service.verifyTicket,
-		});
+		const result = await authenticateTrpcCaller(
+			subscriptionRequest(stackActivityScope.procedure, stackActivityScope.resource),
+			ticket,
+			{
+				auth: mockAuthService(null),
+				verifySubscriptionTicket: service.verifyTicket,
+			},
+		);
 
 		expect(result).toEqual({ caller: null, invalidTicket: true });
 	});
@@ -140,5 +153,21 @@ describe("authenticateTrpcCaller", () => {
 		);
 
 		expect(result).toEqual({ caller: null, invalidTicket: true });
+	});
+
+	test("accepts a stack activity ticket for its intended stack", async () => {
+		const service = createSubscriptionTicketService(SIGNING_KEY);
+		const ticket = await service.issueTicket(caller, stackActivityScope);
+
+		const result = await authenticateTrpcCaller(
+			subscriptionRequest(stackActivityScope.procedure, stackActivityScope.resource),
+			ticket,
+			{
+				auth: mockAuthService(null),
+				verifySubscriptionTicket: service.verifyTicket,
+			},
+		);
+
+		expect(result).toEqual({ caller, invalidTicket: false });
 	});
 });
