@@ -41,6 +41,7 @@ if (process.argv.includes("--healthz")) {
 		const { shutdownTelemetry } = await import("@procella/telemetry");
 		const { BlobCleanupWorker, GCWorker } = await import("@procella/updates");
 		const { bootstrap } = await import("./bootstrap.js");
+		const { drainForShutdown } = await import("./shutdown.js");
 		const { app, auth, config, db, client, github, notifications, storage } = await bootstrap();
 
 		const uiRoot = process.env.PROCELLA_UI_PATH || "/ui";
@@ -84,12 +85,11 @@ if (process.argv.includes("--healthz")) {
 			}, DRAIN_TIMEOUT_MS);
 			forceTimer.unref();
 
-			await server.stop();
-			await gc.stop();
-			await blobCleanup.stop();
-			if (githubOutbox) await githubOutbox.stop();
-			await webhookOutbox.stop();
-			await notifications.close();
+			await drainForShutdown({
+				notifications,
+				server,
+				workers: [gc, blobCleanup, ...(githubOutbox ? [githubOutbox] : []), webhookOutbox],
+			});
 			await shutdownTelemetry();
 			auth.dispose?.();
 			await client.close();

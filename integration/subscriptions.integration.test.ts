@@ -48,6 +48,9 @@ beforeAll(async () => {
 
 afterEach(async () => {
 	await Promise.all(hubs.splice(0).map((hub) => hub.close()));
+	// A channel retired by its last subscriber ends its client without the hub
+	// awaiting it, so drain before the next test counts listener connections.
+	await waitFor(async () => (await listenerConnections()) === 0, "listener connections to drain");
 	await truncateTables();
 });
 
