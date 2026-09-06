@@ -92,6 +92,10 @@ import {
 const MAX_JOURNAL_ENTRIES = 10_000;
 const MAX_EVENT_BATCH_SIZE = 1_000;
 
+function isTerminalUpdateStatus(status: string): status is "succeeded" | "failed" | "cancelled" {
+	return status === "succeeded" || status === "failed" || status === "cancelled";
+}
+
 type DbTransaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 
 interface LockedUpdateRow {
@@ -349,6 +353,9 @@ export class PostgresUpdatesService implements UpdatesService {
 	}
 
 	async completeUpdate(updateId: string, request: CompleteUpdateRequest): Promise<void> {
+		if (!isTerminalUpdateStatus(request.status)) {
+			throw new BadRequestError(`Invalid terminal update status: ${request.status}`);
+		}
 		let notifyStackId: string | undefined;
 		let deltaBaseBlobKey: string | null = null;
 		await withDbSpan(

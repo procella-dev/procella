@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { AesCryptoService } from "@procella/crypto";
-import { checkpoints, type Database, journalEntries, updates } from "@procella/db";
+import { checkpoints, type Database, journalEntries, stacks, updates } from "@procella/db";
 import { PostgresStacksService, type StackInfo } from "@procella/stacks";
 import { type BlobStorage, LocalBlobStorage } from "@procella/storage";
 import {
@@ -301,6 +301,67 @@ describe("PostgresUpdatesService — integration", () => {
 			// Should allow new update
 			const second = await updatesService.createUpdate(stack.id, "update");
 			expect(second.updateID).toBeTruthy();
+		});
+
+		test("rejects every non-terminal status without changing active update state", async () => {
+			const stack = await seedStack();
+			const created = await updatesService.createUpdate(stack.id, "update");
+			await updatesService.startUpdate(created.updateID, {});
+			const [updateBefore] = await db
+				.select({
+					status: updates.status,
+					leaseToken: updates.leaseToken,
+					leaseExpiresAt: updates.leaseExpiresAt,
+					completedAt: updates.completedAt,
+				})
+				.from(updates)
+				.where(eq(updates.id, created.updateID));
+			const [stackBefore] = await db
+				.select({ activeUpdateId: stacks.activeUpdateId })
+				.from(stacks)
+				.where(eq(stacks.id, stack.id));
+
+			for (const status of ["not started", "requested", "running"]) {
+				await expect(
+					updatesService.completeUpdate(created.updateID, { status }),
+				).rejects.toBeInstanceOf(BadRequestError);
+
+				const [updateAfter] = await db
+					.select({
+						status: updates.status,
+						leaseToken: updates.leaseToken,
+						leaseExpiresAt: updates.leaseExpiresAt,
+						completedAt: updates.completedAt,
+					})
+					.from(updates)
+					.where(eq(updates.id, created.updateID));
+				const [stackAfter] = await db
+					.select({ activeUpdateId: stacks.activeUpdateId })
+					.from(stacks)
+					.where(eq(stacks.id, stack.id));
+
+				expect(updateAfter).toEqual(updateBefore);
+				expect(stackAfter).toEqual(stackBefore);
+				await expect(updatesService.createUpdate(stack.id, "update")).rejects.toBeInstanceOf(
+					UpdateConflictError,
+				);
+			}
+		});
+
+		test("database rejects completed timestamps on non-terminal updates", async () => {
+			const stack = await seedStack();
+			const created = await updatesService.createUpdate(stack.id, "update");
+
+			for (const status of ["not started", "requested", "running"]) {
+				await expect(
+					Promise.resolve(
+						db
+							.update(updates)
+							.set({ status, completedAt: new Date() })
+							.where(eq(updates.id, created.updateID)),
+					),
+				).rejects.toThrow();
+			}
 		});
 	});
 

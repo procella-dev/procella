@@ -13,6 +13,10 @@ import type { Context } from "hono";
 import type { Env } from "../types.js";
 import { param, updateContext } from "./params.js";
 
+function isTerminalUpdateStatus(status: unknown): status is "succeeded" | "failed" | "cancelled" {
+	return status === "succeeded" || status === "failed" || status === "cancelled";
+}
+
 // ============================================================================
 // Update Handlers
 // ============================================================================
@@ -70,6 +74,12 @@ export function updateHandlers(
 			const updateCtx = updateContext(c);
 			const updateId = updateCtx.updateId;
 			const body = await c.req.json<CompleteUpdateRequest>();
+			if (!isTerminalUpdateStatus(body.status)) {
+				return c.json(
+					{ code: "invalid_status", message: `Invalid terminal update status: ${body.status}` },
+					400,
+				);
+			}
 			await updates.completeUpdate(updateId, body);
 
 			const caller = c.get("caller");
@@ -77,14 +87,7 @@ export function updateHandlers(
 			const project = c.req.param("project");
 			const stack = c.req.param("stack");
 
-			if (
-				caller &&
-				org &&
-				project &&
-				stack &&
-				webhooks &&
-				(body.status === "succeeded" || body.status === "failed" || body.status === "cancelled")
-			) {
+			if (caller && org && project && stack && webhooks) {
 				let tenantId = org;
 				try {
 					const stackInfo = await stacks.getStack(caller.tenantId, org, project, stack);
