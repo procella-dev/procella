@@ -348,6 +348,100 @@ describe("PostgresStacksService — integration", () => {
 			).toHaveLength(1);
 		});
 
+		test("concurrent deletions enqueue a blob shared only by deleted stacks", async () => {
+			const left = await stacks.createStack("tenant-1", "org-1", "proj-1", "left");
+			const right = await stacks.createStack("tenant-1", "org-1", "proj-1", "right");
+			const [leftUpdate] = await db
+				.insert(updates)
+				.values({ stackId: left.id, kind: "update", status: "succeeded" })
+				.returning({ id: updates.id });
+			const [rightUpdate] = await db
+				.insert(updates)
+				.values({ stackId: right.id, kind: "update", status: "succeeded" })
+				.returning({ id: updates.id });
+			const sharedBlobKey = "checkpoints/shared/concurrent-delete";
+			await db.insert(checkpoints).values([
+				{
+					updateId: leftUpdate.id,
+					stackId: left.id,
+					version: 1,
+					blobKey: sharedBlobKey,
+				},
+				{
+					updateId: rightUpdate.id,
+					stackId: right.id,
+					version: 1,
+					blobKey: sharedBlobKey,
+				},
+			]);
+
+			const lockPool = new SQL({ url: getTestDbUrl(), max: 2 });
+			const holder = await lockPool.reserve();
+			const observer = await lockPool.reserve();
+			let lockHeld = false;
+			let deletions: Promise<void>[] = [];
+
+			try {
+				await holder.unsafe("BEGIN");
+				lockHeld = true;
+				const holderRows = (await holder.unsafe(
+					"SELECT pg_backend_pid()::int AS pid",
+				)) as unknown as Array<{ pid: number }>;
+				const holderPid = holderRows[0]?.pid;
+				expect(holderPid).toBeNumber();
+				await holder.unsafe(
+					"SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+					[sharedBlobKey],
+				);
+
+				deletions = [
+					stacks.deleteStack("tenant-1", "org-1", "proj-1", "left", true),
+					stacks.deleteStack("tenant-1", "org-1", "proj-1", "right", true),
+				];
+
+				let blockedPids = new Set<number>();
+				const deadline = Date.now() + 5_000;
+				while (blockedPids.size < 2 && Date.now() < deadline) {
+					const rows = (await observer.unsafe(
+						`WITH RECURSIVE blocked(pid) AS (
+							SELECT pid
+							FROM pg_stat_activity
+							WHERE $1::int = ANY(pg_blocking_pids(pid))
+							UNION
+							SELECT activity.pid
+							FROM pg_stat_activity AS activity
+							JOIN blocked AS blocker
+								ON blocker.pid = ANY(pg_blocking_pids(activity.pid))
+						)
+						SELECT DISTINCT pid::int AS pid FROM blocked`,
+						[holderPid],
+					)) as unknown as Array<{ pid: number }>;
+					blockedPids = new Set(rows.map(({ pid }) => pid));
+				}
+				expect(blockedPids.size).toBe(2);
+
+				await holder.unsafe("COMMIT");
+				lockHeld = false;
+				expect((await Promise.allSettled(deletions)).map(({ status }) => status)).toEqual([
+					"fulfilled",
+					"fulfilled",
+				]);
+
+				expect(
+					await db
+						.select({ blobKey: blobCleanupQueue.blobKey })
+						.from(blobCleanupQueue)
+						.where(eq(blobCleanupQueue.blobKey, sharedBlobKey)),
+				).toEqual([{ blobKey: sharedBlobKey }]);
+			} finally {
+				if (lockHeld) await holder.unsafe("ROLLBACK");
+				await Promise.allSettled(deletions);
+				holder.release();
+				observer.release();
+				await lockPool.close();
+			}
+		});
+
 		test("wrong-tenant deletion cannot enqueue or remove descendants", async () => {
 			const target = await stacks.createStack("tenant-1", "org-1", "proj-1", "dev");
 			const [update] = await db

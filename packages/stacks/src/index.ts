@@ -600,6 +600,20 @@ export class PostgresStacksService implements StacksService {
 						.where(eq(updates.stackId, locked.stackId))
 						.for("update");
 
+					// Serialize shared-key orphan decisions across stack transactions. The
+					// following INSERT gets a fresh READ COMMITTED snapshot after any wait.
+					await tx.execute(sql`
+						SELECT pg_advisory_xact_lock(hashtextextended(keys.blob_key, 0))
+						FROM (
+							SELECT DISTINCT ${checkpoints.blobKey} AS blob_key
+							FROM ${checkpoints}
+							INNER JOIN ${updates} ON ${updates.id} = ${checkpoints.updateId}
+							WHERE ${updates.stackId} = ${locked.stackId}
+								AND ${checkpoints.blobKey} IS NOT NULL
+						) keys
+						ORDER BY keys.blob_key
+					`);
+
 					await tx.execute(sql`
 						INSERT INTO ${blobCleanupQueue} (blob_key)
 						SELECT DISTINCT ${checkpoints.blobKey}
