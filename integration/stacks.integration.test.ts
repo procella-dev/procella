@@ -1,4 +1,5 @@
 import { afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { SQL } from "bun";
 import { checkpoints, type Database, stacks as stackRows, updates } from "@procella/db";
 import { PostgresStacksService, type StackInfo } from "@procella/stacks";
 import {
@@ -9,7 +10,7 @@ import {
 	StackNotFoundError,
 } from "@procella/types";
 import { eq } from "drizzle-orm";
-import { getTestDb, truncateTables } from "./setup.js";
+import { getTestDb, getTestDbUrl, truncateTables } from "./setup.js";
 
 let db: Database;
 let stacks: PostgresStacksService;
@@ -204,18 +205,67 @@ describe("PostgresStacksService — integration", () => {
 		});
 
 		test("row lock makes concurrent deletes resolve one winner", async () => {
-			await stacks.createStack("tenant-1", "org-1", "proj-1", "dev");
+			const stack = await stacks.createStack("tenant-1", "org-1", "proj-1", "dev");
+			const lockPool = new SQL({ url: getTestDbUrl(), max: 2 });
+			const holder = await lockPool.reserve();
+			const observer = await lockPool.reserve();
+			let lockHeld = false;
+			let deletions: Promise<void>[] = [];
 
-			const results = await Promise.allSettled([
-				stacks.deleteStack("tenant-1", "org-1", "proj-1", "dev"),
-				stacks.deleteStack("tenant-1", "org-1", "proj-1", "dev"),
-			]);
+			try {
+				await holder.unsafe("BEGIN");
+				lockHeld = true;
+				const holderRows = (await holder.unsafe(
+					"SELECT pg_backend_pid()::int AS pid",
+				)) as unknown as Array<{ pid: number }>;
+				const holderPid = holderRows[0]?.pid;
+				expect(holderPid).toBeNumber();
+				await holder.unsafe("SELECT id FROM stacks WHERE id = $1 FOR UPDATE", [stack.id]);
 
-			// Without FOR UPDATE both callers read the row, both report success, and
-			// one of them silently deletes nothing.
-			expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
-			const [rejected] = results.filter((r) => r.status === "rejected");
-			expect((rejected as PromiseRejectedResult).reason).toBeInstanceOf(StackNotFoundError);
+				deletions = [
+					stacks.deleteStack("tenant-1", "org-1", "proj-1", "dev"),
+					stacks.deleteStack("tenant-1", "org-1", "proj-1", "dev"),
+				];
+
+				let blockedPids = new Set<number>();
+				const deadline = Date.now() + 5_000;
+				while (blockedPids.size < 2 && Date.now() < deadline) {
+					const rows = (await observer.unsafe(
+						`WITH RECURSIVE blocked(pid) AS (
+							SELECT pid
+							FROM pg_stat_activity
+							WHERE $1::int = ANY(pg_blocking_pids(pid))
+							UNION
+							SELECT activity.pid
+							FROM pg_stat_activity AS activity
+							JOIN blocked AS blocker
+								ON blocker.pid = ANY(pg_blocking_pids(activity.pid))
+						)
+						SELECT DISTINCT pid::int AS pid FROM blocked`,
+						[holderPid],
+					)) as unknown as Array<{ pid: number }>;
+					blockedPids = new Set(rows.map((row) => row.pid));
+				}
+
+				// Both delete transactions have reached the locked row before it is released.
+				// With FOR UPDATE they block during lookup; without it they both pass lookup
+				// and block later during DELETE, making the mutation deterministically visible.
+				expect(blockedPids.size).toBe(2);
+
+				await holder.unsafe("COMMIT");
+				lockHeld = false;
+
+				const results = await Promise.allSettled(deletions);
+				expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+				const [rejected] = results.filter((result) => result.status === "rejected");
+				expect((rejected as PromiseRejectedResult).reason).toBeInstanceOf(StackNotFoundError);
+			} finally {
+				if (lockHeld) await holder.unsafe("ROLLBACK");
+				await Promise.allSettled(deletions);
+				holder.release();
+				observer.release();
+				await lockPool.close();
+			}
 		});
 
 		test("throws StackNotFoundError for missing stack", async () => {
