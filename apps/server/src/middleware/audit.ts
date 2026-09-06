@@ -33,12 +33,7 @@ export function auditMiddleware(auditService: AuditService): MiddlewareHandler<E
 
 		void auditService.log(caller.tenantId, {
 			actorId: caller.principalType === "workload" ? caller.login : caller.userId,
-			actorType:
-				caller.principalType === "workload"
-					? "workload"
-					: caller.userId.startsWith("token:")
-						? "token"
-						: "user",
+			actorType: caller.principalType,
 			action,
 			resourceType: extractResourceType(c.req.path),
 			resourceId: extractResourceId(c.req.path),

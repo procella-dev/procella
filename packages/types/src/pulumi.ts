@@ -167,6 +167,19 @@ export const UpdateStatus = {
 } as const;
 export type UpdateStatus = (typeof UpdateStatus)[keyof typeof UpdateStatus];
 
+export type TerminalUpdateStatus =
+	| typeof UpdateStatus.Failed
+	| typeof UpdateStatus.Succeeded
+	| typeof UpdateStatus.Cancelled;
+
+export function isTerminalUpdateStatus(status: unknown): status is TerminalUpdateStatus {
+	return (
+		status === UpdateStatus.Failed ||
+		status === UpdateStatus.Succeeded ||
+		status === UpdateStatus.Cancelled
+	);
+}
+
 export const UpdateEventKind = {
 	Stdout: "stdout",
 	Stderr: "stderr",

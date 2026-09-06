@@ -1,3 +1,5 @@
+import { projectError } from "@procella/types";
+
 let appPromise: ReturnType<typeof init> | null = null;
 
 async function init() {
@@ -37,7 +39,7 @@ export default {
 			const app = await appPromise;
 			return app.fetch(normalizeRequest(req));
 		} catch (e: unknown) {
-			console.error("[vercel] unhandled error:", e);
+			console.error("[vercel] unhandled error:", projectError(e));
 			return new Response(JSON.stringify({ error: "Internal server error" }), {
 				status: 500,
 				headers: { "content-type": "application/json" },

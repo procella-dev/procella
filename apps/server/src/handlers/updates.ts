@@ -3,7 +3,9 @@
 import type { StacksService } from "@procella/stacks";
 import {
 	type CompleteUpdateRequest,
+	isTerminalUpdateStatus,
 	isValidUpdateKind,
+	projectError,
 	type StartUpdateRequest,
 	type UpdateProgramRequest,
 } from "@procella/types";
@@ -70,6 +72,12 @@ export function updateHandlers(
 			const updateCtx = updateContext(c);
 			const updateId = updateCtx.updateId;
 			const body = await c.req.json<CompleteUpdateRequest>();
+			if (!isTerminalUpdateStatus(body.status)) {
+				return c.json(
+					{ code: "invalid_status", message: `Invalid terminal update status: ${body.status}` },
+					400,
+				);
+			}
 			await updates.completeUpdate(updateId, body);
 
 			const caller = c.get("caller");
@@ -77,14 +85,7 @@ export function updateHandlers(
 			const project = c.req.param("project");
 			const stack = c.req.param("stack");
 
-			if (
-				caller &&
-				org &&
-				project &&
-				stack &&
-				webhooks &&
-				(body.status === "succeeded" || body.status === "failed" || body.status === "cancelled")
-			) {
+			if (caller && org && project && stack && webhooks) {
 				let tenantId = org;
 				try {
 					const stackInfo = await stacks.getStack(caller.tenantId, org, project, stack);
@@ -102,7 +103,10 @@ export function updateHandlers(
 						data: { org, project, stack, updateId, status: body.status },
 					})
 					.catch((error: unknown) => {
-						console.error("[updates] Failed to emit webhook for completeUpdate", error);
+						console.error(
+							"[updates] Failed to emit webhook for completeUpdate",
+							projectError(error),
+						);
 					});
 			}
 			return c.body(null, 204);

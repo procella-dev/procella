@@ -184,6 +184,7 @@
         "@octokit/rest": "^22.0.0",
         "@procella/config": "workspace:*",
         "@procella/db": "workspace:*",
+        "@procella/types": "workspace:*",
         "drizzle-orm": "catalog:",
         "jose": "^6.0.0",
       },

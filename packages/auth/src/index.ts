@@ -284,7 +284,7 @@ export class DescopeAuthService implements AuthService {
 		if (payload.aud && !audienceIncludes(payload.aud, this.projectId)) {
 			throw new UnauthorizedError("JWT audience does not match project");
 		}
-		return this.extractCaller(payload as Record<string, unknown>);
+		return this.extractCaller(payload as Record<string, unknown>, "user");
 	}
 
 	/**
@@ -396,9 +396,10 @@ export class DescopeAuthService implements AuthService {
 					const expireTime = opts?.expireTime ?? 0;
 					const safeCustomClaims = sanitizeCliAccessKeyCustomClaims(opts?.customClaims);
 					const customClaims = {
+						...safeCustomClaims,
 						procellaLogin: loginId,
 						procellaOrgSlug: caller.orgSlug,
-						...safeCustomClaims,
+						[OidcClaims.principalType]: caller.principalType === "workload" ? "workload" : "token",
 					};
 
 					const resp = await this.sdk.management.accessKey.create(
@@ -475,7 +476,7 @@ export class DescopeAuthService implements AuthService {
 				const claims = authInfo.token;
 				const exp = typeof claims.exp === "number" ? claims.exp : undefined;
 
-				const caller = this.extractCaller(claims);
+				const caller = this.extractCaller(claims, "token");
 
 				if (exp) {
 					const nowSec = Math.floor(Date.now() / 1000);
@@ -507,7 +508,10 @@ export class DescopeAuthService implements AuthService {
 		throw lastErr;
 	}
 
-	private extractCaller(claims: Record<string, unknown>): Caller {
+	private extractCaller(
+		claims: Record<string, unknown>,
+		authenticatedPrincipalType: "user" | "token",
+	): Caller {
 		const tenantId = extractTenantId(claims);
 		if (!tenantId) {
 			throw new UnauthorizedError("JWT missing tenant claim");
@@ -523,6 +527,7 @@ export class DescopeAuthService implements AuthService {
 		const roles = extractRoles(claims, tenantId);
 		const principalTypeRaw = claims[OidcClaims.principalType];
 		const isWorkload = principalTypeRaw === "workload";
+		const isToken = principalTypeRaw === "token" || authenticatedPrincipalType === "token";
 
 		const workload: WorkloadIdentity | undefined = isWorkload
 			? {
@@ -549,7 +554,7 @@ export class DescopeAuthService implements AuthService {
 			userId,
 			login,
 			roles,
-			principalType: isWorkload ? "workload" : userId.startsWith("token:") ? "token" : "user",
+			principalType: isWorkload ? "workload" : isToken ? "token" : "user",
 			workload,
 		};
 	}

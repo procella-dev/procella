@@ -4,7 +4,7 @@ import { timingSafeEqual } from "node:crypto";
 import { appRouter } from "@procella/api/src/router/index.js";
 import type { TRPCContext } from "@procella/api/src/trpc.js";
 import type { AuditService } from "@procella/audit";
-import type { AuthConfig, AuthService } from "@procella/auth";
+import { type AuthConfig, type AuthService, METHOD_ROLE_MAP } from "@procella/auth";
 import type { Database } from "@procella/db";
 import type { EscService } from "@procella/esc";
 import {
@@ -15,11 +15,11 @@ import {
 import type { OidcService, TrustPolicyRepository } from "@procella/oidc";
 import type { StacksService } from "@procella/stacks";
 import { tracingMiddleware } from "@procella/telemetry";
-import { PulumiRoutes } from "@procella/types";
+import { PulumiRoutes, projectError } from "@procella/types";
 import { GCWorker, type UpdatesService } from "@procella/updates";
 import type { WebhooksService } from "@procella/webhooks";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import { Hono } from "hono";
+import { Hono, type MiddlewareHandler } from "hono";
 import { cors } from "hono/cors";
 import {
 	auditHandlers,
@@ -188,7 +188,7 @@ export function createApp(deps: {
 			createContext: () => ctx,
 			onError({ error }) {
 				if (error.code !== "UNAUTHORIZED") {
-					console.error("[trpc]", error);
+					console.error("[trpc]", projectError(error));
 				}
 			},
 		});
@@ -222,7 +222,7 @@ export function createApp(deps: {
 		if (deps.github) {
 			await new GitHubOutboxWorker({ db: deps.db, github: deps.github, maxPerRun: 5 })
 				.runOnce({ deadlineMs: startedAt + CRON_WORK_DEADLINE_MS })
-				.catch((error) => console.error("[cron] GitHub outbox drain failed", error));
+				.catch((error) => console.error("[cron] GitHub outbox drain failed", projectError(error)));
 		}
 		return c.json({ ok: true });
 	});
@@ -246,6 +246,12 @@ export function createApp(deps: {
 		const caller = await deps.auth.authenticate(c.req.raw).catch(() => null);
 		if (!caller) {
 			return c.json({ error: "Unauthorized" }, 401);
+		}
+		if (caller.principalType !== "user") {
+			return c.json(
+				{ error: "CLI tokens can only be created from an interactive user session" },
+				403,
+			);
 		}
 		const body = await c.req.json<{ name?: string }>().catch(() => ({}));
 		const keyName =
@@ -296,6 +302,13 @@ export function createApp(deps: {
 	const api = new Hono<Env>();
 	api.use("*", withApiAuth);
 	api.use("*", withAudit);
+	const roleMiddlewareByMethod = new Map<string, MiddlewareHandler<Env>>(
+		Object.entries(METHOD_ROLE_MAP).map(([method, role]) => [method, requireRoleMiddleware(role)]),
+	);
+	const withMethodRole: MiddlewareHandler<Env> = (c, next) =>
+		roleMiddlewareByMethod.get(c.req.method)?.(c, next) ?? next();
+	api.use("/stacks/*", withMethodRole);
+	api.use("/esc/*", withMethodRole);
 
 	// User
 	api.get("/user", user.getCurrentUser);

@@ -5,6 +5,7 @@
 // These are no-ops when telemetry is disabled (the tracer returns NoopSpans).
 
 import { SpanStatusCode, trace } from "@opentelemetry/api";
+import { projectError } from "@procella/types";
 import { dbOperationCount, dbOperationDuration } from "./metrics.js";
 
 /**
@@ -24,11 +25,12 @@ export async function withSpan<T>(
 			span.setStatus({ code: SpanStatusCode.OK });
 			return result;
 		} catch (err) {
+			const projected = projectError(err);
 			span.setStatus({
 				code: SpanStatusCode.ERROR,
-				message: err instanceof Error ? err.message : String(err),
+				message: projected.message,
 			});
-			span.recordException(err instanceof Error ? err : new Error(String(err)));
+			span.recordException(projected);
 			throw err;
 		} finally {
 			span.end();

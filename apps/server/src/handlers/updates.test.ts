@@ -209,6 +209,33 @@ describe("updateHandlers", () => {
 		expect(updates.completeUpdate).toHaveBeenCalledWith("upd-1", reqBody);
 	});
 
+	test("completeUpdate rejects non-terminal and unknown statuses without calling the service", async () => {
+		const updates = mockUpdatesService();
+		const stacks = mockStacksService();
+		const app = new Hono<Env>();
+		app.use("*", async (c, next) => {
+			c.set("updateContext", { updateId: "upd-1", stackId: "s-1" });
+			await next();
+		});
+		const h = updateHandlers(updates, stacks);
+		app.post("/updates/:updateId/complete", h.completeUpdate);
+
+		for (const status of ["not started", "requested", "running", "paused"]) {
+			const res = await app.request("/updates/upd-1/complete", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ status }),
+			});
+
+			expect(res.status).toBe(400);
+			expect(await res.json()).toEqual({
+				code: "invalid_status",
+				message: `Invalid terminal update status: ${status}`,
+			});
+		}
+		expect(updates.completeUpdate).not.toHaveBeenCalled();
+	});
+
 	test("cancelUpdate returns 204", async () => {
 		const updates = mockUpdatesService();
 		const stacks = mockStacksService();

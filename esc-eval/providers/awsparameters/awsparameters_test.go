@@ -9,8 +9,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	ssmtypes "github.com/aws/aws-sdk-go-v2/service/ssm/types"
-	"github.com/tektum/procella/esc-eval/providers/internal/awsutil"
 	"github.com/pulumi/esc"
+	"github.com/tektum/procella/esc-eval/providers/internal/awsutil"
 )
 
 type fakeSSMClient struct {
@@ -27,10 +27,20 @@ func (f *fakeSSMClient) GetParameter(_ context.Context, input *ssm.GetParameterI
 	return f.output, nil
 }
 
+func testLogin() esc.Value {
+	return esc.NewValue(map[string]esc.Value{
+		"accessKeyId":     esc.NewValue("test-access-key"),
+		"secretAccessKey": esc.NewValue("test-secret-key"),
+	})
+}
+
 func TestOpenReturnsPlainParameter(t *testing.T) {
 	client := &fakeSSMClient{output: &ssm.GetParameterOutput{Parameter: &ssmtypes.Parameter{Value: aws.String("hello"), Type: ssmtypes.ParameterTypeString}}}
 	p := New(
-		WithConfigLoader(func(_ context.Context, region string, _ *awsutil.Credentials) (aws.Config, error) {
+		WithConfigLoader(func(_ context.Context, region string, creds awsutil.Credentials) (aws.Config, error) {
+			if creds.AccessKeyID != "test-access-key" || creds.SecretAccessKey != "test-secret-key" {
+				t.Fatalf("credentials = %#v", creds)
+			}
 			return aws.Config{Region: region}, nil
 		}),
 		WithClientFactory(func(aws.Config) ssmAPI { return client }),
@@ -39,6 +49,7 @@ func TestOpenReturnsPlainParameter(t *testing.T) {
 	v, err := p.Open(context.Background(), map[string]esc.Value{
 		"region": esc.NewValue("us-east-1"),
 		"name":   esc.NewValue("/procella/plain"),
+		"login":  testLogin(),
 	}, nil)
 	if err != nil {
 		t.Fatalf("Open returned error: %v", err)
@@ -52,7 +63,7 @@ func TestOpenReturnsPlainParameter(t *testing.T) {
 func TestOpenMarksSecureStringAsSecret(t *testing.T) {
 	client := &fakeSSMClient{output: &ssm.GetParameterOutput{Parameter: &ssmtypes.Parameter{Value: aws.String("secret"), Type: ssmtypes.ParameterTypeSecureString}}}
 	p := New(
-		WithConfigLoader(func(_ context.Context, region string, _ *awsutil.Credentials) (aws.Config, error) {
+		WithConfigLoader(func(_ context.Context, region string, _ awsutil.Credentials) (aws.Config, error) {
 			return aws.Config{Region: region}, nil
 		}),
 		WithClientFactory(func(aws.Config) ssmAPI { return client }),
@@ -62,6 +73,7 @@ func TestOpenMarksSecureStringAsSecret(t *testing.T) {
 		"region":         esc.NewValue("us-east-1"),
 		"name":           esc.NewValue("/procella/secret"),
 		"withDecryption": esc.NewValue(true),
+		"login":          testLogin(),
 	}, nil)
 	if err != nil {
 		t.Fatalf("Open returned error: %v", err)
@@ -82,10 +94,29 @@ func TestOpenRejectsMissingName(t *testing.T) {
 	}
 }
 
+func TestOpenRejectsMissingLogin(t *testing.T) {
+	configLoaded := false
+	p := New(WithConfigLoader(func(_ context.Context, _ string, _ awsutil.Credentials) (aws.Config, error) {
+		configLoaded = true
+		return aws.Config{}, nil
+	})).(*provider)
+
+	_, err := p.Open(context.Background(), map[string]esc.Value{
+		"region": esc.NewValue("us-east-1"),
+		"name":   esc.NewValue("/procella/plain"),
+	}, nil)
+	if err == nil || err.Error() != "login is required" {
+		t.Fatalf("expected missing login error, got %v", err)
+	}
+	if configLoaded {
+		t.Fatal("AWS config loader was called without explicit credentials")
+	}
+}
+
 func TestOpenPropagatesSDKError(t *testing.T) {
 	want := errors.New("boom")
 	p := New(
-		WithConfigLoader(func(_ context.Context, region string, _ *awsutil.Credentials) (aws.Config, error) {
+		WithConfigLoader(func(_ context.Context, region string, _ awsutil.Credentials) (aws.Config, error) {
 			return aws.Config{Region: region}, nil
 		}),
 		WithClientFactory(func(aws.Config) ssmAPI { return &fakeSSMClient{err: want} }),
@@ -94,6 +125,7 @@ func TestOpenPropagatesSDKError(t *testing.T) {
 	_, err := p.Open(context.Background(), map[string]esc.Value{
 		"region": esc.NewValue("us-east-1"),
 		"name":   esc.NewValue("/procella/plain"),
+		"login":  testLogin(),
 	}, nil)
 	if !errors.Is(err, want) {
 		t.Fatalf("expected sdk error, got %v", err)

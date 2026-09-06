@@ -14,6 +14,7 @@ import { type GitHubService, verifyGitHubWebhookSignature } from "@procella/gith
 import type { OidcService, TrustPolicyRepository } from "@procella/oidc";
 import type { StacksService } from "@procella/stacks";
 import { tracingMiddleware } from "@procella/telemetry";
+import { projectError } from "@procella/types";
 import type { UpdatesService } from "@procella/updates";
 import type { WebhooksService } from "@procella/webhooks";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
@@ -95,6 +96,12 @@ export function createWebApp(deps: WebAppDeps): Hono<Env> {
 		if (!caller) {
 			return c.json({ error: "Unauthorized" }, 401);
 		}
+		if (caller.principalType !== "user") {
+			return c.json(
+				{ error: "CLI tokens can only be created from an interactive user session" },
+				403,
+			);
+		}
 		const body = await c.req.json<{ name?: string }>().catch(() => ({}));
 		const keyName =
 			"name" in body && body.name ? body.name : `procella-cli-${caller.login}-${Date.now()}`;
@@ -143,7 +150,7 @@ export function createWebApp(deps: WebAppDeps): Hono<Env> {
 			createContext: () => ctx,
 			onError({ error }) {
 				if (error.code !== "UNAUTHORIZED") {
-					console.error("[trpc]", error);
+					console.error("[trpc]", projectError(error));
 				}
 			},
 		});

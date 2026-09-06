@@ -185,15 +185,25 @@ export const JournalEntriesSchema = withJsonBounds(
 		.strict(),
 );
 
-export const UntypedDeploymentSchema = withJsonBounds(
-	z
-		.object({
-			version: DeploymentSchemaVersion.min(1).optional(),
-			features: FeatureListSchema.optional(),
-			deployment: BoundedJSON,
-		})
-		.strict(),
-);
+const DeploymentEnvelopeSchema = z
+	.unknown()
+	.nonoptional()
+	.superRefine((value, ctx) => addBoundedJsonIssues(value, ctx, 2))
+	.pipe(
+		z
+			.object({
+				resources: z.array(z.object({}).passthrough()).nullish(),
+			})
+			.passthrough(),
+	);
+
+export const UntypedDeploymentSchema = z
+	.object({
+		version: DeploymentSchemaVersion.min(1).optional(),
+		features: FeatureListSchema.optional(),
+		deployment: DeploymentEnvelopeSchema,
+	})
+	.strict();
 
 export const RenewUpdateLeaseRequestSchema = withJsonBounds(
 	z

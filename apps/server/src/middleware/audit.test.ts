@@ -204,7 +204,8 @@ describe("auditMiddleware", () => {
 	test("identifies token-based actors", async () => {
 		const tokenCaller: Caller = {
 			...validCaller,
-			userId: "token:ak-12345",
+			userId: "K3-unprefixed-access-key",
+			principalType: "token",
 		};
 		const audit = mockAuditService();
 		const app = new Hono<Env>();

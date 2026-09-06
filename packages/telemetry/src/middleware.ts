@@ -12,6 +12,7 @@ import {
 	SpanStatusCode,
 	trace,
 } from "@opentelemetry/api";
+import { projectError } from "@procella/types";
 import type { MiddlewareHandler } from "hono";
 import {
 	httpActiveRequestsGauge,
@@ -73,11 +74,12 @@ export function tracingMiddleware(): MiddlewareHandler {
 						span.setStatus({ code: SpanStatusCode.OK });
 					}
 				} catch (err) {
+					const projected = projectError(err);
 					span.setStatus({
 						code: SpanStatusCode.ERROR,
-						message: err instanceof Error ? err.message : String(err),
+						message: projected.message,
 					});
-					span.recordException(err instanceof Error ? err : new Error(String(err)));
+					span.recordException(projected);
 					throw err;
 				} finally {
 					const durationMs = performance.now() - startTime;

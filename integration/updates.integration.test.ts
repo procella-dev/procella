@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { AesCryptoService } from "@procella/crypto";
-import { checkpoints, type Database, journalEntries, updates } from "@procella/db";
+import { checkpoints, type Database, journalEntries, stacks, updates } from "@procella/db";
 import { PostgresStacksService, type StackInfo } from "@procella/stacks";
 import { type BlobStorage, LocalBlobStorage } from "@procella/storage";
 import {
@@ -246,6 +246,84 @@ describe("PostgresUpdatesService — integration", () => {
 		});
 	});
 
+	describe("terminal completion migration", () => {
+		test("repairs completed non-terminal rows before validating the constraint", async () => {
+			const migration = await readFile(
+				new URL("../packages/db/drizzle/0019_terminal_update_completion.sql", import.meta.url),
+				"utf8",
+			);
+			const statements = migration
+				.split("--> statement-breakpoint")
+				.map((statement) => statement.trim())
+				.filter(Boolean);
+
+			await db.transaction(async (tx) => {
+				await tx.execute(sql.raw(`
+					CREATE TEMP TABLE stacks (
+						id uuid PRIMARY KEY,
+						active_update_id uuid,
+						updated_at timestamp NOT NULL
+					) ON COMMIT DROP
+				`));
+				await tx.execute(sql.raw(`
+					CREATE TEMP TABLE updates (
+						id uuid PRIMARY KEY,
+						stack_id uuid NOT NULL,
+						status text NOT NULL,
+						result text,
+						lease_token text,
+						lease_expires_at timestamp,
+						completed_at timestamp,
+						updated_at timestamp NOT NULL
+					) ON COMMIT DROP
+				`));
+				await tx.execute(sql.raw(`
+					INSERT INTO updates (id, stack_id, status, result, lease_token, lease_expires_at, completed_at, updated_at)
+					VALUES (
+						'00000000-0000-4000-8000-000000000001',
+						'10000000-0000-4000-8000-000000000000',
+						'running',
+						'running',
+						NULL,
+						NULL,
+						'2026-09-01 00:00:00',
+						'2026-09-01 00:00:00'
+					)
+				`));
+				await tx.execute(sql.raw(`
+					INSERT INTO stacks (id, active_update_id, updated_at)
+					VALUES (
+						'10000000-0000-4000-8000-000000000000',
+						'00000000-0000-4000-8000-000000000001',
+						'2026-09-01 00:00:00'
+					)
+				`));
+
+				for (const statement of statements) {
+					await tx.execute(sql.raw(statement));
+				}
+
+				const [update] = await tx
+					.select({
+						status: updates.status,
+						result: updates.result,
+						leaseToken: updates.leaseToken,
+						leaseExpiresAt: updates.leaseExpiresAt,
+					})
+					.from(updates);
+				const [stack] = await tx.select({ activeUpdateId: stacks.activeUpdateId }).from(stacks);
+
+				expect(update).toEqual({
+					status: "failed",
+					result: "failed",
+					leaseToken: null,
+					leaseExpiresAt: null,
+				});
+				expect(stack).toEqual({ activeUpdateId: null });
+			});
+		});
+	});
+
 	// ========================================================================
 	// startUpdate
 	// ========================================================================
@@ -301,6 +379,67 @@ describe("PostgresUpdatesService — integration", () => {
 			// Should allow new update
 			const second = await updatesService.createUpdate(stack.id, "update");
 			expect(second.updateID).toBeTruthy();
+		});
+
+		test("rejects non-terminal and unknown statuses without changing active update state", async () => {
+			const stack = await seedStack();
+			const created = await updatesService.createUpdate(stack.id, "update");
+			await updatesService.startUpdate(created.updateID, {});
+			const [updateBefore] = await db
+				.select({
+					status: updates.status,
+					leaseToken: updates.leaseToken,
+					leaseExpiresAt: updates.leaseExpiresAt,
+					completedAt: updates.completedAt,
+				})
+				.from(updates)
+				.where(eq(updates.id, created.updateID));
+			const [stackBefore] = await db
+				.select({ activeUpdateId: stacks.activeUpdateId })
+				.from(stacks)
+				.where(eq(stacks.id, stack.id));
+
+			for (const status of ["not started", "requested", "running", "paused"]) {
+				await expect(
+					updatesService.completeUpdate(created.updateID, { status }),
+				).rejects.toBeInstanceOf(BadRequestError);
+
+				const [updateAfter] = await db
+					.select({
+						status: updates.status,
+						leaseToken: updates.leaseToken,
+						leaseExpiresAt: updates.leaseExpiresAt,
+						completedAt: updates.completedAt,
+					})
+					.from(updates)
+					.where(eq(updates.id, created.updateID));
+				const [stackAfter] = await db
+					.select({ activeUpdateId: stacks.activeUpdateId })
+					.from(stacks)
+					.where(eq(stacks.id, stack.id));
+
+				expect(updateAfter).toEqual(updateBefore);
+				expect(stackAfter).toEqual(stackBefore);
+				await expect(updatesService.createUpdate(stack.id, "update")).rejects.toBeInstanceOf(
+					UpdateConflictError,
+				);
+			}
+		});
+
+		test("database rejects completed timestamps on non-terminal and unknown updates", async () => {
+			const stack = await seedStack();
+			const created = await updatesService.createUpdate(stack.id, "update");
+
+			for (const status of ["not started", "requested", "running", "paused"]) {
+				await expect(
+					Promise.resolve(
+						db
+							.update(updates)
+							.set({ status, completedAt: new Date() })
+							.where(eq(updates.id, created.updateID)),
+					),
+				).rejects.toThrow();
+			}
 		});
 	});
 

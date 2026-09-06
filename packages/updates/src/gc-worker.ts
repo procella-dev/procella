@@ -3,6 +3,7 @@
 import type { Database } from "@procella/db";
 import { githubUpdateOutbox, stacks, updates } from "@procella/db";
 import { activeUpdatesGauge, gcCycleCount, gcOrphansCleanedCount } from "@procella/telemetry";
+import { projectError } from "@procella/types";
 import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import {
 	GC_ADVISORY_LOCK_ID,
@@ -143,7 +144,7 @@ export class GCWorker {
 			gcOrphansCleanedCount().add(result.orphanCount);
 		} catch (err) {
 			// GC is best-effort — log and retry on next interval. Never crash the server.
-			console.error("[gc] cycle failed:", err);
+			console.error("[gc] cycle failed:", projectError(err));
 		} finally {
 			this.running = false;
 		}
