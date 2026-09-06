@@ -42,10 +42,17 @@ export interface NotificationClient {
 
 export type NotificationClientFactory = () => NotificationClient;
 
+/** Bound a stalled TCP connect so pending subscribers cannot hold slots indefinitely. */
+const CONNECT_TIMEOUT_MS = 10_000;
+
 function createPgNotificationClient(connectionString: string): NotificationClient {
 	const client = new Client({
 		connectionString,
 		application_name: NOTIFY_APPLICATION_NAME,
+		connectionTimeoutMillis: CONNECT_TIMEOUT_MS,
+		// Listener connections idle for hours; keepalives surface a peer that
+		// vanished behind a NAT or load balancer instead of hanging silently.
+		keepAlive: true,
 	});
 	return {
 		connect: async () => {
@@ -176,6 +183,22 @@ class Subscriber implements NotificationStream {
 	}
 }
 
+/** The client disconnected before its listener was ready — nothing left to stream. */
+function subscriptionAbortedError(): TRPCError {
+	return new TRPCError({
+		code: "CLIENT_CLOSED_REQUEST",
+		message: "Subscription aborted before the listener was ready",
+	});
+}
+
+/** Reject as soon as the request aborts, so a stalled connect cannot pin a slot. */
+function rejectOnAbort(signal: AbortSignal): { promise: Promise<never>; dispose: () => void } {
+	const { promise, reject } = Promise.withResolvers<never>();
+	const onAbort = () => reject(subscriptionAbortedError());
+	signal.addEventListener("abort", onAbort, { once: true });
+	return { promise, dispose: () => signal.removeEventListener("abort", onAbort) };
+}
+
 export interface PostgresNotificationHubOptions {
 	connectionString: string;
 	maxConcurrent?: number;
@@ -221,6 +244,8 @@ export class PostgresNotificationHub implements NotificationHub {
 				message: "Server is shutting down; subscriptions are not being accepted",
 			});
 		}
+		// A client that is already gone never gets a slot or a connection.
+		if (signal.aborted) throw subscriptionAbortedError();
 		if (this.active >= this.maxConcurrent) {
 			throw new TRPCError({
 				code: "TOO_MANY_REQUESTS",
@@ -233,11 +258,17 @@ export class PostgresNotificationHub implements NotificationHub {
 		const subscriber = new Subscriber(signal, (self) => this.release(channel, state, key, self));
 		this.attach(state, key, subscriber);
 
+		// Admission is cancellation-aware: a client that disconnects while the
+		// listener is still connecting releases its slot immediately instead of
+		// holding capacity for the length of the stall.
+		const abort = rejectOnAbort(signal);
 		try {
-			await state.ready;
+			await Promise.race([state.ready, abort.promise]);
 		} catch (error) {
 			subscriber.close();
 			throw error;
+		} finally {
+			abort.dispose();
 		}
 		return subscriber;
 	}

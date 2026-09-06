@@ -101,6 +101,21 @@ async function listenerConnections(): Promise<number> {
 	return rows[0]?.count ?? 0;
 }
 
+/**
+ * Channels this database has confirmed a LISTEN for. An idle backend whose last
+ * statement is `LISTEN <channel>` has already registered, so a NOTIFY issued
+ * afterwards cannot be missed.
+ */
+async function listeningChannels(): Promise<string[]> {
+	const rows = await stats`
+		SELECT query
+		FROM pg_stat_activity
+		WHERE datname = current_database()
+		  AND state = 'idle'
+		  AND query ILIKE 'LISTEN %'`;
+	return rows.map((row: { query: string }) => row.query.replace(/^LISTEN\s+/i, "").trim());
+}
+
 async function notifyConnectionPids(): Promise<number[]> {
 	const rows = await stats`
 		SELECT pid
@@ -198,10 +213,16 @@ describe("dashboard subscriptions — integration", () => {
 		const firsts = await Promise.all(streams.map((stream) => stream.next()));
 		expect(firsts.map((r) => envelopeId(r.value))).toEqual(Array(25).fill("1"));
 
-		// Stack-activity subscribers only emit on NOTIFY, so wait until they are
-		// all listening before producing the change they must observe.
+		// Stack-activity subscribers only emit on NOTIFY, so wait until PostgreSQL
+		// has confirmed the LISTEN before producing the change they must observe.
+		// The reservation count is not a readiness signal: a slot is taken before
+		// the listener finishes connecting.
 		const activityFirsts = activity.map((stream) => stream.next());
-		await waitFor(async () => hub.activeSubscriptions === 30, "all subscriptions to open");
+		await waitFor(
+			async () =>
+				hub.activeSubscriptions === 30 && (await listeningChannels()).includes("stack_updates"),
+			"every subscriber admitted and the stack_updates LISTEN registered",
+		);
 		await updatesService.completeUpdate(updateId, { status: "succeeded" });
 		const activityResults = await Promise.all(activityFirsts);
 		expect(activityResults.map((r) => envelopeId(r.value))).toEqual(Array(5).fill(updateId));

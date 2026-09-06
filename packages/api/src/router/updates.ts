@@ -6,6 +6,7 @@ import { updateEvents, updates } from "@procella/db";
 import { TRPCError, tracked } from "@trpc/server";
 import { and, asc, desc, eq, gt, inArray, ne } from "drizzle-orm";
 import { z } from "zod/v4";
+import type { NotificationHub, NotificationStream, NotifyChannel } from "../notifications.js";
 import { protectedProcedure, router } from "../trpc.js";
 
 // ============================================================================
@@ -33,6 +34,25 @@ function parseResourceChanges(fields: unknown): Record<string, number> {
 	if (!fields || typeof fields !== "object") return {};
 	const f = fields as { summaryEvent?: { resourceChanges?: Record<string, number> } };
 	return f.summaryEvent?.resourceChanges ?? {};
+}
+
+/**
+ * Open a notification stream, or null when the client disconnected while the
+ * listener was still being set up — there is nothing left to stream then, and
+ * the hub has already released the subscription slot.
+ */
+async function openNotificationStream(
+	notifications: NotificationHub,
+	channel: NotifyChannel,
+	key: string,
+	signal: AbortSignal,
+): Promise<NotificationStream | null> {
+	try {
+		return await notifications.subscribe(channel, key, signal);
+	} catch (error) {
+		if (signal.aborted) return null;
+		throw error;
+	}
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -247,7 +267,13 @@ export const updatesRouter = router({
 
 			let lastSeq = lastEventId ?? 0;
 			const signal = opts.signal ?? AbortSignal.timeout(MAX_SUBSCRIPTION_LIFETIME_MS);
-			const stream = await opts.ctx.notifications.subscribe("update_events", updateId, signal);
+			const stream = await openNotificationStream(
+				opts.ctx.notifications,
+				"update_events",
+				updateId,
+				signal,
+			);
+			if (!stream) return;
 
 			try {
 				// Replay first (resumes after lastEventId), then drain on every NOTIFY.
@@ -274,7 +300,13 @@ export const updatesRouter = router({
 		const stackInfo = await opts.ctx.stacks.getStack(opts.ctx.caller.tenantId, org, project, stack);
 
 		const signal = opts.signal ?? AbortSignal.timeout(MAX_SUBSCRIPTION_LIFETIME_MS);
-		const stream = await opts.ctx.notifications.subscribe("stack_updates", stackInfo.id, signal);
+		const stream = await openNotificationStream(
+			opts.ctx.notifications,
+			"stack_updates",
+			stackInfo.id,
+			signal,
+		);
+		if (!stream) return;
 
 		try {
 			while (await stream.wait()) {

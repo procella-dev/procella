@@ -79,9 +79,22 @@ class TestHub implements NotificationHub {
 	readonly subscribed: Array<{ channel: NotifyChannel; key: string }> = [];
 	readonly streams: TestStream[] = [];
 	rejectWith: TRPCError | null = null;
+	/** Holds `subscribe()` open so a test can disconnect mid-setup. */
+	setupGate: Promise<void> | null = null;
 
-	async subscribe(channel: NotifyChannel, key: string): Promise<NotificationStream> {
+	async subscribe(
+		channel: NotifyChannel,
+		key: string,
+		signal: AbortSignal,
+	): Promise<NotificationStream> {
 		if (this.rejectWith) throw this.rejectWith;
+		if (this.setupGate) await this.setupGate;
+		if (signal.aborted) {
+			throw new TRPCError({
+				code: "CLIENT_CLOSED_REQUEST",
+				message: "Subscription aborted before the listener was ready",
+			});
+		}
 		this.subscribed.push({ channel, key });
 		const stream = new TestStream();
 		this.streams.push(stream);
@@ -276,6 +289,26 @@ describe("updates.onEvents", () => {
 			.catch((e: unknown) => e);
 		expect(error).toBeInstanceOf(TRPCError);
 		expect((error as TRPCError).code).toBe("TOO_MANY_REQUESTS");
+	});
+
+	test("ends quietly when the client disconnects while the listener is being set up", async () => {
+		const hub = new TestHub();
+		const gate = Promise.withResolvers<void>();
+		hub.setupGate = gate.promise;
+		const { ctx } = makeContext([[{ id: UPDATE_ID }]], { hub });
+		const controller = new AbortController();
+
+		const iterator = await updatesRouter
+			.createCaller(ctx, { signal: controller.signal })
+			.onEvents({ org: "my-org", project: "my-project", stack: "dev", updateId: UPDATE_ID });
+
+		const first = iterator[Symbol.asyncIterator]().next();
+		controller.abort();
+		gate.resolve();
+
+		// The client is gone: no error is raised and no stream was opened.
+		expect((await first).done).toBe(true);
+		expect(hub.subscribed).toHaveLength(0);
 	});
 
 	test("does not consume a subscription slot when stack authorization fails", async () => {

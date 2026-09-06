@@ -17,6 +17,8 @@ class FakeClient implements NotificationClient {
 	ended = false;
 	listening: NotifyChannel | null = null;
 	connectError: Error | null = null;
+	/** Holds `connect()` open to simulate a stalled listener setup. */
+	connectGate: Promise<void> | null = null;
 	private notificationListener: ((payload: string | undefined) => void) | null = null;
 	private errorListener: ((error: Error) => void) | null = null;
 
@@ -25,6 +27,7 @@ class FakeClient implements NotificationClient {
 	}
 
 	async connect(): Promise<void> {
+		if (this.connectGate) await this.connectGate;
 		if (this.connectError) throw this.connectError;
 		this.connected = true;
 	}
@@ -258,12 +261,44 @@ describe("PostgresNotificationHub", () => {
 		expect(hub.activeSubscriptions).toBe(0);
 	});
 
-	test("returns immediately for an already-aborted request", async () => {
-		const { hub } = makeHub();
-		const stream = await hub.subscribe("update_events", "update-1", AbortSignal.abort());
+	test("rejects an already-aborted request without opening a connection", async () => {
+		const { hub, clients } = makeHub();
 
-		expect(await stream.wait()).toBe(false);
-		stream.close();
+		await expect(hub.subscribe("update_events", "update-1", AbortSignal.abort())).rejects.toThrow(
+			"aborted before the listener was ready",
+		);
+		expect(clients()).toHaveLength(0);
+		expect(hub.activeSubscriptions).toBe(0);
+	});
+
+	test("releases the slot when the client disconnects while the listener is connecting", async () => {
+		FakeClient.created = [];
+		const stalled = Promise.withResolvers<void>();
+		const hub = new PostgresNotificationHub({
+			connectionString: "postgres://unused.invalid/db",
+			maxConcurrent: 1,
+			createClient: () => {
+				const client = new FakeClient();
+				client.connectGate = stalled.promise;
+				return client;
+			},
+		});
+
+		const controller = new AbortController();
+		const pending = hub.subscribe("update_events", "update-1", controller.signal);
+		await Promise.resolve();
+		expect(hub.activeSubscriptions).toBe(1);
+
+		controller.abort();
+
+		await expect(pending).rejects.toThrow("aborted before the listener was ready");
+		// The slot is free again even though the connection attempt is still stalled,
+		// so unrelated subscribers are not rejected by a hung listener setup.
+		expect(hub.activeSubscriptions).toBe(0);
+		expect(hub.openConnections).toBe(0);
+		expect(FakeClient.created[0]?.ended).toBe(true);
+
+		stalled.resolve();
 	});
 
 	test("close() ends every connection and stops accepting subscriptions", async () => {
