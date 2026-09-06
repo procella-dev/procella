@@ -69,7 +69,7 @@ The `--force` flag is a client-side safety check; Procella accepts the import re
 
 ## Update and Checkpoint Versioning
 
-Each non-preview update increments the stack's update version. Preview updates reuse the current version and are excluded from versioned export. `StartUpdateResponse.version` exposes this update version to the CLI, and `GET .../export/{version}` resolves it to that update's final canonical checkpoint.
+Each non-preview update increments the stack's update version. Preview updates reuse the version of the last succeeded non-preview update and are excluded from versioned export. `StartUpdateResponse.version` exposes this update version to the CLI, and `GET .../export/{version}` resolves it to that update's final canonical checkpoint.
 
 Checkpoint versions are separate: they start at 1 for each update and increase for every checkpoint write. They order checkpoints within an update so versioned export can select its final canonical state.
 

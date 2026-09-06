@@ -945,7 +945,8 @@ describe("PostgresUpdatesService — integration", () => {
 				);
 			expect(sidecar).toEqual([{ version: DELTA_BASE_CHECKPOINT_VERSION, isDelta: true }]);
 
-			// Explicitly requesting the reserved version must not return the raw baseline text.
+			// Update version 0 does not exist, so it cannot be used to exercise the
+			// canonical-checkpoint filter after version selection moved to `updates.version`.
 			await expect(
 				updatesService.exportStack(stack.id, DELTA_BASE_CHECKPOINT_VERSION),
 			).rejects.toBeInstanceOf(CheckpointNotFoundError);
@@ -959,6 +960,23 @@ describe("PostgresUpdatesService — integration", () => {
 			const versioned = await updatesService.exportStack(stack.id, 1);
 			expect(versioned.version).toBe(3);
 			expect(versioned.deployment).toEqual(canonical);
+
+			// A matching update whose only checkpoint is the sidecar proves the canonical filter
+			// remains load-bearing: removing `isDelta = false` would export this metadata row.
+			const sidecarOnlyStack = await seedStack();
+			const sidecarOnlyUpdate = await updatesService.createUpdate(sidecarOnlyStack.id, "update");
+			const sidecarOnlyStarted = await updatesService.startUpdate(sidecarOnlyUpdate.updateID, {});
+			expect(sidecarOnlyStarted.version).toBe(1);
+			await db.insert(checkpoints).values({
+				updateId: sidecarOnlyUpdate.updateID,
+				stackId: sidecarOnlyStack.id,
+				version: DELTA_BASE_CHECKPOINT_VERSION,
+				data: { sequenceNumber: 1 },
+				isDelta: true,
+			});
+			await expect(updatesService.exportStack(sidecarOnlyStack.id, 1)).rejects.toBeInstanceOf(
+				CheckpointNotFoundError,
+			);
 		});
 
 		test("treats a replay of the same sequence number as a no-op", async () => {
