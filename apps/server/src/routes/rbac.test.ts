@@ -481,7 +481,19 @@ const mutationCases: MutationCase[] = [
 ];
 
 const appFactories = [
-	{ name: "web", create: (deps: CliAppDeps) => createApp(deps) },
+	{
+		name: "web",
+		create: (deps: CliAppDeps) =>
+			createApp({
+				...deps,
+				storage: {
+					get: async () => null,
+					put: async () => {},
+					delete: async () => {},
+					exists: async () => false,
+				},
+			}),
+	},
 	{ name: "cli", create: (deps: CliAppDeps) => createCliApp(deps) },
 ] as const;
 

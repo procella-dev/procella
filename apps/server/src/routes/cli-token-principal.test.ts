@@ -98,6 +98,12 @@ function makeApiApp(
 		audit: {} as AuditService,
 		db: {} as Database,
 		dbUrl: "postgres://test:test@localhost:5432/test",
+		storage: {
+			get: async () => null,
+			put: async () => {},
+			delete: async () => {},
+			exists: async () => false,
+		},
 		stacks: {} as StacksService,
 		updates: {} as UpdatesService,
 		webhooks: {} as WebhooksService,
