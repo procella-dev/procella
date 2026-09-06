@@ -78,7 +78,7 @@ export interface UpdatesService {
 
 	exportStack(stackId: string, version?: number): Promise<UntypedDeployment>;
 
-	importStack(stackId: string, deployment: UntypedDeployment): Promise<ImportStackResponse>;
+	importStack(stackId: string, deployment: unknown): Promise<ImportStackResponse>;
 
 	repairStack(stackId: string): Promise<RepairMutation[]>;
 

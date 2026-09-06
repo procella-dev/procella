@@ -1,7 +1,6 @@
 // @procella/server — Export/import state handlers.
 
 import type { StacksService } from "@procella/stacks";
-import type { UntypedDeployment } from "@procella/types";
 import type { UpdatesService } from "@procella/updates";
 import type { Context } from "hono";
 import type { Env } from "../types.js";
@@ -53,7 +52,7 @@ export function stateHandlers(updates: UpdatesService, stacks: StacksService) {
 			if (!parseResult.success) {
 				return c.json({ code: "invalid_request", message: parseResult.error.message }, 400);
 			}
-			const result = await updates.importStack(stackInfo.id, parseResult.data as UntypedDeployment);
+			const result = await updates.importStack(stackInfo.id, parseResult.data);
 			return c.json(result);
 		},
 	};

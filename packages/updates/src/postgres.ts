@@ -76,6 +76,7 @@ import {
 	requireCheckpointHash,
 	requireSequenceNumber,
 	safeTokenCompare,
+	validateImportedDeployment,
 } from "./helpers.js";
 import { type RepairMutation, repairCheckpoint } from "./repair.js";
 import type {
@@ -840,7 +841,7 @@ export class PostgresUpdatesService implements UpdatesService {
 		});
 	}
 
-	async importStack(stackId: string, deployment: UntypedDeployment): Promise<ImportStackResponse> {
+	async importStack(stackId: string, deployment: unknown): Promise<ImportStackResponse> {
 		return withDbSpan("importStack", { "stack.id": stackId }, () =>
 			this.importStackVersion(stackId, deployment),
 		);
@@ -848,9 +849,10 @@ export class PostgresUpdatesService implements UpdatesService {
 
 	private async importStackVersion(
 		stackId: string,
-		deployment: UntypedDeployment,
+		deployment: unknown,
 		expectedCheckpointId?: string,
 	): Promise<ImportStackResponse> {
+		const validatedDeployment = validateImportedDeployment(deployment);
 		const updateRow = await this.db.transaction(async (tx) => {
 			const stackLock = await this.lockStackForOperation(tx, stackId);
 			if (stackLock.activeUpdateId) {
@@ -879,7 +881,7 @@ export class PostgresUpdatesService implements UpdatesService {
 				})
 				.returning();
 
-			await this.upsertCheckpointInTransaction(tx, row.id, deployment.deployment, {
+			await this.upsertCheckpointInTransaction(tx, row.id, validatedDeployment.deployment, {
 				requireRunningLease: false,
 			});
 

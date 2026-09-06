@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import {
 	BadRequestError,
 	type Caller,
@@ -32,6 +32,7 @@ import {
 	requireCheckpointHash,
 	requireSequenceNumber,
 	safeTokenCompare,
+	validateImportedDeployment,
 } from "./helpers.js";
 import {
 	applyJournalEntries,
@@ -546,6 +547,45 @@ describe("@procella/updates helpers", () => {
 			expect(() => assertSupportedDeploymentEnvelope({ version: "3" }, "ctx")).toThrow(
 				BadRequestError,
 			);
+		});
+	});
+
+	describe("validateImportedDeployment", () => {
+		test("preserves supported envelopes and opaque deployment fields", () => {
+			for (const version of [1, 2, 3]) {
+				const envelope = {
+					version,
+					deployment: { resources: version === 1 ? null : [], opaque: { future: true } },
+				};
+				expect(validateImportedDeployment(envelope)).toBe(envelope);
+			}
+			expect(validateImportedDeployment({ deployment: {} })).toEqual({ deployment: {} });
+		});
+
+		test("rejects malformed deployments before persistence starts", async () => {
+			const transaction = mock(async () => {
+				throw new Error("persistence reached");
+			});
+			const service = new PostgresUpdatesService({
+				db: { transaction } as never,
+				storage: {} as never,
+				crypto: {} as never,
+			});
+
+			for (const deployment of [
+				{ version: 3 },
+				{ version: 3, deployment: { resources: "not-an-array" } },
+				{ version: 3, deployment: { resources: [null] } },
+			]) {
+				let rejection: unknown;
+				try {
+					await service.importStack("stack-1", deployment);
+				} catch (error) {
+					rejection = error;
+				}
+				expect(rejection).toBeInstanceOf(BadRequestError);
+			}
+			expect(transaction).not.toHaveBeenCalled();
 		});
 	});
 

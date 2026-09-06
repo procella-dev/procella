@@ -1,14 +1,25 @@
-import { SUPPORTED_DEPLOYMENT_SCHEMA_VERSION } from "@procella/updates";
+import { BadRequestError } from "@procella/types";
+import {
+	MAX_IMPORT_FEATURE_COUNT,
+	MAX_IMPORT_JSON_DEPTH,
+	MAX_IMPORT_STRING_LENGTH,
+	SUPPORTED_DEPLOYMENT_SCHEMA_VERSION,
+	validateImportedDeployment,
+} from "@procella/updates";
 import { z } from "zod";
 
-export const MAX_JSON_DEPTH = 32;
-export const MAX_STRING_LENGTH = 1024 * 1024;
+export const MAX_JSON_DEPTH = MAX_IMPORT_JSON_DEPTH;
+export const MAX_STRING_LENGTH = MAX_IMPORT_STRING_LENGTH;
 export const MAX_EVENT_BATCH_SIZE = 1000;
 export const MAX_BATCH_CRYPT_ITEMS = 1000;
-export const MAX_FEATURE_COUNT = 100;
+export const MAX_FEATURE_COUNT = MAX_IMPORT_FEATURE_COUNT;
 export const MAX_LEASE_DURATION_SECONDS = 300;
 
-const FORBIDDEN_JSON_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+const FORBIDDEN_JSON_KEYS: Record<string, boolean> = {
+	["__proto__"]: true,
+	constructor: true,
+	prototype: true,
+};
 
 export const BoundedString = (max: number) => z.string().max(max);
 export const BoundedJSON = z.unknown();
@@ -55,7 +66,7 @@ function addBoundedJsonIssues(
 	}
 
 	for (const [key, nestedValue] of Object.entries(value)) {
-		if (FORBIDDEN_JSON_KEYS.has(key)) {
+		if (Object.hasOwn(FORBIDDEN_JSON_KEYS, key)) {
 			ctx.addIssue({
 				code: "custom",
 				path: [...path, key],
@@ -185,25 +196,17 @@ export const JournalEntriesSchema = withJsonBounds(
 		.strict(),
 );
 
-const DeploymentEnvelopeSchema = z
-	.unknown()
-	.nonoptional()
-	.superRefine((value, ctx) => addBoundedJsonIssues(value, ctx, 2))
-	.pipe(
-		z
-			.object({
-				resources: z.array(z.object({}).passthrough()).nullish(),
-			})
-			.passthrough(),
-	);
-
-export const UntypedDeploymentSchema = z
-	.object({
-		version: DeploymentSchemaVersion.min(1).optional(),
-		features: FeatureListSchema.optional(),
-		deployment: DeploymentEnvelopeSchema,
-	})
-	.strict();
+export const UntypedDeploymentSchema = z.unknown().transform((value, ctx) => {
+	try {
+		return validateImportedDeployment(value);
+	} catch (error) {
+		if (error instanceof BadRequestError) {
+			ctx.addIssue({ code: "custom", message: error.message });
+			return z.NEVER;
+		}
+		throw error;
+	}
+});
 
 export const RenewUpdateLeaseRequestSchema = withJsonBounds(
 	z

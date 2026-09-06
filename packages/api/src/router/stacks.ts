@@ -296,8 +296,7 @@ export const stacksRouter = router({
 				input.project,
 				input.stack,
 			);
-			const deployment = input.deployment as UntypedDeployment;
-			return ctx.updates.importStack(stackInfo.id, deployment);
+			return ctx.updates.importStack(stackInfo.id, input.deployment);
 		}),
 
 	repair: memberProcedure.input(stackInput).mutation(async ({ ctx, input }) => {

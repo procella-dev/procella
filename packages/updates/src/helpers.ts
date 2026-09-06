@@ -277,6 +277,99 @@ export function assertSupportedDeploymentEnvelope(
 	}
 }
 
+export const MAX_IMPORT_JSON_DEPTH = 32;
+export const MAX_IMPORT_STRING_LENGTH = 1024 * 1024;
+export const MAX_IMPORT_FEATURE_COUNT = 100;
+
+const IMPORT_ENVELOPE_KEYS: Record<string, boolean> = {
+	version: true,
+	features: true,
+	deployment: true,
+};
+const FORBIDDEN_IMPORT_JSON_KEYS: Record<string, boolean> = {
+	["__proto__"]: true,
+	constructor: true,
+	prototype: true,
+};
+
+function assertImportJsonBounds(value: unknown, depth = 1): void {
+	if (depth > MAX_IMPORT_JSON_DEPTH) {
+		throw new BadRequestError(
+			`Imported deployment exceeds maximum JSON depth of ${MAX_IMPORT_JSON_DEPTH}`,
+		);
+	}
+	if (typeof value === "string") {
+		if (value.length > MAX_IMPORT_STRING_LENGTH) {
+			throw new BadRequestError(
+				`Imported deployment string exceeds maximum length of ${MAX_IMPORT_STRING_LENGTH}`,
+			);
+		}
+		return;
+	}
+	if (value === null || typeof value !== "object") return;
+
+	if (Array.isArray(value)) {
+		for (const item of value) assertImportJsonBounds(item, depth + 1);
+		return;
+	}
+
+	for (const [key, nestedValue] of Object.entries(value)) {
+		if (Object.hasOwn(FORBIDDEN_IMPORT_JSON_KEYS, key)) {
+			throw new BadRequestError(`Imported deployment contains forbidden JSON key: ${key}`);
+		}
+		assertImportJsonBounds(nestedValue, depth + 1);
+	}
+}
+
+/** Validate an import envelope before any update or checkpoint rows are written. */
+export function validateImportedDeployment(value: unknown): UntypedDeployment {
+	assertImportJsonBounds(value);
+	if (!isPlainObject(value)) {
+		throw new BadRequestError("Imported deployment envelope must be an object");
+	}
+	for (const key of Object.keys(value)) {
+		if (!Object.hasOwn(IMPORT_ENVELOPE_KEYS, key)) {
+			throw new BadRequestError(`Imported deployment envelope contains unknown key: ${key}`);
+		}
+	}
+
+	const { version, features } = value;
+	if (
+		version !== undefined &&
+		(typeof version !== "number" || !Number.isInteger(version) || version < 1)
+	) {
+		throw new BadRequestError("Imported deployment schema version must be a positive integer");
+	}
+	if (features !== undefined && !Array.isArray(features)) {
+		throw new BadRequestError("Imported deployment features must be an array");
+	}
+	assertSupportedDeploymentEnvelope(value, "Imported deployment");
+	if (Array.isArray(features) && features.length > MAX_IMPORT_FEATURE_COUNT) {
+		throw new BadRequestError(
+			`Imported deployment has more than ${MAX_IMPORT_FEATURE_COUNT} features`,
+		);
+	}
+
+	if (!Object.hasOwn(value, "deployment") || value.deployment === undefined) {
+		throw new BadRequestError("Imported deployment payload is required");
+	}
+	if (!isPlainObject(value.deployment)) {
+		throw new BadRequestError("Imported deployment payload must be an object");
+	}
+
+	const { resources } = value.deployment;
+	if (resources !== undefined && resources !== null) {
+		if (!Array.isArray(resources)) {
+			throw new BadRequestError("Imported deployment resources must be an array or null");
+		}
+		if (resources.some((resource) => !isPlainObject(resource))) {
+			throw new BadRequestError("Imported deployment resources must contain only objects");
+		}
+	}
+
+	return value as unknown as UntypedDeployment;
+}
+
 /**
  * Parse verbatim/delta deployment text into its inner deployment payload.
  *
