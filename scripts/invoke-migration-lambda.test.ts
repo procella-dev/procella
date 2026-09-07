@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
 	invokeMigration,
 	resolveMigrationCommandDirectory,
+	resolveRepositoryDirectory,
 	validateMigrationInvocation,
 } from "./invoke-migration-lambda.js";
 
@@ -22,6 +23,24 @@ describe("resolveMigrationCommandDirectory", () => {
 	test("walks from .sst/platform to the project root for local deploys", () => {
 		expect(resolveMigrationCommandDirectory({})).toBe("../..");
 		expect(resolveMigrationCommandDirectory({ GITHUB_WORKSPACE: "  " })).toBe("../..");
+	});
+});
+
+describe("resolveRepositoryDirectory", () => {
+	test("uses the config process directory for local deploys", () => {
+		expect(resolveRepositoryDirectory({}, "/repo/procella")).toBe("/repo/procella");
+		expect(resolveRepositoryDirectory({ GITHUB_WORKSPACE: "  " }, "/repo/procella")).toBe(
+			"/repo/procella",
+		);
+	});
+
+	test("uses the GitHub Actions workspace when present", () => {
+		expect(
+			resolveRepositoryDirectory(
+				{ GITHUB_WORKSPACE: "/home/runner/work/procella/procella" },
+				"/repo/procella",
+			),
+		).toBe("/home/runner/work/procella/procella");
 	});
 });
 
