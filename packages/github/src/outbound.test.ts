@@ -135,7 +135,7 @@ describe("VaultedGitHubIdentityService", () => {
 		);
 
 		await expect(
-			service.verifyAccountAdministration("user-a", TENANT_A, "acme"),
+			service.verifyAccountAdministration("user-a", TENANT_A, "acme", "tok-a"),
 		).resolves.toBeUndefined();
 		expect(await service.loadIdentity("user-a", TENANT_A)).toEqual({ login: "Acme" });
 		expect(fetchUserToken).toHaveBeenCalledWith("user-a", TENANT_A);
@@ -153,7 +153,7 @@ describe("VaultedGitHubIdentityService", () => {
 		);
 
 		await expect(
-			service.verifyAccountAdministration("user-a", TENANT_A, "acme"),
+			service.verifyAccountAdministration("user-a", TENANT_A, "acme", "tok-a"),
 		).resolves.toBeUndefined();
 	});
 
@@ -170,7 +170,7 @@ describe("VaultedGitHubIdentityService", () => {
 				),
 			);
 			await expect(
-				service.verifyAccountAdministration("user-a", TENANT_A, "acme", {
+				service.verifyAccountAdministration("user-a", TENANT_A, "acme", "tok-a", {
 					allowInvisibleMembership: true,
 				}),
 			).rejects.toMatchObject({ code: "authorization_required" });
@@ -191,13 +191,13 @@ describe("VaultedGitHubIdentityService", () => {
 			// Before installation a GitHub App user token cannot read organization
 			// membership, so the flow may continue to the installation screen.
 			await expect(
-				service.verifyAccountAdministration("user-a", TENANT_A, "acme", {
+				service.verifyAccountAdministration("user-a", TENANT_A, "acme", "tok-a", {
 					allowInvisibleMembership: true,
 				}),
 			).resolves.toBeUndefined();
 			// After installation the same answer is a denial.
 			await expect(
-				service.verifyAccountAdministration("user-a", TENANT_A, "acme"),
+				service.verifyAccountAdministration("user-a", TENANT_A, "acme", "tok-a"),
 			).rejects.toMatchObject({ code: "authorization_required" });
 		}
 	});
@@ -214,7 +214,7 @@ describe("VaultedGitHubIdentityService", () => {
 
 		for (const options of [{}, { allowInvisibleMembership: true }]) {
 			await expect(
-				service.verifyAccountAdministration("user-a", TENANT_A, "acme", options),
+				service.verifyAccountAdministration("user-a", TENANT_A, "acme", "tok-a", options),
 			).rejects.toMatchObject({ code: "authorization_failed" });
 		}
 	});
@@ -228,7 +228,7 @@ describe("VaultedGitHubIdentityService", () => {
 		);
 
 		await expect(
-			service.verifyAccountAdministration("user-a", TENANT_A, "acme"),
+			service.verifyAccountAdministration("user-a", TENANT_A, "acme", "tok-a"),
 		).rejects.toMatchObject({ code: "authorization_required" });
 		expect(await service.loadIdentity("user-a", TENANT_A)).toBeNull();
 		expect(request).not.toHaveBeenCalled();
@@ -267,8 +267,9 @@ describe("VaultedGitHubIdentityService", () => {
 		delete confirmed[TENANT_A];
 
 		expect(await service.loadIdentity("user-a", TENANT_B)).toEqual({ login: "alice" });
+		// The caller reads the confirmed id itself now; tenant A's is gone.
 		await expect(
-			service.verifyAccountAdministration("user-a", TENANT_A, "alice"),
+			service.verifyAccountAdministration("user-a", TENANT_A, "alice", confirmed[TENANT_A] ?? null),
 		).rejects.toMatchObject({ code: "authorization_required" });
 	});
 
@@ -285,9 +286,11 @@ describe("VaultedGitHubIdentityService", () => {
 		// Descope has vaulted a token, but no browser-bound callback confirmed it.
 		expect(await service.loadIdentity("user-a", TENANT_A)).toBeNull();
 		await expect(
-			service.verifyAccountAdministration("user-a", TENANT_A, "acme"),
+			service.verifyAccountAdministration("user-a", TENANT_A, "acme", null),
 		).rejects.toMatchObject({ code: "authorization_required" });
-		await expect(service.verifyInstallationAccess("user-a", TENANT_A, 101)).rejects.toMatchObject({
+		await expect(
+			service.verifyInstallationAccess("user-a", TENANT_A, 101, null),
+		).rejects.toMatchObject({
 			code: "authorization_required",
 		});
 		expect(request).not.toHaveBeenCalled();
@@ -311,16 +314,20 @@ describe("VaultedGitHubIdentityService", () => {
 		);
 
 		expect(await service.loadIdentity("user-a", TENANT_A)).toBeNull();
+		// "tok-a" is what the caller confirmed; the vault now answers with a
+		// different token, so it may not be used.
 		await expect(
-			service.verifyAccountAdministration("user-a", TENANT_A, "acme"),
+			service.verifyAccountAdministration("user-a", TENANT_A, "acme", "tok-a"),
 		).rejects.toMatchObject({ code: "authorization_required" });
-		await expect(service.verifyInstallationAccess("user-a", TENANT_A, 101)).rejects.toMatchObject({
+		await expect(
+			service.verifyInstallationAccess("user-a", TENANT_A, 101, "tok-a"),
+		).rejects.toMatchObject({
 			code: "authorization_required",
 		});
 		expect(request).not.toHaveBeenCalled();
 	});
 
-	test("fails closed when the confirmation store is unreachable", async () => {
+	test("loadIdentity fails closed when the confirmation store is unreachable", async () => {
 		const service = new VaultedGitHubIdentityService(
 			tokenVault(),
 			{
@@ -331,13 +338,10 @@ describe("VaultedGitHubIdentityService", () => {
 			userClient(async () => ({ data: { login: "alice" } })),
 		);
 
+		// loadIdentity is the only method that still reads the confirmation table
+		// itself; every other verification now takes the confirmed id as an
+		// argument instead, so a store outage cannot wedge it.
 		expect(await service.loadIdentity("user-a", TENANT_A)).toBeNull();
-		await expect(
-			service.verifyAccountAdministration("user-a", TENANT_A, "acme"),
-		).rejects.toMatchObject({ code: "authorization_failed" });
-		await expect(service.drainTenantTokens("user-a", TENANT_A, "tok-a")).rejects.toMatchObject({
-			code: "authorization_failed",
-		});
 	});
 
 	test("paginates installation access and rejects installations the user cannot see", async () => {
@@ -352,7 +356,7 @@ describe("VaultedGitHubIdentityService", () => {
 			userClient(async () => pages[call++] ?? { data: { total_count: 0, installations: [] } }),
 		);
 		await expect(
-			accessible.verifyInstallationAccess("user-a", TENANT_A, 101),
+			accessible.verifyInstallationAccess("user-a", TENANT_A, 101, "tok-a"),
 		).resolves.toBeUndefined();
 		expect(call).toBe(2);
 
@@ -361,7 +365,9 @@ describe("VaultedGitHubIdentityService", () => {
 			confirmations(),
 			userClient(async () => ({ data: { total_count: 1, installations: [{ id: 7 }] } })),
 		);
-		await expect(denied.verifyInstallationAccess("user-a", TENANT_A, 101)).rejects.toMatchObject({
+		await expect(
+			denied.verifyInstallationAccess("user-a", TENANT_A, 101, "tok-a"),
+		).rejects.toMatchObject({
 			code: "authorization_required",
 		});
 	});

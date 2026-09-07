@@ -88,6 +88,13 @@ export interface GitHubOutboundIdentityService {
 	 * Resolves when the confirmed connected user owns `accountLogin` or is an
 	 * active organization administrator of it.
 	 *
+	 * `confirmedTokenId` is the connection id the caller already read under the
+	 * per-connection advisory lock. This method never reads the confirmation
+	 * table itself: doing so would need a second pooled database connection
+	 * while the caller's transaction holds the only one the pool has to give,
+	 * self-deadlocking under a small pool. The caller is responsible for
+	 * reading it inside that same transaction.
+	 *
 	 * `allowInvisibleMembership` covers the pre-installation leg: the vaulted
 	 * token is a GitHub App user-to-server token, so organization membership is
 	 * unreadable until the App is installed on that organization. The
@@ -97,10 +104,20 @@ export interface GitHubOutboundIdentityService {
 		userId: string,
 		tenantId: string,
 		accountLogin: string,
+		confirmedTokenId: string | null,
 		options?: { allowInvisibleMembership?: boolean },
 	): Promise<void>;
-	/** Resolves when the installation is visible to the confirmed connected user. */
-	verifyInstallationAccess(userId: string, tenantId: string, installationId: number): Promise<void>;
+	/**
+	 * Resolves when the installation is visible to the confirmed connected user.
+	 * `confirmedTokenId` carries the same no-second-connection requirement as
+	 * {@link verifyAccountAdministration}.
+	 */
+	verifyInstallationAccess(
+		userId: string,
+		tenantId: string,
+		installationId: number,
+		confirmedTokenId: string | null,
+	): Promise<void>;
 	/**
 	 * Empties this tenant's vault slot, leaving other tenants intact, and returns
 	 * the token ids proven gone.
@@ -275,9 +292,10 @@ export class VaultedGitHubIdentityService implements GitHubOutboundIdentityServi
 		userId: string,
 		tenantId: string,
 		accountLogin: string,
+		confirmedTokenId: string | null,
 		options: { allowInvisibleMembership?: boolean } = {},
 	): Promise<void> {
-		const token = await this.confirmedToken(userId, tenantId);
+		const token = await this.tokenForConfirmedId(userId, tenantId, confirmedTokenId);
 		const login = await this.currentLogin(token.accessToken);
 		if (login.toLowerCase() === accountLogin.toLowerCase()) return;
 
@@ -306,8 +324,9 @@ export class VaultedGitHubIdentityService implements GitHubOutboundIdentityServi
 		userId: string,
 		tenantId: string,
 		installationId: number,
+		confirmedTokenId: string | null,
 	): Promise<void> {
-		const token = await this.confirmedToken(userId, tenantId);
+		const token = await this.tokenForConfirmedId(userId, tenantId, confirmedTokenId);
 		const client = this.userClientFactory(token.accessToken);
 		let page = 1;
 		try {
@@ -381,13 +400,34 @@ export class VaultedGitHubIdentityService implements GitHubOutboundIdentityServi
 		}
 	}
 
-	/** The tenant's token, but only when Descope still reports the confirmed id. */
+	/**
+	 * The tenant's token, but only when Descope still reports the confirmed id
+	 * read from PostgreSQL. Used only by {@link loadIdentity}, which runs
+	 * outside any locked transaction — every other caller already knows the
+	 * confirmed id from the transaction that is verifying it and must use
+	 * {@link tokenForConfirmedId} instead, so it never opens a second pooled
+	 * connection while that transaction holds the only one available.
+	 */
 	private async confirmedToken(userId: string, tenantId: string): Promise<GitHubVaultedToken> {
 		const confirmedTokenId = await this.confirmations
 			.confirmedTokenId(tenantId, userId)
 			.catch(() => {
 				throw new GitHubOutboundError("authorization_failed");
 			});
+		return this.tokenForConfirmedId(userId, tenantId, confirmedTokenId);
+	}
+
+	/**
+	 * The vault's current token for this tenant, but only if it matches the id
+	 * the caller already confirmed. Takes no database dependency: the caller
+	 * supplies the confirmed id, typically read inside the same locked
+	 * transaction that is about to consume the verification result.
+	 */
+	private async tokenForConfirmedId(
+		userId: string,
+		tenantId: string,
+		confirmedTokenId: string | null,
+	): Promise<GitHubVaultedToken> {
 		if (!confirmedTokenId) throw new GitHubOutboundError("authorization_required");
 		const token = await this.requireToken(userId, tenantId);
 		if (token.id !== confirmedTokenId) {

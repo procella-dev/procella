@@ -732,7 +732,7 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 			browserBinding: claims.browserBinding,
 			phase: "install",
 		});
-		await this.db.transaction(async (tx) => {
+		const pending = await this.db.transaction(async (tx): Promise<GitHubPendingConnection> => {
 			await lockOutboundConnection(tx as Database, claims.tenantId, claims.initiatorUserId);
 			// Read the vaulted token only after the lock: a token observed earlier
 			// could already have been drained by a concurrent disconnect.
@@ -759,14 +759,18 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 					target: [githubOutboundConnections.tenantId, githubOutboundConnections.userId],
 					set: { tokenId: pending.tokenId, updatedAt: sql`now()` },
 				});
+			return pending;
 		});
 
 		// Only now can the connected identity be verified: confirmation is what
-		// makes the token usable at all.
+		// makes the token usable at all. The transaction already committed, so
+		// this is not a second checkout while the lock's transaction is open; the
+		// id just confirmed is passed directly rather than re-reading it.
 		await this.verifyVaultedAdministration(
 			claims.tenantId,
 			claims.initiatorUserId,
 			claims.accountLogin,
+			pending.tokenId,
 			{ allowInvisibleMembership: true },
 		);
 
@@ -786,6 +790,12 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 	 * see it, or waits until this binding is committed and then removes both. A
 	 * verification that ran before the lock could be satisfied by a token the
 	 * disconnect deletes a moment later, leaving a binding with no confirmation.
+	 *
+	 * The confirmed token id is read through `tx` — never through a second pool
+	 * connection — and handed to the outbound verification calls directly: they
+	 * take that id as an argument rather than reading it themselves, because a
+	 * second checkout while this transaction holds the pool's only connection
+	 * would deadlock the connection it is waiting on.
 	 */
 	async completeInstallation(
 		state: string,
@@ -803,15 +813,28 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 
 		return this.db.transaction(async (tx) => {
 			await lockOutboundConnection(tx as Database, claims.tenantId, claims.initiatorUserId);
+			const [confirmation] = await tx
+				.select({ tokenId: githubOutboundConnections.tokenId })
+				.from(githubOutboundConnections)
+				.where(
+					and(
+						eq(githubOutboundConnections.tenantId, claims.tenantId),
+						eq(githubOutboundConnections.userId, claims.initiatorUserId),
+					),
+				)
+				.limit(1);
+			const confirmedTokenId = confirmation?.tokenId ?? null;
 			await this.verifyVaultedAdministration(
 				claims.tenantId,
 				claims.initiatorUserId,
 				claims.accountLogin,
+				confirmedTokenId,
 			);
 			await this.verifyVaultedInstallationAccess(
 				claims.tenantId,
 				claims.initiatorUserId,
 				installationId,
+				confirmedTokenId,
 			);
 			await this.consumeSetupState(tx as Database, claims);
 			return this.saveInstallation(claims.tenantId, installation, tx as Database);
@@ -965,11 +988,18 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 		tenantId: string,
 		userId: string,
 		accountLogin: string,
+		confirmedTokenId: string | null,
 		options: { allowInvisibleMembership?: boolean } = {},
 	): Promise<void> {
 		if (!this.outbound) throw new GitHubSetupError("authorization_unavailable");
 		try {
-			await this.outbound.verifyAccountAdministration(userId, tenantId, accountLogin, options);
+			await this.outbound.verifyAccountAdministration(
+				userId,
+				tenantId,
+				accountLogin,
+				confirmedTokenId,
+				options,
+			);
 		} catch (error) {
 			throw setupErrorFromOutbound(error);
 		}
@@ -979,10 +1009,16 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 		tenantId: string,
 		userId: string,
 		installationId: number,
+		confirmedTokenId: string | null,
 	): Promise<void> {
 		if (!this.outbound) throw new GitHubSetupError("authorization_unavailable");
 		try {
-			await this.outbound.verifyInstallationAccess(userId, tenantId, installationId);
+			await this.outbound.verifyInstallationAccess(
+				userId,
+				tenantId,
+				installationId,
+				confirmedTokenId,
+			);
 		} catch (error) {
 			throw setupErrorFromOutbound(error);
 		}

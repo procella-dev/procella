@@ -1,7 +1,6 @@
 import { afterEach, beforeAll, describe, expect, test } from "bun:test";
 import type { Octokit } from "@octokit/rest";
-import type { Database } from "@procella/db";
-import { githubInstallations, githubOutboundConnections } from "@procella/db";
+import { createDb, type Database, githubInstallations, githubOutboundConnections } from "@procella/db";
 import { eq, sql } from "drizzle-orm";
 import {
 	GitHubOutboundError,
@@ -10,7 +9,7 @@ import {
 	PostgresGitHubOutboundConfirmations,
 	VaultedGitHubIdentityService,
 } from "@procella/github";
-import { getTestDb, truncateTables } from "./setup.js";
+import { getTestDb, getTestDbUrl, truncateTables } from "./setup.js";
 
 const config = {
 	appId: "123",
@@ -78,7 +77,9 @@ function vaultTokenId(tenantId: string, userId: string): string {
 	return `tok-${tenantId}-${userId}`;
 }
 
-function createService(overrides: { outbound?: GitHubOutboundIdentityService } = {}) {
+function createService(
+	overrides: { outbound?: GitHubOutboundIdentityService; db?: Database } = {},
+) {
 	const appClient = {
 		request: async (route: string, input?: { installation_id: number }) => {
 			if (route === "GET /app") return { data: { id: 123, slug: "procella-test" } };
@@ -88,8 +89,9 @@ function createService(overrides: { outbound?: GitHubOutboundIdentityService } =
 			return { data };
 		},
 	} as unknown as Octokit;
-	const outbound: GitHubOutboundIdentityService = overrides.outbound ?? vaultBackedOutbound();
-	return new OctokitGitHubService({ db, config, appClient, outbound });
+	const activeDb = overrides.db ?? db;
+	const outbound: GitHubOutboundIdentityService = overrides.outbound ?? vaultBackedOutbound(activeDb);
+	return new OctokitGitHubService({ db: activeDb, config, appClient, outbound });
 }
 
 /**
@@ -97,8 +99,13 @@ function createService(overrides: { outbound?: GitHubOutboundIdentityService } =
  * whose GitHub user is an active organization administrator. Confirmations are
  * read from the real table, so these tests exercise the durable boundary and
  * database-level tenant isolation rather than GitHub's verification.
+ *
+ * `confirmationsDb` defaults to the shared test pool; the pool-exhaustion
+ * regression below passes its own single-connection pool instead so the
+ * confirmation reader and the service's transactions contend for the same
+ * one connection if anything tries to check out a second.
  */
-function vaultBackedOutbound(): GitHubOutboundIdentityService {
+function vaultBackedOutbound(confirmationsDb: Database = db): GitHubOutboundIdentityService {
 	return new VaultedGitHubIdentityService(
 		{
 			// Deleting a token empties that tenant's slot, so disconnect's drain
@@ -122,7 +129,7 @@ function vaultBackedOutbound(): GitHubOutboundIdentityService {
 				}
 			},
 		},
-		new PostgresGitHubOutboundConfirmations(db),
+		new PostgresGitHubOutboundConfirmations(confirmationsDb),
 		(token) =>
 			({
 				request: async (route: string) => {
@@ -847,20 +854,32 @@ function callbackRaceHarness(): CallbackRaceHarness {
 			loadIdentity: (userId, tenantId) => delegate.loadIdentity(userId, tenantId),
 			loadPendingConnection: (userId, tenantId) =>
 				delegate.loadPendingConnection(userId, tenantId),
-			verifyAccountAdministration: async (userId, tenantId, accountLogin, options) => {
+			verifyAccountAdministration: async (
+				userId,
+				tenantId,
+				accountLogin,
+				confirmedTokenId,
+				options,
+			) => {
 				harness.verifications += 1;
 				events.push("verify:enter");
 				await harness.pauseVerification;
 				try {
-					await delegate.verifyAccountAdministration(userId, tenantId, accountLogin, options);
+					await delegate.verifyAccountAdministration(
+						userId,
+						tenantId,
+						accountLogin,
+						confirmedTokenId,
+						options,
+					);
 				} catch (error) {
 					events.push("verify:denied");
 					throw error;
 				}
 				events.push("verify:ok");
 			},
-			verifyInstallationAccess: (userId, tenantId, installationId) =>
-				delegate.verifyInstallationAccess(userId, tenantId, installationId),
+			verifyInstallationAccess: (userId, tenantId, installationId, confirmedTokenId) =>
+				delegate.verifyInstallationAccess(userId, tenantId, installationId, confirmedTokenId),
 			drainTenantTokens: async (userId, tenantId, expectedTokenId) => {
 				harness.drains += 1;
 				events.push(`drain:enter:${expectedTokenId ?? "none"}`);
@@ -1005,4 +1024,38 @@ describe("GitHub installation callback locking", () => {
 		});
 		expect(verificationsWhileDraining).toBe(verificationsBefore);
 	});
+});
+
+// ============================================================================
+// completeInstallation must not need a second pooled connection
+// ============================================================================
+//
+// The locked transaction holds one pool connection for its whole duration. If
+// any read inside it — including the outbound verification calls — tried to
+// check out a second connection from the same pool, a pool configured for
+// exactly one connection would self-deadlock: the only connection is the one
+// waiting, so the checkout it is waiting on can never succeed. Running this
+// against a real pool with `max: 1` is what proves the verification calls
+// never do that, not just that they were passed the right arguments.
+
+describe("completeInstallation avoids a second pool checkout while the lock is held", () => {
+	test("finishes against a database pool with exactly one connection", async () => {
+		const { db: singleConnectionDb, client } = await createDb({ url: getTestDbUrl(), max: 1 });
+		try {
+			const service = createService({ db: singleConnectionDb });
+			const installState = await issueInstallState(service, "tenant-a", 101);
+
+			// If `completeInstallation`'s locked verification tried a second
+			// checkout against this same one-connection pool, this would hang
+			// until the test's own timeout killed it rather than resolving.
+			await expect(
+				service.completeInstallation(installState, 101, BROWSER_NONCE),
+			).resolves.toMatchObject({ installationId: 101 });
+			expect(await confirmedRows("tenant-a")).toEqual([
+				vaultTokenId("tenant-a", "tenant-a-admin"),
+			]);
+		} finally {
+			await client.close();
+		}
+	}, 8_000);
 });

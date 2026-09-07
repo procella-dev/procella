@@ -206,7 +206,14 @@ function stubOutbound(
  * Transaction-capable db double: state rows are consumed, confirmations and
  * installations upserted.
  */
-function setupStateDb(options: { consumed?: boolean; installationRow?: unknown } = {}) {
+function setupStateDb(
+	options: {
+		consumed?: boolean;
+		installationRow?: unknown;
+		/** Row `completeInstallation` reads under the lock. Defaults to "tok-a", matching `stubOutbound()`'s pending token. `null` simulates no confirmation. */
+		confirmedTokenId?: string | null;
+	} = {},
+) {
 	const stateValues = mock(async (_value?: unknown) => []);
 	const installationReturning = mock(async () => [options.installationRow ?? installationRow]);
 	const confirmationConflict = mock(async () => []);
@@ -221,10 +228,19 @@ function setupStateDb(options: { consumed?: boolean; installationRow?: unknown }
 		options.consumed === false ? [] : [{ jti: "state" }],
 	);
 	const execute = mock(async () => []);
+	const confirmedTokenId =
+		options.confirmedTokenId === undefined ? "tok-a" : options.confirmedTokenId;
+	const confirmationRow = confirmedTokenId === null ? [] : [{ tokenId: confirmedTokenId }];
+	const select = mock(() => ({
+		from: mock(() => ({
+			where: mock(() => ({ limit: mock(async () => confirmationRow) })),
+		})),
+	}));
 	const tx = {
 		delete: mock(() => ({ where: mock(() => ({ returning: consumedReturning })) })),
 		insert: mock(() => ({ values })),
 		execute,
+		select,
 	} as unknown as Database;
 	const transaction = mock(async (callback: (database: Database) => Promise<unknown>) =>
 		callback(tx),
@@ -241,6 +257,7 @@ function setupStateDb(options: { consumed?: boolean; installationRow?: unknown }
 		transaction,
 		values,
 		execute,
+		select,
 	};
 }
 
@@ -334,6 +351,7 @@ describe("GitHub setup state", () => {
 			"user-a",
 			"tenant-a",
 			"acme",
+			"tok-a",
 			{ allowInvisibleMembership: true },
 		);
 		expect(db.consumedReturning).toHaveBeenCalledTimes(1);
@@ -560,11 +578,13 @@ describe("OctokitGitHubService vaulted user verification", () => {
 			};
 		});
 		const outbound = stubOutbound({
-			verifyAccountAdministration: mock(async (_userId, _tenantId, _account, options) => {
-				events.push(
-					options?.allowInvisibleMembership ? "administration-advisory" : "administration",
-				);
-			}),
+			verifyAccountAdministration: mock(
+				async (_userId, _tenantId, _account, _confirmedTokenId, options) => {
+					events.push(
+						options?.allowInvisibleMembership ? "administration-advisory" : "administration",
+					);
+				},
+			),
 			verifyInstallationAccess: mock(async () => {
 				events.push("installation-access");
 			}),
@@ -591,7 +611,12 @@ describe("OctokitGitHubService vaulted user verification", () => {
 			"administration",
 			"installation-access",
 		]);
-		expect(outbound.verifyInstallationAccess).toHaveBeenCalledWith("user-a", "tenant-a", 101);
+		expect(outbound.verifyInstallationAccess).toHaveBeenCalledWith(
+			"user-a",
+			"tenant-a",
+			101,
+			"tok-a",
+		);
 	});
 
 	test("rejects a GitHub user who does not administer the requested account", async () => {
@@ -933,6 +958,11 @@ describe("OctokitGitHubService installation binding", () => {
 				order.push("lock");
 				return [];
 			}),
+			select: mock(() => ({
+				from: mock(() => ({
+					where: mock(() => ({ limit: mock(async () => [{ tokenId: "tok-a" }]) })),
+				})),
+			})),
 		} as unknown as Database;
 		const db = {
 			transaction: mock(async (callback: (transaction: Database) => Promise<unknown>) =>
@@ -981,6 +1011,11 @@ describe("OctokitGitHubService installation binding", () => {
 			})),
 			insert,
 			execute: mock(async () => []),
+			select: mock(() => ({
+				from: mock(() => ({
+					where: mock(() => ({ limit: mock(async () => [{ tokenId: "tok-a" }]) })),
+				})),
+			})),
 		} as unknown as Database;
 		const db = {
 			transaction: mock(async (callback: (transaction: Database) => Promise<unknown>) =>
