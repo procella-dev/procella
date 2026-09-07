@@ -69,31 +69,27 @@ describe("DescopeGitHubOutboundVault", () => {
 	test("never accepts a token attributed to another tenant", async () => {
 		const api = vaultApi();
 
-		expect(await vaultFor(api).fetchUserToken("user-a", TENANT_B)).toEqual({ outcome: "absent" });
+		// A cross-tenant answer is not proof this tenant's slot is empty.
+		expect(await vaultFor(api).fetchUserToken("user-a", TENANT_B)).toEqual({ outcome: "failed" });
 		expect(api.fetchToken).toHaveBeenCalledWith(APP_ID, "user-a", TENANT_B, {
 			forceRefresh: false,
 		});
 	});
 
-	test("reports absence only when Descope answers", async () => {
-		const absent: ApiOverrides[] = [
-			{ fetchToken: mock(async () => ({ ok: false, code: 404 })) },
-			{ fetchToken: mock(async () => ({ ok: true, data: { id: "tok-a", accessToken: "" } })) },
-			{ fetchToken: mock(async () => ({ ok: true, data: { accessToken: "ghu_vaulted" } })) },
-			{ fetchToken: mock(async () => ({ ok: true })) },
-		];
-		for (const override of absent) {
-			expect(await vaultFor(vaultApi(override)).fetchUserToken("user-a", TENANT_A)).toEqual({
-				outcome: "absent",
-			});
-		}
+	test("reports absence only for Descope's documented not-found", async () => {
+		const api = vaultApi({ fetchToken: mock(async () => ({ ok: false, code: 404 })) });
+
+		expect(await vaultFor(api).fetchUserToken("user-a", TENANT_A)).toEqual({ outcome: "absent" });
 	});
 
-	test("reports failure when Descope does not answer, never absence", async () => {
+	test("reports failure for outages and for successes carrying no usable token", async () => {
 		const failures: ApiOverrides[] = [
 			{ fetchToken: mock(async () => ({ ok: false })) },
 			{ fetchToken: mock(async () => ({ ok: false, code: 500 })) },
 			{ fetchToken: mock(async () => ({ ok: false, code: 429 })) },
+			{ fetchToken: mock(async () => ({ ok: true })) },
+			{ fetchToken: mock(async () => ({ ok: true, data: { id: "tok-a", accessToken: "" } })) },
+			{ fetchToken: mock(async () => ({ ok: true, data: { accessToken: "ghu_vaulted" } })) },
 			{
 				fetchToken: mock(async () => {
 					throw new Error("management unreachable");
@@ -372,48 +368,97 @@ describe("VaultedGitHubIdentityService", () => {
 		expect(deleteToken).toHaveBeenCalledWith("tok-a");
 	});
 
-	test("refuses to disconnect when the vault lookup fails", async () => {
-		const deleteToken = mock(async () => undefined);
+	test("deletes the token now in the vault, not just the confirmed one", async () => {
+		const deleted: string[] = [];
 		const service = new VaultedGitHubIdentityService(
 			tokenVault({
-				fetchUserToken: mock(async () => ({ outcome: "failed" }) as const),
-				deleteToken,
+				// An abandoned or forwarded connect replaced confirmed A with B.
+				fetchUserToken: mock(async () => found("tok-b", "ghu_replacement")),
+				deleteToken: mock(async (tokenId: string) => {
+					deleted.push(tokenId);
+				}),
 			}),
-			confirmations(),
-		);
-
-		// A Descope outage must not read as "already disconnected": the caller
-		// keeps the tenant binding until the credential is provably gone.
-		await expect(service.disconnect("user-a", TENANT_A)).rejects.toMatchObject({
-			code: "authorization_failed",
-		});
-		expect(deleteToken).not.toHaveBeenCalled();
-	});
-
-	test("treats a confirmed-absent credential as already disconnected", async () => {
-		const deleteToken = mock(async () => undefined);
-		const service = new VaultedGitHubIdentityService(
-			tokenVault({
-				fetchUserToken: mock(async () => ({ outcome: "absent" }) as const),
-				deleteToken,
-			}),
-			confirmations(),
+			confirmations("tok-a"),
 		);
 
 		await expect(service.disconnect("user-a", TENANT_A)).resolves.toBeUndefined();
-		expect(deleteToken).not.toHaveBeenCalled();
+		// B cannot survive a disconnect, and stale A is cleaned up too.
+		expect(deleted).toEqual(["tok-b", "tok-a"]);
 	});
 
-	test("skips the vault entirely when nothing is confirmed", async () => {
-		const fetchUserToken = mock(async () => found("tok-a", "ghu_vaulted"));
-		const deleteToken = mock(async () => undefined);
+	test("deletes an unconfirmed token even when nothing was ever confirmed", async () => {
+		const deleted: string[] = [];
 		const service = new VaultedGitHubIdentityService(
-			tokenVault({ fetchUserToken, deleteToken }),
+			tokenVault({
+				fetchUserToken: mock(async () => found("tok-forwarded", "ghu_victim")),
+				deleteToken: mock(async (tokenId: string) => {
+					deleted.push(tokenId);
+				}),
+			}),
 			confirmations(null),
 		);
 
 		await expect(service.disconnect("user-a", TENANT_A)).resolves.toBeUndefined();
-		expect(fetchUserToken).not.toHaveBeenCalled();
-		expect(deleteToken).not.toHaveBeenCalled();
+		expect(deleted).toEqual(["tok-forwarded"]);
+	});
+
+	test("refuses to disconnect when the vault lookup fails or answers malformed", async () => {
+		for (const fetchUserToken of [
+			mock(async () => ({ outcome: "failed" }) as const),
+			mock(async () => {
+				throw new Error("management unreachable");
+			}),
+		]) {
+			const deleteToken = mock(async () => undefined);
+			const service = new VaultedGitHubIdentityService(
+				tokenVault({ fetchUserToken, deleteToken }),
+				confirmations(),
+			);
+
+			// A Descope outage, or a success carrying no usable token, must not read
+			// as "already disconnected": local state stays until the credential is
+			// provably gone.
+			await expect(service.disconnect("user-a", TENANT_A)).rejects.toMatchObject({
+				code: "authorization_failed",
+			});
+			expect(deleteToken).not.toHaveBeenCalled();
+		}
+	});
+
+	test("still clears a stale confirmed token when the vault reports absence", async () => {
+		const deleted: string[] = [];
+		const service = new VaultedGitHubIdentityService(
+			tokenVault({
+				fetchUserToken: mock(async () => ({ outcome: "absent" }) as const),
+				deleteToken: mock(async (tokenId: string) => {
+					deleted.push(tokenId);
+				}),
+			}),
+			confirmations("tok-a"),
+		);
+
+		await expect(service.disconnect("user-a", TENANT_A)).resolves.toBeUndefined();
+		expect(deleted).toEqual(["tok-a"]);
+	});
+
+	test("an already-deleted confirmed token cannot wedge disconnect", async () => {
+		const api = vaultApi({
+			fetchToken: mock(async () => ({ ok: false, code: 404 })),
+			// Descope's documented not-found is proof the token is gone.
+			deleteTokenById: mock(async () => ({ ok: false, code: 404 })),
+		});
+		const service = new VaultedGitHubIdentityService(vaultFor(api), confirmations("tok-a"));
+
+		await expect(service.disconnect("user-a", TENANT_A)).resolves.toBeUndefined();
+		expect(api.deleteTokenById).toHaveBeenCalledWith("tok-a");
+	});
+
+	test("a non-404 delete rejection blocks disconnect", async () => {
+		const api = vaultApi({ deleteTokenById: mock(async () => ({ ok: false, code: 500 })) });
+		const service = new VaultedGitHubIdentityService(vaultFor(api), confirmations());
+
+		await expect(service.disconnect("user-a", TENANT_A)).rejects.toMatchObject({
+			code: "authorization_failed",
+		});
 	});
 });

@@ -129,8 +129,11 @@ export interface DescopeOutboundApplicationApi {
 		code?: number;
 		data?: { id?: string; accessToken?: string; tenantId?: string };
 	}>;
-	deleteTokenById(id: string): Promise<{ ok: boolean }>;
+	deleteTokenById(id: string): Promise<{ ok: boolean; code?: number }>;
 }
+
+/** Descope's documented "no such token" answer. Anything else is inconclusive. */
+const DESCOPE_NOT_FOUND = 404;
 
 /** Narrow adapter over Descope's outbound-application management API. */
 export class DescopeGitHubOutboundVault implements GitHubOutboundTokenVault {
@@ -143,14 +146,17 @@ export class DescopeGitHubOutboundVault implements GitHubOutboundTokenVault {
 		const response = await this.outboundApplication
 			.fetchToken(this.appId, userId, tenantId, { forceRefresh: false })
 			.catch(() => null);
-		// A thrown call or any non-404 rejection means Descope did not answer, so
-		// the caller must not conclude anything about the credential.
+		// Absence is only ever Descope's documented not-found. A thrown call or any
+		// other rejection leaves the credential state unknown.
 		if (!response) return { outcome: "failed" };
-		if (!response.ok) return response.code === 404 ? { outcome: "absent" } : { outcome: "failed" };
+		if (!response.ok) {
+			return response.code === DESCOPE_NOT_FOUND ? { outcome: "absent" } : { outcome: "failed" };
+		}
 
 		const token = response.data;
-		// Defence in depth: never accept a token Descope attributes to another
-		// tenant, even if the API ever answers a tenant-scoped request loosely.
+		// A success that carries no usable token, or one Descope attributes to
+		// another tenant, is not proof the vault is empty: report failure so no
+		// caller cleans up local state on it.
 		if (
 			!token ||
 			typeof token.accessToken !== "string" ||
@@ -159,16 +165,16 @@ export class DescopeGitHubOutboundVault implements GitHubOutboundTokenVault {
 			token.id.length === 0 ||
 			(typeof token.tenantId === "string" && token.tenantId !== tenantId)
 		) {
-			return { outcome: "absent" };
+			return { outcome: "failed" };
 		}
 		return { outcome: "found", token: { id: token.id, accessToken: token.accessToken } };
 	}
 
+	/** Resolves when the token is gone: deleted now, or already not found. */
 	async deleteToken(tokenId: string): Promise<void> {
 		const response = await this.outboundApplication.deleteTokenById(tokenId).catch(() => null);
-		if (!response?.ok) {
-			throw new GitHubOutboundError("authorization_failed");
-		}
+		if (response?.ok || response?.code === DESCOPE_NOT_FOUND) return;
+		throw new GitHubOutboundError("authorization_failed");
 	}
 }
 
@@ -306,12 +312,15 @@ export class VaultedGitHubIdentityService implements GitHubOutboundIdentityServi
 	}
 
 	/**
-	 * Deletes only this tenant's confirmed token.
+	 * Empties this tenant's slot in the vault before any local state is removed.
 	 *
-	 * A user with no confirmed connection, or a credential Descope reports as
-	 * already gone, is idempotently disconnected. A lookup that Descope does not
-	 * answer is a failure: reporting success there would drop the tenant binding
-	 * while the GitHub credential stayed live in the vault.
+	 * The token Descope holds now is not necessarily the confirmed one: an
+	 * abandoned or forwarded connect can have replaced confirmed token A with an
+	 * unconfirmed token B. Deleting only A would leave B live in the vault while
+	 * Procella reported a completed disconnect, so both the current and the
+	 * confirmed token are deleted. Descope's documented not-found is the only
+	 * accepted proof that a token is already gone; anything else fails closed and
+	 * keeps the confirmation row and tenant binding in place.
 	 */
 	async disconnect(userId: string, tenantId: string): Promise<void> {
 		const confirmedTokenId = await this.confirmations
@@ -319,12 +328,18 @@ export class VaultedGitHubIdentityService implements GitHubOutboundIdentityServi
 			.catch(() => {
 				throw new GitHubOutboundError("authorization_failed");
 			});
-		if (!confirmedTokenId) return;
 
-		const lookup = await this.vault.fetchUserToken(userId, tenantId);
+		const lookup = await this.vault
+			.fetchUserToken(userId, tenantId)
+			.catch((): GitHubVaultedTokenLookup => ({ outcome: "failed" }));
 		if (lookup.outcome === "failed") throw new GitHubOutboundError("authorization_failed");
-		if (lookup.outcome === "absent") return;
-		await this.vault.deleteToken(confirmedTokenId);
+
+		const doomed = new Set<string>();
+		if (lookup.outcome === "found") doomed.add(lookup.token.id);
+		if (confirmedTokenId) doomed.add(confirmedTokenId);
+		for (const tokenId of doomed) {
+			await this.vault.deleteToken(tokenId);
+		}
 	}
 
 	/** The tenant's token, but only when Descope still reports the confirmed id. */
