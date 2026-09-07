@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, describe, expect, test } from "bun:test";
 import type { Octokit } from "@octokit/rest";
 import type { Database } from "@procella/db";
-import { githubOutboundConnections } from "@procella/db";
+import { githubInstallations, githubOutboundConnections } from "@procella/db";
 import { eq } from "drizzle-orm";
 import {
 	GitHubOutboundError,
@@ -463,5 +463,233 @@ describe("GitHub installation binding integration", () => {
 			installation: { id: 101 },
 		});
 		expect(await service.listInstallations("tenant-a")).toHaveLength(0);
+	});
+});
+
+// ============================================================================
+// Lock-ordered concurrency: confirmation versus disconnect
+// ============================================================================
+//
+// Both operations run at once against real PostgreSQL, so the per-connection
+// advisory lock is the only thing that can serialize them. A slow Descope round
+// trip is simulated with a gate the test releases; the assertions are on
+// observable ordering, blocking, and final state rather than on which SQL ran.
+
+/** A promise the test releases, standing in for a slow Descope round trip. */
+function gate(): { opened: Promise<void>; release: () => void } {
+	let release = (): void => undefined;
+	const opened = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	return { opened, release: () => release() };
+}
+
+/** Waits for the other operation to reach a point, or gives up. */
+async function waitFor(condition: () => boolean, timeoutMs = 5_000): Promise<boolean> {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		if (condition()) return true;
+		await Bun.sleep(10);
+	}
+	return condition();
+}
+
+/** Long enough that an unserialized implementation would have gotten through. */
+const INTERLEAVE_WINDOW_MS = 250;
+
+const RECONNECT_INITIATOR = { tenantId: "tenant-a", userId: "tenant-a-admin" } as const;
+
+interface LockHarness {
+	/** Ordered trace of what the vault saw, from inside the locked callbacks. */
+	readonly events: string[];
+	readonly service: OctokitGitHubService;
+	/** Descope's tenant slot: one token id at a time, as the real vault behaves. */
+	readonly vault: Map<string, string>;
+	pendingReads: number;
+	drains: number;
+}
+
+/**
+ * A service whose vault calls report their own interleaving and can be paused
+ * mid-flight, so a test can hold one locked transaction open while the other
+ * operation tries to run.
+ */
+function lockHarness(options: {
+	initialTokenId?: string;
+	/** Runs inside the confirmation's lock, before the vault is read. */
+	onPendingRead?: () => Promise<void>;
+	/** Runs inside the disconnect's lock, before the slot is emptied. */
+	onDrain?: () => Promise<void>;
+	/** Runs inside the disconnect's lock, after the slot is emptied. */
+	afterDrain?: (vault: Map<string, string>, slot: string) => void;
+}): LockHarness {
+	const slot = vaultSlot("tenant-a", "tenant-a-admin");
+	const vault = new Map<string, string>(
+		options.initialTokenId ? [[slot, options.initialTokenId]] : [],
+	);
+	const events: string[] = [];
+	const harness = { events, vault, pendingReads: 0, drains: 0 } as LockHarness;
+
+	harness.service = createService({
+		outbound: {
+			loadIdentity: async (userId, tenantId) =>
+				vault.has(vaultSlot(tenantId, userId)) ? { login: "alice" } : null,
+			loadPendingConnection: async (userId, tenantId) => {
+				harness.pendingReads += 1;
+				events.push("pending:enter");
+				await options.onPendingRead?.();
+				const tokenId = vault.get(vaultSlot(tenantId, userId));
+				if (!tokenId) {
+					events.push("pending:absent");
+					throw new GitHubOutboundError("authorization_required");
+				}
+				events.push(`pending:${tokenId}`);
+				return { tokenId, login: "alice" };
+			},
+			verifyAccountAdministration: async () => undefined,
+			verifyInstallationAccess: async () => undefined,
+			drainTenantTokens: async (userId, tenantId, expectedTokenId) => {
+				harness.drains += 1;
+				events.push(`drain:enter:${expectedTokenId ?? "none"}`);
+				await options.onDrain?.();
+				const key = vaultSlot(tenantId, userId);
+				const drained = vault.get(key);
+				vault.delete(key);
+				events.push(`drain:done:${drained ?? "none"}`);
+				options.afterDrain?.(vault, key);
+				return drained ? [drained] : [];
+			},
+		},
+	});
+	return harness;
+}
+
+/**
+ * Opens a connect transaction and hands back a starter, so the caller decides
+ * when the locked callback runs. A helper that returned the call itself would
+ * be awaited by its caller and could never interleave.
+ */
+async function reconnectStarter(service: OctokitGitHubService): Promise<() => Promise<string>> {
+	const connectState = await service.beginConnect(
+		"tenant-a",
+		"acme",
+		"tenant-a-admin",
+		BROWSER_NONCE,
+	);
+	return () => service.issueInstallationUrl(connectState, BROWSER_NONCE, RECONNECT_INITIATOR);
+}
+
+describe("GitHub outbound connection locking", () => {
+	test("a confirmation holding the lock keeps the disconnect out until it commits", async () => {
+		const pending = gate();
+		const harness = lockHarness({
+			initialTokenId: "tok-b",
+			onPendingRead: () => pending.opened,
+		});
+		await db.insert(githubInstallations).values({
+			tenantId: "tenant-a",
+			installationId: 101,
+			accountLogin: "acme",
+			accountType: "Organization",
+			repositorySelection: "all",
+		});
+
+		const reconnect = (await reconnectStarter(harness.service))();
+		const confirming = await waitFor(() => harness.pendingReads === 1);
+		const disconnect = harness.service.removeInstallation("tenant-a", 101, "tenant-a-admin");
+		// Unserialized, the disconnect would drain the token this confirmation is
+		// about to publish and leave a row naming a deleted credential.
+		await Bun.sleep(INTERLEAVE_WINDOW_MS);
+		const drainsWhileConfirming = harness.drains;
+		pending.release();
+		// Both operations are settled before anything is asserted, so a regression
+		// reports a failure instead of stranding an open transaction.
+		const [reconnected, disconnected] = await Promise.allSettled([reconnect, disconnect]);
+
+		expect(confirming).toBe(true);
+		expect(drainsWhileConfirming).toBe(0);
+		expect(reconnected).toMatchObject({ status: "fulfilled" });
+		expect(disconnected).toMatchObject({ status: "fulfilled" });
+		// The disconnect drained exactly the generation the confirmation published.
+		expect(harness.events).toEqual([
+			"pending:enter",
+			"pending:tok-b",
+			"drain:enter:tok-b",
+			"drain:done:tok-b",
+		]);
+		expect(await confirmedRows("tenant-a")).toEqual([]);
+		expect(await harness.service.listInstallations("tenant-a")).toHaveLength(0);
+		expect(harness.vault.size).toBe(0);
+	});
+
+	test("a disconnect holding the lock keeps a reconnect from confirming a token it is deleting", async () => {
+		const drain = gate();
+		const harness = lockHarness({ initialTokenId: "tok-a", onDrain: () => drain.opened });
+		await bind(harness.service, "tenant-a", 101);
+		expect(await confirmedRows("tenant-a")).toEqual(["tok-a"]);
+		const readsBeforeDrain = harness.pendingReads;
+
+		const disconnect = harness.service.removeInstallation("tenant-a", 101, "tenant-a-admin");
+		const draining = await waitFor(() => harness.drains === 1);
+		const reconnect = (await reconnectStarter(harness.service))();
+		// Unserialized, the reconnect would read the vault here and confirm the
+		// very token the drain is deleting.
+		await Bun.sleep(INTERLEAVE_WINDOW_MS);
+		const readsWhileDraining = harness.pendingReads;
+		drain.release();
+		const [reconnected, disconnected] = await Promise.allSettled([reconnect, disconnect]);
+
+		expect(draining).toBe(true);
+		expect(readsWhileDraining).toBe(readsBeforeDrain);
+		expect(disconnected).toMatchObject({ status: "fulfilled" });
+		expect(reconnected).toMatchObject({
+			status: "rejected",
+			reason: { code: "authorization_required" },
+		});
+		expect(harness.events.slice(-4)).toEqual([
+			"drain:enter:tok-a",
+			"drain:done:tok-a",
+			"pending:enter",
+			"pending:absent",
+		]);
+		expect(await confirmedRows("tenant-a")).toEqual([]);
+		expect(await harness.service.listInstallations("tenant-a")).toHaveLength(0);
+		expect(harness.vault.size).toBe(0);
+	});
+
+	test("a token vaulted while the disconnect holds the lock is confirmed and still exists", async () => {
+		const drain = gate();
+		const harness = lockHarness({
+			initialTokenId: "tok-a",
+			onDrain: () => drain.opened,
+			// Descope finishes the reconnect's OAuth and vaults B right after the
+			// drain emptied the slot, while the disconnect still owns the lock.
+			afterDrain: (vault, slot) => vault.set(slot, "tok-b"),
+		});
+		await bind(harness.service, "tenant-a", 101);
+		const readsBeforeDrain = harness.pendingReads;
+
+		const disconnect = harness.service.removeInstallation("tenant-a", 101, "tenant-a-admin");
+		const draining = await waitFor(() => harness.drains === 1);
+		const reconnect = (await reconnectStarter(harness.service))();
+		await Bun.sleep(INTERLEAVE_WINDOW_MS);
+		const readsWhileDraining = harness.pendingReads;
+		drain.release();
+		const [reconnected, disconnected] = await Promise.allSettled([reconnect, disconnect]);
+
+		expect(draining).toBe(true);
+		expect(readsWhileDraining).toBe(readsBeforeDrain);
+		expect(disconnected).toMatchObject({ status: "fulfilled" });
+		expect(reconnected).toMatchObject({ status: "fulfilled" });
+		// The surviving confirmation names a token that is still in the vault, and
+		// the drained generation left no row behind.
+		expect(await confirmedRows("tenant-a")).toEqual(["tok-b"]);
+		expect([...harness.vault.values()]).toEqual(["tok-b"]);
+		expect(harness.events.slice(-4)).toEqual([
+			"drain:enter:tok-a",
+			"drain:done:tok-a",
+			"pending:enter",
+			"pending:tok-b",
+		]);
 	});
 });
