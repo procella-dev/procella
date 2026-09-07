@@ -1,6 +1,8 @@
 import { afterEach, beforeAll, describe, expect, test } from "bun:test";
 import type { Octokit } from "@octokit/rest";
 import type { Database } from "@procella/db";
+import { githubOutboundConnections } from "@procella/db";
+import { eq } from "drizzle-orm";
 import {
 	type GitHubOutboundIdentityService,
 	OctokitGitHubService,
@@ -333,6 +335,63 @@ describe("GitHub installation binding integration", () => {
 		expect(await service.resolveConnectedLogin("tenant-a", "tenant-a-admin")).toBe(
 			"user-token-tenant-a-github",
 		);
+	});
+
+	test("a reconnect that lands mid-disconnect keeps its confirmation and binding", async () => {
+		const service = createService({
+			outbound: {
+				loadIdentity: async () => ({ login: "alice" }),
+				loadPendingConnection: async () => ({ tokenId: "tok-b", login: "alice" }),
+				verifyAccountAdministration: async () => undefined,
+				verifyInstallationAccess: async () => undefined,
+				// The drain observed and cleared the older confirmation A.
+				disconnect: async () => ({ expectedTokenId: "tok-a", clearedTokenIds: ["tok-a"] }),
+			},
+		});
+		await bind(service, "tenant-a", 101);
+		// The reconnect that ran while the drain was in flight confirmed token B.
+		await db
+			.insert(githubOutboundConnections)
+			.values({ tenantId: "tenant-a", userId: "tenant-a-admin", tokenId: "tok-b" })
+			.onConflictDoUpdate({
+				target: [githubOutboundConnections.tenantId, githubOutboundConnections.userId],
+				set: { tokenId: "tok-b" },
+			});
+
+		await service.removeInstallation("tenant-a", 101, "tenant-a-admin");
+
+		// B's confirmation was never drained, so it and its binding remain usable.
+		expect(
+			await db
+				.select({ tokenId: githubOutboundConnections.tokenId })
+				.from(githubOutboundConnections)
+				.where(eq(githubOutboundConnections.tenantId, "tenant-a")),
+		).toEqual([{ tokenId: "tok-b" }]);
+		expect(await service.listInstallations("tenant-a")).toHaveLength(1);
+		expect(await service.resolveConnectedLogin("tenant-a", "tenant-a-admin")).toBe("alice");
+	});
+
+	test("a normal disconnect still removes the confirmation and the binding", async () => {
+		const service = createService({
+			outbound: {
+				loadIdentity: async () => ({ login: "alice" }),
+				loadPendingConnection: async () => ({ tokenId: "tok-a", login: "alice" }),
+				verifyAccountAdministration: async () => undefined,
+				verifyInstallationAccess: async () => undefined,
+				disconnect: async () => ({ expectedTokenId: "tok-a", clearedTokenIds: ["tok-a"] }),
+			},
+		});
+		await bind(service, "tenant-a", 101);
+
+		await service.removeInstallation("tenant-a", 101, "tenant-a-admin");
+
+		expect(
+			await db
+				.select({ tokenId: githubOutboundConnections.tokenId })
+				.from(githubOutboundConnections)
+				.where(eq(githubOutboundConnections.tenantId, "tenant-a")),
+		).toEqual([]);
+		expect(await service.listInstallations("tenant-a")).toHaveLength(0);
 	});
 
 	test("webhooks update and delete only existing installation bindings", async () => {

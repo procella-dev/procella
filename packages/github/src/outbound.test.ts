@@ -261,7 +261,9 @@ describe("VaultedGitHubIdentityService", () => {
 		expect(await service.loadIdentity("user-a", TENANT_B)).toEqual({ login: "alice" });
 
 		// Disconnecting tenant A deletes exactly that token and leaves B intact.
-		await service.disconnect("user-a", TENANT_A);
+		expect(await service.disconnect("user-a", TENANT_A)).toMatchObject({
+			clearedTokenIds: ["tok-a"],
+		});
 		expect(deleteToken).toHaveBeenCalledWith("tok-a");
 		expect(tokens[TENANT_A]).toBeUndefined();
 		delete confirmed[TENANT_A];
@@ -398,7 +400,10 @@ describe("VaultedGitHubIdentityService", () => {
 			confirmations("tok-a"),
 		);
 
-		await expect(service.disconnect("user-a", TENANT_A)).resolves.toBeUndefined();
+		await expect(service.disconnect("user-a", TENANT_A)).resolves.toEqual({
+			expectedTokenId: "tok-a",
+			clearedTokenIds: ["tok-c", "tok-b", "tok-a"],
+		});
 		// Nothing survives: both unconfirmed tokens and the stale confirmed id.
 		expect(deleted).toEqual(["tok-c", "tok-b", "tok-a"]);
 	});
@@ -420,7 +425,9 @@ describe("VaultedGitHubIdentityService", () => {
 			confirmations("tok-1"),
 		);
 
-		await expect(service.disconnect("user-a", TENANT_A)).resolves.toBeUndefined();
+		await expect(service.disconnect("user-a", TENANT_A)).resolves.toMatchObject({
+			expectedTokenId: "tok-1",
+		});
 		expect(deleted).toEqual(["tok-1", "tok-2", "tok-3", "tok-4", "tok-5"]);
 	});
 
@@ -476,7 +483,10 @@ describe("VaultedGitHubIdentityService", () => {
 			confirmations(null),
 		);
 
-		await expect(service.disconnect("user-a", TENANT_A)).resolves.toBeUndefined();
+		await expect(service.disconnect("user-a", TENANT_A)).resolves.toEqual({
+			expectedTokenId: null,
+			clearedTokenIds: ["tok-forwarded"],
+		});
 		expect(deleted).toEqual(["tok-forwarded"]);
 	});
 
@@ -515,7 +525,10 @@ describe("VaultedGitHubIdentityService", () => {
 			confirmations("tok-a"),
 		);
 
-		await expect(service.disconnect("user-a", TENANT_A)).resolves.toBeUndefined();
+		await expect(service.disconnect("user-a", TENANT_A)).resolves.toEqual({
+			expectedTokenId: "tok-a",
+			clearedTokenIds: ["tok-a"],
+		});
 		expect(deleted).toEqual(["tok-a"]);
 	});
 
@@ -527,7 +540,9 @@ describe("VaultedGitHubIdentityService", () => {
 		});
 		const service = new VaultedGitHubIdentityService(vaultFor(api), confirmations("tok-a"));
 
-		await expect(service.disconnect("user-a", TENANT_A)).resolves.toBeUndefined();
+		await expect(service.disconnect("user-a", TENANT_A)).resolves.toMatchObject({
+			expectedTokenId: "tok-a",
+		});
 		expect(api.deleteTokenById).toHaveBeenCalledWith("tok-a");
 	});
 

@@ -65,6 +65,16 @@ export interface GitHubUserIdentity {
 	login: string;
 }
 
+/**
+ * What a disconnect drained. `expectedTokenId` is the confirmation generation
+ * observed when the drain began, so local cleanup can tell a stale row from one
+ * a newer connect wrote while the vault calls were in flight.
+ */
+export interface GitHubOutboundDisconnectResult {
+	readonly expectedTokenId: string | null;
+	readonly clearedTokenIds: readonly string[];
+}
+
 /** Identity plus the Descope token id the callback is about to confirm. */
 export interface GitHubPendingConnection extends GitHubUserIdentity {
 	tokenId: string;
@@ -101,8 +111,11 @@ export interface GitHubOutboundIdentityService {
 	): Promise<void>;
 	/** Resolves when the installation is visible to the confirmed connected user. */
 	verifyInstallationAccess(userId: string, tenantId: string, installationId: number): Promise<void>;
-	/** Deletes this tenant's confirmed GitHub token, leaving other tenants intact. */
-	disconnect(userId: string, tenantId: string): Promise<void>;
+	/**
+	 * Empties this tenant's vault slot, leaving other tenants intact, and reports
+	 * the confirmation generation it drained so callers can scope local cleanup.
+	 */
+	disconnect(userId: string, tenantId: string): Promise<GitHubOutboundDisconnectResult>;
 }
 
 export type GitHubOutboundErrorCode = "authorization_required" | "authorization_failed";
@@ -318,7 +331,8 @@ export class VaultedGitHubIdentityService implements GitHubOutboundIdentityServi
 	}
 
 	/**
-	 * Drains this tenant's slot in the vault before any local state is removed.
+	 * Drains this tenant's slot in the vault before any local state is removed,
+	 * returning the token ids proven gone.
 	 *
 	 * Descope can hold more than one token for a user, and the one it reports as
 	 * latest is not necessarily the confirmed one: an abandoned or forwarded
@@ -329,16 +343,18 @@ export class VaultedGitHubIdentityService implements GitHubOutboundIdentityServi
 	 *
 	 * Everything else fails closed, so the confirmation row and tenant binding
 	 * stay put: an unanswered lookup or delete, a malformed answer, a token that
-	 * reappears after a claimed delete, and an exhausted iteration cap.
+	 * reappears after a claimed delete, and an exhausted iteration cap. The
+	 * reported generation lets callers scope their local cleanup to exactly the
+	 * confirmation this call drained.
 	 */
-	async disconnect(userId: string, tenantId: string): Promise<void> {
+	async disconnect(userId: string, tenantId: string): Promise<GitHubOutboundDisconnectResult> {
 		const confirmedTokenId = await this.confirmations
 			.confirmedTokenId(tenantId, userId)
 			.catch(() => {
 				throw new GitHubOutboundError("authorization_failed");
 			});
 
-		const deleted = new Set<string>();
+		const cleared = new Set<string>();
 		for (let attempt = 0; attempt < GITHUB_OUTBOUND_DRAIN_LIMIT; attempt += 1) {
 			const lookup = await this.vault
 				.fetchUserToken(userId, tenantId)
@@ -347,18 +363,19 @@ export class VaultedGitHubIdentityService implements GitHubOutboundIdentityServi
 			if (lookup.outcome === "absent") {
 				// The slot is provably empty. A confirmed id Descope never reported
 				// is cleared too, tolerating its documented not-found.
-				if (confirmedTokenId && !deleted.has(confirmedTokenId)) {
+				if (confirmedTokenId && !cleared.has(confirmedTokenId)) {
 					await this.vault.deleteToken(confirmedTokenId);
+					cleared.add(confirmedTokenId);
 				}
-				return;
+				return { expectedTokenId: confirmedTokenId, clearedTokenIds: [...cleared] };
 			}
-			if (deleted.has(lookup.token.id)) {
+			if (cleared.has(lookup.token.id)) {
 				// Descope still reports a token this call already deleted, so the
 				// vault state is unknown rather than empty.
 				throw new GitHubOutboundError("authorization_failed");
 			}
 			await this.vault.deleteToken(lookup.token.id);
-			deleted.add(lookup.token.id);
+			cleared.add(lookup.token.id);
 		}
 		throw new GitHubOutboundError("authorization_failed");
 	}

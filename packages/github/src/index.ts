@@ -824,30 +824,53 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 	 * Confirmed vaulted token first: killing the GitHub credential is the
 	 * security-relevant half, so a management failure leaves local state intact
 	 * and surfaces the error instead of reporting a disconnect that only removed
-	 * the binding. The confirmation row and the tenant binding then go in one
-	 * transaction, so no tenant is left trusting a deleted token.
+	 * the binding.
+	 *
+	 * Local cleanup is conditional on the confirmation generation the vault drain
+	 * observed. A reconnect can confirm a new token while those network calls are
+	 * in flight; that credential was never drained, so both its confirmation row
+	 * and the tenant binding it belongs to are left alone. The conditional delete
+	 * plus the survivor read run in one transaction, and no network call happens
+	 * inside it.
 	 */
 	async removeInstallation(
 		tenantId: string,
 		installationId: number,
 		userId: string,
 	): Promise<void> {
+		let expectedTokenId: string | null = null;
 		if (this.outbound) {
 			try {
-				await this.outbound.disconnect(userId, tenantId);
+				({ expectedTokenId } = await this.outbound.disconnect(userId, tenantId));
 			} catch {
 				throw new GitHubSetupError("authorization_failed");
 			}
 		}
 		await this.db.transaction(async (tx) => {
-			await tx
-				.delete(githubOutboundConnections)
+			if (expectedTokenId) {
+				await tx
+					.delete(githubOutboundConnections)
+					.where(
+						and(
+							eq(githubOutboundConnections.tenantId, tenantId),
+							eq(githubOutboundConnections.userId, userId),
+							eq(githubOutboundConnections.tokenId, expectedTokenId),
+						),
+					);
+			}
+			const [survivor] = await tx
+				.select({ tokenId: githubOutboundConnections.tokenId })
+				.from(githubOutboundConnections)
 				.where(
 					and(
 						eq(githubOutboundConnections.tenantId, tenantId),
 						eq(githubOutboundConnections.userId, userId),
 					),
-				);
+				)
+				.limit(1);
+			// A confirmation from a newer connect survived the conditional delete,
+			// so the installation binding that connection depends on stays too.
+			if (survivor) return;
 			await tx
 				.delete(githubInstallations)
 				.where(
