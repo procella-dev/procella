@@ -693,11 +693,9 @@ describe("OctokitGitHubService vaulted user verification", () => {
 	test("rejects a callback whose GitHub user lost installation access", async () => {
 		const setupStates = createGitHubSetupStateService(testConfig.stateSigningKey);
 		const { state } = await setupStates.issue(INSTALL_STATE_INPUT);
-		const transaction = mock(() => {
-			throw new Error("must not consume or insert state");
-		});
+		const db = setupStateDb();
 		const service = new OctokitGitHubService({
-			db: { transaction } as unknown as Database,
+			db: db.db,
 			config: testConfig,
 			appClient: { request: mockInstallationRequest() } as unknown as Octokit,
 			setupStates,
@@ -711,17 +709,18 @@ describe("OctokitGitHubService vaulted user verification", () => {
 		await expect(service.completeInstallation(state, 101, BROWSER_NONCE)).rejects.toMatchObject({
 			code: "authorization_required",
 		});
-		expect(transaction).not.toHaveBeenCalled();
+		// The check runs under the lock, so the transaction opens and rolls back
+		// with the install state still unconsumed and no binding written.
+		expect(db.consumedReturning).not.toHaveBeenCalled();
+		expect(db.values).not.toHaveBeenCalled();
 	});
 
 	test("reports GitHub verification outages separately from denied administration", async () => {
 		const setupStates = createGitHubSetupStateService(testConfig.stateSigningKey);
 		const { state } = await setupStates.issue(INSTALL_STATE_INPUT);
-		const transaction = mock(() => {
-			throw new Error("must not consume or insert state");
-		});
+		const db = setupStateDb();
 		const service = new OctokitGitHubService({
-			db: { transaction } as unknown as Database,
+			db: db.db,
 			config: testConfig,
 			appClient: { request: mockInstallationRequest() } as unknown as Octokit,
 			setupStates,
@@ -735,7 +734,8 @@ describe("OctokitGitHubService vaulted user verification", () => {
 		await expect(service.completeInstallation(state, 101, BROWSER_NONCE)).rejects.toMatchObject({
 			code: "authorization_failed",
 		});
-		expect(transaction).not.toHaveBeenCalled();
+		expect(db.consumedReturning).not.toHaveBeenCalled();
+		expect(db.values).not.toHaveBeenCalled();
 	});
 
 	test("never surfaces the vaulted GitHub token to callers", async () => {
@@ -857,6 +857,43 @@ describe("OctokitGitHubService vaulted user verification", () => {
 		// The transaction aborts before any local delete, so nothing is removed.
 		expect(tx.deletedTables).toEqual([]);
 	});
+
+	test("disconnect refuses a confirmed connection when management is unavailable", async () => {
+		const tx = cleanupTransaction({ survivors: [{ tokenId: "tok-a" }] });
+		const service = new OctokitGitHubService({
+			db: {
+				transaction: mock(async (callback: (database: Database) => Promise<unknown>) =>
+					callback(tx.database),
+				),
+			} as unknown as Database,
+			config: testConfig,
+			appClient: {} as Octokit,
+		});
+
+		// The vaulted token cannot be deleted without management credentials, so
+		// reporting a disconnect would leave the credential live in Descope.
+		await expect(service.removeInstallation("tenant-a", 101, "user-a")).rejects.toMatchObject({
+			code: "authorization_unavailable",
+		});
+		expect(tx.deletedTables).toEqual([]);
+	});
+
+	test("disconnect removes an unconfirmed binding when management is unavailable", async () => {
+		const tx = cleanupTransaction({ survivors: [] });
+		const service = new OctokitGitHubService({
+			db: {
+				transaction: mock(async (callback: (database: Database) => Promise<unknown>) =>
+					callback(tx.database),
+				),
+			} as unknown as Database,
+			config: testConfig,
+			appClient: {} as Octokit,
+		});
+
+		// Nothing is vaulted for this tenant, so the binding can still go.
+		await service.removeInstallation("tenant-a", 101, "user-a");
+		expect(tx.deletedTables).toEqual(["github_outbound_connections", "github_installations"]);
+	});
 });
 
 const installationRow = {
@@ -881,6 +918,7 @@ function readOnlyDb(rows: GitHubInstallationInfo[]): Database {
 
 describe("OctokitGitHubService installation binding", () => {
 	test("binds the App-authenticated installation after consuming install state", async () => {
+		const order: string[] = [];
 		const consumedReturning = mock(async () => [{ jti: "state-id" }]);
 		const installationReturning = mock(async () => [installationRow]);
 		const values = mock(() => ({
@@ -891,6 +929,10 @@ describe("OctokitGitHubService installation binding", () => {
 				where: mock(() => ({ returning: consumedReturning })),
 			})),
 			insert: mock(() => ({ values })),
+			execute: mock(async () => {
+				order.push("lock");
+				return [];
+			}),
 		} as unknown as Database;
 		const db = {
 			transaction: mock(async (callback: (transaction: Database) => Promise<unknown>) =>
@@ -904,13 +946,18 @@ describe("OctokitGitHubService installation binding", () => {
 			config: testConfig,
 			appClient: { request } as unknown as Octokit,
 			setupStates,
-			outbound: stubOutbound(),
+			outbound: stubOutbound({
+				verifyAccountAdministration: mock(async () => {
+					order.push("verify");
+				}),
+			}),
 		});
 
 		const { state } = await setupStates.issue(INSTALL_STATE_INPUT);
 		await expect(service.completeInstallation(state, 101, BROWSER_NONCE)).resolves.toEqual(
 			installationRow,
 		);
+		expect(order).toEqual(["lock", "verify"]);
 		expect(request).toHaveBeenCalledWith("GET /app/installations/{installation_id}", {
 			installation_id: 101,
 		});
@@ -933,6 +980,7 @@ describe("OctokitGitHubService installation binding", () => {
 				where: mock(() => ({ returning: mock(async () => []) })),
 			})),
 			insert,
+			execute: mock(async () => []),
 		} as unknown as Database;
 		const db = {
 			transaction: mock(async (callback: (transaction: Database) => Promise<unknown>) =>

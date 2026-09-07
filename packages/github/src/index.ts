@@ -780,6 +780,12 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 	 * and `setup_action=update` (GitHub sends the latter when the App is already
 	 * installed on the account), so the state, browser binding, App-authenticated
 	 * installation data, and vaulted identity are all re-verified here.
+	 *
+	 * Every read of the connection happens under the per-connection advisory lock,
+	 * so a concurrent disconnect either drains the credential before these checks
+	 * see it, or waits until this binding is committed and then removes both. A
+	 * verification that ran before the lock could be satisfied by a token the
+	 * disconnect deletes a moment later, leaving a binding with no confirmation.
 	 */
 	async completeInstallation(
 		state: string,
@@ -794,18 +800,19 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 		if (installation.accountLogin.toLowerCase() !== claims.accountLogin.toLowerCase()) {
 			throw new GitHubSetupError("unauthorized_account");
 		}
-		await this.verifyVaultedAdministration(
-			claims.tenantId,
-			claims.initiatorUserId,
-			claims.accountLogin,
-		);
-		await this.verifyVaultedInstallationAccess(
-			claims.tenantId,
-			claims.initiatorUserId,
-			installationId,
-		);
 
 		return this.db.transaction(async (tx) => {
+			await lockOutboundConnection(tx as Database, claims.tenantId, claims.initiatorUserId);
+			await this.verifyVaultedAdministration(
+				claims.tenantId,
+				claims.initiatorUserId,
+				claims.accountLogin,
+			);
+			await this.verifyVaultedInstallationAccess(
+				claims.tenantId,
+				claims.initiatorUserId,
+				installationId,
+			);
 			await this.consumeSetupState(tx as Database, claims);
 			return this.saveInstallation(claims.tenantId, installation, tx as Database);
 		});
@@ -862,7 +869,9 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 	 *
 	 * The credential goes first, so a management failure aborts the transaction
 	 * and leaves local state intact rather than reporting a disconnect that only
-	 * removed the binding. The vault calls all carry hard timeouts.
+	 * removed the binding. The vault calls all carry hard timeouts. A confirmed
+	 * connection with no management credentials configured is refused outright:
+	 * the token could not be deleted, so reporting success would be a lie.
 	 */
 	async removeInstallation(
 		tenantId: string,
@@ -889,6 +898,12 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 				} catch {
 					throw new GitHubSetupError("authorization_failed");
 				}
+			} else if (confirmation) {
+				// Without management credentials the vaulted token cannot be deleted,
+				// so a confirmed connection must not report a disconnect that only
+				// removed local rows. A tenant with no confirmation has nothing
+				// vaulted to lose, so its binding can still be removed.
+				throw new GitHubSetupError("authorization_unavailable");
 			}
 
 			await tx

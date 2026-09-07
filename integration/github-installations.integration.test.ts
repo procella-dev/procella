@@ -88,49 +88,53 @@ function createService(overrides: { outbound?: GitHubOutboundIdentityService } =
 			return { data };
 		},
 	} as unknown as Octokit;
-	// Vault stub keyed by (user, tenant): each tenant admin holds its own token
-	// whose GitHub user is an active organization administrator. Confirmations are
-	// read from the real table, so these tests exercise the durable boundary and
-	// database-level tenant isolation rather than GitHub's verification.
-	const outbound: GitHubOutboundIdentityService =
-		overrides.outbound ??
-		new VaultedGitHubIdentityService(
-			{
-				// Deleting a token empties that tenant's slot, so disconnect's drain
-				// loop terminates the way it does against Descope.
-				fetchUserToken: async (userId, tenantId) =>
-					vaultTokens.has(vaultSlot(tenantId, userId))
-						? {
-								outcome: "found",
-								token: {
-									id: vaultTokenId(tenantId, userId),
-									accessToken: `user-token-${tenantId}`,
-								},
-							}
-						: { outcome: "absent" },
-				deleteToken: async (tokenId) => {
-					for (const slot of vaultTokens) {
-						const [slotTenantId, slotUserId] = slot.split("|");
-						if (slotTenantId && slotUserId && vaultTokenId(slotTenantId, slotUserId) === tokenId) {
-							vaultTokens.delete(slot);
-						}
-					}
-				},
-			},
-			new PostgresGitHubOutboundConfirmations(db),
-			(token) =>
-				({
-					request: async (route: string) => {
-						if (route === "GET /user/installations") {
-							const visible = [...installations.values()];
-							return { data: { total_count: visible.length, installations: visible } };
-						}
-						if (route === "GET /user") return { data: { login: `${token}-github` } };
-						return { data: { state: "active", role: "admin" } };
-					},
-				}) as unknown as Octokit,
-		);
+	const outbound: GitHubOutboundIdentityService = overrides.outbound ?? vaultBackedOutbound();
 	return new OctokitGitHubService({ db, config, appClient, outbound });
+}
+
+/**
+ * Vault stub keyed by (user, tenant): each tenant admin holds its own token
+ * whose GitHub user is an active organization administrator. Confirmations are
+ * read from the real table, so these tests exercise the durable boundary and
+ * database-level tenant isolation rather than GitHub's verification.
+ */
+function vaultBackedOutbound(): GitHubOutboundIdentityService {
+	return new VaultedGitHubIdentityService(
+		{
+			// Deleting a token empties that tenant's slot, so disconnect's drain
+			// loop terminates the way it does against Descope.
+			fetchUserToken: async (userId, tenantId) =>
+				vaultTokens.has(vaultSlot(tenantId, userId))
+					? {
+							outcome: "found",
+							token: {
+								id: vaultTokenId(tenantId, userId),
+								accessToken: `user-token-${tenantId}`,
+							},
+						}
+					: { outcome: "absent" },
+			deleteToken: async (tokenId) => {
+				for (const slot of vaultTokens) {
+					const [slotTenantId, slotUserId] = slot.split("|");
+					if (slotTenantId && slotUserId && vaultTokenId(slotTenantId, slotUserId) === tokenId) {
+						vaultTokens.delete(slot);
+					}
+				}
+			},
+		},
+		new PostgresGitHubOutboundConfirmations(db),
+		(token) =>
+			({
+				request: async (route: string) => {
+					if (route === "GET /user/installations") {
+						const visible = [...installations.values()];
+						return { data: { total_count: visible.length, installations: visible } };
+					}
+					if (route === "GET /user") return { data: { login: `${token}-github` } };
+					return { data: { state: "active", role: "admin" } };
+				},
+			}) as unknown as Octokit,
+	);
 }
 
 async function issueInstallState(
@@ -691,5 +695,173 @@ describe("GitHub outbound connection locking", () => {
 			"pending:enter",
 			"pending:tok-b",
 		]);
+	});
+});
+
+// ============================================================================
+// Lock-ordered concurrency: installation callback versus disconnect
+// ============================================================================
+//
+// Same idea, on the other half of the flow. The vault-backed service is the
+// real one, so verification answers from the confirmation table and the vault
+// exactly as it does in production; only its pauses are injected.
+
+interface CallbackRaceHarness {
+	readonly service: OctokitGitHubService;
+	readonly events: string[];
+	/** Set to a gate's promise to hold the next administration check open. */
+	pauseVerification: Promise<void> | null;
+	/** Set to a gate's promise to hold the next vault drain open. */
+	pauseDrain: Promise<void> | null;
+	verifications: number;
+	drains: number;
+}
+
+/** Wraps the real vault-backed service so a test can pause it mid-call. */
+function callbackRaceHarness(): CallbackRaceHarness {
+	const delegate = vaultBackedOutbound();
+	const events: string[] = [];
+	const harness: CallbackRaceHarness = {
+		service: undefined as unknown as OctokitGitHubService,
+		events,
+		pauseVerification: null,
+		pauseDrain: null,
+		verifications: 0,
+		drains: 0,
+	};
+
+	harness.service = createService({
+		outbound: {
+			loadIdentity: (userId, tenantId) => delegate.loadIdentity(userId, tenantId),
+			loadPendingConnection: (userId, tenantId) =>
+				delegate.loadPendingConnection(userId, tenantId),
+			verifyAccountAdministration: async (userId, tenantId, accountLogin, options) => {
+				harness.verifications += 1;
+				events.push("verify:enter");
+				await harness.pauseVerification;
+				try {
+					await delegate.verifyAccountAdministration(userId, tenantId, accountLogin, options);
+				} catch (error) {
+					events.push("verify:denied");
+					throw error;
+				}
+				events.push("verify:ok");
+			},
+			verifyInstallationAccess: (userId, tenantId, installationId) =>
+				delegate.verifyInstallationAccess(userId, tenantId, installationId),
+			drainTenantTokens: async (userId, tenantId, expectedTokenId) => {
+				harness.drains += 1;
+				events.push(`drain:enter:${expectedTokenId ?? "none"}`);
+				await harness.pauseDrain;
+				const cleared = await delegate.drainTenantTokens(userId, tenantId, expectedTokenId);
+				events.push(`drain:done:${cleared.join(",") || "none"}`);
+				return cleared;
+			},
+		},
+	});
+	return harness;
+}
+
+/**
+ * The whole connection as an observer sees it. A binding with no confirmation
+ * or no live token is the corruption these tests exist to rule out.
+ */
+async function connectionState(
+	service: OctokitGitHubService,
+	tenantId: string,
+	userId: string,
+): Promise<{ bindings: number[]; confirmed: string[]; vaulted: boolean }> {
+	return {
+		bindings: (await service.listInstallations(tenantId)).map((row) => row.installationId),
+		confirmed: await confirmedRows(tenantId),
+		vaulted: vaultTokens.has(vaultSlot(tenantId, userId)),
+	};
+}
+
+describe("GitHub installation callback locking", () => {
+	test("a callback holding the lock commits a whole connection before the disconnect runs", async () => {
+		const harness = callbackRaceHarness();
+		const installState = await issueInstallState(harness.service, "tenant-a", 101);
+		const verification = gate();
+		const drain = gate();
+		harness.pauseVerification = verification.opened;
+		harness.pauseDrain = drain.opened;
+		const verificationsBefore = harness.verifications;
+
+		const callback = harness.service.completeInstallation(installState, 101, BROWSER_NONCE);
+		const verifying = await waitFor(() => harness.verifications === verificationsBefore + 1);
+		const disconnect = harness.service.removeInstallation("tenant-a", 101, "tenant-a-admin");
+		// Unserialized, the disconnect would delete the confirmation while this
+		// callback is still verifying and about to save a binding.
+		await Bun.sleep(INTERLEAVE_WINDOW_MS);
+		const drainsWhileVerifying = harness.drains;
+
+		verification.release();
+		// The disconnect only reaches its drain once the callback committed, so
+		// this snapshot is the state the callback published.
+		const draining = await waitFor(() => harness.drains === 1);
+		const committed = await connectionState(harness.service, "tenant-a", "tenant-a-admin");
+		drain.release();
+		const [bound, disconnected] = await Promise.allSettled([callback, disconnect]);
+
+		expect(verifying).toBe(true);
+		expect(draining).toBe(true);
+		expect(bound).toMatchObject({ status: "fulfilled", value: { installationId: 101 } });
+		expect(disconnected).toMatchObject({ status: "fulfilled" });
+		// Fully connected between the two commits: binding, confirmation, token.
+		expect(committed).toEqual({
+			bindings: [101],
+			confirmed: [vaultTokenId("tenant-a", "tenant-a-admin")],
+			vaulted: true,
+		});
+		// Fully disconnected afterwards.
+		expect(await connectionState(harness.service, "tenant-a", "tenant-a-admin")).toEqual({
+			bindings: [],
+			confirmed: [],
+			vaulted: false,
+		});
+		expect(drainsWhileVerifying).toBe(0);
+	});
+
+	test("a disconnect holding the lock keeps a callback from binding on a drained credential", async () => {
+		const harness = callbackRaceHarness();
+		const installState = await issueInstallState(harness.service, "tenant-a", 101);
+		expect(await confirmedRows("tenant-a")).toEqual([
+			vaultTokenId("tenant-a", "tenant-a-admin"),
+		]);
+		const drain = gate();
+		harness.pauseDrain = drain.opened;
+		const verificationsBefore = harness.verifications;
+
+		const disconnect = harness.service.removeInstallation("tenant-a", 101, "tenant-a-admin");
+		const draining = await waitFor(() => harness.drains === 1);
+		const callback = harness.service.completeInstallation(installState, 101, BROWSER_NONCE);
+		// Unserialized, the callback would verify the credential this drain is
+		// deleting and then save a binding with nothing behind it.
+		await Bun.sleep(INTERLEAVE_WINDOW_MS);
+		const verificationsWhileDraining = harness.verifications;
+
+		drain.release();
+		const [bound, disconnected] = await Promise.allSettled([callback, disconnect]);
+
+		expect(draining).toBe(true);
+		expect(disconnected).toMatchObject({ status: "fulfilled" });
+		// The callback acquires the lock after the drain committed, finds no
+		// confirmed credential, and rolls back without saving a binding.
+		expect(bound).toMatchObject({
+			status: "rejected",
+			reason: { code: "authorization_required" },
+		});
+		expect(harness.events.slice(-3)).toEqual([
+			"drain:done:" + vaultTokenId("tenant-a", "tenant-a-admin"),
+			"verify:enter",
+			"verify:denied",
+		]);
+		expect(await connectionState(harness.service, "tenant-a", "tenant-a-admin")).toEqual({
+			bindings: [],
+			confirmed: [],
+			vaulted: false,
+		});
+		expect(verificationsWhileDraining).toBe(verificationsBefore);
 	});
 });
