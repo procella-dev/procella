@@ -26,7 +26,6 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { Hono } from "hono";
 import { getCookie } from "hono/cookie";
 import {
-	createGitHubConnectStarter,
 	githubHandlers,
 	githubSetupCookieHeader,
 	healthHandlers,
@@ -146,12 +145,6 @@ export function createWebApp(deps: WebAppDeps): Hono<Env> {
 	const oauth = oauthHandlers(deps.oidc ?? null);
 	app.post("/api/oauth/token", withOauthTokenRateLimit, withApiDecompress, oauth.tokenExchange);
 
-	const startGitHubConnect = createGitHubConnectStarter({
-		auth: deps.auth,
-		appOrigin: deps.appOrigin,
-		outboundAppId: deps.githubOutboundAppId,
-	});
-
 	// tRPC routes — queries, mutations, SSE subscriptions (short-lived ticket auth for GET)
 	app.all(
 		"/trpc/*",
@@ -175,6 +168,8 @@ export function createWebApp(deps: WebAppDeps): Hono<Env> {
 				webhooks: deps.webhooks,
 				esc: deps.esc,
 				github: deps.github,
+				appOrigin: deps.appOrigin,
+				githubOutboundAppId: deps.githubOutboundAppId,
 				oidcPolicies: deps.oidcPolicies ?? null,
 			};
 
@@ -185,12 +180,6 @@ export function createWebApp(deps: WebAppDeps): Hono<Env> {
 				createContext: ({ resHeaders }) => ({
 					...ctx,
 					githubSetupNonce: getCookie(c, GITHUB_SETUP_COOKIE_NAME),
-					...(startGitHubConnect
-						? {
-								startGitHubConnect: (connect: { state: string; tenantId: string }) =>
-									startGitHubConnect(c.req.raw, connect),
-							}
-						: {}),
 					setGitHubSetupCookie(nonce: string) {
 						resHeaders.append(
 							"Set-Cookie",

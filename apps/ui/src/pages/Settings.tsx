@@ -1,4 +1,10 @@
-import { AuditManagement, RoleManagement, TenantProfile, UserManagement } from "@descope/react-sdk";
+import {
+	AuditManagement,
+	RoleManagement,
+	TenantProfile,
+	UserManagement,
+	useDescope,
+} from "@descope/react-sdk";
 import { useEffect, useState } from "react";
 import { useAuthConfig } from "../hooks/useAuthConfig";
 import { trpc } from "../trpc";
@@ -132,23 +138,41 @@ export function Settings() {
 	);
 }
 
+/** The only authorization URL a GitHub outbound connect may hand the browser. */
+const GITHUB_AUTHORIZATION_URL = "https://github.com/login/oauth/authorize";
+
 function GitHubSettingsTab() {
 	const { data: status, isLoading, error: queryError, refetch } = trpc.github.status.useQuery();
 	const startConnectMutation = trpc.github.startConnect.useMutation();
 	const removeMutation = trpc.github.removeInstallation.useMutation();
+	const sdk = useDescope();
 	const [disconnectId, setDisconnectId] = useState<number | null>(null);
 	const [actionError, setActionError] = useState<string | null>(null);
 	const callback = new URLSearchParams(window.location.search).get("github");
 	const callbackReason = new URLSearchParams(window.location.search).get("reason");
 
-	// Descope owns the GitHub authorization. The server mints a one-time
-	// transaction bound to this browser before calling Descope, so the browser
-	// only follows the provider URL and holds no setup authority of its own.
+	// The server mints a one-time transaction bound to this browser and cookie,
+	// and returns only the outbound app id, tenant, and a server-built redirect
+	// URL — never a token. The browser's own cookie-authenticated Descope SDK
+	// performs the outbound connect call, so no session or refresh token is
+	// ever read or handed to the caller, and the returned provider URL is
+	// allowlisted to GitHub's authorization endpoint before navigation.
 	const handleConnect = async (accountLogin: string) => {
 		setActionError(null);
 		try {
-			const { url } = await startConnectMutation.mutateAsync({ accountLogin });
-			window.location.assign(url);
+			const { appId, tenantId, redirectUrl } = await startConnectMutation.mutateAsync({
+				accountLogin,
+			});
+			const response = await sdk.outbound.connect(appId, { redirectUrl, tenantId });
+			const url = response.ok ? response.data?.url : undefined;
+			if (typeof url !== "string" || url.length === 0) {
+				throw new Error("Unable to start GitHub setup");
+			}
+			const parsed = new URL(url, GITHUB_AUTHORIZATION_URL);
+			if (`${parsed.origin}${parsed.pathname}` !== GITHUB_AUTHORIZATION_URL) {
+				throw new Error("Unable to start GitHub setup");
+			}
+			window.location.assign(parsed.toString());
 		} catch (error) {
 			setActionError(error instanceof Error ? error.message : "Unable to start GitHub setup");
 		}

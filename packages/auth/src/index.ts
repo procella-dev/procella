@@ -8,11 +8,7 @@ import DescopeSdk from "@descope/node-sdk";
 import { OidcClaims } from "@procella/oidc";
 import { authAuthenticateDuration, authFailureCount, withSpan } from "@procella/telemetry";
 import type { Caller, Role, WorkloadIdentity } from "@procella/types";
-import {
-	ForbiddenError,
-	OutboundConnectUnavailableError,
-	UnauthorizedError,
-} from "@procella/types";
+import { ForbiddenError, UnauthorizedError } from "@procella/types";
 import { createRemoteJWKSet, type JWTVerifyGetKey, jwtVerify } from "jose";
 
 // ============================================================================
@@ -31,20 +27,6 @@ export interface AuthService {
 		caller: Caller,
 		name: string,
 		opts?: { expireTime?: number; customClaims?: Record<string, unknown> },
-	): Promise<string>;
-	/**
-	 * Start a Descope Outbound Application connect flow for the request's own
-	 * authenticated user and tenant, returning only the provider authorization
-	 * URL.
-	 *
-	 * Cookie mode keeps the session JWT HttpOnly, so the browser cannot supply it
-	 * to Descope itself. The server reads the verified session from the request
-	 * and never hands any token back to the caller.
-	 */
-	startOutboundConnect?(
-		request: Request,
-		appId: string,
-		options: { redirectUrl: string; tenantId: string },
 	): Promise<string>;
 	/** Stop background timers (e.g. cache sweep). Called on server shutdown. */
 	dispose?(): void;
@@ -353,66 +335,6 @@ export class DescopeAuthService implements AuthService {
 			}
 		}
 		throw new UnauthorizedError("Invalid session cookie");
-	}
-
-	/**
-	 * Exchanges the request's own verified session for a provider authorization
-	 * URL. Only interactive user sessions qualify: access keys have no Descope
-	 * user to vault an outbound token against.
-	 *
-	 * `tenantId` scopes the vaulted token, so the same Descope user connecting
-	 * from two Procella tenants ends up with two independent tokens.
-	 */
-	async startOutboundConnect(
-		request: Request,
-		appId: string,
-		options: { redirectUrl: string; tenantId: string },
-	): Promise<string> {
-		const token = await this.resolveSessionToken(request);
-		const response = await this.sdk.outbound
-			.connect(appId, { redirectUrl: options.redirectUrl, tenantId: options.tenantId }, token)
-			.catch(() => null);
-		// The session was already verified, so a missing URL is an upstream
-		// failure, not a credential rejection: reporting 401 would log the
-		// administrator out of the dashboard instead of letting them retry.
-		const url = response?.ok ? response.data?.url : undefined;
-		if (typeof url !== "string" || url.length === 0) {
-			throw new OutboundConnectUnavailableError();
-		}
-		return url;
-	}
-
-	/**
-	 * The verified session JWT backing this request, from header or cookie.
-	 *
-	 * `verifySessionJwt` classifies a JWT without `amr` as a machine principal, so
-	 * an admin-role access-key JWT would otherwise be forwarded to Descope's
-	 * user-scoped outbound endpoint. Both candidate paths require
-	 * `principalType === "user"`, matching the CLI-access-key minting gate, and
-	 * reject before any Descope call.
-	 */
-	private async resolveSessionToken(request: Request): Promise<string> {
-		if (request.headers.get("Authorization")) {
-			const { token } = extractToken(request);
-			if (!token.startsWith("eyJ")) {
-				throw new UnauthorizedError("Outbound connect requires an interactive user session");
-			}
-			const caller = await this.verifySessionJwt(token);
-			if (caller.principalType !== "user") {
-				throw new UnauthorizedError("Outbound connect requires an interactive user session");
-			}
-			return token;
-		}
-		for (const candidate of extractSessionCookieTokens(request)) {
-			const caller = await this.verifySessionJwt(candidate).catch(() => null);
-			// A verified non-user principal is a hard failure, not a wrong-environment
-			// cookie: continuing could pick a weaker candidate from the same jar.
-			if (caller && caller.principalType !== "user") {
-				throw new UnauthorizedError("Outbound connect requires an interactive user session");
-			}
-			if (caller) return candidate;
-		}
-		throw new UnauthorizedError("Missing Descope session");
 	}
 
 	async authenticateUpdateToken(token: string): Promise<{ updateId: string; stackId: string }> {

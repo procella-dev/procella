@@ -1,6 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
 import { type GitHubService, GitHubSetupError } from "@procella/github";
-import { OutboundConnectUnavailableError } from "@procella/types";
 import type { TRPCContext } from "../trpc.js";
 import { githubRouter } from "./github.js";
 
@@ -46,7 +45,8 @@ function mockContext(overrides?: Partial<TRPCContext>): TRPCContext {
 		},
 		setGitHubSetupCookie: mock(() => {}),
 		githubSetupNonce: "n".repeat(43),
-		startGitHubConnect: mock(async () => "https://github.com/login/oauth/authorize?state=descope"),
+		appOrigin: "https://app.procella.test",
+		githubOutboundAppId: "procella-github",
 		resolveUserDisplayName: (subject) => Promise.resolve(subject),
 		db: {} as never,
 		notifications: {} as never,
@@ -91,7 +91,8 @@ describe("githubRouter", () => {
 	test("status reports connect unavailable without probing the vault", async () => {
 		for (const ctx of [
 			mockContext({ github: mockGitHubService({ connectAvailable: false }) }),
-			mockContext({ startGitHubConnect: undefined }),
+			mockContext({ appOrigin: undefined }),
+			mockContext({ githubOutboundAppId: undefined }),
 		]) {
 			const status = await githubRouter.createCaller(ctx).status();
 			expect(status).toMatchObject({ connectAvailable: false, connectedLogin: null });
@@ -104,10 +105,12 @@ describe("githubRouter", () => {
 		expect((await githubRouter.createCaller(ctx).status()).configured).toBe(true);
 	});
 
-	test("startConnect returns only the provider URL for admins", async () => {
+	test("startConnect returns only appId, tenantId, and a server-built redirect URL for admins", async () => {
 		const ctx = mockContext();
 		expect(await githubRouter.createCaller(ctx).startConnect({ accountLogin: "acme" })).toEqual({
-			url: "https://github.com/login/oauth/authorize?state=descope",
+			appId: "procella-github",
+			tenantId: "t-1",
+			redirectUrl: "https://app.procella.test/settings/github/connected?state=signed-connect-state",
 		});
 
 		const nonAdmin = mockContext({ caller: { ...viewerCaller, roles: ["viewer"] } });
@@ -119,7 +122,12 @@ describe("githubRouter", () => {
 	test("startConnect fails closed when the outbound app is unavailable", async () => {
 		await expect(
 			githubRouter
-				.createCaller(mockContext({ startGitHubConnect: undefined }))
+				.createCaller(mockContext({ appOrigin: undefined }))
+				.startConnect({ accountLogin: "acme" }),
+		).rejects.toThrow("GitHub user verification is not configured");
+		await expect(
+			githubRouter
+				.createCaller(mockContext({ githubOutboundAppId: undefined }))
 				.startConnect({ accountLogin: "acme" }),
 		).rejects.toThrow("GitHub user verification is not configured");
 		await expect(
@@ -134,18 +142,16 @@ describe("githubRouter", () => {
 		).rejects.toThrow("GitHub App is not configured");
 	});
 
-	test("startConnect mints a browser-bound transaction before calling Descope", async () => {
+	test("startConnect mints a browser-bound transaction and sets the cookie before returning", async () => {
 		const beginConnect = mock(async () => "signed-connect-state");
-		const startGitHubConnect = mock(
-			async () => "https://github.com/login/oauth/authorize?state=descope",
-		);
 		const ctx = mockContext({
 			github: mockGitHubService({ beginConnect }),
-			startGitHubConnect,
 		});
 
 		expect(await githubRouter.createCaller(ctx).startConnect({ accountLogin: "acme" })).toEqual({
-			url: "https://github.com/login/oauth/authorize?state=descope",
+			appId: "procella-github",
+			tenantId: "t-1",
+			redirectUrl: "https://app.procella.test/settings/github/connected?state=signed-connect-state",
 		});
 		const [tenantId, accountLogin, userId, nonce] = beginConnect.mock.calls[0] as unknown as [
 			string,
@@ -155,13 +161,29 @@ describe("githubRouter", () => {
 		];
 		expect([tenantId, accountLogin, userId]).toEqual(["t-1", "acme", "u-1"]);
 		expect(nonce).toMatch(/^[a-zA-Z0-9_-]{43}$/);
-		// The signed transaction and the tenant scope reach Descope, and the same
-		// nonce is the only thing the browser keeps.
-		expect(startGitHubConnect).toHaveBeenCalledWith({
-			state: "signed-connect-state",
-			tenantId: "t-1",
-		});
+		// The setup cookie is set before the mutation returns, so it always exists
+		// before the browser's own SDK can start the outbound OAuth handoff.
 		expect(ctx.setGitHubSetupCookie).toHaveBeenCalledWith(nonce);
+	});
+
+	test("startConnect never lets client input influence the redirect origin", async () => {
+		const beginConnect = mock(async () => "signed-connect-state");
+		const ctx = mockContext({
+			github: mockGitHubService({ beginConnect }),
+			appOrigin: "https://trusted.procella.test",
+		});
+
+		// zod strips unrecognized input keys, so an attacker-supplied origin or
+		// redirect URL never reaches the server logic in the first place; the
+		// redirect always comes from the server's own configured appOrigin.
+		const result = await githubRouter.createCaller(ctx).startConnect({
+			accountLogin: "acme",
+			redirectUrl: "https://evil.example/steal",
+			appOrigin: "https://evil.example",
+		} as unknown as { accountLogin: string });
+
+		expect(result.redirectUrl.startsWith("https://trusted.procella.test/")).toBe(true);
+		expect(result.redirectUrl).not.toContain("evil.example");
 	});
 
 	test("startConnect rejects malformed accounts and never sets a cookie on failure", async () => {
@@ -173,13 +195,15 @@ describe("githubRouter", () => {
 		expect(malformed.setGitHubSetupCookie).not.toHaveBeenCalled();
 
 		const failing = mockContext({
-			startGitHubConnect: mock(async () => {
-				throw new OutboundConnectUnavailableError();
+			github: mockGitHubService({
+				beginConnect: mock(async () => {
+					throw new GitHubSetupError("authorization_unavailable");
+				}),
 			}),
 		});
 		await expect(
 			githubRouter.createCaller(failing).startConnect({ accountLogin: "acme" }),
-		).rejects.toThrow("temporarily unavailable");
+		).rejects.toThrow("not configured on this server");
 		expect(failing.setGitHubSetupCookie).not.toHaveBeenCalled();
 	});
 

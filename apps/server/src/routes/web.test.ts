@@ -284,13 +284,9 @@ describe("createWebApp GitHub setup callback", () => {
 });
 
 describe("createWebApp GitHub outbound connect", () => {
-	test("carries the signed transaction and tenant into the Descope redirect URL", async () => {
-		const startOutboundConnect = mock(
-			async () => "https://github.com/login/oauth/authorize?state=descope",
-		);
+	test("mints a browser-bound transaction and returns appId, tenantId, and a server-built redirect URL", async () => {
 		const github = mockGitHubService();
-		const auth = mockAuthService();
-		const app = makeApp({ github, auth: { ...auth, startOutboundConnect } });
+		const app = makeApp({ github });
 
 		const res = await app.request("https://app.procella.test/trpc/github.startConnect", {
 			method: "POST",
@@ -299,7 +295,8 @@ describe("createWebApp GitHub outbound connect", () => {
 		});
 
 		expect(res.status).toBe(200);
-		// Connect responses carry a state-bearing URL and a fresh browser nonce.
+		// The setup cookie must exist before the browser's own Descope SDK can
+		// start the outbound OAuth handoff, so it is set on this response.
 		expect(res.headers.get("cache-control")).toBe("no-store");
 		const cookie = res.headers.get("set-cookie") ?? "";
 		const nonce = cookie.match(new RegExp(`${GITHUB_SETUP_COOKIE_NAME}=([^;]+)`))?.[1];
@@ -313,45 +310,42 @@ describe("createWebApp GitHub outbound connect", () => {
 			nonce,
 		);
 
-		const body = (await res.json()) as { result: { data: { json: { url: string } } } };
+		const body = (await res.json()) as {
+			result: { data: { json: { appId: string; tenantId: string; redirectUrl: string } } };
+		};
 		expect(body.result.data.json).toEqual({
-			url: "https://github.com/login/oauth/authorize?state=descope",
-		});
-		const [request, appId, options] = startOutboundConnect.mock.calls[0] as unknown as [
-			Request,
-			string,
-			{ redirectUrl: string; tenantId: string },
-		];
-		expect(request.headers.get("Cookie")).toBe("DS=session-cookie");
-		expect(appId).toBe("procella-github");
-		expect(options).toEqual({
-			redirectUrl: "https://app.procella.test/settings/github/connected?state=signed-connect-state",
+			appId: "procella-github",
 			tenantId: validCaller.tenantId,
+			redirectUrl: "https://app.procella.test/settings/github/connected?state=signed-connect-state",
 		});
 	});
 
-	test("rejects an authorization URL outside GitHub's authorize endpoint", async () => {
-		const startOutboundConnect = mock(async () => "https://evil.example/login/oauth/authorize");
-		const auth = mockAuthService();
-		const app = makeApp({
-			github: mockGitHubService(),
-			auth: { ...auth, startOutboundConnect },
-		});
+	test("never lets request headers or a spoofed origin influence the redirect URL", async () => {
+		const github = mockGitHubService();
+		const app = makeApp({ github, appOrigin: "https://app.procella.test" });
 
 		const res = await app.request("https://app.procella.test/trpc/github.startConnect", {
 			method: "POST",
-			headers: { Cookie: "DS=session-cookie", "Content-Type": "application/json" },
+			headers: {
+				Cookie: "DS=session-cookie",
+				"Content-Type": "application/json",
+				Host: "evil.example",
+				Origin: "https://evil.example",
+				"X-Forwarded-Host": "evil.example",
+			},
 			body: JSON.stringify({ json: { accountLogin: "acme" } }),
 		});
 
-		expect(res.status).toBe(400);
-		expect(res.headers.get("set-cookie")).toBeNull();
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as { result: { data: { json: { redirectUrl: string } } } };
+		expect(body.result.data.json.redirectUrl.startsWith("https://app.procella.test/")).toBe(true);
+		expect(body.result.data.json.redirectUrl).not.toContain("evil.example");
 	});
 
-	test("fails closed without a dashboard origin or outbound-capable auth service", async () => {
+	test("fails closed without a configured dashboard origin or outbound app id", async () => {
 		for (const overrides of [
 			{ github: mockGitHubService(), appOrigin: "" },
-			{ github: mockGitHubService() },
+			{ github: mockGitHubService(), githubOutboundAppId: "" },
 		]) {
 			const app = makeApp(overrides);
 			const res = await app.request("https://app.procella.test/trpc/github.startConnect", {
@@ -363,7 +357,6 @@ describe("createWebApp GitHub outbound connect", () => {
 		}
 	});
 });
-
 describe("createWebApp auth config discovery", () => {
 	test("GET /api/auth/config returns descope config with authBaseUrl when configured", async () => {
 		const app = makeApp({

@@ -160,19 +160,3 @@ export class CheckpointNotFoundError extends NotFoundError {
 		this.name = "CheckpointNotFoundError";
 	}
 }
-
-// ============================================================================
-// Outbound Application Errors
-// ============================================================================
-
-/**
- * Descope was reachable but could not start an outbound connect. Distinct from
- * a rejected session: reporting 401 here would sign the dashboard user out
- * instead of letting them retry.
- */
-export class OutboundConnectUnavailableError extends ProcellaError {
-	constructor() {
-		super("Descope could not start the outbound connect", "OUTBOUND_CONNECT_UNAVAILABLE", 502);
-		this.name = "OutboundConnectUnavailableError";
-	}
-}

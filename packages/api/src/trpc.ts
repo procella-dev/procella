@@ -26,12 +26,14 @@ export interface TRPCContext {
 	/** Browser-bound setup nonce from the HttpOnly `__Host-` cookie, when present. */
 	githubSetupNonce?: string;
 	/**
-	 * Starts the GitHub Outbound App connect for the caller's own session and
-	 * returns the provider authorization URL. The signed connect transaction is
-	 * carried in the Descope redirect URL. Absent when the deployment cannot
-	 * reach Descope or has no dashboard origin to return the browser to.
+	 * Dashboard origin the Descope outbound callback returns the browser to.
+	 * The GitHub connect redirect URL is always built from this trusted,
+	 * server-configured origin, never from client input. Absent when the
+	 * deployment has no dashboard origin configured.
 	 */
-	startGitHubConnect?: (connect: { state: string; tenantId: string }) => Promise<string>;
+	appOrigin?: string;
+	/** Descope Outbound Application that vaults each admin's GitHub user token. */
+	githubOutboundAppId?: string;
 	resolveUserDisplayName: (subject: string) => Promise<string | null>;
 	db: Database;
 	notifications: NotificationHub;

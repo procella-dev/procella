@@ -1,5 +1,9 @@
-import { createGitHubSetupNonce, GitHubSetupError } from "@procella/github";
-import { OutboundConnectUnavailableError, ProcellaError } from "@procella/types";
+import {
+	createGitHubSetupNonce,
+	GITHUB_CONNECT_RETURN_PATH,
+	GitHubSetupError,
+} from "@procella/github";
+import { ProcellaError } from "@procella/types";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod/v4";
 import { adminProcedure, protectedProcedure, router } from "../trpc.js";
@@ -38,14 +42,6 @@ function trpcSetupError(error: unknown): TRPCError {
 		if (mapped) return new TRPCError(mapped);
 		return new TRPCError({ code: "BAD_REQUEST", message: error.code });
 	}
-	// Descope outages must not surface as 401: the dashboard would log the
-	// administrator out instead of letting them retry the connection.
-	if (error instanceof OutboundConnectUnavailableError) {
-		return new TRPCError({
-			code: "BAD_GATEWAY",
-			message: "GitHub connection is temporarily unavailable. Try again",
-		});
-	}
 	// Other domain errors keep their own status through the tRPC error formatter.
 	if (error instanceof ProcellaError) {
 		return new TRPCError({
@@ -77,7 +73,8 @@ export const githubRouter = router({
 				installations: [],
 			};
 		}
-		const connectAvailable = ctx.github.connectAvailable && Boolean(ctx.startGitHubConnect);
+		const connectAvailable =
+			ctx.github.connectAvailable && Boolean(ctx.appOrigin) && Boolean(ctx.githubOutboundAppId);
 		return {
 			configured: true as const,
 			connectAvailable,
@@ -93,10 +90,13 @@ export const githubRouter = router({
 	/**
 	 * Cookie-mode safe outbound handoff. A one-time server transaction bound to
 	 * the tenant, the admin, the requested account, and a fresh `__Host-` browser
-	 * nonce is minted before Descope is called, and its signed reference travels
-	 * in the Descope redirect URL. Forwarding the returned authorization URL to
-	 * another person therefore cannot vault their GitHub token against this
-	 * caller: the callback cannot be continued from another browser or session.
+	 * nonce is minted before the browser is told anything, and its signed
+	 * reference travels in the redirect URL the browser hands back to Descope.
+	 * The browser's own cookie-authenticated Descope SDK performs the outbound
+	 * connect call, so no session or refresh token is ever read here or handed
+	 * to the caller. The redirect URL is always built from this server's own
+	 * configured dashboard origin, never from client input, so a caller cannot
+	 * redirect the flow to another origin.
 	 */
 	startConnect: adminProcedure
 		.input(z.object({ accountLogin: accountLoginSchema }))
@@ -107,7 +107,7 @@ export const githubRouter = router({
 					message: "GitHub App is not configured on this server",
 				});
 			}
-			if (!ctx.github.connectAvailable || !ctx.startGitHubConnect) {
+			if (!ctx.github.connectAvailable || !ctx.appOrigin || !ctx.githubOutboundAppId) {
 				throw new TRPCError({
 					code: "PRECONDITION_FAILED",
 					message: "GitHub user verification is not configured on this server",
@@ -128,9 +128,16 @@ export const githubRouter = router({
 					ctx.caller.userId,
 					browserNonce,
 				);
-				const url = await ctx.startGitHubConnect({ state, tenantId: ctx.caller.tenantId });
+				const redirectUrl = new URL(GITHUB_CONNECT_RETURN_PATH, ctx.appOrigin);
+				redirectUrl.searchParams.set("state", state);
+				// The cookie must exist before the browser can complete the outbound
+				// connect it is about to start, so it is set here rather than after.
 				ctx.setGitHubSetupCookie(browserNonce);
-				return { url };
+				return {
+					appId: ctx.githubOutboundAppId,
+					tenantId: ctx.caller.tenantId,
+					redirectUrl: redirectUrl.toString(),
+				};
 			} catch (error) {
 				throw trpcSetupError(error);
 			}

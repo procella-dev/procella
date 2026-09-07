@@ -114,11 +114,14 @@ script hash is a Pulumi trigger, so changing it reprovisions on the next deploy.
 
 Sign in to Procella as a tenant administrator, open **Settings** > **GitHub**, enter the exact GitHub user or organization login to connect, and select **Install & Verify GitHub App**.
 
-1. Procella mints a one-time connect transaction bound to the tenant, the initiating administrator,
-   the requested account, and a fresh `__Host-` browser nonce, then asks Descope, server-side and
-   using the browser's own session, for the GitHub authorization URL. The signed transaction travels
-   inside the Descope redirect URL, and the returned URL must be GitHub's authorization endpoint.
-   Session and refresh tokens stay HttpOnly; the browser only ever receives the provider URL.
+1. Procella's server mints a one-time connect transaction bound to the tenant, the initiating
+   administrator, the requested account, and a fresh `__Host-` browser nonce, sets the browser
+   nonce as an HttpOnly cookie, and returns only the outbound app id, the tenant, and a redirect URL
+   it builds from its own configured dashboard origin — never a token. The signed transaction travels
+   inside that redirect URL. The browser's own cookie-authenticated Descope SDK then calls the
+   outbound connect endpoint directly and only follows a returned URL that is exactly GitHub's
+   authorization endpoint. Session and refresh tokens stay HttpOnly and are never read by the
+   dashboard; the browser never receives or stores anything else.
 2. Descope completes the code exchange and vaults the GitHub user token **for that tenant**, then
    returns the browser to `/settings/github/connected?state=...`.
 3. Procella consumes the transaction exactly once, requiring the browser nonce cookie and the same
