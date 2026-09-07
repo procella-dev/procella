@@ -367,23 +367,35 @@ export class DescopeAuthService implements AuthService {
 		return url;
 	}
 
-	/** The verified session JWT backing this request, from header or cookie. */
+	/**
+	 * The verified session JWT backing this request, from header or cookie.
+	 *
+	 * `verifySessionJwt` classifies a JWT without `amr` as a machine principal, so
+	 * an admin-role access-key JWT would otherwise be forwarded to Descope's
+	 * user-scoped outbound endpoint. Both candidate paths require
+	 * `principalType === "user"`, matching the CLI-access-key minting gate, and
+	 * reject before any Descope call.
+	 */
 	private async resolveSessionToken(request: Request): Promise<string> {
 		if (request.headers.get("Authorization")) {
 			const { token } = extractToken(request);
 			if (!token.startsWith("eyJ")) {
 				throw new UnauthorizedError("Outbound connect requires an interactive user session");
 			}
-			await this.verifySessionJwt(token);
+			const caller = await this.verifySessionJwt(token);
+			if (caller.principalType !== "user") {
+				throw new UnauthorizedError("Outbound connect requires an interactive user session");
+			}
 			return token;
 		}
 		for (const candidate of extractSessionCookieTokens(request)) {
-			try {
-				await this.verifySessionJwt(candidate);
-				return candidate;
-			} catch {
-				// Try the next candidate — may belong to a sibling environment.
+			const caller = await this.verifySessionJwt(candidate).catch(() => null);
+			// A verified non-user principal is a hard failure, not a wrong-environment
+			// cookie: continuing could pick a weaker candidate from the same jar.
+			if (caller && caller.principalType !== "user") {
+				throw new UnauthorizedError("Outbound connect requires an interactive user session");
 			}
+			if (caller) return candidate;
 		}
 		throw new UnauthorizedError("Missing Descope session");
 	}

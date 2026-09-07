@@ -21,9 +21,11 @@ const mockExchangeAccessKey = mock();
 const mockLoadByUserId = mock();
 const mockAccessKeyCreate = mock();
 const mockAccessKeyLoad = mock();
+const mockOutboundConnect = mock();
 mock.module("@descope/node-sdk", () => ({
 	default: () => ({
 		exchangeAccessKey: mockExchangeAccessKey,
+		outbound: { connect: mockOutboundConnect },
 		management: {
 			user: { loadByUserId: mockLoadByUserId },
 			accessKey: { create: mockAccessKeyCreate, load: mockAccessKeyLoad },
@@ -778,6 +780,160 @@ describe("DescopeAuthService — session cookie fallback", () => {
 
 		// The invalid Bearer token must fail — not silently fall back to the cookie.
 		return expect(svc.authenticate(request)).rejects.toThrow();
+	});
+});
+
+// ============================================================================
+// DescopeAuthService — outbound connect (user-scoped)
+// ============================================================================
+
+describe("DescopeAuthService — outbound connect", () => {
+	let harness: Awaited<ReturnType<typeof createJwtTestHarness>>;
+	let svc: DescopeAuthService;
+
+	const BASE_CLAIMS = {
+		sub: "user-1",
+		dct: "tenant-1",
+		procellaLogin: "omer",
+		tenants: { "tenant-1": { roles: ["admin"] } },
+		exp: Math.floor(Date.now() / 1000) + 3600,
+	};
+	const USER_CLAIMS = { ...BASE_CLAIMS, amr: ["pwd"] };
+	/** Access-key JWTs carry no `amr`, so they authenticate as machine principals. */
+	const ACCESS_KEY_CLAIMS = BASE_CLAIMS;
+	const WORKLOAD_CLAIMS = {
+		...BASE_CLAIMS,
+		amr: ["pwd"],
+		[OidcClaims.principalType]: "workload",
+		[OidcClaims.workloadProvider]: "github-actions",
+		[OidcClaims.workloadSub]: "repo:acme/infra:ref:refs/heads/main",
+	};
+
+	async function signed(claims: Record<string, unknown>): Promise<string> {
+		return signDescopeJwt(harness.privateKey, claims, {
+			issuer: harness.issuer,
+			audience: harness.audience,
+		});
+	}
+
+	beforeAll(async () => {
+		harness = await createJwtTestHarness();
+		svc = new DescopeAuthService({
+			sdk: DescopeSdk({ projectId: harness.audience }),
+			config: { projectId: harness.audience, issuer: harness.issuer },
+			jwks: harness.jwks,
+		});
+	});
+
+	beforeEach(() => {
+		mockOutboundConnect.mockReset();
+		mockOutboundConnect.mockResolvedValue({
+			ok: true,
+			data: { url: "https://github.com/login/oauth/authorize?state=descope" },
+		});
+	});
+
+	afterAll(() => {
+		svc.dispose();
+	});
+
+	test("starts the connect for an interactive user session from the Authorization header", async () => {
+		const token = await signed(USER_CLAIMS);
+
+		await expect(
+			svc.startOutboundConnect(
+				reqWithAuth(`Bearer ${token}`),
+				"procella-github",
+				"https://app.example.com/settings/github/connected",
+			),
+		).resolves.toBe("https://github.com/login/oauth/authorize?state=descope");
+		expect(mockOutboundConnect).toHaveBeenCalledWith(
+			"procella-github",
+			{ redirectUrl: "https://app.example.com/settings/github/connected" },
+			token,
+		);
+	});
+
+	test("starts the connect for an interactive user session from the session cookie", async () => {
+		const token = await signed(USER_CLAIMS);
+		const request = new Request("http://localhost:9090/trpc/github.startConnect", {
+			method: "POST",
+			headers: { Cookie: `DS=${token}` },
+		});
+
+		await expect(
+			svc.startOutboundConnect(request, "procella-github", "https://app.example.com/x"),
+		).resolves.toContain("https://github.com/login/oauth/authorize");
+		expect(mockOutboundConnect.mock.calls[0]?.[2]).toBe(token);
+	});
+
+	test("rejects a JWT-shaped access-key principal without calling Descope", async () => {
+		const token = await signed(ACCESS_KEY_CLAIMS);
+
+		await expect(
+			svc.startOutboundConnect(
+				reqWithAuth(`Bearer ${token}`),
+				"procella-github",
+				"https://app.example.com/x",
+			),
+		).rejects.toBeInstanceOf(UnauthorizedError);
+		expect(mockOutboundConnect).not.toHaveBeenCalled();
+	});
+
+	test("rejects a workload principal without calling Descope", async () => {
+		const token = await signed(WORKLOAD_CLAIMS);
+
+		await expect(
+			svc.startOutboundConnect(
+				reqWithAuth(`Bearer ${token}`),
+				"procella-github",
+				"https://app.example.com/x",
+			),
+		).rejects.toBeInstanceOf(UnauthorizedError);
+		expect(mockOutboundConnect).not.toHaveBeenCalled();
+	});
+
+	test("rejects a verified non-user cookie candidate without calling Descope", async () => {
+		for (const claims of [ACCESS_KEY_CLAIMS, WORKLOAD_CLAIMS]) {
+			mockOutboundConnect.mockClear();
+			const token = await signed(claims);
+			const request = new Request("http://localhost:9090/trpc/github.startConnect", {
+				method: "POST",
+				headers: { Cookie: `DS=${token}` },
+			});
+
+			await expect(
+				svc.startOutboundConnect(request, "procella-github", "https://app.example.com/x"),
+			).rejects.toBeInstanceOf(UnauthorizedError);
+			expect(mockOutboundConnect).not.toHaveBeenCalled();
+		}
+	});
+
+	test("rejects an opaque access key and a missing session without calling Descope", async () => {
+		await expect(
+			svc.startOutboundConnect(
+				reqWithAuth("token K2opaqueaccesskey"),
+				"procella-github",
+				"https://app.example.com/x",
+			),
+		).rejects.toBeInstanceOf(UnauthorizedError);
+		await expect(
+			svc.startOutboundConnect(reqWithoutAuth(), "procella-github", "https://app.example.com/x"),
+		).rejects.toBeInstanceOf(UnauthorizedError);
+		expect(mockOutboundConnect).not.toHaveBeenCalled();
+	});
+
+	test("surfaces a declined Descope connect response", async () => {
+		mockOutboundConnect.mockResolvedValue({ ok: false });
+		const token = await signed(USER_CLAIMS);
+
+		await expect(
+			svc.startOutboundConnect(
+				reqWithAuth(`Bearer ${token}`),
+				"procella-github",
+				"https://app.example.com/x",
+			),
+		).rejects.toBeInstanceOf(UnauthorizedError);
 	});
 });
 
