@@ -2,7 +2,7 @@ import { afterEach, beforeAll, describe, expect, test } from "bun:test";
 import type { Octokit } from "@octokit/rest";
 import type { Database } from "@procella/db";
 import { githubInstallations, githubOutboundConnections } from "@procella/db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
 	GitHubOutboundError,
 	type GitHubOutboundIdentityService,
@@ -524,7 +524,13 @@ function gate(): { opened: Promise<void>; release: () => void } {
 	return { opened, release: () => release() };
 }
 
-/** Waits for the other operation to reach a point, or gives up. */
+/**
+ * Waits for one of this test's own in-process counters to reach a value an
+ * async callback sets from inside a locked transaction. Nothing in this
+ * process emits an event when that happens, so polling the counter is the
+ * only way to observe it; the loop returns the instant it is true and never
+ * lengthens a passing run.
+ */
 async function waitFor(condition: () => boolean, timeoutMs = 5_000): Promise<boolean> {
 	const deadline = Date.now() + timeoutMs;
 	while (Date.now() < deadline) {
@@ -534,8 +540,38 @@ async function waitFor(condition: () => boolean, timeoutMs = 5_000): Promise<boo
 	return condition();
 }
 
-/** Long enough that an unserialized implementation would have gotten through. */
-const INTERLEAVE_WINDOW_MS = 250;
+/**
+ * Waits until PostgreSQL itself reports a session other than this one blocked
+ * on the outbound connection's advisory lock. `hashtextextended` appears only
+ * in `lockOutboundConnection`'s statement in this codebase, so matching a
+ * blocked backend's query text is proof that the contending transaction
+ * reached the database and is waiting on this exact lock — not a guess from
+ * elapsed time, which a slow-starting contender or a differing lock key would
+ * both pass unnoticed.
+ */
+async function waitForLockWaiter(timeoutMs = 5_000): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		const result = await db.execute(sql`
+			SELECT count(*)::int AS waiters
+			FROM pg_stat_activity
+			WHERE wait_event_type = 'Lock'
+				AND query ILIKE '%hashtextextended%'
+				AND pid <> pg_backend_pid()
+		`);
+		const rows = "rows" in result ? result.rows : (result as unknown[]);
+		const waiters = Number((rows[0] as { waiters?: number } | undefined)?.waiters ?? 0);
+		if (waiters > 0) return;
+		// Polling, not a fixed wait: the condition is PostgreSQL's own server-side
+		// lock-wait state on a separate connection, which no fake timer can drive
+		// and which Postgres has no push notification for. The loop exits the
+		// instant `waiters` is observed, so it never lengthens a passing run.
+		await Bun.sleep(10);
+	}
+	throw new Error(
+		"timed out waiting for a contending transaction to block on the outbound connection lock",
+	);
+}
 
 const RECONNECT_INITIATOR = { tenantId: "tenant-a", userId: "tenant-a-admin" } as const;
 
@@ -634,14 +670,23 @@ describe("GitHub outbound connection locking", () => {
 			repositorySelection: "all",
 		});
 
-		const reconnect = (await reconnectStarter(harness.service))();
-		const confirming = await waitFor(() => harness.pendingReads === 1);
-		const disconnect = harness.service.removeInstallation("tenant-a", 101, "tenant-a-admin");
-		// Unserialized, the disconnect would drain the token this confirmation is
-		// about to publish and leave a row naming a deleted credential.
-		await Bun.sleep(INTERLEAVE_WINDOW_MS);
-		const drainsWhileConfirming = harness.drains;
-		pending.release();
+		const startReconnect = await reconnectStarter(harness.service);
+		const reconnect = startReconnect();
+		let disconnect: Promise<void> = Promise.resolve();
+		let confirming = false;
+		let drainsWhileConfirming = 0;
+		try {
+			confirming = await waitFor(() => harness.pendingReads === 1);
+			disconnect = harness.service.removeInstallation("tenant-a", 101, "tenant-a-admin");
+			// Unserialized, the disconnect would drain the token this confirmation is
+			// about to publish and leave a row naming a deleted credential. Waiting
+			// for PostgreSQL to report the disconnect blocked on the lock — not a
+			// fixed sleep — proves the two transactions actually contended.
+			await waitForLockWaiter();
+			drainsWhileConfirming = harness.drains;
+		} finally {
+			pending.release();
+		}
 		// Both operations are settled before anything is asserted, so a regression
 		// reports a failure instead of stranding an open transaction.
 		const [reconnected, disconnected] = await Promise.allSettled([reconnect, disconnect]);
@@ -669,15 +714,32 @@ describe("GitHub outbound connection locking", () => {
 		expect(await confirmedRows("tenant-a")).toEqual(["tok-a"]);
 		const readsBeforeDrain = harness.pendingReads;
 
+		// Prepared before the disconnect launches and pauses on the drain gate: if
+		// this DB work rejected afterward, the disconnect's already-open
+		// transaction would have nothing to release it or settle it.
+		const startReconnect = await reconnectStarter(harness.service);
 		const disconnect = harness.service.removeInstallation("tenant-a", 101, "tenant-a-admin");
-		const draining = await waitFor(() => harness.drains === 1);
-		const reconnect = (await reconnectStarter(harness.service))();
-		// Unserialized, the reconnect would read the vault here and confirm the
-		// very token the drain is deleting.
-		await Bun.sleep(INTERLEAVE_WINDOW_MS);
-		const readsWhileDraining = harness.pendingReads;
-		drain.release();
-		const [reconnected, disconnected] = await Promise.allSettled([reconnect, disconnect]);
+		let reconnect: Promise<string> | undefined;
+		let draining = false;
+		let readsWhileDraining = readsBeforeDrain;
+		let settled: [PromiseSettledResult<string>, PromiseSettledResult<void>];
+		try {
+			draining = await waitFor(() => harness.drains === 1);
+			reconnect = startReconnect();
+			// Unserialized, the reconnect would read the vault here and confirm the
+			// very token the drain is deleting. Waiting for PostgreSQL to report the
+			// reconnect blocked on the lock — not a fixed sleep — proves the two
+			// transactions actually contended.
+			await waitForLockWaiter();
+			readsWhileDraining = harness.pendingReads;
+		} finally {
+			drain.release();
+			settled = await Promise.allSettled([
+				reconnect ?? Promise.reject(new Error("reconnect never started")),
+				disconnect,
+			]);
+		}
+		const [reconnected, disconnected] = settled;
 
 		expect(draining).toBe(true);
 		expect(readsWhileDraining).toBe(readsBeforeDrain);
@@ -709,13 +771,27 @@ describe("GitHub outbound connection locking", () => {
 		await bind(harness.service, "tenant-a", 101);
 		const readsBeforeDrain = harness.pendingReads;
 
+		// Prepared before the disconnect launches and pauses on the drain gate, for
+		// the same reason as the previous test.
+		const startReconnect = await reconnectStarter(harness.service);
 		const disconnect = harness.service.removeInstallation("tenant-a", 101, "tenant-a-admin");
-		const draining = await waitFor(() => harness.drains === 1);
-		const reconnect = (await reconnectStarter(harness.service))();
-		await Bun.sleep(INTERLEAVE_WINDOW_MS);
-		const readsWhileDraining = harness.pendingReads;
-		drain.release();
-		const [reconnected, disconnected] = await Promise.allSettled([reconnect, disconnect]);
+		let reconnect: Promise<string> | undefined;
+		let draining = false;
+		let readsWhileDraining = readsBeforeDrain;
+		let settled: [PromiseSettledResult<string>, PromiseSettledResult<void>];
+		try {
+			draining = await waitFor(() => harness.drains === 1);
+			reconnect = startReconnect();
+			await waitForLockWaiter();
+			readsWhileDraining = harness.pendingReads;
+		} finally {
+			drain.release();
+			settled = await Promise.allSettled([
+				reconnect ?? Promise.reject(new Error("reconnect never started")),
+				disconnect,
+			]);
+		}
+		const [reconnected, disconnected] = settled;
 
 		expect(draining).toBe(true);
 		expect(readsWhileDraining).toBe(readsBeforeDrain);
@@ -825,20 +901,37 @@ describe("GitHub installation callback locking", () => {
 		const verificationsBefore = harness.verifications;
 
 		const callback = harness.service.completeInstallation(installState, 101, BROWSER_NONCE);
-		const verifying = await waitFor(() => harness.verifications === verificationsBefore + 1);
-		const disconnect = harness.service.removeInstallation("tenant-a", 101, "tenant-a-admin");
-		// Unserialized, the disconnect would delete the confirmation while this
-		// callback is still verifying and about to save a binding.
-		await Bun.sleep(INTERLEAVE_WINDOW_MS);
-		const drainsWhileVerifying = harness.drains;
-
-		verification.release();
-		// The disconnect only reaches its drain once the callback committed, so
-		// this snapshot is the state the callback published.
-		const draining = await waitFor(() => harness.drains === 1);
-		const committed = await connectionState(harness.service, "tenant-a", "tenant-a-admin");
-		drain.release();
-		const [bound, disconnected] = await Promise.allSettled([callback, disconnect]);
+		let disconnect: Promise<void> | undefined;
+		let verifying = false;
+		let draining = false;
+		let drainsWhileVerifying = 0;
+		let committed: { bindings: number[]; confirmed: string[]; vaulted: boolean } | undefined;
+		let settled: [PromiseSettledResult<unknown>, PromiseSettledResult<unknown>];
+		try {
+			try {
+				verifying = await waitFor(() => harness.verifications === verificationsBefore + 1);
+				disconnect = harness.service.removeInstallation("tenant-a", 101, "tenant-a-admin");
+				// Unserialized, the disconnect would delete the confirmation while this
+				// callback is still verifying and about to save a binding. Waiting for
+				// PostgreSQL to report the disconnect blocked on the lock — not a fixed
+				// sleep — proves the two transactions actually contended.
+				await waitForLockWaiter();
+				drainsWhileVerifying = harness.drains;
+			} finally {
+				verification.release();
+			}
+			// The disconnect only reaches its drain once the callback committed, so
+			// this snapshot is the state the callback published.
+			draining = await waitFor(() => harness.drains === 1);
+			committed = await connectionState(harness.service, "tenant-a", "tenant-a-admin");
+		} finally {
+			drain.release();
+			settled = await Promise.allSettled([
+				callback,
+				disconnect ?? Promise.reject(new Error("disconnect never started")),
+			]);
+		}
+		const [bound, disconnected] = settled;
 
 		expect(verifying).toBe(true);
 		expect(draining).toBe(true);
@@ -870,15 +963,27 @@ describe("GitHub installation callback locking", () => {
 		const verificationsBefore = harness.verifications;
 
 		const disconnect = harness.service.removeInstallation("tenant-a", 101, "tenant-a-admin");
-		const draining = await waitFor(() => harness.drains === 1);
-		const callback = harness.service.completeInstallation(installState, 101, BROWSER_NONCE);
-		// Unserialized, the callback would verify the credential this drain is
-		// deleting and then save a binding with nothing behind it.
-		await Bun.sleep(INTERLEAVE_WINDOW_MS);
-		const verificationsWhileDraining = harness.verifications;
-
-		drain.release();
-		const [bound, disconnected] = await Promise.allSettled([callback, disconnect]);
+		let callback: ReturnType<OctokitGitHubService["completeInstallation"]> | undefined;
+		let draining = false;
+		let verificationsWhileDraining = verificationsBefore;
+		let settled: [PromiseSettledResult<unknown>, PromiseSettledResult<unknown>];
+		try {
+			draining = await waitFor(() => harness.drains === 1);
+			callback = harness.service.completeInstallation(installState, 101, BROWSER_NONCE);
+			// Unserialized, the callback would verify the credential this drain is
+			// deleting and then save a binding with nothing behind it. Waiting for
+			// PostgreSQL to report the callback blocked on the lock — not a fixed
+			// sleep — proves the two transactions actually contended.
+			await waitForLockWaiter();
+			verificationsWhileDraining = harness.verifications;
+		} finally {
+			drain.release();
+			settled = await Promise.allSettled([
+				callback ?? Promise.reject(new Error("callback never started")),
+				disconnect,
+			]);
+		}
+		const [bound, disconnected] = settled;
 
 		expect(draining).toBe(true);
 		expect(disconnected).toMatchObject({ status: "fulfilled" });
