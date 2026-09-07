@@ -81,8 +81,8 @@ function createService(overrides: { outbound?: GitHubOutboundIdentityService } =
 		new VaultedGitHubIdentityService(
 			{
 				fetchUserToken: async (userId, tenantId) => ({
-					id: `tok-${tenantId}-${userId}`,
-					accessToken: `user-token-${tenantId}`,
+					outcome: "found",
+					token: { id: `tok-${tenantId}-${userId}`, accessToken: `user-token-${tenantId}` },
 				}),
 				deleteToken: async () => undefined,
 			},
@@ -225,7 +225,10 @@ describe("GitHub installation binding integration", () => {
 		const service = createService({
 			outbound: new VaultedGitHubIdentityService(
 				{
-					fetchUserToken: async (userId, tenantId) => tokens.get(`${tenantId}|${userId}`) ?? null,
+					fetchUserToken: async (userId, tenantId) => {
+						const token = tokens.get(`${tenantId}|${userId}`);
+						return token ? { outcome: "found", token } : { outcome: "absent" };
+					},
 					deleteToken: async (tokenId) => {
 						deleted.push(tokenId);
 						for (const [key, token] of tokens) {

@@ -24,10 +24,20 @@ export interface GitHubVaultedToken {
 	accessToken: string;
 }
 
+/**
+ * Outcome of a vault lookup. `absent` is Descope answering that this tenant has
+ * no token; `failed` is Descope not answering at all. Collapsing the two would
+ * let an outage look like a completed disconnect.
+ */
+export type GitHubVaultedTokenLookup =
+	| { readonly outcome: "found"; readonly token: GitHubVaultedToken }
+	| { readonly outcome: "absent" }
+	| { readonly outcome: "failed" };
+
 /** Vaulted GitHub user tokens for one outbound application, per tenant. */
 export interface GitHubOutboundTokenVault {
-	/** Latest tenant-scoped access token for the user, or null when none exists. */
-	fetchUserToken(userId: string, tenantId: string): Promise<GitHubVaultedToken | null>;
+	/** Looks up the latest tenant-scoped token for the user. */
+	fetchUserToken(userId: string, tenantId: string): Promise<GitHubVaultedTokenLookup>;
 	/** Deletes exactly one vaulted token by its Descope id. */
 	deleteToken(tokenId: string): Promise<void>;
 }
@@ -114,7 +124,11 @@ export interface DescopeOutboundApplicationApi {
 		userId: string,
 		tenantId: string,
 		options: { forceRefresh: boolean },
-	): Promise<{ ok: boolean; data?: { id?: string; accessToken?: string; tenantId?: string } }>;
+	): Promise<{
+		ok: boolean;
+		code?: number;
+		data?: { id?: string; accessToken?: string; tenantId?: string };
+	}>;
 	deleteTokenById(id: string): Promise<{ ok: boolean }>;
 }
 
@@ -125,11 +139,16 @@ export class DescopeGitHubOutboundVault implements GitHubOutboundTokenVault {
 		private readonly appId: string,
 	) {}
 
-	async fetchUserToken(userId: string, tenantId: string): Promise<GitHubVaultedToken | null> {
+	async fetchUserToken(userId: string, tenantId: string): Promise<GitHubVaultedTokenLookup> {
 		const response = await this.outboundApplication
 			.fetchToken(this.appId, userId, tenantId, { forceRefresh: false })
 			.catch(() => null);
-		const token = response?.ok ? response.data : undefined;
+		// A thrown call or any non-404 rejection means Descope did not answer, so
+		// the caller must not conclude anything about the credential.
+		if (!response) return { outcome: "failed" };
+		if (!response.ok) return response.code === 404 ? { outcome: "absent" } : { outcome: "failed" };
+
+		const token = response.data;
 		// Defence in depth: never accept a token Descope attributes to another
 		// tenant, even if the API ever answers a tenant-scoped request loosely.
 		if (
@@ -140,9 +159,9 @@ export class DescopeGitHubOutboundVault implements GitHubOutboundTokenVault {
 			token.id.length === 0 ||
 			(typeof token.tenantId === "string" && token.tenantId !== tenantId)
 		) {
-			return null;
+			return { outcome: "absent" };
 		}
-		return { id: token.id, accessToken: token.accessToken };
+		return { outcome: "found", token: { id: token.id, accessToken: token.accessToken } };
 	}
 
 	async deleteToken(tokenId: string): Promise<void> {
@@ -287,9 +306,12 @@ export class VaultedGitHubIdentityService implements GitHubOutboundIdentityServi
 	}
 
 	/**
-	 * Deletes only this tenant's confirmed token. A user with no confirmed
-	 * connection is already disconnected, so deletion is a no-op rather than an
-	 * error, and no app/user-wide deletion is ever issued.
+	 * Deletes only this tenant's confirmed token.
+	 *
+	 * A user with no confirmed connection, or a credential Descope reports as
+	 * already gone, is idempotently disconnected. A lookup that Descope does not
+	 * answer is a failure: reporting success there would drop the tenant binding
+	 * while the GitHub credential stayed live in the vault.
 	 */
 	async disconnect(userId: string, tenantId: string): Promise<void> {
 		const confirmedTokenId = await this.confirmations
@@ -298,6 +320,10 @@ export class VaultedGitHubIdentityService implements GitHubOutboundIdentityServi
 				throw new GitHubOutboundError("authorization_failed");
 			});
 		if (!confirmedTokenId) return;
+
+		const lookup = await this.vault.fetchUserToken(userId, tenantId);
+		if (lookup.outcome === "failed") throw new GitHubOutboundError("authorization_failed");
+		if (lookup.outcome === "absent") return;
 		await this.vault.deleteToken(confirmedTokenId);
 	}
 
@@ -320,11 +346,12 @@ export class VaultedGitHubIdentityService implements GitHubOutboundIdentityServi
 	}
 
 	private async requireToken(userId: string, tenantId: string): Promise<GitHubVaultedToken> {
-		const token = await this.vault.fetchUserToken(userId, tenantId).catch(() => {
-			throw new GitHubOutboundError("authorization_failed");
-		});
-		if (!token) throw new GitHubOutboundError("authorization_required");
-		return token;
+		const lookup = await this.vault
+			.fetchUserToken(userId, tenantId)
+			.catch((): GitHubVaultedTokenLookup => ({ outcome: "failed" }));
+		if (lookup.outcome === "failed") throw new GitHubOutboundError("authorization_failed");
+		if (lookup.outcome === "absent") throw new GitHubOutboundError("authorization_required");
+		return lookup.token;
 	}
 
 	private async currentLogin(token: string): Promise<string> {

@@ -156,17 +156,29 @@ export const githubRouter = router({
 					message: "This GitHub connection could not be verified. Start the connection again",
 				});
 			}
+			if (!ctx.setGitHubSetupCookie) {
+				throw new TRPCError({
+					code: "INTERNAL_SERVER_ERROR",
+					message: "GitHub setup cookie support is unavailable",
+				});
+			}
 
+			const browserNonce = ctx.githubSetupNonce;
+			let url: string;
 			try {
-				return {
-					url: await ctx.github.issueInstallationUrl(input.state, ctx.githubSetupNonce, {
-						tenantId: ctx.caller.tenantId,
-						userId: ctx.caller.userId,
-					}),
-				};
+				url = await ctx.github.issueInstallationUrl(input.state, browserNonce, {
+					tenantId: ctx.caller.tenantId,
+					userId: ctx.caller.userId,
+				});
 			} catch (error) {
 				throw trpcSetupError(error);
 			}
+			// The installation state gets a fresh TTL, so the browser binding it is
+			// tied to has to get one too: otherwise the cookie minted at connect
+			// time expires mid-installation. Only on success, so a failed attempt
+			// never extends the window.
+			ctx.setGitHubSetupCookie(browserNonce);
+			return { url };
 		}),
 
 	removeInstallation: adminProcedure

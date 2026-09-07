@@ -595,7 +595,10 @@ describe("OctokitGitHubService vaulted user verification", () => {
 			appClient: {} as Octokit,
 			setupStates,
 			outbound: new VaultedGitHubIdentityService(
-				{ fetchUserToken: mock(async () => null), deleteToken: mock(async () => undefined) },
+				{
+					fetchUserToken: mock(async () => ({ outcome: "absent" }) as const),
+					deleteToken: mock(async () => undefined),
+				},
 				{ confirmedTokenId: mock(async () => null) },
 			),
 		});
@@ -700,7 +703,10 @@ describe("OctokitGitHubService vaulted user verification", () => {
 	});
 
 	test("never surfaces the vaulted GitHub token to callers", async () => {
-		const fetchUserToken = mock(async () => ({ id: "tok-a", accessToken: "ghu_secret-token" }));
+		const fetchUserToken = mock(
+			async () =>
+				({ outcome: "found", token: { id: "tok-a", accessToken: "ghu_secret-token" } }) as const,
+		);
 		const userRequest = mock(async (route: string) =>
 			route === "GET /user" ? { data: { login: "alice" } } : { data: {} },
 		);

@@ -198,6 +198,32 @@ describe("githubRouter", () => {
 			tenantId: "t-1",
 			userId: "u-1",
 		});
+		// The installation state carries a fresh TTL, so the cookie the binding
+		// depends on is renewed with the same nonce.
+		expect(ctx.setGitHubSetupCookie).toHaveBeenCalledWith("n".repeat(43));
+	});
+
+	test("createInstallationUrl never renews the browser cookie on failure", async () => {
+		const ctx = mockContext({
+			github: mockGitHubService({
+				issueInstallationUrl: mock(async () => {
+					throw new GitHubSetupError("replayed_state");
+				}),
+			}),
+		});
+
+		await expect(
+			githubRouter.createCaller(ctx).createInstallationUrl({ state: "signed-connect-state" }),
+		).rejects.toThrow("already used");
+		expect(ctx.setGitHubSetupCookie).not.toHaveBeenCalled();
+
+		const withoutCookieSupport = mockContext({ setGitHubSetupCookie: undefined });
+		await expect(
+			githubRouter
+				.createCaller(withoutCookieSupport)
+				.createInstallationUrl({ state: "signed-connect-state" }),
+		).rejects.toThrow("GitHub setup cookie support is unavailable");
+		expect(withoutCookieSupport.github?.issueInstallationUrl).not.toHaveBeenCalled();
 	});
 
 	test("createInstallationUrl rejects non-admin callers", async () => {
