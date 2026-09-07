@@ -15,6 +15,25 @@ const secretNames = {
 	webhookSecret: "ProcellaGitHubAppWebhookSecret",
 } as const;
 
+/**
+ * Runtime secrets are linked into Lambdas. The OAuth client credentials are
+ * deploy-time only: they configure the Descope Outbound App that vaults each
+ * admin's GitHub user token, and the server never exchanges OAuth codes itself.
+ */
+const githubAppSecretGroups = {
+	runtime: {
+		appId: secretNames.appId,
+		privateKey: secretNames.privateKey,
+		webhookSecret: secretNames.webhookSecret,
+	},
+	provisioning: {
+		clientId: secretNames.clientId,
+		clientSecret: secretNames.clientSecret,
+	},
+} as const;
+
+export type GitHubAppSecretGroups = typeof githubAppSecretGroups;
+
 const secretEnvironmentKeys = {
 	appId: `SST_SECRET_${secretNames.appId}`,
 	clientId: `SST_SECRET_${secretNames.clientId}`,
@@ -27,7 +46,9 @@ const enabledEnvironmentKey = "PROCELLA_GITHUB_APP_ENABLED";
 
 type Environment = Record<string, string | undefined>;
 
-export function resolveGitHubAppSecretNames(environment: Environment) {
+export function resolveGitHubAppSecretNames(
+	environment: Environment,
+): GitHubAppSecretGroups | null {
 	const values = {
 		appId: environment[secretEnvironmentKeys.appId],
 		clientId: environment[secretEnvironmentKeys.clientId],
@@ -77,5 +98,5 @@ export function resolveGitHubAppSecretNames(environment: Environment) {
 		throw new Error(`ProcellaGitHubAppWebhookSecret: ${GITHUB_APP_WEBHOOK_SECRET_ERROR}`);
 	}
 
-	return secretNames;
+	return githubAppSecretGroups;
 }

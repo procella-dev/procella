@@ -1,7 +1,13 @@
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import * as descope from "@descope/pulumi-descope";
+import { GITHUB_OUTBOUND_APP_ID } from "@procella/config";
+import { resolveMigrationCommandDirectory } from "../scripts/invoke-migration-lambda";
+import { DESCOPE_OUTBOUND_CALLBACK_URL } from "../scripts/provision-descope-outbound-app";
 import signUpOrInFlowJson from "./flows/sign-up-or-in.json" with { type: "json" };
 import stylesJson from "./flows/styles.json" with { type: "json" };
-import { descopeManagementKey } from "./secrets";
+import { descopeManagementKey, githubAppOAuthSecrets } from "./secrets";
 
 const signUpOrInFlow = JSON.stringify(signUpOrInFlowJson);
 const stylesData = JSON.stringify(stylesJson);
@@ -175,7 +181,58 @@ const project = new descope.Project(
 	{ provider },
 );
 
+// ── GitHub Outbound Application ─────────────────────────────────────────────
+// @descope/pulumi-descope has no outbound-application resource, so SST drives
+// the checked-in idempotent provisioner. The GitHub OAuth client secret is a
+// deploy-time input here only: after cutover no Lambda receives it, because
+// Descope owns the authorization code exchange and vaults the user token.
+// Pulumi evaluates the program from a nested working directory, so repo-local
+// commands and file reads resolve through the same directory infra/api.ts uses.
+const commandDir = resolveMigrationCommandDirectory(process.env);
+const provisionScript = "scripts/provision-descope-outbound-app.ts";
+const provisionScriptHash = createHash("sha256")
+	.update(readFileSync(join(commandDir, provisionScript)))
+	.digest("hex");
+
+if (githubAppOAuthSecrets) {
+	const provisionCmd = `bun run ${provisionScript}`;
+	// Every input the provisioner sends to Descope is a trigger, so rotating a
+	// credential, changing the callback, or renaming the app reprovisions. The
+	// OAuth credentials contribute only as a digest, so no secret value is
+	// compared or retained as a plain trigger input.
+	const credentialDigest = $resolve([
+		githubAppOAuthSecrets.clientId.value,
+		githubAppOAuthSecrets.clientSecret.value,
+	]).apply(([clientId, clientSecret]) =>
+		createHash("sha256").update(`${clientId}\u0000${clientSecret}`).digest("hex"),
+	);
+	new command.local.Command(
+		"ProcellaDescopeGitHubOutboundApp",
+		{
+			create: provisionCmd,
+			update: provisionCmd,
+			dir: commandDir,
+			environment: {
+				PROCELLA_DESCOPE_PROJECT_ID: project.id,
+				PROCELLA_DESCOPE_MANAGEMENT_KEY: descopeManagementKey.value,
+				PROCELLA_GITHUB_APP_CLIENT_ID: githubAppOAuthSecrets.clientId.value,
+				PROCELLA_GITHUB_APP_CLIENT_SECRET: githubAppOAuthSecrets.clientSecret.value,
+				PROCELLA_GITHUB_OUTBOUND_APP_ID: GITHUB_OUTBOUND_APP_ID,
+			},
+			triggers: [
+				provisionScriptHash,
+				project.id,
+				credentialDigest,
+				GITHUB_OUTBOUND_APP_ID,
+				DESCOPE_OUTBOUND_CALLBACK_URL,
+			],
+		},
+		{ dependsOn: [project] },
+	);
+}
+
 // ── Outputs ─────────────────────────────────────────────────────────────────
 const projectId = project.id;
+const githubOutboundAppId = GITHUB_OUTBOUND_APP_ID;
 
-export { project, projectId };
+export { githubOutboundAppId, project, projectId };

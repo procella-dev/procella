@@ -1,5 +1,6 @@
+import type { AuthService } from "@procella/auth";
 import {
-	GITHUB_AUTHORIZATION_COOKIE_NAME,
+	GITHUB_CONNECT_RETURN_PATH,
 	GITHUB_SETUP_COOKIE_NAME,
 	GITHUB_SETUP_STATE_TTL_SECONDS,
 	type GitHubService,
@@ -58,6 +59,43 @@ export function githubSetupCookieHeader(
 	return `${name}=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
 }
 
+/** The only authorization URL a GitHub outbound connect may hand the browser. */
+const GITHUB_AUTHORIZATION_URL = "https://github.com/login/oauth/authorize";
+
+/**
+ * Binds the deployment's outbound-connect capability to one request. Returns
+ * null when the deployment cannot start the flow: no Descope-backed auth
+ * service, no outbound app, or no dashboard origin to return the browser to.
+ * Callers fail closed instead of guessing a redirect target.
+ *
+ * The signed connect transaction travels in the Descope redirect URL, so the
+ * callback page can only continue in the browser that started the flow, and the
+ * returned provider URL is allowlisted to GitHub's authorization endpoint.
+ */
+export function createGitHubConnectStarter(deps: {
+	auth: Pick<AuthService, "startOutboundConnect">;
+	appOrigin?: string;
+	outboundAppId?: string;
+}): ((request: Request, connect: { state: string; tenantId: string }) => Promise<string>) | null {
+	const start = deps.auth.startOutboundConnect?.bind(deps.auth);
+	if (!start || !deps.appOrigin || !deps.outboundAppId) return null;
+	const appOrigin = deps.appOrigin;
+	const appId = deps.outboundAppId;
+	return async (request, connect) => {
+		const redirect = new URL(GITHUB_CONNECT_RETURN_PATH, appOrigin);
+		redirect.searchParams.set("state", connect.state);
+		const url = await start(request, appId, {
+			redirectUrl: redirect.toString(),
+			tenantId: connect.tenantId,
+		});
+		const parsed = new URL(url, GITHUB_AUTHORIZATION_URL);
+		if (`${parsed.origin}${parsed.pathname}` !== GITHUB_AUTHORIZATION_URL) {
+			throw new BadRequestError("Outbound connect returned an unexpected authorization URL");
+		}
+		return parsed.toString();
+	};
+}
+
 export function githubHandlers(deps: {
 	github: GitHubService | null;
 	webhookSecret?: string;
@@ -107,34 +145,13 @@ export function githubHandlers(deps: {
 			await deps.github.handleWebhookEvent(event, parsed);
 			return c.body(null, 200);
 		},
-
-		completeAuthorization: async (c: Context<Env>) => {
-			c.header("Cache-Control", "no-store");
-			if (!deps.github) {
-				return redirectToGitHubSettings(c, "not_configured");
-			}
-
-			const state = c.req.query("state");
-			const code = c.req.query("code");
-			if (!state || state.length > 4096 || !code || code.length > 1024) {
-				return redirectToGitHubSettings(c, "invalid_callback");
-			}
-			const browserNonce = getCookie(c, GITHUB_SETUP_COOKIE_NAME);
-			if (!browserNonce) return redirectToGitHubSettings(c, "invalid_state");
-
-			try {
-				await deps.github.completeAuthorization(state, code, browserNonce);
-				c.header("Set-Cookie", githubSetupCookieHeader(GITHUB_SETUP_COOKIE_NAME, "", 0));
-				c.header("Set-Cookie", githubSetupCookieHeader(GITHUB_AUTHORIZATION_COOKIE_NAME, "", 0), {
-					append: true,
-				});
-				return c.redirect("/settings?github=connected#github", 303);
-			} catch (error) {
-				const reason = error instanceof GitHubSetupError ? error.code : "github_error";
-				return redirectToGitHubSettings(c, reason);
-			}
-		},
-
+		/**
+		 * GitHub's setup callback. `setup_action=update` arrives when the App is
+		 * already installed on the account and the admin re-runs the flow, so both
+		 * actions bind the installation; the signed browser-bound state, the
+		 * App-authenticated installation data, and the vaulted GitHub identity are
+		 * what authorize it, not the action string.
+		 */
 		completeInstallation: async (c: Context<Env>) => {
 			c.header("Cache-Control", "no-store");
 			if (!deps.github) {
@@ -144,7 +161,7 @@ export function githubHandlers(deps: {
 			const state = c.req.query("state");
 			const installationIdValue = c.req.query("installation_id");
 			const setupAction = c.req.query("setup_action");
-			if (setupAction && setupAction !== "install") {
+			if (setupAction && setupAction !== "install" && setupAction !== "update") {
 				return redirectToGitHubSettings(c, "unsupported_setup_action");
 			}
 			if (
@@ -166,21 +183,9 @@ export function githubHandlers(deps: {
 			if (!browserNonce) return redirectToGitHubSettings(c, "invalid_state");
 
 			try {
-				const authorization = await deps.github.completeInstallation(
-					state,
-					installationId,
-					browserNonce,
-				);
-				c.header("Set-Cookie", githubSetupCookieHeader(GITHUB_SETUP_COOKIE_NAME, browserNonce));
-				c.header(
-					"Set-Cookie",
-					githubSetupCookieHeader(
-						GITHUB_AUTHORIZATION_COOKIE_NAME,
-						authorization.authorizationState,
-					),
-					{ append: true },
-				);
-				return c.redirect(authorization.url, 303);
+				await deps.github.completeInstallation(state, installationId, browserNonce);
+				c.header("Set-Cookie", githubSetupCookieHeader(GITHUB_SETUP_COOKIE_NAME, "", 0));
+				return c.redirect("/settings?github=connected#github", 303);
 			} catch (error) {
 				const reason = error instanceof GitHubSetupError ? error.code : "github_error";
 				return redirectToGitHubSettings(c, reason);
@@ -214,11 +219,13 @@ export function githubHandlers(deps: {
 			}
 
 			const installations = await deps.github.listInstallations(caller.tenantId);
-			await Promise.all(
-				installations.map((installation) =>
-					deps.github?.removeInstallation(caller.tenantId, installation.installationId),
-				),
-			);
+			for (const installation of installations) {
+				await deps.github.removeInstallation(
+					caller.tenantId,
+					installation.installationId,
+					caller.userId,
+				);
+			}
 
 			return c.body(null, 204);
 		},

@@ -60,6 +60,7 @@ export const api = new sst.aws.Function("ProcellaCliApi", {
 		PROCELLA_TICKET_SIGNING_KEY: ticketSigningKey.value,
 		PROCELLA_ESC_EVALUATOR_FN_NAME: escEvaluator.name,
 		PROCELLA_CORS_ORIGINS: `${appOrigin},${rootOrigin}`,
+		PROCELLA_APP_ORIGIN: appOrigin,
 		PROCELLA_OTEL_ENABLED: "true",
 		OTEL_SERVICE_NAME: `procella-cli-${stage}`,
 		OTEL_EXPORTER_OTLP_ENDPOINT: otelEndpoint.value,

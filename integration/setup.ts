@@ -32,7 +32,7 @@ export async function truncateTables(): Promise<void> {
 	const { SQL } = require("bun") as typeof import("bun");
 	const sql = new SQL({ url: TEST_DB_URL });
 	await sql.unsafe(
-		"TRUNCATE subscription_ticket_nonces, esc_sessions, esc_environment_revisions, esc_environments, esc_projects, webhook_outbox, webhook_deliveries, webhooks, github_update_outbox, github_setup_states, github_installations, oidc_trust_policies, update_events, journal_entries, checkpoints, updates, stacks, projects, blob_cleanup_queue CASCADE",
+		"TRUNCATE subscription_ticket_nonces, esc_sessions, esc_environment_revisions, esc_environments, esc_projects, webhook_outbox, webhook_deliveries, webhooks, github_update_outbox, github_setup_states, github_outbound_connections, github_installations, oidc_trust_policies, update_events, journal_entries, checkpoints, updates, stacks, projects, blob_cleanup_queue CASCADE",
 	);
 	await sql.close();
 }

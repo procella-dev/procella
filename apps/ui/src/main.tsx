@@ -32,6 +32,9 @@ const UpdateDetail = lazy(() =>
 	import("./pages/UpdateDetail").then((m) => ({ default: m.UpdateDetail })),
 );
 const Settings = lazy(() => import("./pages/Settings").then((m) => ({ default: m.Settings })));
+const GitHubConnected = lazy(() =>
+	import("./pages/GitHubConnected").then((m) => ({ default: m.GitHubConnected })),
+);
 const Tokens = lazy(() => import("./pages/Tokens").then((m) => ({ default: m.Tokens })));
 const Webhooks = lazy(() => import("./pages/Webhooks").then((m) => ({ default: m.Webhooks })));
 const EscEnvironments = lazy(() =>
@@ -130,6 +133,7 @@ function App() {
 								{ path: "home", element: <StackList /> },
 								{ path: "tokens", element: <Tokens /> },
 								{ path: "settings", element: <Settings /> },
+								{ path: "settings/github/connected", element: <GitHubConnected /> },
 								{ path: "webhooks", element: <Webhooks /> },
 								{ path: "esc", element: <EscEnvironments /> },
 								{ path: "esc/:project/:envName", element: <EscEnvironmentDetail /> },

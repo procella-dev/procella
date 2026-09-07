@@ -44,7 +44,8 @@ function mockAuthService(): AuthService {
 		authenticate: async (request: Request) => {
 			const header = request.headers.get("Authorization");
 			const cookie = request.headers.get("Cookie");
-			if (header !== "token valid-token" && cookie !== "DS=session-cookie") {
+			// The setup nonce cookie rides alongside the session cookie.
+			if (header !== "token valid-token" && !cookie?.includes("DS=session-cookie")) {
 				throw new UnauthorizedError("Invalid token");
 			}
 			return validCaller;
@@ -58,16 +59,11 @@ function mockAuthService(): AuthService {
 function mockGitHubService(): GitHubService {
 	return {
 		handleWebhookEvent: mock(async () => {}),
+		connectAvailable: true,
+		resolveConnectedLogin: mock(async () => "alice"),
+		beginConnect: mock(async () => "signed-connect-state"),
 		issueInstallationUrl: mock(async () => "https://github.com/apps/procella/installations/new"),
 		completeInstallation: mock(async () => ({
-			url: "https://github.com/login/oauth/authorize",
-			authorizationState: "authorization-state",
-		})),
-		resumeAuthorization: mock(async () => ({
-			url: "https://github.com/login/oauth/authorize",
-			accountLogin: "acme",
-		})),
-		completeAuthorization: mock(async () => ({
 			id: "row-1",
 			tenantId: validCaller.tenantId,
 			installationId: 101,
@@ -93,6 +89,8 @@ function makeApp(overrides?: {
 	auth?: AuthService;
 	authConfig?: AuthConfig;
 	github?: GitHubService | null;
+	appOrigin?: string;
+	githubOutboundAppId?: string;
 }) {
 	const authConfig: AuthConfig = overrides?.authConfig ?? {
 		mode: "dev",
@@ -114,6 +112,8 @@ function makeApp(overrides?: {
 		webhooks: {} as WebhooksService,
 		esc: {} as EscService,
 		github: overrides?.github ?? null,
+		appOrigin: overrides?.appOrigin ?? "https://app.procella.test",
+		githubOutboundAppId: overrides?.githubOutboundAppId ?? "procella-github",
 		issueSubscriptionTicket:
 			overrides?.issueSubscriptionTicket ??
 			((caller: Caller, scope: SubscriptionTicketScope) =>
@@ -204,7 +204,7 @@ describe("createWebApp tRPC auth", () => {
 		expect(await res.json()).toEqual({ token: "bound-cli-token" });
 	});
 
-	test("GitHub setup sets a browser nonce for header and cookie authentication", async () => {
+	test("GitHub installation handoff requires the browser nonce for header and cookie auth", async () => {
 		const authenticationHeaders: Array<Record<string, string>> = [
 			{ Authorization: "token valid-token" },
 			{ Cookie: "DS=session-cookie" },
@@ -212,27 +212,37 @@ describe("createWebApp tRPC auth", () => {
 		for (const headers of authenticationHeaders) {
 			const github = mockGitHubService();
 			const app = makeApp({ github });
+			const withoutCookie = await app.request(
+				"https://app.procella.test/trpc/github.createInstallationUrl",
+				{
+					method: "POST",
+					headers: { ...headers, "Content-Type": "application/json" },
+					body: JSON.stringify({ json: { state: "signed-connect-state" } }),
+				},
+			);
+			// No `__Host-` nonce cookie means the callback is being replayed from
+			// another browser: the request must not reach the service.
+			expect(withoutCookie.status).toBe(400);
+			expect(github.issueInstallationUrl).not.toHaveBeenCalled();
+
+			const nonce = "a".repeat(43);
 			const res = await app.request("https://app.procella.test/trpc/github.createInstallationUrl", {
 				method: "POST",
-				headers: { ...headers, "Content-Type": "application/json" },
-				body: JSON.stringify({ json: { accountLogin: "acme" } }),
+				headers: {
+					...headers,
+					Cookie: [headers.Cookie, `${GITHUB_SETUP_COOKIE_NAME}=${nonce}`]
+						.filter(Boolean)
+						.join("; "),
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({ json: { state: "signed-connect-state" } }),
 			});
 
 			expect(res.status).toBe(200);
-			expect(res.headers.get("cache-control")).toBe("no-store");
-			const cookie = res.headers.get("set-cookie") ?? "";
-			expect(cookie).toContain(`${GITHUB_SETUP_COOKIE_NAME}=`);
-			expect(cookie).toContain("HttpOnly");
-			expect(cookie).toContain("SameSite=Lax");
-			expect(cookie).toContain("Secure");
-			const nonce = cookie.match(new RegExp(`${GITHUB_SETUP_COOKIE_NAME}=([^;]+)`))?.[1];
-			expect(nonce).toMatch(/^[a-zA-Z0-9_-]{43}$/);
-			expect(github.issueInstallationUrl).toHaveBeenCalledWith(
-				validCaller.tenantId,
-				"acme",
-				validCaller.userId,
-				nonce,
-			);
+			expect(github.issueInstallationUrl).toHaveBeenCalledWith("signed-connect-state", nonce, {
+				tenantId: validCaller.tenantId,
+				userId: validCaller.userId,
+			});
 		}
 	});
 
@@ -260,14 +270,97 @@ describe("createWebApp GitHub setup callback", () => {
 		expect(callback.status).toBe(303);
 		expect(callback.headers.get("location")).toContain("reason=not_configured");
 
-		const oauthCallback = await app.request("/github/oauth/callback?code=code&state=signed");
-		expect(oauthCallback.status).toBe(303);
-		expect(oauthCallback.headers.get("location")).toContain("reason=not_configured");
-
 		const sacredApiPath = await app.request(
 			"/api/github/setup?installation_id=123&setup_action=install&state=signed",
 		);
 		expect(sacredApiPath.status).toBe(404);
+	});
+
+	test("no longer exposes a direct GitHub OAuth code-exchange callback", async () => {
+		const app = makeApp({ github: mockGitHubService() });
+		const oauthCallback = await app.request("/github/oauth/callback?code=code&state=signed");
+		expect(oauthCallback.status).toBe(404);
+	});
+});
+
+describe("createWebApp GitHub outbound connect", () => {
+	test("carries the signed transaction and tenant into the Descope redirect URL", async () => {
+		const startOutboundConnect = mock(
+			async () => "https://github.com/login/oauth/authorize?state=descope",
+		);
+		const github = mockGitHubService();
+		const auth = mockAuthService();
+		const app = makeApp({ github, auth: { ...auth, startOutboundConnect } });
+
+		const res = await app.request("https://app.procella.test/trpc/github.startConnect", {
+			method: "POST",
+			headers: { Cookie: "DS=session-cookie", "Content-Type": "application/json" },
+			body: JSON.stringify({ json: { accountLogin: "acme" } }),
+		});
+
+		expect(res.status).toBe(200);
+		// Connect responses carry a state-bearing URL and a fresh browser nonce.
+		expect(res.headers.get("cache-control")).toBe("no-store");
+		const cookie = res.headers.get("set-cookie") ?? "";
+		const nonce = cookie.match(new RegExp(`${GITHUB_SETUP_COOKIE_NAME}=([^;]+)`))?.[1];
+		expect(nonce).toMatch(/^[a-zA-Z0-9_-]{43}$/);
+		expect(cookie).toContain("HttpOnly");
+		expect(cookie).toContain("Secure");
+		expect(github.beginConnect).toHaveBeenCalledWith(
+			validCaller.tenantId,
+			"acme",
+			validCaller.userId,
+			nonce,
+		);
+
+		const body = (await res.json()) as { result: { data: { json: { url: string } } } };
+		expect(body.result.data.json).toEqual({
+			url: "https://github.com/login/oauth/authorize?state=descope",
+		});
+		const [request, appId, options] = startOutboundConnect.mock.calls[0] as unknown as [
+			Request,
+			string,
+			{ redirectUrl: string; tenantId: string },
+		];
+		expect(request.headers.get("Cookie")).toBe("DS=session-cookie");
+		expect(appId).toBe("procella-github");
+		expect(options).toEqual({
+			redirectUrl: "https://app.procella.test/settings/github/connected?state=signed-connect-state",
+			tenantId: validCaller.tenantId,
+		});
+	});
+
+	test("rejects an authorization URL outside GitHub's authorize endpoint", async () => {
+		const startOutboundConnect = mock(async () => "https://evil.example/login/oauth/authorize");
+		const auth = mockAuthService();
+		const app = makeApp({
+			github: mockGitHubService(),
+			auth: { ...auth, startOutboundConnect },
+		});
+
+		const res = await app.request("https://app.procella.test/trpc/github.startConnect", {
+			method: "POST",
+			headers: { Cookie: "DS=session-cookie", "Content-Type": "application/json" },
+			body: JSON.stringify({ json: { accountLogin: "acme" } }),
+		});
+
+		expect(res.status).toBe(400);
+		expect(res.headers.get("set-cookie")).toBeNull();
+	});
+
+	test("fails closed without a dashboard origin or outbound-capable auth service", async () => {
+		for (const overrides of [
+			{ github: mockGitHubService(), appOrigin: "" },
+			{ github: mockGitHubService() },
+		]) {
+			const app = makeApp(overrides);
+			const res = await app.request("https://app.procella.test/trpc/github.startConnect", {
+				method: "POST",
+				headers: { Cookie: "DS=session-cookie", "Content-Type": "application/json" },
+				body: JSON.stringify({ json: { accountLogin: "acme" } }),
+			});
+			expect(res.status).toBe(412);
+		}
 	});
 });
 

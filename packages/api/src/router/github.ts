@@ -1,41 +1,116 @@
-import { createGitHubSetupNonce } from "@procella/github";
+import { createGitHubSetupNonce, GitHubSetupError } from "@procella/github";
+import { OutboundConnectUnavailableError, ProcellaError } from "@procella/types";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod/v4";
-import {
-	adminProcedure,
-	protectedProcedure,
-	resolvePendingAuthorization,
-	router,
-} from "../trpc.js";
+import { adminProcedure, protectedProcedure, router } from "../trpc.js";
+
+const SETUP_ERROR_MESSAGES: Record<string, { code: TRPCError["code"]; message: string }> = {
+	authorization_unavailable: {
+		code: "PRECONDITION_FAILED",
+		message: "GitHub user verification is not configured on this server",
+	},
+	authorization_required: {
+		code: "FORBIDDEN",
+		message:
+			"Connect a GitHub account that owns this account or administers this organization, then retry",
+	},
+	authorization_failed: {
+		code: "BAD_GATEWAY",
+		message: "GitHub could not confirm your account administration",
+	},
+	invalid_state: {
+		code: "BAD_REQUEST",
+		message: "This GitHub connection could not be verified. Start the connection again",
+	},
+	expired_state: {
+		code: "BAD_REQUEST",
+		message: "The GitHub connection expired. Start the connection again",
+	},
+	replayed_state: {
+		code: "BAD_REQUEST",
+		message: "This GitHub connection was already used. Start the connection again",
+	},
+};
+
+function trpcSetupError(error: unknown): TRPCError {
+	if (error instanceof GitHubSetupError) {
+		const mapped = SETUP_ERROR_MESSAGES[error.code];
+		if (mapped) return new TRPCError(mapped);
+		return new TRPCError({ code: "BAD_REQUEST", message: error.code });
+	}
+	// Descope outages must not surface as 401: the dashboard would log the
+	// administrator out instead of letting them retry the connection.
+	if (error instanceof OutboundConnectUnavailableError) {
+		return new TRPCError({
+			code: "BAD_GATEWAY",
+			message: "GitHub connection is temporarily unavailable. Try again",
+		});
+	}
+	// Other domain errors keep their own status through the tRPC error formatter.
+	if (error instanceof ProcellaError) {
+		return new TRPCError({
+			code: "INTERNAL_SERVER_ERROR",
+			message: error.message,
+			cause: error,
+		});
+	}
+	return new TRPCError({
+		code: "INTERNAL_SERVER_ERROR",
+		message: "Unable to start GitHub setup",
+	});
+}
+
+const accountLoginSchema = z
+	.string()
+	.trim()
+	.min(1)
+	.max(100)
+	.regex(/^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$/);
 
 export const githubRouter = router({
 	status: protectedProcedure.query(async ({ ctx }) => {
 		if (!ctx.github) {
-			return { configured: false as const, installations: [], pendingAuthorization: null };
+			return {
+				configured: false as const,
+				connectAvailable: false,
+				connectedLogin: null,
+				installations: [],
+			};
 		}
+		const connectAvailable = ctx.github.connectAvailable && Boolean(ctx.startGitHubConnect);
 		return {
 			configured: true as const,
+			connectAvailable,
+			// Reported for the caller's own tenant and session, and only the login;
+			// the vaulted GitHub token never leaves the server.
+			connectedLogin: connectAvailable
+				? await ctx.github.resolveConnectedLogin(ctx.caller.tenantId, ctx.caller.userId)
+				: null,
 			installations: await ctx.github.listInstallations(ctx.caller.tenantId),
-			pendingAuthorization: await resolvePendingAuthorization(ctx),
 		};
 	}),
 
-	createInstallationUrl: adminProcedure
-		.input(
-			z.object({
-				accountLogin: z
-					.string()
-					.trim()
-					.min(1)
-					.max(100)
-					.regex(/^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$/),
-			}),
-		)
+	/**
+	 * Cookie-mode safe outbound handoff. A one-time server transaction bound to
+	 * the tenant, the admin, the requested account, and a fresh `__Host-` browser
+	 * nonce is minted before Descope is called, and its signed reference travels
+	 * in the Descope redirect URL. Forwarding the returned authorization URL to
+	 * another person therefore cannot vault their GitHub token against this
+	 * caller: the callback cannot be continued from another browser or session.
+	 */
+	startConnect: adminProcedure
+		.input(z.object({ accountLogin: accountLoginSchema }))
 		.mutation(async ({ ctx, input }) => {
 			if (!ctx.github) {
 				throw new TRPCError({
 					code: "PRECONDITION_FAILED",
 					message: "GitHub App is not configured on this server",
+				});
+			}
+			if (!ctx.github.connectAvailable || !ctx.startGitHubConnect) {
+				throw new TRPCError({
+					code: "PRECONDITION_FAILED",
+					message: "GitHub user verification is not configured on this server",
 				});
 			}
 			if (!ctx.setGitHubSetupCookie) {
@@ -46,12 +121,62 @@ export const githubRouter = router({
 			}
 
 			const browserNonce = createGitHubSetupNonce();
-			const url = await ctx.github.issueInstallationUrl(
-				ctx.caller.tenantId,
-				input.accountLogin,
-				ctx.caller.userId,
-				browserNonce,
-			);
+			try {
+				const state = await ctx.github.beginConnect(
+					ctx.caller.tenantId,
+					input.accountLogin,
+					ctx.caller.userId,
+					browserNonce,
+				);
+				const url = await ctx.startGitHubConnect({ state, tenantId: ctx.caller.tenantId });
+				ctx.setGitHubSetupCookie(browserNonce);
+				return { url };
+			} catch (error) {
+				throw trpcSetupError(error);
+			}
+		}),
+
+	/**
+	 * Continues the flow after the Descope callback. Authority comes from the
+	 * signed connect transaction plus the browser nonce cookie, never from the
+	 * browser: the requested account is read out of the verified transaction.
+	 */
+	createInstallationUrl: adminProcedure
+		.input(z.object({ state: z.string().min(1).max(4096) }))
+		.mutation(async ({ ctx, input }) => {
+			if (!ctx.github) {
+				throw new TRPCError({
+					code: "PRECONDITION_FAILED",
+					message: "GitHub App is not configured on this server",
+				});
+			}
+			if (!ctx.githubSetupNonce) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: "This GitHub connection could not be verified. Start the connection again",
+				});
+			}
+			if (!ctx.setGitHubSetupCookie) {
+				throw new TRPCError({
+					code: "INTERNAL_SERVER_ERROR",
+					message: "GitHub setup cookie support is unavailable",
+				});
+			}
+
+			const browserNonce = ctx.githubSetupNonce;
+			let url: string;
+			try {
+				url = await ctx.github.issueInstallationUrl(input.state, browserNonce, {
+					tenantId: ctx.caller.tenantId,
+					userId: ctx.caller.userId,
+				});
+			} catch (error) {
+				throw trpcSetupError(error);
+			}
+			// The installation state gets a fresh TTL, so the browser binding it is
+			// tied to has to get one too: otherwise the cookie minted at connect
+			// time expires mid-installation. Only on success, so a failed attempt
+			// never extends the window.
 			ctx.setGitHubSetupCookie(browserNonce);
 			return { url };
 		}),
@@ -59,7 +184,17 @@ export const githubRouter = router({
 	removeInstallation: adminProcedure
 		.input(z.object({ installationId: z.number().int().positive() }))
 		.mutation(async ({ ctx, input }) => {
-			await ctx.github?.removeInstallation(ctx.caller.tenantId, input.installationId);
+			if (ctx.github) {
+				try {
+					await ctx.github.removeInstallation(
+						ctx.caller.tenantId,
+						input.installationId,
+						ctx.caller.userId,
+					);
+				} catch (error) {
+					throw trpcSetupError(error);
+				}
+			}
 			return { success: true };
 		}),
 });

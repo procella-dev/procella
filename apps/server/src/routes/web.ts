@@ -12,7 +12,6 @@ import type { AuthConfig, AuthService } from "@procella/auth";
 import type { Database } from "@procella/db";
 import type { EscService } from "@procella/esc";
 import {
-	GITHUB_AUTHORIZATION_COOKIE_NAME,
 	GITHUB_SETUP_COOKIE_NAME,
 	type GitHubService,
 	verifyGitHubWebhookSignature,
@@ -27,6 +26,7 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { Hono } from "hono";
 import { getCookie } from "hono/cookie";
 import {
+	createGitHubConnectStarter,
 	githubHandlers,
 	githubSetupCookieHeader,
 	healthHandlers,
@@ -53,6 +53,9 @@ export interface WebAppDeps {
 	webhooks: WebhooksService;
 	esc: EscService;
 	github: GitHubService | null;
+	/** Dashboard origin the Descope outbound callback returns the browser to. */
+	appOrigin?: string;
+	githubOutboundAppId?: string;
 	issueSubscriptionTicket?: (
 		caller: import("@procella/types").Caller,
 		scope: import("@procella/types").SubscriptionTicketScope,
@@ -90,7 +93,6 @@ export function createWebApp(deps: WebAppDeps): Hono<Env> {
 		github: deps.github,
 		verifySignature: verifyGitHubWebhookSignature,
 	});
-	app.get("/github/oauth/callback", github.completeAuthorization);
 	app.get("/github/setup", github.completeInstallation);
 	app.get("/healthz", health.health);
 
@@ -144,6 +146,12 @@ export function createWebApp(deps: WebAppDeps): Hono<Env> {
 	const oauth = oauthHandlers(deps.oidc ?? null);
 	app.post("/api/oauth/token", withOauthTokenRateLimit, withApiDecompress, oauth.tokenExchange);
 
+	const startGitHubConnect = createGitHubConnectStarter({
+		auth: deps.auth,
+		appOrigin: deps.appOrigin,
+		outboundAppId: deps.githubOutboundAppId,
+	});
+
 	// tRPC routes — queries, mutations, SSE subscriptions (short-lived ticket auth for GET)
 	app.all(
 		"/trpc/*",
@@ -176,10 +184,13 @@ export function createWebApp(deps: WebAppDeps): Hono<Env> {
 				router: appRouter,
 				createContext: ({ resHeaders }) => ({
 					...ctx,
-					githubSetupCookies: {
-						nonce: getCookie(c, GITHUB_SETUP_COOKIE_NAME),
-						authorizationState: getCookie(c, GITHUB_AUTHORIZATION_COOKIE_NAME),
-					},
+					githubSetupNonce: getCookie(c, GITHUB_SETUP_COOKIE_NAME),
+					...(startGitHubConnect
+						? {
+								startGitHubConnect: (connect: { state: string; tenantId: string }) =>
+									startGitHubConnect(c.req.raw, connect),
+							}
+						: {}),
 					setGitHubSetupCookie(nonce: string) {
 						resHeaders.append(
 							"Set-Cookie",

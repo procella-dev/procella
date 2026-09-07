@@ -62,14 +62,23 @@ describe("GitHub App SST secrets", () => {
 		).toBeNull();
 	});
 
-	test("links every secret when the integration is explicitly enabled and valid", () => {
-		expect(resolveGitHubAppSecretNames(enabledSecrets)).toEqual({
-			appId: "ProcellaGitHubAppId",
-			clientId: "ProcellaGitHubAppClientId",
-			clientSecret: "ProcellaGitHubAppClientSecret",
-			privateKey: "ProcellaGitHubAppPrivateKey",
-			webhookSecret: "ProcellaGitHubAppWebhookSecret",
+	test("separates runtime secrets from deploy-time OAuth client credentials", () => {
+		const groups = resolveGitHubAppSecretNames(enabledSecrets);
+		expect(groups).toEqual({
+			runtime: {
+				appId: "ProcellaGitHubAppId",
+				privateKey: "ProcellaGitHubAppPrivateKey",
+				webhookSecret: "ProcellaGitHubAppWebhookSecret",
+			},
+			provisioning: {
+				clientId: "ProcellaGitHubAppClientId",
+				clientSecret: "ProcellaGitHubAppClientSecret",
+			},
 		});
+		// The runtime never receives the GitHub OAuth client credentials: Descope
+		// performs the code exchange and vaults the resulting user token.
+		expect(Object.values(groups?.runtime ?? {})).not.toContain("ProcellaGitHubAppClientId");
+		expect(Object.values(groups?.runtime ?? {})).not.toContain("ProcellaGitHubAppClientSecret");
 	});
 
 	test("rejects partial credentials", () => {

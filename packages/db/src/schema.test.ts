@@ -5,6 +5,7 @@ import {
 	blobCleanupQueue,
 	checkpoints,
 	githubInstallations,
+	githubOutboundConnections,
 	githubSetupStates,
 	githubUpdateOutbox,
 	oidcTrustPolicies,
@@ -317,16 +318,49 @@ describe("@procella/db schema", () => {
 		});
 	});
 
+	describe("github_outbound_connections table", () => {
+		test("records one confirmed Descope token per tenant and user", () => {
+			expect(getTableName(githubOutboundConnections)).toBe("github_outbound_connections");
+			const columns = getTableColumns(githubOutboundConnections);
+			expect(columns.tenantId.name).toBe("tenant_id");
+			expect(columns.userId.name).toBe("user_id");
+			expect(columns.tokenId.name).toBe("token_id");
+			expect(columns.updatedAt.name).toBe("updated_at");
+
+			const index = getTableConfig(githubOutboundConnections).indexes.find(
+				(candidate) => candidate.config.name === "idx_github_outbound_connection_owner",
+			);
+			expect(index?.config.unique).toBe(true);
+			expect(
+				index?.config.columns.map((column) => ("name" in column ? column.name : undefined)),
+			).toEqual(["tenant_id", "user_id"]);
+		});
+
+		test("0023 snapshot carries the confirmation table", async () => {
+			const snapshot = (await Bun.file(
+				new URL("../drizzle/meta/0023_snapshot.json", import.meta.url),
+			).json()) as {
+				tables: Record<
+					string,
+					{ columns: Record<string, unknown>; indexes: Record<string, { isUnique: boolean }> }
+				>;
+			};
+			const table = snapshot.tables["public.github_outbound_connections"];
+			expect(table?.columns.token_id).toBeDefined();
+			expect(table?.indexes.idx_github_outbound_connection_owner?.isUnique).toBe(true);
+		});
+	});
+
 	describe("migration journal", () => {
-		test("keeps portfolio migrations 0019, 0020, 0021, and 0022 in order", async () => {
+		test("keeps portfolio migrations 0020 through 0023 in order", async () => {
 			const journal = (await Bun.file(
 				new URL("../drizzle/meta/_journal.json", import.meta.url),
 			).json()) as { entries: Array<{ idx: number; tag: string }> };
 			const expected = [
-				{ idx: 19, tag: "0019_terminal_update_completion" },
 				{ idx: 20, tag: "0020_durable_blob_cleanup" },
 				{ idx: 21, tag: "0021_webhook_delivery_outbox" },
 				{ idx: 22, tag: "0022_single_use_subscription_tickets" },
+				{ idx: 23, tag: "0023_confirmed_github_outbound_connections" },
 			];
 
 			expect(journal.entries.slice(-4)).toEqual(
@@ -351,6 +385,7 @@ describe("@procella/db schema", () => {
 			expect(getTableName(githubUpdateOutbox)).toBe("github_update_outbox");
 			expect(getTableName(githubInstallations)).toBe("github_installations");
 			expect(getTableName(githubSetupStates)).toBe("github_setup_states");
+			expect(getTableName(githubOutboundConnections)).toBe("github_outbound_connections");
 			expect(getTableName(subscriptionTicketNonces)).toBe("subscription_ticket_nonces");
 			expect(getTableName(oidcTrustPolicies)).toBe("oidc_trust_policies");
 		});
