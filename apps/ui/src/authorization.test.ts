@@ -99,7 +99,6 @@ const { Layout } = await import("./components/Layout");
 const { Settings } = await import("./pages/Settings");
 const { GitHubConnected } = await import("./pages/GitHubConnected");
 const { ProcellaAuthProvider } = await import("./components/AuthProvider");
-const { GITHUB_CONNECT_ACCOUNT_KEY } = await import("./github-connect");
 let dom: Window;
 
 beforeEach(() => {
@@ -217,7 +216,7 @@ describe("Settings authorization", () => {
 		expect(page.getByText("Admin access required")).toBeTruthy();
 	});
 
-	test("hands the account to the server-initiated outbound connect without reading tokens", async () => {
+	test("sends the account to the server-minted connect without reading or storing anything", async () => {
 		currentCallerQuery = {
 			data: { tenantId: "tenant-from-server", roles: ["admin"] },
 			isLoading: false,
@@ -239,58 +238,37 @@ describe("Settings authorization", () => {
 		expect(account.required).toBe(true);
 		account.value = "acme";
 		fireEvent.submit(page.getByRole("form", { name: "Connect GitHub App" }));
-		await waitFor(() => expect(startConnect).toHaveBeenCalled());
+		await waitFor(() => expect(startConnect).toHaveBeenCalledWith({ accountLogin: "acme" }));
 
-		// Cookie mode: the dashboard never reads session or refresh tokens, and the
-		// only thing it remembers locally is the non-secret account login.
+		// Cookie mode: no session or refresh token is read, and the browser keeps
+		// no setup state of its own: the transaction lives on the server and in
+		// the HttpOnly nonce cookie.
 		expect(getSessionToken).not.toHaveBeenCalled();
 		expect(getRefreshToken).not.toHaveBeenCalled();
-		expect(sessionStorage.getItem(GITHUB_CONNECT_ACCOUNT_KEY)).toBe("acme");
-		expect(localStorage.getItem(GITHUB_CONNECT_ACCOUNT_KEY)).toBeNull();
+		expect(sessionStorage.length).toBe(0);
+		expect(localStorage.length).toBe(0);
 		expect(createInstallationUrl).not.toHaveBeenCalled();
 	});
 
-	test("rejects a malformed account before starting the outbound connect", async () => {
-		currentCallerQuery = {
-			data: { tenantId: "tenant-from-server", roles: ["admin"] },
-			isLoading: false,
-			error: null,
-		};
-		githubStatusQuery = {
-			data: { configured: true, connectAvailable: true, connectedLogin: null, installations: [] },
-			isLoading: false,
-			error: null,
-		};
-		dom.location.hash = "github";
-
-		const page = render(createElement(Settings));
-		const account = page.getByLabelText("GitHub account") as HTMLInputElement;
-		account.value = "../attacker";
-		fireEvent.submit(page.getByRole("form", { name: "Connect GitHub App" }));
-		await waitFor(() =>
-			expect(page.getByText("Enter a valid GitHub user or organization login")).toBeTruthy(),
-		);
-		expect(startConnect).not.toHaveBeenCalled();
-		expect(sessionStorage.getItem(GITHUB_CONNECT_ACCOUNT_KEY)).toBeNull();
-	});
-
-	test("resumes the installation handoff after the outbound callback returns", async () => {
-		sessionStorage.setItem(GITHUB_CONNECT_ACCOUNT_KEY, "acme");
+	test("resumes the installation handoff from the signed callback state", async () => {
+		dom.location.href = "http://localhost/settings/github/connected?state=signed-connect-state";
 
 		render(createElement(GitHubConnected));
 
 		await waitFor(() =>
-			expect(createInstallationUrl).toHaveBeenCalledWith({ accountLogin: "acme" }),
+			expect(createInstallationUrl).toHaveBeenCalledWith({ state: "signed-connect-state" }),
 		);
 		expect(getSessionToken).not.toHaveBeenCalled();
 		expect(getRefreshToken).not.toHaveBeenCalled();
-		expect(sessionStorage.getItem(GITHUB_CONNECT_ACCOUNT_KEY)).toBeNull();
+		expect(sessionStorage.length).toBe(0);
 	});
 
-	test("sends the browser back to settings when the remembered account is gone", async () => {
+	test("sends the browser back to settings when the callback carries no transaction", async () => {
+		dom.location.href = "http://localhost/settings/github/connected";
+
 		render(createElement(GitHubConnected));
 
-		await waitFor(() => expect(dom.location.href).toContain("reason=missing_account"));
+		await waitFor(() => expect(dom.location.href).toContain("reason=invalid_state"));
 		expect(createInstallationUrl).not.toHaveBeenCalled();
 	});
 
@@ -329,8 +307,7 @@ describe("Settings authorization", () => {
 		expect(page.getByText("alice")).toBeTruthy();
 		expect(page.getByText("Connect another GitHub account")).toBeTruthy();
 		fireEvent.click(page.getByRole("button", { name: "Configure & Verify" }));
-		await waitFor(() => expect(startConnect).toHaveBeenCalled());
-		expect(sessionStorage.getItem(GITHUB_CONNECT_ACCOUNT_KEY)).toBe("acme");
+		await waitFor(() => expect(startConnect).toHaveBeenCalledWith({ accountLogin: "acme" }));
 	});
 
 	test("explains an unavailable outbound connection and hides the connect form", () => {
@@ -373,9 +350,10 @@ describe("Settings authorization", () => {
 				"GitHub returned an unsupported setup callback. Start the connection again.",
 			],
 			[
-				"missing_account",
-				"The GitHub account for this connection was lost. Start the connection again.",
+				"invalid_state",
+				"This GitHub connection could not be verified. Start the connection again.",
 			],
+			["replayed_state", "This GitHub setup link was already used. Start the connection again."],
 		] as const;
 
 		currentCallerQuery = {

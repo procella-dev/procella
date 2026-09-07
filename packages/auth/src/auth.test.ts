@@ -1,7 +1,11 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import DescopeSdk from "@descope/node-sdk";
 import { OidcClaims } from "@procella/oidc";
-import { ForbiddenError, UnauthorizedError } from "@procella/types";
+import {
+	ForbiddenError,
+	OutboundConnectUnavailableError,
+	UnauthorizedError,
+} from "@procella/types";
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from "jose";
 import {
 	type AuthService,
@@ -837,19 +841,22 @@ describe("DescopeAuthService — outbound connect", () => {
 		svc.dispose();
 	});
 
-	test("starts the connect for an interactive user session from the Authorization header", async () => {
+	const CONNECT = {
+		redirectUrl: "https://app.example.com/settings/github/connected?state=signed-connect",
+		tenantId: "tenant-1",
+	} as const;
+
+	test("starts a tenant-scoped connect for an interactive user session from the header", async () => {
 		const token = await signed(USER_CLAIMS);
 
 		await expect(
-			svc.startOutboundConnect(
-				reqWithAuth(`Bearer ${token}`),
-				"procella-github",
-				"https://app.example.com/settings/github/connected",
-			),
+			svc.startOutboundConnect(reqWithAuth(`Bearer ${token}`), "procella-github", CONNECT),
 		).resolves.toBe("https://github.com/login/oauth/authorize?state=descope");
+		// The tenant scopes the vaulted token, and the redirect URL carries the
+		// server's one-time connect transaction.
 		expect(mockOutboundConnect).toHaveBeenCalledWith(
 			"procella-github",
-			{ redirectUrl: "https://app.example.com/settings/github/connected" },
+			{ redirectUrl: CONNECT.redirectUrl, tenantId: "tenant-1" },
 			token,
 		);
 	});
@@ -861,9 +868,9 @@ describe("DescopeAuthService — outbound connect", () => {
 			headers: { Cookie: `DS=${token}` },
 		});
 
-		await expect(
-			svc.startOutboundConnect(request, "procella-github", "https://app.example.com/x"),
-		).resolves.toContain("https://github.com/login/oauth/authorize");
+		await expect(svc.startOutboundConnect(request, "procella-github", CONNECT)).resolves.toContain(
+			"https://github.com/login/oauth/authorize",
+		);
 		expect(mockOutboundConnect.mock.calls[0]?.[2]).toBe(token);
 	});
 
@@ -871,11 +878,7 @@ describe("DescopeAuthService — outbound connect", () => {
 		const token = await signed(ACCESS_KEY_CLAIMS);
 
 		await expect(
-			svc.startOutboundConnect(
-				reqWithAuth(`Bearer ${token}`),
-				"procella-github",
-				"https://app.example.com/x",
-			),
+			svc.startOutboundConnect(reqWithAuth(`Bearer ${token}`), "procella-github", CONNECT),
 		).rejects.toBeInstanceOf(UnauthorizedError);
 		expect(mockOutboundConnect).not.toHaveBeenCalled();
 	});
@@ -884,11 +887,7 @@ describe("DescopeAuthService — outbound connect", () => {
 		const token = await signed(WORKLOAD_CLAIMS);
 
 		await expect(
-			svc.startOutboundConnect(
-				reqWithAuth(`Bearer ${token}`),
-				"procella-github",
-				"https://app.example.com/x",
-			),
+			svc.startOutboundConnect(reqWithAuth(`Bearer ${token}`), "procella-github", CONNECT),
 		).rejects.toBeInstanceOf(UnauthorizedError);
 		expect(mockOutboundConnect).not.toHaveBeenCalled();
 	});
@@ -903,7 +902,7 @@ describe("DescopeAuthService — outbound connect", () => {
 			});
 
 			await expect(
-				svc.startOutboundConnect(request, "procella-github", "https://app.example.com/x"),
+				svc.startOutboundConnect(request, "procella-github", CONNECT),
 			).rejects.toBeInstanceOf(UnauthorizedError);
 			expect(mockOutboundConnect).not.toHaveBeenCalled();
 		}
@@ -911,29 +910,34 @@ describe("DescopeAuthService — outbound connect", () => {
 
 	test("rejects an opaque access key and a missing session without calling Descope", async () => {
 		await expect(
-			svc.startOutboundConnect(
-				reqWithAuth("token K2opaqueaccesskey"),
-				"procella-github",
-				"https://app.example.com/x",
-			),
+			svc.startOutboundConnect(reqWithAuth("token K2opaqueaccesskey"), "procella-github", CONNECT),
 		).rejects.toBeInstanceOf(UnauthorizedError);
 		await expect(
-			svc.startOutboundConnect(reqWithoutAuth(), "procella-github", "https://app.example.com/x"),
+			svc.startOutboundConnect(reqWithoutAuth(), "procella-github", CONNECT),
 		).rejects.toBeInstanceOf(UnauthorizedError);
 		expect(mockOutboundConnect).not.toHaveBeenCalled();
 	});
 
-	test("surfaces a declined Descope connect response", async () => {
-		mockOutboundConnect.mockResolvedValue({ ok: false });
+	test("reports a Descope outage as unavailable rather than an auth failure", async () => {
 		const token = await signed(USER_CLAIMS);
 
-		await expect(
-			svc.startOutboundConnect(
+		for (const response of [{ ok: false }, { ok: true, data: {} }]) {
+			mockOutboundConnect.mockResolvedValue(response);
+			const failure = svc.startOutboundConnect(
 				reqWithAuth(`Bearer ${token}`),
 				"procella-github",
-				"https://app.example.com/x",
-			),
-		).rejects.toBeInstanceOf(UnauthorizedError);
+				CONNECT,
+			);
+			// A 401 would sign the administrator out of the dashboard instead of
+			// letting them retry the connection.
+			await expect(failure).rejects.toBeInstanceOf(OutboundConnectUnavailableError);
+			await expect(failure).rejects.not.toBeInstanceOf(UnauthorizedError);
+		}
+
+		mockOutboundConnect.mockRejectedValue(new Error("network down"));
+		await expect(
+			svc.startOutboundConnect(reqWithAuth(`Bearer ${token}`), "procella-github", CONNECT),
+		).rejects.toBeInstanceOf(OutboundConnectUnavailableError);
 	});
 });
 

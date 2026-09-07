@@ -1,13 +1,14 @@
 // Landing route for the Descope outbound callback.
 //
 // Descope finishes the GitHub OAuth exchange server-side and returns the
-// browser here. The GitHub user token stays vaulted; this page only asks the
-// server for the signed installation URL for the remembered account and hands
-// the browser to GitHub.
+// browser here with the signed connect transaction Procella minted before the
+// flow started. The page carries no authority: it hands that reference back to
+// the server, which verifies it against the HttpOnly browser nonce and the
+// caller's tenant and user before issuing the installation URL. A forwarded
+// callback link therefore cannot continue in anyone else's browser.
 
 import { useEffect, useRef, useState } from "react";
 import { FullPageSpinner } from "../components/FullPageSpinner";
-import { clearGitHubConnectAccount, readGitHubConnectAccount } from "../github-connect";
 import { trpc } from "../trpc";
 
 export function GitHubConnected() {
@@ -19,20 +20,18 @@ export function GitHubConnected() {
 		if (started.current) return;
 		started.current = true;
 
-		const accountLogin = readGitHubConnectAccount();
-		if (!accountLogin) {
-			window.location.replace("/settings?github=error&reason=missing_account#github");
+		const state = new URLSearchParams(window.location.search).get("state");
+		if (!state) {
+			window.location.replace("/settings?github=error&reason=invalid_state#github");
 			return;
 		}
 
 		createUrlMutation
-			.mutateAsync({ accountLogin })
+			.mutateAsync({ state })
 			.then(({ url }) => {
-				clearGitHubConnectAccount();
 				window.location.assign(url);
 			})
 			.catch((mutationError: unknown) => {
-				clearGitHubConnectAccount();
 				setError(
 					mutationError instanceof Error
 						? mutationError.message

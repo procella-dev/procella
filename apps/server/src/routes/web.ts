@@ -24,6 +24,7 @@ import type { UpdatesService } from "@procella/updates";
 import type { WebhooksService } from "@procella/webhooks";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { Hono } from "hono";
+import { getCookie } from "hono/cookie";
 import {
 	createGitHubConnectStarter,
 	githubHandlers,
@@ -183,8 +184,12 @@ export function createWebApp(deps: WebAppDeps): Hono<Env> {
 				router: appRouter,
 				createContext: ({ resHeaders }) => ({
 					...ctx,
+					githubSetupNonce: getCookie(c, GITHUB_SETUP_COOKIE_NAME),
 					...(startGitHubConnect
-						? { startGitHubConnect: () => startGitHubConnect(c.req.raw) }
+						? {
+								startGitHubConnect: (connect: { state: string; tenantId: string }) =>
+									startGitHubConnect(c.req.raw, connect),
+							}
 						: {}),
 					setGitHubSetupCookie(nonce: string) {
 						resHeaders.append(

@@ -114,23 +114,31 @@ script hash is a Pulumi trigger, so changing it reprovisions on the next deploy.
 
 Sign in to Procella as a tenant administrator, open **Settings** > **GitHub**, enter the exact GitHub user or organization login to connect, and select **Install & Verify GitHub App**.
 
-1. Procella asks Descope, server-side and using the browser's own session, for the GitHub
-   authorization URL and sends the browser there. Session and refresh tokens stay HttpOnly; the
-   browser only ever receives the provider URL.
-2. Descope completes the code exchange and vaults the GitHub user token, then returns the browser to
-   `/settings/github/connected`.
-3. Procella fetches the vaulted token server-side, requires that the connected GitHub user owns the
-   requested personal account or is an **active administrator** of the requested organization, and
-   only then issues browser-bound signed installation state and sends the browser to GitHub.
+1. Procella mints a one-time connect transaction bound to the tenant, the initiating administrator,
+   the requested account, and a fresh `__Host-` browser nonce, then asks Descope, server-side and
+   using the browser's own session, for the GitHub authorization URL. The signed transaction travels
+   inside the Descope redirect URL, and the returned URL must be GitHub's authorization endpoint.
+   Session and refresh tokens stay HttpOnly; the browser only ever receives the provider URL.
+2. Descope completes the code exchange and vaults the GitHub user token **for that tenant**, then
+   returns the browser to `/settings/github/connected?state=...`.
+3. Procella consumes the transaction exactly once, requiring the browser nonce cookie and the same
+   tenant and administrator that opened it, reads the tenant-scoped vaulted token, confirms the
+   connected GitHub identity, and only then issues browser-bound installation state and sends the
+   browser to GitHub. A forwarded authorization link is therefore useless: the callback cannot be
+   continued from another browser, tenant, or user, and a used or expired transaction is rejected.
 4. GitHub's setup callback re-verifies the signed state, the browser binding, the App-authenticated
-   installation identity, and the vaulted GitHub identity, including that the installation is
-   visible to that user, before saving the tenant binding.
+   installation identity, and the vaulted GitHub identity, requiring proof that the user owns the
+   personal account or is an **active administrator** of the organization and that the installation
+   is visible to that user, before saving the tenant binding.
+
+Organization membership is unreadable to a GitHub App user token until the App is installed on that
+organization, so administration is proven at the callback rather than before installation. No tenant
+binding is ever saved without it.
 
 The requested login is untrusted until GitHub confirms that authority. Procella never stores the
-GitHub user token; it lives only in the Descope vault and is read for the duration of a verification
-call.
-
-Both redirects must return to the browser that started setup. Procella binds the signed state to a short-lived `__Host-` prefixed HttpOnly, Secure, SameSite cookie, so forwarding the callback URL to another browser or tenant cannot transfer the tenant binding.
+GitHub user token; it lives only in the Descope vault, scoped to one tenant, and is read for the
+duration of a verification call. The same Descope user connecting from two tenants holds two
+independent tokens, and disconnecting one tenant deletes only that tenant's token.
 
 GitHub reports `setup_action=update` when the App is already installed on the account. Procella
 accepts that callback under the same signed-state, browser-binding, and vaulted-identity checks, so

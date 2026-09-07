@@ -71,15 +71,18 @@ function createService(overrides: { outbound?: GitHubOutboundIdentityService } =
 			return { data };
 		},
 	} as unknown as Octokit;
-	// Vault stub: each tenant admin holds a token whose GitHub user is an active
-	// organization administrator, so these tests exercise the database-level
-	// tenant isolation rather than GitHub's verification (covered by unit tests).
+	// Vault stub keyed by (user, tenant): each tenant admin holds its own token
+	// whose GitHub user is an active organization administrator, so these tests
+	// exercise database-level tenant isolation rather than GitHub's verification.
 	const outbound: GitHubOutboundIdentityService =
 		overrides.outbound ??
 		new VaultedGitHubIdentityService(
 			{
-				fetchUserToken: async (userId) => `user-token-${userId}`,
-				deleteUserTokens: async () => undefined,
+				fetchUserToken: async (userId, tenantId) => ({
+					id: `tok-${tenantId}-${userId}`,
+					accessToken: `user-token-${tenantId}`,
+				}),
+				deleteToken: async () => undefined,
 			},
 			(token) =>
 				({
@@ -103,13 +106,17 @@ async function issueInstallState(
 ): Promise<string> {
 	const installation = installations.get(installationId as 101 | 102 | 201);
 	if (!installation) throw new Error("Unknown test installation");
+	const connectState = await service.beginConnect(
+		tenantId,
+		installation.account.login,
+		`${tenantId}-admin`,
+		BROWSER_NONCE,
+	);
 	const installationUrl = new URL(
-		await service.issueInstallationUrl(
+		await service.issueInstallationUrl(connectState, BROWSER_NONCE, {
 			tenantId,
-			installation.account.login,
-			`${tenantId}-admin`,
-			BROWSER_NONCE,
-		),
+			userId: `${tenantId}-admin`,
+		}),
 	);
 	const installationState = installationUrl.searchParams.get("state");
 	if (!installationState) throw new Error("Installation URL did not include state");
@@ -186,6 +193,54 @@ describe("GitHub installation binding integration", () => {
 		await bind(service, "tenant-a", 101);
 		await service.removeInstallation("tenant-b", 101, "tenant-b-admin");
 		expect(await service.listInstallations("tenant-a")).toHaveLength(1);
+	});
+
+	test("keeps one Descope user's tenant connections independent on disconnect", async () => {
+		const tokens = new Map([
+			["tenant-a|user-shared", { id: "tok-a", accessToken: "user-token-tenant-a" }],
+			["tenant-b|user-shared", { id: "tok-b", accessToken: "user-token-tenant-b" }],
+		]);
+		const deleted: string[] = [];
+		const service = createService({
+			outbound: new VaultedGitHubIdentityService(
+				{
+					fetchUserToken: async (userId, tenantId) => tokens.get(`${tenantId}|${userId}`) ?? null,
+					deleteToken: async (tokenId) => {
+						deleted.push(tokenId);
+						for (const [key, token] of tokens) {
+							if (token.id === tokenId) tokens.delete(key);
+						}
+					},
+				},
+				(token) =>
+					({
+						request: async (route: string) => {
+							if (route === "GET /user/installations") {
+								const visible = [...installations.values()];
+								return { data: { total_count: visible.length, installations: visible } };
+							}
+							if (route === "GET /user") return { data: { login: `${token}-github` } };
+							return { data: { state: "active", role: "admin" } };
+						},
+					}) as unknown as Octokit,
+			),
+		});
+
+		expect(await service.resolveConnectedLogin("tenant-a", "user-shared")).toBe(
+			"user-token-tenant-a-github",
+		);
+		expect(await service.resolveConnectedLogin("tenant-b", "user-shared")).toBe(
+			"user-token-tenant-b-github",
+		);
+
+		await service.removeInstallation("tenant-a", 101, "user-shared");
+
+		// Only tenant A's token is deleted; tenant B keeps its own connection.
+		expect(deleted).toEqual(["tok-a"]);
+		expect(await service.resolveConnectedLogin("tenant-a", "user-shared")).toBeNull();
+		expect(await service.resolveConnectedLogin("tenant-b", "user-shared")).toBe(
+			"user-token-tenant-b-github",
+		);
 	});
 
 	test("webhooks update and delete only existing installation bindings", async () => {

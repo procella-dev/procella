@@ -1,6 +1,5 @@
 import { AuditManagement, RoleManagement, TenantProfile, UserManagement } from "@descope/react-sdk";
 import { useEffect, useState } from "react";
-import { clearGitHubConnectAccount, rememberGitHubConnectAccount } from "../github-connect";
 import { useAuthConfig } from "../hooks/useAuthConfig";
 import { trpc } from "../trpc";
 
@@ -142,19 +141,15 @@ function GitHubSettingsTab() {
 	const callback = new URLSearchParams(window.location.search).get("github");
 	const callbackReason = new URLSearchParams(window.location.search).get("reason");
 
-	// Descope owns the GitHub authorization: the browser only follows the
-	// provider URL the server returns. Session and GitHub tokens stay server-side.
+	// Descope owns the GitHub authorization. The server mints a one-time
+	// transaction bound to this browser before calling Descope, so the browser
+	// only follows the provider URL and holds no setup authority of its own.
 	const handleConnect = async (accountLogin: string) => {
 		setActionError(null);
-		if (!rememberGitHubConnectAccount(accountLogin)) {
-			setActionError("Enter a valid GitHub user or organization login");
-			return;
-		}
 		try {
-			const { url } = await startConnectMutation.mutateAsync();
+			const { url } = await startConnectMutation.mutateAsync({ accountLogin });
 			window.location.assign(url);
 		} catch (error) {
-			clearGitHubConnectAccount();
 			setActionError(error instanceof Error ? error.message : "Unable to start GitHub setup");
 		}
 	};
@@ -346,8 +341,8 @@ function githubCallbackError(reason: string | null): string {
 			return "GitHub returned an installation for a different account. Start the connection again.";
 		case "unsupported_setup_action":
 			return "GitHub returned an unsupported setup callback. Start the connection again.";
-		case "missing_account":
-			return "The GitHub account for this connection was lost. Start the connection again.";
+		case "invalid_state":
+			return "This GitHub connection could not be verified. Start the connection again.";
 		case "not_configured":
 			return "The GitHub App is not configured on this server.";
 		default:

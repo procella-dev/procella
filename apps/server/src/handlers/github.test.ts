@@ -41,6 +41,7 @@ function mockGitHubService(overrides?: Partial<GitHubService>): GitHubService {
 		handleWebhookEvent: mock(async () => {}),
 		connectAvailable: true,
 		resolveConnectedLogin: mock(async () => "alice"),
+		beginConnect: mock(async () => "signed-connect-state"),
 		issueInstallationUrl: mock(async () => "https://github.com/apps/procella/installations/new"),
 		completeInstallation: mock(async () => mockInstallation),
 		listInstallations: mock(async () => [mockInstallation]),

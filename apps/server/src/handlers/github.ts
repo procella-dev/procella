@@ -59,22 +59,41 @@ export function githubSetupCookieHeader(
 	return `${name}=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
 }
 
+/** The only authorization URL a GitHub outbound connect may hand the browser. */
+const GITHUB_AUTHORIZATION_URL = "https://github.com/login/oauth/authorize";
+
 /**
  * Binds the deployment's outbound-connect capability to one request. Returns
  * null when the deployment cannot start the flow: no Descope-backed auth
  * service, no outbound app, or no dashboard origin to return the browser to.
  * Callers fail closed instead of guessing a redirect target.
+ *
+ * The signed connect transaction travels in the Descope redirect URL, so the
+ * callback page can only continue in the browser that started the flow, and the
+ * returned provider URL is allowlisted to GitHub's authorization endpoint.
  */
 export function createGitHubConnectStarter(deps: {
 	auth: Pick<AuthService, "startOutboundConnect">;
 	appOrigin?: string;
 	outboundAppId?: string;
-}): ((request: Request) => Promise<string>) | null {
+}): ((request: Request, connect: { state: string; tenantId: string }) => Promise<string>) | null {
 	const start = deps.auth.startOutboundConnect?.bind(deps.auth);
 	if (!start || !deps.appOrigin || !deps.outboundAppId) return null;
-	const redirectUrl = new URL(GITHUB_CONNECT_RETURN_PATH, deps.appOrigin).toString();
+	const appOrigin = deps.appOrigin;
 	const appId = deps.outboundAppId;
-	return (request) => start(request, appId, redirectUrl);
+	return async (request, connect) => {
+		const redirect = new URL(GITHUB_CONNECT_RETURN_PATH, appOrigin);
+		redirect.searchParams.set("state", connect.state);
+		const url = await start(request, appId, {
+			redirectUrl: redirect.toString(),
+			tenantId: connect.tenantId,
+		});
+		const parsed = new URL(url, GITHUB_AUTHORIZATION_URL);
+		if (`${parsed.origin}${parsed.pathname}` !== GITHUB_AUTHORIZATION_URL) {
+			throw new BadRequestError("Outbound connect returned an unexpected authorization URL");
+		}
+		return parsed.toString();
+	};
 }
 
 export function githubHandlers(deps: {

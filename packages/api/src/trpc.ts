@@ -23,12 +23,15 @@ export interface TRPCContext {
 	caller: Caller | null;
 	issueSubscriptionTicket?: (caller: Caller, scope: SubscriptionTicketScope) => Promise<string>;
 	setGitHubSetupCookie?: (nonce: string) => void;
+	/** Browser-bound setup nonce from the HttpOnly `__Host-` cookie, when present. */
+	githubSetupNonce?: string;
 	/**
 	 * Starts the GitHub Outbound App connect for the caller's own session and
-	 * returns the provider authorization URL. Absent when the deployment cannot
+	 * returns the provider authorization URL. The signed connect transaction is
+	 * carried in the Descope redirect URL. Absent when the deployment cannot
 	 * reach Descope or has no dashboard origin to return the browser to.
 	 */
-	startGitHubConnect?: () => Promise<string>;
+	startGitHubConnect?: (connect: { state: string; tenantId: string }) => Promise<string>;
 	resolveUserDisplayName: (subject: string) => Promise<string | null>;
 	db: Database;
 	notifications: NotificationHub;
@@ -116,6 +119,7 @@ const protectedMiddleware = t.middleware(async ({ ctx, next }) => {
 			...ctx,
 			caller: ctx.caller,
 			setGitHubSetupCookie: ctx.setGitHubSetupCookie,
+			githubSetupNonce: ctx.githubSetupNonce,
 		},
 	});
 });
@@ -134,6 +138,7 @@ const memberMiddleware = t.middleware(async ({ ctx, next }) => {
 			...ctx,
 			caller: ctx.caller,
 			setGitHubSetupCookie: ctx.setGitHubSetupCookie,
+			githubSetupNonce: ctx.githubSetupNonce,
 		},
 	});
 });
@@ -152,6 +157,7 @@ const adminMiddleware = t.middleware(async ({ ctx, next }) => {
 			...ctx,
 			caller: ctx.caller,
 			setGitHubSetupCookie: ctx.setGitHubSetupCookie,
+			githubSetupNonce: ctx.githubSetupNonce,
 		},
 	});
 });
