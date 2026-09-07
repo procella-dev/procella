@@ -66,6 +66,15 @@ afterEach(async () => {
 /** Tenant slots Descope is pretending to hold, so deletes actually empty them. */
 const vaultTokens = new Set<string>();
 
+/** Slot key and token id are derived the same way wherever the stub needs them. */
+function vaultSlot(tenantId: string, userId: string): string {
+	return `${tenantId}|${userId}`;
+}
+
+function vaultTokenId(tenantId: string, userId: string): string {
+	return `tok-${tenantId}-${userId}`;
+}
+
 function createService(overrides: { outbound?: GitHubOutboundIdentityService } = {}) {
 	const appClient = {
 		request: async (route: string, input?: { installation_id: number }) => {
@@ -87,15 +96,21 @@ function createService(overrides: { outbound?: GitHubOutboundIdentityService } =
 				// Deleting a token empties that tenant's slot, so disconnect's drain
 				// loop terminates the way it does against Descope.
 				fetchUserToken: async (userId, tenantId) =>
-					vaultTokens.has(`${tenantId}|${userId}`)
+					vaultTokens.has(vaultSlot(tenantId, userId))
 						? {
 								outcome: "found",
-								token: { id: `tok-${tenantId}-${userId}`, accessToken: `user-token-${tenantId}` },
+								token: {
+									id: vaultTokenId(tenantId, userId),
+									accessToken: `user-token-${tenantId}`,
+								},
 							}
 						: { outcome: "absent" },
 				deleteToken: async (tokenId) => {
-					for (const key of vaultTokens) {
-						if (`tok-${key.replace("|", "-")}` === tokenId) vaultTokens.delete(key);
+					for (const slot of vaultTokens) {
+						const [slotTenantId, slotUserId] = slot.split("|");
+						if (slotTenantId && slotUserId && vaultTokenId(slotTenantId, slotUserId) === tokenId) {
+							vaultTokens.delete(slot);
+						}
 					}
 				},
 			},
@@ -122,7 +137,7 @@ async function issueInstallState(
 ): Promise<string> {
 	const installation = installations.get(installationId as 101 | 102 | 201);
 	if (!installation) throw new Error("Unknown test installation");
-	vaultTokens.add(`${tenantId}|${tenantId}-admin`);
+	vaultTokens.add(vaultSlot(tenantId, `${tenantId}-admin`));
 	const connectState = await service.beginConnect(
 		tenantId,
 		installation.account.login,
@@ -157,7 +172,7 @@ async function confirm(
 ): Promise<void> {
 	const installation = installations.get(installationId as 101 | 102 | 201);
 	if (!installation) throw new Error("Unknown test installation");
-	vaultTokens.add(`${tenantId}|${userId}`);
+	vaultTokens.add(vaultSlot(tenantId, userId));
 	const connectState = await service.beginConnect(
 		tenantId,
 		installation.account.login,
@@ -233,15 +248,15 @@ describe("GitHub installation binding integration", () => {
 
 	test("keeps one Descope user's confirmed tenant connections independent", async () => {
 		const tokens = new Map([
-			["tenant-a|user-shared", { id: "tok-a", accessToken: "user-token-tenant-a" }],
-			["tenant-b|user-shared", { id: "tok-b", accessToken: "user-token-tenant-b" }],
+			[vaultSlot("tenant-a", "user-shared"), { id: "tok-a", accessToken: "user-token-tenant-a" }],
+			[vaultSlot("tenant-b", "user-shared"), { id: "tok-b", accessToken: "user-token-tenant-b" }],
 		]);
 		const deleted: string[] = [];
 		const service = createService({
 			outbound: new VaultedGitHubIdentityService(
 				{
 					fetchUserToken: async (userId, tenantId) => {
-						const token = tokens.get(`${tenantId}|${userId}`);
+						const token = tokens.get(vaultSlot(tenantId, userId));
 						return token ? { outcome: "found", token } : { outcome: "absent" };
 					},
 					deleteToken: async (tokenId) => {
@@ -293,7 +308,7 @@ describe("GitHub installation binding integration", () => {
 
 		// Descope has vaulted a token for the initiator, but the callback never ran
 		// in the initiating browser.
-		vaultTokens.add("tenant-a|tenant-a-admin");
+		vaultTokens.add(vaultSlot("tenant-a", "tenant-a-admin"));
 		expect(await service.resolveConnectedLogin("tenant-a", "tenant-a-admin")).toBeNull();
 
 		const connectState = await service.beginConnect(
