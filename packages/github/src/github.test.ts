@@ -197,7 +197,7 @@ function stubOutbound(
 		loadPendingConnection: mock(async () => ({ tokenId: "tok-a", login: "alice" })),
 		verifyAccountAdministration: mock(async () => undefined),
 		verifyInstallationAccess: mock(async () => undefined),
-		disconnect: mock(async () => ({ expectedTokenId: "tok-a", clearedTokenIds: ["tok-a"] })),
+		drainTenantTokens: mock(async () => ["tok-a"] as readonly string[]),
 		...overrides,
 	};
 }
@@ -220,9 +220,11 @@ function setupStateDb(options: { consumed?: boolean; installationRow?: unknown }
 	const consumedReturning = mock(async () =>
 		options.consumed === false ? [] : [{ jti: "state" }],
 	);
+	const execute = mock(async () => []);
 	const tx = {
 		delete: mock(() => ({ where: mock(() => ({ returning: consumedReturning })) })),
 		insert: mock(() => ({ values })),
+		execute,
 	} as unknown as Database;
 	const transaction = mock(async (callback: (database: Database) => Promise<unknown>) =>
 		callback(tx),
@@ -238,6 +240,7 @@ function setupStateDb(options: { consumed?: boolean; installationRow?: unknown }
 		confirmationConflict,
 		transaction,
 		values,
+		execute,
 	};
 }
 
@@ -245,6 +248,10 @@ function setupStateDb(options: { consumed?: boolean; installationRow?: unknown }
 function cleanupTransaction(options: { survivors: Array<{ tokenId: string }>; order?: string[] }) {
 	const deletedTables: string[] = [];
 	const database = {
+		execute: mock(async () => {
+			options.order?.push("lock");
+			return [];
+		}),
 		delete: mock((table: Parameters<typeof getTableName>[0]) => ({
 			where: mock(async () => {
 				deletedTables.push(getTableName(table));
@@ -254,7 +261,12 @@ function cleanupTransaction(options: { survivors: Array<{ tokenId: string }>; or
 		})),
 		select: mock(() => ({
 			from: mock(() => ({
-				where: mock(() => ({ limit: mock(async () => options.survivors) })),
+				where: mock(() => ({
+					limit: mock(async () => {
+						options.order?.push("select");
+						return options.survivors;
+					}),
+				})),
 			})),
 		})),
 	} as unknown as Database;
@@ -420,8 +432,9 @@ describe("GitHub setup state", () => {
 		await expect(
 			service.issueInstallationUrl(state, BROWSER_NONCE, INITIATOR),
 		).rejects.toMatchObject({ code: "authorization_required" });
+		// The transaction aborts under the lock, so nothing is confirmed or consumed.
 		expect(db.confirmationConflict).not.toHaveBeenCalled();
-		expect(db.transaction).not.toHaveBeenCalled();
+		expect(db.consumedReturning).not.toHaveBeenCalled();
 	});
 
 	test("rejects an expired or replayed connect transaction", async () => {
@@ -611,9 +624,11 @@ describe("OctokitGitHubService vaulted user verification", () => {
 		const setupStates = createGitHubSetupStateService(testConfig.stateSigningKey);
 		const { state } = await setupStates.issue(CONNECT_STATE_INPUT);
 		const service = new OctokitGitHubService({
-			db: {} as Database,
+			db: setupStateDb().db,
 			config: testConfig,
-			appClient: {} as Octokit,
+			appClient: {
+				request: mock(async () => ({ data: { id: 123, slug: "procella" } })),
+			} as unknown as Octokit,
 			setupStates,
 			outbound: new VaultedGitHubIdentityService(
 				{
@@ -752,9 +767,9 @@ describe("OctokitGitHubService vaulted user verification", () => {
 	test("disconnect deletes the confirmed token, then confirmation and binding", async () => {
 		const order: string[] = [];
 		const tx = cleanupTransaction({ survivors: [], order });
-		const disconnect = mock(async () => {
+		const drainTenantTokens = mock(async () => {
 			order.push("token");
-			return { expectedTokenId: "tok-a", clearedTokenIds: ["tok-a"] };
+			return ["tok-a"] as readonly string[];
 		});
 		const service = new OctokitGitHubService({
 			db: {
@@ -764,18 +779,43 @@ describe("OctokitGitHubService vaulted user verification", () => {
 			} as unknown as Database,
 			config: testConfig,
 			appClient: {} as Octokit,
-			outbound: stubOutbound({ disconnect }),
+			outbound: stubOutbound({ drainTenantTokens }),
 		});
 
 		await service.removeInstallation("tenant-a", 101, "user-a");
-		// Credential first, then confirmation row and tenant binding locally.
-		expect(order).toEqual(["token", "delete", "delete"]);
+		// Lock and confirmation read, then the credential, then local deletes.
+		expect(order).toEqual(["lock", "select", "token", "delete", "delete"]);
 		expect(tx.deletedTables).toEqual(["github_outbound_connections", "github_installations"]);
-		expect(disconnect).toHaveBeenCalledWith("user-a", "tenant-a");
+		expect(drainTenantTokens).toHaveBeenCalledWith("user-a", "tenant-a", null);
 	});
 
-	test("disconnect keeps a newer confirmation and its binding", async () => {
-		// A reconnect confirmed token B while the vault drain of A was in flight.
+	test("disconnect drains under the connection lock before removing local rows", async () => {
+		const order: string[] = [];
+		const tx = cleanupTransaction({ survivors: [{ tokenId: "tok-a" }], order });
+		const service = new OctokitGitHubService({
+			db: {
+				transaction: mock(async (callback: (database: Database) => Promise<unknown>) =>
+					callback(tx.database),
+				),
+			} as unknown as Database,
+			config: testConfig,
+			appClient: {} as Octokit,
+			outbound: stubOutbound({
+				drainTenantTokens: mock(async () => {
+					order.push("drain");
+					return ["tok-a"] as readonly string[];
+				}),
+			}),
+		});
+
+		await service.removeInstallation("tenant-a", 101, "user-a");
+		// Lock, then the confirmation read, then the drain, then local deletes.
+		expect(order).toEqual(["lock", "select", "drain", "delete", "delete"]);
+		expect(tx.deletedTables).toEqual(["github_outbound_connections", "github_installations"]);
+	});
+
+	test("disconnect passes the locked confirmation generation to the drain", async () => {
+		const drainTenantTokens = mock(async () => ["tok-b"] as readonly string[]);
 		const tx = cleanupTransaction({ survivors: [{ tokenId: "tok-b" }] });
 		const service = new OctokitGitHubService({
 			db: {
@@ -785,68 +825,27 @@ describe("OctokitGitHubService vaulted user verification", () => {
 			} as unknown as Database,
 			config: testConfig,
 			appClient: {} as Octokit,
-			outbound: stubOutbound({
-				disconnect: mock(async () => ({
-					expectedTokenId: "tok-a",
-					clearedTokenIds: ["tok-a"],
-				})),
-			}),
+			outbound: stubOutbound({ drainTenantTokens }),
 		});
 
 		await service.removeInstallation("tenant-a", 101, "user-a");
-		// The conditional delete missed B, so the binding it depends on survives.
-		expect(tx.deletedTables).toEqual(["github_outbound_connections"]);
-	});
-
-	test("disconnect never deletes a confirmation the drain did not observe", async () => {
-		// Nothing was confirmed when the drain began, so a row that exists now was
-		// written by a reconnect and keeps its binding.
-		const raced = cleanupTransaction({ survivors: [{ tokenId: "tok-b" }] });
-		const service = new OctokitGitHubService({
-			db: {
-				transaction: mock(async (callback: (database: Database) => Promise<unknown>) =>
-					callback(raced.database),
-				),
-			} as unknown as Database,
-			config: testConfig,
-			appClient: {} as Octokit,
-			outbound: stubOutbound({
-				disconnect: mock(async () => ({ expectedTokenId: null, clearedTokenIds: [] })),
-			}),
-		});
-
-		await service.removeInstallation("tenant-a", 101, "user-a");
-		expect(raced.deletedTables).toEqual([]);
-
-		// With no confirmation at all, only the binding goes.
-		const quiet = cleanupTransaction({ survivors: [] });
-		const quietService = new OctokitGitHubService({
-			db: {
-				transaction: mock(async (callback: (database: Database) => Promise<unknown>) =>
-					callback(quiet.database),
-				),
-			} as unknown as Database,
-			config: testConfig,
-			appClient: {} as Octokit,
-			outbound: stubOutbound({
-				disconnect: mock(async () => ({ expectedTokenId: null, clearedTokenIds: [] })),
-			}),
-		});
-
-		await quietService.removeInstallation("tenant-a", 101, "user-a");
-		expect(quiet.deletedTables).toEqual(["github_installations"]);
+		// Whatever the row says while the lock is held is what gets drained, so a
+		// confirmation written by a reconnect is drained rather than orphaned.
+		expect(drainTenantTokens).toHaveBeenCalledWith("user-a", "tenant-a", "tok-b");
 	});
 
 	test("disconnect keeps local state when the vaulted token cannot be deleted", async () => {
-		const del = mock(() => {
-			throw new Error("must not delete local state");
-		});
+		const tx = cleanupTransaction({ survivors: [{ tokenId: "tok-a" }] });
 		const service = new OctokitGitHubService({
-			db: { transaction: del } as unknown as Database,
+			db: {
+				transaction: mock(async (callback: (database: Database) => Promise<unknown>) =>
+					callback(tx.database),
+				),
+			} as unknown as Database,
 			config: testConfig,
 			appClient: {} as Octokit,
 			outbound: stubOutbound({
-				disconnect: mock(async () => {
+				drainTenantTokens: mock(async () => {
 					throw new GitHubOutboundError("authorization_failed");
 				}),
 			}),
@@ -855,7 +854,8 @@ describe("OctokitGitHubService vaulted user verification", () => {
 		await expect(service.removeInstallation("tenant-a", 101, "user-a")).rejects.toMatchObject({
 			code: "authorization_failed",
 		});
-		expect(del).not.toHaveBeenCalled();
+		// The transaction aborts before any local delete, so nothing is removed.
+		expect(tx.deletedTables).toEqual([]);
 	});
 });
 

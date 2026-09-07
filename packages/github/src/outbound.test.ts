@@ -261,9 +261,7 @@ describe("VaultedGitHubIdentityService", () => {
 		expect(await service.loadIdentity("user-a", TENANT_B)).toEqual({ login: "alice" });
 
 		// Disconnecting tenant A deletes exactly that token and leaves B intact.
-		expect(await service.disconnect("user-a", TENANT_A)).toMatchObject({
-			clearedTokenIds: ["tok-a"],
-		});
+		expect(await service.drainTenantTokens("user-a", TENANT_A, "tok-a")).toEqual(["tok-a"]);
 		expect(deleteToken).toHaveBeenCalledWith("tok-a");
 		expect(tokens[TENANT_A]).toBeUndefined();
 		delete confirmed[TENANT_A];
@@ -337,7 +335,7 @@ describe("VaultedGitHubIdentityService", () => {
 		await expect(
 			service.verifyAccountAdministration("user-a", TENANT_A, "acme"),
 		).rejects.toMatchObject({ code: "authorization_failed" });
-		await expect(service.disconnect("user-a", TENANT_A)).rejects.toMatchObject({
+		await expect(service.drainTenantTokens("user-a", TENANT_A, "tok-a")).rejects.toMatchObject({
 			code: "authorization_failed",
 		});
 	});
@@ -377,7 +375,7 @@ describe("VaultedGitHubIdentityService", () => {
 			confirmations(),
 		);
 
-		await expect(service.disconnect("user-a", TENANT_A)).rejects.toMatchObject({
+		await expect(service.drainTenantTokens("user-a", TENANT_A, "tok-a")).rejects.toMatchObject({
 			code: "authorization_failed",
 		});
 		expect(deleteToken).toHaveBeenCalledWith("tok-a");
@@ -400,10 +398,11 @@ describe("VaultedGitHubIdentityService", () => {
 			confirmations("tok-a"),
 		);
 
-		await expect(service.disconnect("user-a", TENANT_A)).resolves.toEqual({
-			expectedTokenId: "tok-a",
-			clearedTokenIds: ["tok-c", "tok-b", "tok-a"],
-		});
+		await expect(service.drainTenantTokens("user-a", TENANT_A, "tok-a")).resolves.toEqual([
+			"tok-c",
+			"tok-b",
+			"tok-a",
+		]);
 		// Nothing survives: both unconfirmed tokens and the stale confirmed id.
 		expect(deleted).toEqual(["tok-c", "tok-b", "tok-a"]);
 	});
@@ -425,9 +424,7 @@ describe("VaultedGitHubIdentityService", () => {
 			confirmations("tok-1"),
 		);
 
-		await expect(service.disconnect("user-a", TENANT_A)).resolves.toMatchObject({
-			expectedTokenId: "tok-1",
-		});
+		await expect(service.drainTenantTokens("user-a", TENANT_A, "tok-1")).resolves.toHaveLength(5);
 		expect(deleted).toEqual(["tok-1", "tok-2", "tok-3", "tok-4", "tok-5"]);
 	});
 
@@ -445,7 +442,7 @@ describe("VaultedGitHubIdentityService", () => {
 
 		// Descope claims the delete succeeded but still reports the token, so the
 		// vault state is unknown and local state must survive.
-		await expect(service.disconnect("user-a", TENANT_A)).rejects.toMatchObject({
+		await expect(service.drainTenantTokens("user-a", TENANT_A, "tok-a")).rejects.toMatchObject({
 			code: "authorization_failed",
 		});
 		expect(deleted).toEqual(["tok-a"]);
@@ -465,7 +462,7 @@ describe("VaultedGitHubIdentityService", () => {
 			confirmations("tok-0"),
 		);
 
-		await expect(service.disconnect("user-a", TENANT_A)).rejects.toMatchObject({
+		await expect(service.drainTenantTokens("user-a", TENANT_A, "tok-a")).rejects.toMatchObject({
 			code: "authorization_failed",
 		});
 		expect(deleted).toHaveLength(GITHUB_OUTBOUND_DRAIN_LIMIT);
@@ -483,10 +480,9 @@ describe("VaultedGitHubIdentityService", () => {
 			confirmations(null),
 		);
 
-		await expect(service.disconnect("user-a", TENANT_A)).resolves.toEqual({
-			expectedTokenId: null,
-			clearedTokenIds: ["tok-forwarded"],
-		});
+		await expect(service.drainTenantTokens("user-a", TENANT_A, null)).resolves.toEqual([
+			"tok-forwarded",
+		]);
 		expect(deleted).toEqual(["tok-forwarded"]);
 	});
 
@@ -506,7 +502,7 @@ describe("VaultedGitHubIdentityService", () => {
 			// A Descope outage, or a success carrying no usable token, must not read
 			// as "already disconnected": local state stays until the credential is
 			// provably gone.
-			await expect(service.disconnect("user-a", TENANT_A)).rejects.toMatchObject({
+			await expect(service.drainTenantTokens("user-a", TENANT_A, "tok-a")).rejects.toMatchObject({
 				code: "authorization_failed",
 			});
 			expect(deleteToken).not.toHaveBeenCalled();
@@ -525,10 +521,9 @@ describe("VaultedGitHubIdentityService", () => {
 			confirmations("tok-a"),
 		);
 
-		await expect(service.disconnect("user-a", TENANT_A)).resolves.toEqual({
-			expectedTokenId: "tok-a",
-			clearedTokenIds: ["tok-a"],
-		});
+		await expect(service.drainTenantTokens("user-a", TENANT_A, "tok-a")).resolves.toEqual([
+			"tok-a",
+		]);
 		expect(deleted).toEqual(["tok-a"]);
 	});
 
@@ -540,9 +535,9 @@ describe("VaultedGitHubIdentityService", () => {
 		});
 		const service = new VaultedGitHubIdentityService(vaultFor(api), confirmations("tok-a"));
 
-		await expect(service.disconnect("user-a", TENANT_A)).resolves.toMatchObject({
-			expectedTokenId: "tok-a",
-		});
+		await expect(service.drainTenantTokens("user-a", TENANT_A, "tok-a")).resolves.toEqual([
+			"tok-a",
+		]);
 		expect(api.deleteTokenById).toHaveBeenCalledWith("tok-a");
 	});
 
@@ -550,7 +545,7 @@ describe("VaultedGitHubIdentityService", () => {
 		const api = vaultApi({ deleteTokenById: mock(async () => ({ ok: false, code: 500 })) });
 		const service = new VaultedGitHubIdentityService(vaultFor(api), confirmations());
 
-		await expect(service.disconnect("user-a", TENANT_A)).rejects.toMatchObject({
+		await expect(service.drainTenantTokens("user-a", TENANT_A, "tok-a")).rejects.toMatchObject({
 			code: "authorization_failed",
 		});
 	});

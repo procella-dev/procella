@@ -198,6 +198,27 @@ export interface GitHubSetupStateService {
 	verify(state: string): Promise<GitHubSetupStateClaims>;
 }
 
+/**
+ * Namespace for the per-connection advisory lock. Fixed and documented so the
+ * confirmation and disconnect paths always contend on the same key, and so no
+ * other lock in the schema can collide with it.
+ */
+const GITHUB_OUTBOUND_LOCK_NAMESPACE = "procella:github-outbound-connection";
+
+/**
+ * Serializes everything that may confirm or drain one tenant/user connection.
+ * Transaction-scoped, so it releases on commit or rollback with no unlock path
+ * to forget, and cluster-safe because PostgreSQL owns it.
+ */
+async function lockOutboundConnection(
+	database: Database,
+	tenantId: string,
+	userId: string,
+): Promise<void> {
+	const key = JSON.stringify([GITHUB_OUTBOUND_LOCK_NAMESPACE, tenantId, userId]);
+	await database.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
+}
+
 export function createGitHubSetupNonce(): string {
 	return randomBytes(32).toString("base64url");
 }
@@ -681,6 +702,10 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 	 * user-to-server token, so membership stays invisible until the App is
 	 * installed. `completeInstallation` requires proof of administration and
 	 * installation visibility before any binding is saved.
+	 *
+	 * The token read and the confirmation write happen under the per-connection
+	 * advisory lock, so a disconnect draining the same slot cannot interleave and
+	 * leave this confirmation pointing at a token it deleted.
 	 */
 	async issueInstallationUrl(
 		connectState: string,
@@ -688,6 +713,7 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 		initiator: { tenantId: string; userId: string },
 	): Promise<string> {
 		if (!this.outbound) throw new GitHubSetupError("authorization_unavailable");
+		const outbound = this.outbound;
 		const claims = await this.setupStates.verify(connectState);
 		this.verifyBrowserBinding(browserNonce, claims.browserBinding);
 		if (
@@ -698,12 +724,6 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 			throw new GitHubSetupError("invalid_state");
 		}
 
-		let pending: GitHubPendingConnection;
-		try {
-			pending = await this.outbound.loadPendingConnection(claims.initiatorUserId, claims.tenantId);
-		} catch (error) {
-			throw setupErrorFromOutbound(error);
-		}
 		const slug = await this.loadAppSlug();
 		const next = await this.setupStates.issue({
 			tenantId: claims.tenantId,
@@ -713,6 +733,15 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 			phase: "install",
 		});
 		await this.db.transaction(async (tx) => {
+			await lockOutboundConnection(tx as Database, claims.tenantId, claims.initiatorUserId);
+			// Read the vaulted token only after the lock: a token observed earlier
+			// could already have been drained by a concurrent disconnect.
+			let pending: GitHubPendingConnection;
+			try {
+				pending = await outbound.loadPendingConnection(claims.initiatorUserId, claims.tenantId);
+			} catch (error) {
+				throw setupErrorFromOutbound(error);
+			}
 			await this.consumeSetupState(tx as Database, claims);
 			await tx.insert(githubSetupStates).values({
 				jti: next.claims.jti,
@@ -821,44 +850,29 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 	}
 
 	/**
-	 * Confirmed vaulted token first: killing the GitHub credential is the
-	 * security-relevant half, so a management failure leaves local state intact
-	 * and surfaces the error instead of reporting a disconnect that only removed
-	 * the binding.
+	 * Disconnects the tenant under the per-connection advisory lock: read the
+	 * confirmation, drain the tenant's vault slot, then remove the confirmation
+	 * row and the tenant binding, all in one transaction.
 	 *
-	 * Local cleanup is conditional on the confirmation generation the vault drain
-	 * observed. A reconnect can confirm a new token while those network calls are
-	 * in flight; that credential was never drained, so both its confirmation row
-	 * and the tenant binding it belongs to are left alone. The conditional delete
-	 * plus the survivor read run in one transaction, and no network call happens
-	 * inside it.
+	 * Holding the lock across the vault calls is what keeps a concurrent
+	 * confirmation honest. Either the confirmation wins the lock first and this
+	 * drain then removes the token it recorded, or this drain wins and the
+	 * confirmation's own token read finds nothing to confirm. No confirmed row can
+	 * be left pointing at a token this call deleted.
+	 *
+	 * The credential goes first, so a management failure aborts the transaction
+	 * and leaves local state intact rather than reporting a disconnect that only
+	 * removed the binding. The vault calls all carry hard timeouts.
 	 */
 	async removeInstallation(
 		tenantId: string,
 		installationId: number,
 		userId: string,
 	): Promise<void> {
-		let expectedTokenId: string | null = null;
-		if (this.outbound) {
-			try {
-				({ expectedTokenId } = await this.outbound.disconnect(userId, tenantId));
-			} catch {
-				throw new GitHubSetupError("authorization_failed");
-			}
-		}
+		const outbound = this.outbound;
 		await this.db.transaction(async (tx) => {
-			if (expectedTokenId) {
-				await tx
-					.delete(githubOutboundConnections)
-					.where(
-						and(
-							eq(githubOutboundConnections.tenantId, tenantId),
-							eq(githubOutboundConnections.userId, userId),
-							eq(githubOutboundConnections.tokenId, expectedTokenId),
-						),
-					);
-			}
-			const [survivor] = await tx
+			await lockOutboundConnection(tx as Database, tenantId, userId);
+			const [confirmation] = await tx
 				.select({ tokenId: githubOutboundConnections.tokenId })
 				.from(githubOutboundConnections)
 				.where(
@@ -868,9 +882,23 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 					),
 				)
 				.limit(1);
-			// A confirmation from a newer connect survived the conditional delete,
-			// so the installation binding that connection depends on stays too.
-			if (survivor) return;
+
+			if (outbound) {
+				try {
+					await outbound.drainTenantTokens(userId, tenantId, confirmation?.tokenId ?? null);
+				} catch {
+					throw new GitHubSetupError("authorization_failed");
+				}
+			}
+
+			await tx
+				.delete(githubOutboundConnections)
+				.where(
+					and(
+						eq(githubOutboundConnections.tenantId, tenantId),
+						eq(githubOutboundConnections.userId, userId),
+					),
+				);
 			await tx
 				.delete(githubInstallations)
 				.where(

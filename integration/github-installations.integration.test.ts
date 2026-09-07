@@ -4,6 +4,7 @@ import type { Database } from "@procella/db";
 import { githubOutboundConnections } from "@procella/db";
 import { eq } from "drizzle-orm";
 import {
+	GitHubOutboundError,
 	type GitHubOutboundIdentityService,
 	OctokitGitHubService,
 	PostgresGitHubOutboundConfirmations,
@@ -163,6 +164,14 @@ async function bind(service: OctokitGitHubService, tenantId: string, installatio
 		installationId,
 		BROWSER_NONCE,
 	);
+}
+
+async function confirmedRows(tenantId: string): Promise<string[]> {
+	const rows = await db
+		.select({ tokenId: githubOutboundConnections.tokenId })
+		.from(githubOutboundConnections)
+		.where(eq(githubOutboundConnections.tenantId, tenantId));
+	return rows.map((row) => row.tokenId);
 }
 
 /** Runs the browser-bound callback so the tenant's vaulted token is confirmed. */
@@ -337,61 +346,100 @@ describe("GitHub installation binding integration", () => {
 		);
 	});
 
-	test("a reconnect that lands mid-disconnect keeps its confirmation and binding", async () => {
+	test("serializes a reconnect against a disconnect draining the same slot", async () => {
+		// Both paths contend on the same per-connection advisory lock, so whichever
+		// wins runs to completion first. Order 1: the disconnect wins.
+		const vault = new Map<string, string>([["tenant-a|tenant-a-admin", "tok-a"]]);
 		const service = createService({
 			outbound: {
-				loadIdentity: async () => ({ login: "alice" }),
-				loadPendingConnection: async () => ({ tokenId: "tok-b", login: "alice" }),
+				loadIdentity: async (userId, tenantId) =>
+					vault.has(vaultSlot(tenantId, userId)) ? { login: "alice" } : null,
+				loadPendingConnection: async (userId, tenantId) => {
+					const tokenId = vault.get(vaultSlot(tenantId, userId));
+					// The drain emptied the slot first, so there is nothing to confirm.
+					if (!tokenId) throw new GitHubOutboundError("authorization_required");
+					return { tokenId, login: "alice" };
+				},
 				verifyAccountAdministration: async () => undefined,
 				verifyInstallationAccess: async () => undefined,
-				// The drain observed and cleared the older confirmation A.
-				disconnect: async () => ({ expectedTokenId: "tok-a", clearedTokenIds: ["tok-a"] }),
+				drainTenantTokens: async (userId, tenantId) => {
+					const slot = vaultSlot(tenantId, userId);
+					const drained = vault.get(slot);
+					vault.delete(slot);
+					return drained ? [drained] : [];
+				},
 			},
 		});
 		await bind(service, "tenant-a", 101);
-		// The reconnect that ran while the drain was in flight confirmed token B.
-		await db
-			.insert(githubOutboundConnections)
-			.values({ tenantId: "tenant-a", userId: "tenant-a-admin", tokenId: "tok-b" })
-			.onConflictDoUpdate({
-				target: [githubOutboundConnections.tenantId, githubOutboundConnections.userId],
-				set: { tokenId: "tok-b" },
-			});
 
 		await service.removeInstallation("tenant-a", 101, "tenant-a-admin");
 
-		// B's confirmation was never drained, so it and its binding remain usable.
-		expect(
-			await db
-				.select({ tokenId: githubOutboundConnections.tokenId })
-				.from(githubOutboundConnections)
-				.where(eq(githubOutboundConnections.tenantId, "tenant-a")),
-		).toEqual([{ tokenId: "tok-b" }]);
-		expect(await service.listInstallations("tenant-a")).toHaveLength(1);
-		expect(await service.resolveConnectedLogin("tenant-a", "tenant-a-admin")).toBe("alice");
+		// Vault and local state are both empty, and a reconnect arriving after the
+		// disconnect cannot confirm the drained token.
+		expect(await confirmedRows("tenant-a")).toEqual([]);
+		expect(await service.listInstallations("tenant-a")).toHaveLength(0);
+		const connectState = await service.beginConnect(
+			"tenant-a",
+			"acme",
+			"tenant-a-admin",
+			BROWSER_NONCE,
+		);
+		await expect(
+			service.issueInstallationUrl(connectState, BROWSER_NONCE, {
+				tenantId: "tenant-a",
+				userId: "tenant-a-admin",
+			}),
+		).rejects.toMatchObject({ code: "authorization_required" });
+		expect(await confirmedRows("tenant-a")).toEqual([]);
 	});
 
-	test("a normal disconnect still removes the confirmation and the binding", async () => {
+	test("a reconnect that wins the lock is drained by the disconnect that follows", async () => {
+		// Order 2: the reconnect wins, confirming token B, and the disconnect that
+		// follows reads B under the lock and drains exactly that generation.
+		const vault = new Map<string, string>([["tenant-a|tenant-a-admin", "tok-b"]]);
+		const drained: Array<string | null> = [];
 		const service = createService({
 			outbound: {
-				loadIdentity: async () => ({ login: "alice" }),
-				loadPendingConnection: async () => ({ tokenId: "tok-a", login: "alice" }),
+				loadIdentity: async (userId, tenantId) =>
+					vault.has(vaultSlot(tenantId, userId)) ? { login: "alice" } : null,
+				loadPendingConnection: async (userId, tenantId) => {
+					const tokenId = vault.get(vaultSlot(tenantId, userId));
+					if (!tokenId) throw new GitHubOutboundError("authorization_required");
+					return { tokenId, login: "alice" };
+				},
 				verifyAccountAdministration: async () => undefined,
 				verifyInstallationAccess: async () => undefined,
-				disconnect: async () => ({ expectedTokenId: "tok-a", clearedTokenIds: ["tok-a"] }),
+				drainTenantTokens: async (userId, tenantId, expectedTokenId) => {
+					drained.push(expectedTokenId);
+					const slot = vaultSlot(tenantId, userId);
+					const current = vault.get(slot);
+					vault.delete(slot);
+					return current ? [current] : [];
+				},
 			},
 		});
 		await bind(service, "tenant-a", 101);
+		expect(await confirmedRows("tenant-a")).toEqual(["tok-b"]);
 
 		await service.removeInstallation("tenant-a", 101, "tenant-a-admin");
 
-		expect(
-			await db
-				.select({ tokenId: githubOutboundConnections.tokenId })
-				.from(githubOutboundConnections)
-				.where(eq(githubOutboundConnections.tenantId, "tenant-a")),
-		).toEqual([]);
+		// The confirmation the reconnect wrote is exactly what got drained, so no
+		// confirmed row is ever left pointing at a deleted token.
+		expect(drained).toEqual(["tok-b"]);
+		expect(await confirmedRows("tenant-a")).toEqual([]);
 		expect(await service.listInstallations("tenant-a")).toHaveLength(0);
+		expect(await service.resolveConnectedLogin("tenant-a", "tenant-a-admin")).toBeNull();
+	});
+
+	test("disconnecting one tenant leaves another tenant's confirmation intact", async () => {
+		const service = createService();
+		await confirm(service, "tenant-a", "user-shared", 101);
+		await confirm(service, "tenant-b", "user-shared", 201);
+
+		await service.removeInstallation("tenant-a", 101, "user-shared");
+
+		expect(await confirmedRows("tenant-a")).toEqual([]);
+		expect(await confirmedRows("tenant-b")).toEqual(["tok-tenant-b-user-shared"]);
 	});
 
 	test("webhooks update and delete only existing installation bindings", async () => {
