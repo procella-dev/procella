@@ -29,7 +29,6 @@ import { cors } from "hono/cors";
 import {
 	auditHandlers,
 	checkpointHandlers,
-	createGitHubConnectStarter,
 	cryptoHandlers,
 	escHandlers,
 	eventHandlers,
@@ -158,12 +157,6 @@ export function createApp(deps: {
 		deps.stacks,
 	);
 
-	const startGitHubConnect = createGitHubConnectStarter({
-		auth: deps.auth,
-		appOrigin: deps.appOrigin,
-		outboundAppId: deps.githubOutboundAppId,
-	});
-
 	// ========================================================================
 	// tRPC routes (/trpc/*) — SSE GET requests use short-lived signed tickets
 	// ========================================================================
@@ -190,6 +183,8 @@ export function createApp(deps: {
 				webhooks: deps.webhooks,
 				esc: deps.esc,
 				github: deps.github,
+				appOrigin: deps.appOrigin,
+				githubOutboundAppId: deps.githubOutboundAppId,
 				oidcPolicies: deps.oidcPolicies ?? null,
 			};
 
@@ -200,12 +195,6 @@ export function createApp(deps: {
 				createContext: ({ resHeaders }) => ({
 					...ctx,
 					githubSetupNonce: getCookie(c, GITHUB_SETUP_COOKIE_NAME),
-					...(startGitHubConnect
-						? {
-								startGitHubConnect: (connect: { state: string; tenantId: string }) =>
-									startGitHubConnect(c.req.raw, connect),
-							}
-						: {}),
 					setGitHubSetupCookie(nonce: string) {
 						resHeaders.append(
 							"Set-Cookie",

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { resolve } from "node:path";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { Window } from "happy-dom";
 import type { ReactNode } from "react";
 import { createElement } from "react";
@@ -42,7 +42,13 @@ let githubStatusQuery: {
 };
 const createInstallationUrl = mock(async () => ({ url: "http://localhost/github-install" }));
 const startConnect = mock(async () => ({
-	url: "https://github.com/login/oauth/authorize?state=descope",
+	appId: "procella-github",
+	tenantId: "tenant-from-server",
+	redirectUrl: "https://app.example.test/settings/github/connected?state=signed-connect-state",
+}));
+const outboundConnect = mock(async () => ({
+	ok: true,
+	data: { url: "https://github.com/login/oauth/authorize?state=descope" },
 }));
 const removeInstallation = mock(async () => ({ success: true }));
 const getSessionToken = mock(() => "must-not-be-read");
@@ -89,7 +95,12 @@ mock.module("@descope/react-sdk", () => ({
 	TenantProfile: () => null,
 	UserManagement: ({ tenant }: { tenant: string }) =>
 		createElement("div", { "data-testid": "user-management" }, tenant),
-	useDescope: () => ({ logout: async () => {}, getSessionToken, getRefreshToken }),
+	useDescope: () => ({
+		logout: async () => {},
+		getSessionToken,
+		getRefreshToken,
+		outbound: { connect: outboundConnect },
+	}),
 	useSession: () => sessionState,
 	useUser: () => ({ user: { name: "Admin User", email: "admin@example.com" } }),
 }));
@@ -124,6 +135,16 @@ beforeEach(() => {
 	};
 	createInstallationUrl.mockClear();
 	startConnect.mockClear();
+	startConnect.mockImplementation(async () => ({
+		appId: "procella-github",
+		tenantId: "tenant-from-server",
+		redirectUrl: "https://app.example.test/settings/github/connected?state=signed-connect-state",
+	}));
+	outboundConnect.mockClear();
+	outboundConnect.mockImplementation(async () => ({
+		ok: true,
+		data: { url: "https://github.com/login/oauth/authorize?state=descope" },
+	}));
 	removeInstallation.mockClear();
 	getSessionToken.mockClear();
 	getRefreshToken.mockClear();
@@ -216,7 +237,7 @@ describe("Settings authorization", () => {
 		expect(page.getByText("Admin access required")).toBeTruthy();
 	});
 
-	test("sends the account to the server-minted connect without reading or storing anything", async () => {
+	test("sends the account to the server-minted connect, then completes via the browser's own outbound.connect without reading or storing anything", async () => {
 		currentCallerQuery = {
 			data: { tenantId: "tenant-from-server", roles: ["admin"] },
 			isLoading: false,
@@ -240,6 +261,22 @@ describe("Settings authorization", () => {
 		fireEvent.submit(page.getByRole("form", { name: "Connect GitHub App" }));
 		await waitFor(() => expect(startConnect).toHaveBeenCalledWith({ accountLogin: "acme" }));
 
+		// The server response carries no token — only the outbound app id, the
+		// tenant, and a server-built redirect URL — and the browser's own
+		// cookie-authenticated SDK performs the outbound connect with no token
+		// argument of its own.
+		await waitFor(() =>
+			expect(outboundConnect).toHaveBeenCalledWith("procella-github", {
+				redirectUrl:
+					"https://app.example.test/settings/github/connected?state=signed-connect-state",
+				tenantId: "tenant-from-server",
+			}),
+		);
+		expect(outboundConnect.mock.calls[0]).toHaveLength(2);
+		await waitFor(() =>
+			expect(dom.location.href).toBe("https://github.com/login/oauth/authorize?state=descope"),
+		);
+
 		// Cookie mode: no session or refresh token is read, and the browser keeps
 		// no setup state of its own: the transaction lives on the server and in
 		// the HttpOnly nonce cookie.
@@ -248,6 +285,109 @@ describe("Settings authorization", () => {
 		expect(sessionStorage.length).toBe(0);
 		expect(localStorage.length).toBe(0);
 		expect(createInstallationUrl).not.toHaveBeenCalled();
+	});
+
+	test("keeps connection controls disabled until outbound connect settles", async () => {
+		currentCallerQuery = {
+			data: { tenantId: "tenant-from-server", roles: ["admin"] },
+			isLoading: false,
+			error: null,
+		};
+		githubStatusQuery = {
+			data: { configured: true, connectAvailable: true, connectedLogin: null, installations: [] },
+			isLoading: false,
+			error: null,
+		};
+		dom.location.hash = "github";
+		const connect = Promise.withResolvers<{ ok: boolean }>();
+		outboundConnect.mockImplementationOnce(() => connect.promise);
+
+		const page = render(createElement(Settings));
+		const form = page.getByRole("form", { name: "Connect GitHub App" });
+		const account = page.getByLabelText("GitHub account") as HTMLInputElement;
+		account.value = "acme";
+		fireEvent.submit(form);
+
+		await waitFor(() => expect(outboundConnect).toHaveBeenCalledTimes(1));
+		const button = page.getByRole("button", { name: "Opening GitHub…" }) as HTMLButtonElement;
+		expect(button.disabled).toBe(true);
+		fireEvent.submit(form);
+		expect(startConnect).toHaveBeenCalledTimes(1);
+		expect(outboundConnect).toHaveBeenCalledTimes(1);
+
+		const ordinaryPageShow = new dom.Event("pageshow");
+		Object.defineProperty(ordinaryPageShow, "persisted", { value: false });
+		act(() => dom.dispatchEvent(ordinaryPageShow));
+		expect(button.disabled).toBe(true);
+
+		const restoredPageShow = new dom.Event("pageshow");
+		Object.defineProperty(restoredPageShow, "persisted", { value: true });
+		act(() => dom.dispatchEvent(restoredPageShow));
+		await waitFor(() =>
+			expect(
+				(page.getByRole("button", { name: "Install & Verify GitHub App" }) as HTMLButtonElement)
+					.disabled,
+			).toBe(false),
+		);
+		expect(startConnect).toHaveBeenCalledTimes(1);
+		expect(outboundConnect).toHaveBeenCalledTimes(1);
+
+		act(() => connect.resolve({ ok: false }));
+		await waitFor(() => expect(page.getByText("Unable to start GitHub setup")).toBeTruthy());
+		expect(
+			(page.getByRole("button", { name: "Install & Verify GitHub App" }) as HTMLButtonElement)
+				.disabled,
+		).toBe(false);
+	});
+
+	test("rejects an authorization URL outside GitHub's authorize endpoint and never navigates", async () => {
+		currentCallerQuery = {
+			data: { tenantId: "tenant-from-server", roles: ["admin"] },
+			isLoading: false,
+			error: null,
+		};
+		githubStatusQuery = {
+			data: { configured: true, connectAvailable: true, connectedLogin: null, installations: [] },
+			isLoading: false,
+			error: null,
+		};
+		dom.location.hash = "github";
+		outboundConnect.mockImplementationOnce(async () => ({
+			ok: true,
+			data: { url: "https://evil.example/login/oauth/authorize" },
+		}));
+
+		const page = render(createElement(Settings));
+		const account = page.getByLabelText("GitHub account") as HTMLInputElement;
+		account.value = "acme";
+		fireEvent.submit(page.getByRole("form", { name: "Connect GitHub App" }));
+
+		await waitFor(() => expect(outboundConnect).toHaveBeenCalled());
+		await waitFor(() => expect(page.getByText("Unable to start GitHub setup")).toBeTruthy());
+		expect(dom.location.href).not.toContain("evil.example");
+	});
+
+	test("reports an unsuccessful outbound.connect response instead of navigating", async () => {
+		currentCallerQuery = {
+			data: { tenantId: "tenant-from-server", roles: ["admin"] },
+			isLoading: false,
+			error: null,
+		};
+		githubStatusQuery = {
+			data: { configured: true, connectAvailable: true, connectedLogin: null, installations: [] },
+			isLoading: false,
+			error: null,
+		};
+		dom.location.hash = "github";
+		outboundConnect.mockImplementationOnce(async () => ({ ok: false }));
+
+		const page = render(createElement(Settings));
+		const account = page.getByLabelText("GitHub account") as HTMLInputElement;
+		account.value = "acme";
+		fireEvent.submit(page.getByRole("form", { name: "Connect GitHub App" }));
+
+		await waitFor(() => expect(outboundConnect).toHaveBeenCalled());
+		await waitFor(() => expect(page.getByText("Unable to start GitHub setup")).toBeTruthy());
 	});
 
 	test("resumes the installation handoff from the signed callback state", async () => {
