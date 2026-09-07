@@ -270,7 +270,12 @@ const PROVISIONING_ENV_FILES: Record<string, true> = { "infra/descope.ts": true 
 
 export function checkRuntimeEnvironment(path: string, text: string): string[] {
 	if (PROVISIONING_ENV_FILES[path]) return [];
-	const active = activeText(text);
+	// Manifests comment with `#`, TypeScript infra files with `//`. A commented
+	// mention documents the deploy-time rule; it does not configure a runtime.
+	const active = activeText(text)
+		.split("\n")
+		.filter((line) => !/^\s*\/\//.test(line))
+		.join("\n");
 	return RUNTIME_FORBIDDEN_ENV_VARS.filter((envVar) => active.includes(envVar)).map(
 		(envVar) => `${path}: ${envVar} must not reach runtime configuration`,
 	);

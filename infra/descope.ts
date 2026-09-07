@@ -195,6 +195,15 @@ const provisionScriptHash = createHash("sha256")
 
 if (githubAppOAuthSecrets) {
 	const provisionCmd = `bun run ${provisionScript}`;
+	// Rotating the GitHub OAuth credentials must reprovision the outbound app.
+	// Only their digest becomes a trigger, so the secret itself never has to be
+	// compared or stored as a plain input value.
+	const credentialDigest = $resolve([
+		githubAppOAuthSecrets.clientId.value,
+		githubAppOAuthSecrets.clientSecret.value,
+	]).apply(([clientId, clientSecret]) =>
+		createHash("sha256").update(`${clientId}\u0000${clientSecret}`).digest("hex"),
+	);
 	new command.local.Command(
 		"ProcellaDescopeGitHubOutboundApp",
 		{
@@ -208,8 +217,8 @@ if (githubAppOAuthSecrets) {
 				PROCELLA_GITHUB_APP_CLIENT_SECRET: githubAppOAuthSecrets.clientSecret.value,
 				PROCELLA_GITHUB_OUTBOUND_APP_ID: GITHUB_OUTBOUND_APP_ID,
 			},
-			// Reprovision when the script or the project changes.
-			triggers: [provisionScriptHash, project.id],
+			// Reprovision when the script, the project, or the credentials change.
+			triggers: [provisionScriptHash, project.id, credentialDigest],
 		},
 		{ dependsOn: [project] },
 	);

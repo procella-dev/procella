@@ -271,6 +271,12 @@ envVarGroups:
 				"# PROCELLA_GITHUB_APP_CLIENT_ID is deploy-time only",
 			),
 		).toEqual([]);
+		expect(
+			checkRuntimeEnvironment(
+				"infra/secrets.ts",
+				"// PROCELLA_GITHUB_APP_CLIENT_SECRET is never linked to a Lambda\nconst x = 1;",
+			),
+		).toEqual([]);
 	});
 
 	test("every runtime environment file exists and is clean", async () => {
