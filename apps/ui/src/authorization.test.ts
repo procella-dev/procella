@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { resolve } from "node:path";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { Window } from "happy-dom";
 import type { ReactNode } from "react";
 import { createElement } from "react";
@@ -315,7 +315,24 @@ describe("Settings authorization", () => {
 		expect(startConnect).toHaveBeenCalledTimes(1);
 		expect(outboundConnect).toHaveBeenCalledTimes(1);
 
-		connect.resolve({ ok: false });
+		const ordinaryPageShow = new dom.Event("pageshow");
+		Object.defineProperty(ordinaryPageShow, "persisted", { value: false });
+		act(() => dom.dispatchEvent(ordinaryPageShow));
+		expect(button.disabled).toBe(true);
+
+		const restoredPageShow = new dom.Event("pageshow");
+		Object.defineProperty(restoredPageShow, "persisted", { value: true });
+		act(() => dom.dispatchEvent(restoredPageShow));
+		await waitFor(() =>
+			expect(
+				(page.getByRole("button", { name: "Install & Verify GitHub App" }) as HTMLButtonElement)
+					.disabled,
+			).toBe(false),
+		);
+		expect(startConnect).toHaveBeenCalledTimes(1);
+		expect(outboundConnect).toHaveBeenCalledTimes(1);
+
+		act(() => connect.resolve({ ok: false }));
 		await waitFor(() => expect(page.getByText("Unable to start GitHub setup")).toBeTruthy());
 		expect(
 			(page.getByRole("button", { name: "Install & Verify GitHub App" }) as HTMLButtonElement)

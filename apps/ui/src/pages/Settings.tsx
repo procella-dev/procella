@@ -153,6 +153,16 @@ function GitHubSettingsTab() {
 	const callback = new URLSearchParams(window.location.search).get("github");
 	const callbackReason = new URLSearchParams(window.location.search).get("reason");
 
+	useEffect(() => {
+		const resetAfterHistoryRestore = (event: PageTransitionEvent) => {
+			if (!event.persisted) return;
+			connectInFlight.current = false;
+			setConnectPending(false);
+		};
+		window.addEventListener("pageshow", resetAfterHistoryRestore);
+		return () => window.removeEventListener("pageshow", resetAfterHistoryRestore);
+	}, []);
+
 	// The server mints a one-time transaction bound to this browser and cookie,
 	// and returns only the outbound app id, tenant, and a server-built redirect
 	// URL — never a token. The browser's own cookie-authenticated Descope SDK
