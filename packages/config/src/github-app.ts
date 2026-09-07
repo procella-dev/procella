@@ -6,6 +6,7 @@ import { createPrivateKey } from "node:crypto";
  * with the runtime so no stage-specific identifier is ever hardcoded.
  */
 export const GITHUB_OUTBOUND_APP_ID = "procella-github";
+export const DESCOPE_OUTBOUND_CALLBACK_URL = "https://api.descope.com/v1/outbound/oauth/callback";
 export const GITHUB_OUTBOUND_APP_ID_ERROR = "Must be a lowercase slug of 1-64 characters";
 
 export function isValidGitHubOutboundAppId(value: string): boolean {
