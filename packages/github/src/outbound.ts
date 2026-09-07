@@ -18,6 +18,12 @@ import { and, eq } from "drizzle-orm";
 
 export const GITHUB_OUTBOUND_REQUEST_TIMEOUT_MS = 8_000;
 
+/**
+ * Hard ceiling on disconnect's drain loop. Reaching it means Descope kept
+ * reporting new tokens, which is a failure rather than a completed disconnect.
+ */
+export const GITHUB_OUTBOUND_DRAIN_LIMIT = 16;
+
 export interface GitHubVaultedToken {
 	/** Descope token id, used for confirmation matching and tenant-scoped deletion. */
 	id: string;
@@ -312,15 +318,18 @@ export class VaultedGitHubIdentityService implements GitHubOutboundIdentityServi
 	}
 
 	/**
-	 * Empties this tenant's slot in the vault before any local state is removed.
+	 * Drains this tenant's slot in the vault before any local state is removed.
 	 *
-	 * The token Descope holds now is not necessarily the confirmed one: an
-	 * abandoned or forwarded connect can have replaced confirmed token A with an
-	 * unconfirmed token B. Deleting only A would leave B live in the vault while
-	 * Procella reported a completed disconnect, so both the current and the
-	 * confirmed token are deleted. Descope's documented not-found is the only
-	 * accepted proof that a token is already gone; anything else fails closed and
-	 * keeps the confirmation row and tenant binding in place.
+	 * Descope can hold more than one token for a user, and the one it reports as
+	 * latest is not necessarily the confirmed one: an abandoned or forwarded
+	 * connect leaves extra tokens behind. Deleting only the latest and the
+	 * confirmed id could therefore leave an older unconfirmed token live while
+	 * Procella reported a completed disconnect. The loop instead deletes whatever
+	 * Descope reports until Descope answers with its documented not-found.
+	 *
+	 * Everything else fails closed, so the confirmation row and tenant binding
+	 * stay put: an unanswered lookup or delete, a malformed answer, a token that
+	 * reappears after a claimed delete, and an exhausted iteration cap.
 	 */
 	async disconnect(userId: string, tenantId: string): Promise<void> {
 		const confirmedTokenId = await this.confirmations
@@ -329,17 +338,29 @@ export class VaultedGitHubIdentityService implements GitHubOutboundIdentityServi
 				throw new GitHubOutboundError("authorization_failed");
 			});
 
-		const lookup = await this.vault
-			.fetchUserToken(userId, tenantId)
-			.catch((): GitHubVaultedTokenLookup => ({ outcome: "failed" }));
-		if (lookup.outcome === "failed") throw new GitHubOutboundError("authorization_failed");
-
-		const doomed = new Set<string>();
-		if (lookup.outcome === "found") doomed.add(lookup.token.id);
-		if (confirmedTokenId) doomed.add(confirmedTokenId);
-		for (const tokenId of doomed) {
-			await this.vault.deleteToken(tokenId);
+		const deleted = new Set<string>();
+		for (let attempt = 0; attempt < GITHUB_OUTBOUND_DRAIN_LIMIT; attempt += 1) {
+			const lookup = await this.vault
+				.fetchUserToken(userId, tenantId)
+				.catch((): GitHubVaultedTokenLookup => ({ outcome: "failed" }));
+			if (lookup.outcome === "failed") throw new GitHubOutboundError("authorization_failed");
+			if (lookup.outcome === "absent") {
+				// The slot is provably empty. A confirmed id Descope never reported
+				// is cleared too, tolerating its documented not-found.
+				if (confirmedTokenId && !deleted.has(confirmedTokenId)) {
+					await this.vault.deleteToken(confirmedTokenId);
+				}
+				return;
+			}
+			if (deleted.has(lookup.token.id)) {
+				// Descope still reports a token this call already deleted, so the
+				// vault state is unknown rather than empty.
+				throw new GitHubOutboundError("authorization_failed");
+			}
+			await this.vault.deleteToken(lookup.token.id);
+			deleted.add(lookup.token.id);
 		}
+		throw new GitHubOutboundError("authorization_failed");
 	}
 
 	/** The tenant's token, but only when Descope still reports the confirmed id. */

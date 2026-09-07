@@ -2,8 +2,10 @@ import { describe, expect, mock, test } from "bun:test";
 import type { Octokit } from "@octokit/rest";
 import {
 	DescopeGitHubOutboundVault,
+	GITHUB_OUTBOUND_DRAIN_LIMIT,
 	GitHubOutboundError,
 	type GitHubOutboundTokenVault,
+	type GitHubVaultedTokenLookup,
 	VaultedGitHubIdentityService,
 } from "./outbound.js";
 
@@ -42,6 +44,14 @@ function tokenVault(overrides: Partial<GitHubOutboundTokenVault> = {}): GitHubOu
 
 function found(id: string, accessToken: string) {
 	return { outcome: "found", token: { id, accessToken } } as const;
+}
+
+const absent = { outcome: "absent" } as const;
+
+/** Answers each lookup from a script, so a drain loop can be driven exactly. */
+function lookupSequence(...answers: GitHubVaultedTokenLookup[]) {
+	let call = 0;
+	return mock(async () => answers[call++] ?? absent);
 }
 
 /** Confirmation stub: by default the confirmed id matches the vaulted token. */
@@ -360,7 +370,10 @@ describe("VaultedGitHubIdentityService", () => {
 		const deleteToken = mock(async () => {
 			throw new GitHubOutboundError("authorization_failed");
 		});
-		const service = new VaultedGitHubIdentityService(tokenVault({ deleteToken }), confirmations());
+		const service = new VaultedGitHubIdentityService(
+			tokenVault({ fetchUserToken: lookupSequence(found("tok-a", "ghu_vaulted")), deleteToken }),
+			confirmations(),
+		);
 
 		await expect(service.disconnect("user-a", TENANT_A)).rejects.toMatchObject({
 			code: "authorization_failed",
@@ -368,12 +381,16 @@ describe("VaultedGitHubIdentityService", () => {
 		expect(deleteToken).toHaveBeenCalledWith("tok-a");
 	});
 
-	test("deletes the token now in the vault, not just the confirmed one", async () => {
+	test("drains every tenant token Descope reports before local removal", async () => {
 		const deleted: string[] = [];
 		const service = new VaultedGitHubIdentityService(
 			tokenVault({
-				// An abandoned or forwarded connect replaced confirmed A with B.
-				fetchUserToken: mock(async () => found("tok-b", "ghu_replacement")),
+				// Abandoned and forwarded connects left C and B behind confirmed A.
+				fetchUserToken: lookupSequence(
+					found("tok-c", "ghu_latest"),
+					found("tok-b", "ghu_older"),
+					absent,
+				),
 				deleteToken: mock(async (tokenId: string) => {
 					deleted.push(tokenId);
 				}),
@@ -382,15 +399,76 @@ describe("VaultedGitHubIdentityService", () => {
 		);
 
 		await expect(service.disconnect("user-a", TENANT_A)).resolves.toBeUndefined();
-		// B cannot survive a disconnect, and stale A is cleaned up too.
-		expect(deleted).toEqual(["tok-b", "tok-a"]);
+		// Nothing survives: both unconfirmed tokens and the stale confirmed id.
+		expect(deleted).toEqual(["tok-c", "tok-b", "tok-a"]);
+	});
+
+	test("keeps draining across many replacements", async () => {
+		const remaining = ["tok-1", "tok-2", "tok-3", "tok-4", "tok-5"];
+		const deleted: string[] = [];
+		const service = new VaultedGitHubIdentityService(
+			tokenVault({
+				fetchUserToken: mock(async () => {
+					const next = remaining[0];
+					return next ? found(next, `ghu_${next}`) : absent;
+				}),
+				deleteToken: mock(async (tokenId: string) => {
+					deleted.push(tokenId);
+					remaining.shift();
+				}),
+			}),
+			confirmations("tok-1"),
+		);
+
+		await expect(service.disconnect("user-a", TENANT_A)).resolves.toBeUndefined();
+		expect(deleted).toEqual(["tok-1", "tok-2", "tok-3", "tok-4", "tok-5"]);
+	});
+
+	test("fails closed when a deleted token keeps reappearing", async () => {
+		const deleted: string[] = [];
+		const service = new VaultedGitHubIdentityService(
+			tokenVault({
+				fetchUserToken: mock(async () => found("tok-a", "ghu_vaulted")),
+				deleteToken: mock(async (tokenId: string) => {
+					deleted.push(tokenId);
+				}),
+			}),
+			confirmations("tok-a"),
+		);
+
+		// Descope claims the delete succeeded but still reports the token, so the
+		// vault state is unknown and local state must survive.
+		await expect(service.disconnect("user-a", TENANT_A)).rejects.toMatchObject({
+			code: "authorization_failed",
+		});
+		expect(deleted).toEqual(["tok-a"]);
+	});
+
+	test("fails closed when the drain cap is exhausted", async () => {
+		let issued = 0;
+		const deleted: string[] = [];
+		const service = new VaultedGitHubIdentityService(
+			tokenVault({
+				// A pathological vault that always has one more token.
+				fetchUserToken: mock(async () => found(`tok-${issued++}`, "ghu_endless")),
+				deleteToken: mock(async (tokenId: string) => {
+					deleted.push(tokenId);
+				}),
+			}),
+			confirmations("tok-0"),
+		);
+
+		await expect(service.disconnect("user-a", TENANT_A)).rejects.toMatchObject({
+			code: "authorization_failed",
+		});
+		expect(deleted).toHaveLength(GITHUB_OUTBOUND_DRAIN_LIMIT);
 	});
 
 	test("deletes an unconfirmed token even when nothing was ever confirmed", async () => {
 		const deleted: string[] = [];
 		const service = new VaultedGitHubIdentityService(
 			tokenVault({
-				fetchUserToken: mock(async () => found("tok-forwarded", "ghu_victim")),
+				fetchUserToken: lookupSequence(found("tok-forwarded", "ghu_victim")),
 				deleteToken: mock(async (tokenId: string) => {
 					deleted.push(tokenId);
 				}),
@@ -429,7 +507,7 @@ describe("VaultedGitHubIdentityService", () => {
 		const deleted: string[] = [];
 		const service = new VaultedGitHubIdentityService(
 			tokenVault({
-				fetchUserToken: mock(async () => ({ outcome: "absent" }) as const),
+				fetchUserToken: mock(async () => absent),
 				deleteToken: mock(async (tokenId: string) => {
 					deleted.push(tokenId);
 				}),

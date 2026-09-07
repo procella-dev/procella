@@ -59,8 +59,12 @@ beforeAll(() => {
 });
 
 afterEach(async () => {
+	vaultTokens.clear();
 	await truncateTables();
 });
+
+/** Tenant slots Descope is pretending to hold, so deletes actually empty them. */
+const vaultTokens = new Set<string>();
 
 function createService(overrides: { outbound?: GitHubOutboundIdentityService } = {}) {
 	const appClient = {
@@ -80,11 +84,20 @@ function createService(overrides: { outbound?: GitHubOutboundIdentityService } =
 		overrides.outbound ??
 		new VaultedGitHubIdentityService(
 			{
-				fetchUserToken: async (userId, tenantId) => ({
-					outcome: "found",
-					token: { id: `tok-${tenantId}-${userId}`, accessToken: `user-token-${tenantId}` },
-				}),
-				deleteToken: async () => undefined,
+				// Deleting a token empties that tenant's slot, so disconnect's drain
+				// loop terminates the way it does against Descope.
+				fetchUserToken: async (userId, tenantId) =>
+					vaultTokens.has(`${tenantId}|${userId}`)
+						? {
+								outcome: "found",
+								token: { id: `tok-${tenantId}-${userId}`, accessToken: `user-token-${tenantId}` },
+							}
+						: { outcome: "absent" },
+				deleteToken: async (tokenId) => {
+					for (const key of vaultTokens) {
+						if (`tok-${key.replace("|", "-")}` === tokenId) vaultTokens.delete(key);
+					}
+				},
 			},
 			new PostgresGitHubOutboundConfirmations(db),
 			(token) =>
@@ -109,6 +122,7 @@ async function issueInstallState(
 ): Promise<string> {
 	const installation = installations.get(installationId as 101 | 102 | 201);
 	if (!installation) throw new Error("Unknown test installation");
+	vaultTokens.add(`${tenantId}|${tenantId}-admin`);
 	const connectState = await service.beginConnect(
 		tenantId,
 		installation.account.login,
@@ -143,6 +157,7 @@ async function confirm(
 ): Promise<void> {
 	const installation = installations.get(installationId as 101 | 102 | 201);
 	if (!installation) throw new Error("Unknown test installation");
+	vaultTokens.add(`${tenantId}|${userId}`);
 	const connectState = await service.beginConnect(
 		tenantId,
 		installation.account.login,
@@ -276,8 +291,9 @@ describe("GitHub installation binding integration", () => {
 	test("a forwarded connect URL leaves the vaulted token unconfirmed and unusable", async () => {
 		const service = createService();
 
-		// Descope has vaulted a token for the initiator (the stub always answers),
-		// but the callback never ran in the initiating browser.
+		// Descope has vaulted a token for the initiator, but the callback never ran
+		// in the initiating browser.
+		vaultTokens.add("tenant-a|tenant-a-admin");
 		expect(await service.resolveConnectedLogin("tenant-a", "tenant-a-admin")).toBeNull();
 
 		const connectState = await service.beginConnect(
