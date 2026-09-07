@@ -468,6 +468,64 @@ describe("VaultedGitHubIdentityService", () => {
 		expect(deleted).toHaveLength(GITHUB_OUTBOUND_DRAIN_LIMIT);
 	});
 
+	test("drains exactly the capped number of distinct tokens", async () => {
+		const remaining = Array.from(
+			{ length: GITHUB_OUTBOUND_DRAIN_LIMIT },
+			(_value, index) => `tok-${index}`,
+		);
+		const deleted: string[] = [];
+		const fetchUserToken = mock(async () => {
+			const next = remaining[0];
+			return next ? found(next, `ghu_${next}`) : absent;
+		});
+		const service = new VaultedGitHubIdentityService(
+			tokenVault({
+				fetchUserToken,
+				deleteToken: mock(async (tokenId: string) => {
+					deleted.push(tokenId);
+					remaining.shift();
+				}),
+			}),
+			confirmations("tok-0"),
+		);
+
+		// The cap bounds deletions, so the lookup that proves the slot empty is
+		// still allowed and the disconnect completes.
+		await expect(service.drainTenantTokens("user-a", TENANT_A, "tok-0")).resolves.toHaveLength(
+			GITHUB_OUTBOUND_DRAIN_LIMIT,
+		);
+		expect(deleted).toHaveLength(GITHUB_OUTBOUND_DRAIN_LIMIT);
+		expect(fetchUserToken).toHaveBeenCalledTimes(GITHUB_OUTBOUND_DRAIN_LIMIT + 1);
+	});
+
+	test("fails closed on one token past the cap without claiming the slot is empty", async () => {
+		const remaining = Array.from(
+			{ length: GITHUB_OUTBOUND_DRAIN_LIMIT + 1 },
+			(_value, index) => `tok-${index}`,
+		);
+		const deleted: string[] = [];
+		const service = new VaultedGitHubIdentityService(
+			tokenVault({
+				fetchUserToken: mock(async () => {
+					const next = remaining[0];
+					return next ? found(next, `ghu_${next}`) : absent;
+				}),
+				deleteToken: mock(async (tokenId: string) => {
+					deleted.push(tokenId);
+					remaining.shift();
+				}),
+			}),
+			confirmations("tok-0"),
+		);
+
+		await expect(service.drainTenantTokens("user-a", TENANT_A, "tok-0")).rejects.toMatchObject({
+			code: "authorization_failed",
+		});
+		// The last token stays vaulted, so the caller keeps its local state.
+		expect(deleted).toHaveLength(GITHUB_OUTBOUND_DRAIN_LIMIT);
+		expect(remaining).toEqual([`tok-${GITHUB_OUTBOUND_DRAIN_LIMIT}`]);
+	});
+
 	test("deletes an unconfirmed token even when nothing was ever confirmed", async () => {
 		const deleted: string[] = [];
 		const service = new VaultedGitHubIdentityService(

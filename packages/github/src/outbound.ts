@@ -341,7 +341,10 @@ export class VaultedGitHubIdentityService implements GitHubOutboundIdentityServi
 	 *
 	 * Everything else fails closed, so the caller keeps the confirmation row and
 	 * tenant binding: an unanswered lookup or delete, a malformed answer, a token
-	 * that reappears after a claimed delete, and an exhausted iteration cap.
+	 * that reappears after a claimed delete, and a vault that still reports a new
+	 * token once the deletion cap is spent. The cap bounds deletions, not
+	 * lookups: one lookup runs past it so a slot that really is empty after the
+	 * last permitted delete reports a completed drain instead of a failure.
 	 */
 	async drainTenantTokens(
 		userId: string,
@@ -349,7 +352,7 @@ export class VaultedGitHubIdentityService implements GitHubOutboundIdentityServi
 		expectedTokenId: string | null,
 	): Promise<readonly string[]> {
 		const cleared = new Set<string>();
-		for (let attempt = 0; attempt < GITHUB_OUTBOUND_DRAIN_LIMIT; attempt += 1) {
+		for (let deletions = 0; ; deletions += 1) {
 			const lookup = await this.vault
 				.fetchUserToken(userId, tenantId)
 				.catch((): GitHubVaultedTokenLookup => ({ outcome: "failed" }));
@@ -368,10 +371,14 @@ export class VaultedGitHubIdentityService implements GitHubOutboundIdentityServi
 				// vault state is unknown rather than empty.
 				throw new GitHubOutboundError("authorization_failed");
 			}
+			if (deletions === GITHUB_OUTBOUND_DRAIN_LIMIT) {
+				// The cap is spent and the vault answers with yet another token, so
+				// the slot is not empty and no further deletion is allowed.
+				throw new GitHubOutboundError("authorization_failed");
+			}
 			await this.vault.deleteToken(lookup.token.id);
 			cleared.add(lookup.token.id);
 		}
-		throw new GitHubOutboundError("authorization_failed");
 	}
 
 	/** The tenant's token, but only when Descope still reports the confirmed id. */

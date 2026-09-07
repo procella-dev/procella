@@ -446,6 +446,42 @@ describe("GitHub installation binding integration", () => {
 		expect(await confirmedRows("tenant-b")).toEqual(["tok-tenant-b-user-shared"]);
 	});
 
+	test("refuses to disconnect a confirmed tenant without management credentials", async () => {
+		const service = createService();
+		await bind(service, "tenant-a", 101);
+		const tokenId = vaultTokenId("tenant-a", "tenant-a-admin");
+		expect(await confirmedRows("tenant-a")).toEqual([tokenId]);
+
+		// Same database, but built the way bootstrap builds it when the Descope
+		// management key is missing: the vaulted token cannot be deleted.
+		const unmanaged = new OctokitGitHubService({ db, config, appClient: {} as Octokit });
+		await expect(
+			unmanaged.removeInstallation("tenant-a", 101, "tenant-a-admin"),
+		).rejects.toMatchObject({ code: "authorization_unavailable" });
+
+		// The token is still live in the vault, so the row that names it and the
+		// binding it belongs to both survive and a later call can still revoke it.
+		expect(await confirmedRows("tenant-a")).toEqual([tokenId]);
+		expect((await service.listInstallations("tenant-a")).map((row) => row.installationId)).toEqual(
+			[101],
+		);
+		expect(vaultTokens.has(vaultSlot("tenant-a", "tenant-a-admin"))).toBe(true);
+	});
+
+	test("removes an unconfirmed binding without management credentials", async () => {
+		const service = createService();
+		await bind(service, "tenant-a", 101);
+		// A binding predating the outbound app: no confirmation names a token, so
+		// there is no credential this removal could strand.
+		await db
+			.delete(githubOutboundConnections)
+			.where(eq(githubOutboundConnections.tenantId, "tenant-a"));
+
+		const unmanaged = new OctokitGitHubService({ db, config, appClient: {} as Octokit });
+		await unmanaged.removeInstallation("tenant-a", 101, "tenant-a-admin");
+		expect(await service.listInstallations("tenant-a")).toHaveLength(0);
+	});
+
 	test("webhooks update and delete only existing installation bindings", async () => {
 		const service = createService();
 		await bind(service, "tenant-a", 101);
