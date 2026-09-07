@@ -20,6 +20,7 @@ import {
 	buildGitHubAppConfig,
 	createDescopeGitHubOutboundVault,
 	OctokitGitHubService,
+	PostgresGitHubOutboundConfirmations,
 	VaultedGitHubIdentityService,
 } from "@procella/github";
 import {
@@ -166,6 +167,7 @@ async function bootstrapServices() {
 						managementKey: config.descopeManagementKey,
 						appId: githubConfig.outboundAppId,
 					}),
+					new PostgresGitHubOutboundConfirmations(db),
 				)
 			: null;
 	const githubService = githubConfig

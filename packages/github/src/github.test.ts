@@ -193,6 +193,7 @@ function stubOutbound(
 ): GitHubOutboundIdentityService {
 	return {
 		loadIdentity: mock(async () => ({ login: "alice" })),
+		loadPendingConnection: mock(async () => ({ tokenId: "tok-a", login: "alice" })),
 		verifyAccountAdministration: mock(async () => undefined),
 		verifyInstallationAccess: mock(async () => undefined),
 		disconnect: mock(async () => undefined),
@@ -200,15 +201,21 @@ function stubOutbound(
 	};
 }
 
-/** Transaction-capable db double: state rows are consumed, installations upserted. */
+/**
+ * Transaction-capable db double: state rows are consumed, confirmations and
+ * installations upserted.
+ */
 function setupStateDb(options: { consumed?: boolean; installationRow?: unknown } = {}) {
 	const stateValues = mock(async (_value?: unknown) => []);
 	const installationReturning = mock(async () => [options.installationRow ?? installationRow]);
-	const values = mock((value: Record<string, unknown>) =>
-		"installationId" in value
-			? { onConflictDoUpdate: mock(() => ({ returning: installationReturning })) }
-			: stateValues(value),
-	);
+	const confirmationConflict = mock(async () => []);
+	const values = mock((value: Record<string, unknown>) => {
+		if ("installationId" in value) {
+			return { onConflictDoUpdate: mock(() => ({ returning: installationReturning })) };
+		}
+		if ("tokenId" in value) return { onConflictDoUpdate: confirmationConflict };
+		return stateValues(value);
+	});
 	const consumedReturning = mock(async () =>
 		options.consumed === false ? [] : [{ jti: "state" }],
 	);
@@ -227,6 +234,7 @@ function setupStateDb(options: { consumed?: boolean; installationRow?: unknown }
 		} as unknown as Database,
 		stateValues,
 		consumedReturning,
+		confirmationConflict,
 		transaction,
 		values,
 	};
@@ -297,6 +305,14 @@ describe("GitHub setup state", () => {
 		);
 		expect(db.consumedReturning).toHaveBeenCalledTimes(1);
 		expect(request).toHaveBeenCalledWith("GET /app");
+		// The exact Descope token id the callback saw is durably confirmed.
+		expect(outbound.loadPendingConnection).toHaveBeenCalledWith("user-a", "tenant-a");
+		expect(db.values).toHaveBeenCalledWith({
+			tenantId: "tenant-a",
+			userId: "user-a",
+			tokenId: "tok-a",
+		});
+		expect(db.confirmationConflict).toHaveBeenCalledTimes(1);
 	});
 
 	test("refuses to continue a connect transaction outside its own browser, tenant, or user", async () => {
@@ -332,6 +348,59 @@ describe("GitHub setup state", () => {
 		expect(outbound.verifyAccountAdministration).not.toHaveBeenCalled();
 		expect(appRequest).not.toHaveBeenCalled();
 		expect(transaction).not.toHaveBeenCalled();
+	});
+
+	test("refuses to confirm anything when the browser or caller does not match", async () => {
+		const setupStates = createGitHubSetupStateService(testConfig.stateSigningKey);
+		const { state } = await setupStates.issue(CONNECT_STATE_INPUT);
+		const db = setupStateDb();
+		const outbound = stubOutbound();
+		const service = new OctokitGitHubService({
+			db: db.db,
+			config: testConfig,
+			appClient: {
+				request: mock(async () => ({ data: { id: 123, slug: "procella" } })),
+			} as unknown as Octokit,
+			setupStates,
+			outbound,
+		});
+
+		// A forwarded connect URL means Descope may already have vaulted a token,
+		// but nothing confirms it, so every consumer keeps rejecting it.
+		for (const attempt of [
+			() => service.issueInstallationUrl(state, OTHER_BROWSER_NONCE, INITIATOR),
+			() => service.issueInstallationUrl(state, BROWSER_NONCE, { ...INITIATOR, userId: "user-b" }),
+		]) {
+			await expect(attempt()).rejects.toMatchObject({ code: "invalid_state" });
+		}
+		expect(outbound.loadPendingConnection).not.toHaveBeenCalled();
+		expect(db.confirmationConflict).not.toHaveBeenCalled();
+		expect(db.transaction).not.toHaveBeenCalled();
+	});
+
+	test("fails closed when the pending token cannot be read", async () => {
+		const setupStates = createGitHubSetupStateService(testConfig.stateSigningKey);
+		const { state } = await setupStates.issue(CONNECT_STATE_INPUT);
+		const db = setupStateDb();
+		const service = new OctokitGitHubService({
+			db: db.db,
+			config: testConfig,
+			appClient: {
+				request: mock(async () => ({ data: { id: 123, slug: "procella" } })),
+			} as unknown as Octokit,
+			setupStates,
+			outbound: stubOutbound({
+				loadPendingConnection: mock(async () => {
+					throw new GitHubOutboundError("authorization_required");
+				}),
+			}),
+		});
+
+		await expect(
+			service.issueInstallationUrl(state, BROWSER_NONCE, INITIATOR),
+		).rejects.toMatchObject({ code: "authorization_required" });
+		expect(db.confirmationConflict).not.toHaveBeenCalled();
+		expect(db.transaction).not.toHaveBeenCalled();
 	});
 
 	test("rejects an expired or replayed connect transaction", async () => {
@@ -494,16 +563,13 @@ describe("OctokitGitHubService vaulted user verification", () => {
 	test("rejects a GitHub user who does not administer the requested account", async () => {
 		const setupStates = createGitHubSetupStateService(testConfig.stateSigningKey);
 		const { state } = await setupStates.issue(CONNECT_STATE_INPUT);
-		const transaction = mock(() => {
-			throw new Error("must not consume state");
-		});
-		const appRequest = mock(() => {
-			throw new Error("must not reach GitHub App endpoints");
-		});
+		const db = setupStateDb();
 		const service = new OctokitGitHubService({
-			db: { transaction } as unknown as Database,
+			db: db.db,
 			config: testConfig,
-			appClient: { request: appRequest } as unknown as Octokit,
+			appClient: {
+				request: mock(async () => ({ data: { id: 123, slug: "procella" } })),
+			} as unknown as Octokit,
 			setupStates,
 			outbound: stubOutbound({
 				verifyAccountAdministration: mock(async () => {
@@ -515,8 +581,9 @@ describe("OctokitGitHubService vaulted user verification", () => {
 		await expect(
 			service.issueInstallationUrl(state, BROWSER_NONCE, INITIATOR),
 		).rejects.toMatchObject({ code: "authorization_required" });
-		expect(transaction).not.toHaveBeenCalled();
-		expect(appRequest).not.toHaveBeenCalled();
+		// The transaction ran, so no installation URL is returned and the caller
+		// must restart the connect flow.
+		expect(db.consumedReturning).toHaveBeenCalledTimes(1);
 	});
 
 	test("treats a missing vaulted token as authorization required", async () => {
@@ -527,10 +594,10 @@ describe("OctokitGitHubService vaulted user verification", () => {
 			config: testConfig,
 			appClient: {} as Octokit,
 			setupStates,
-			outbound: new VaultedGitHubIdentityService({
-				fetchUserToken: mock(async () => null),
-				deleteToken: mock(async () => undefined),
-			}),
+			outbound: new VaultedGitHubIdentityService(
+				{ fetchUserToken: mock(async () => null), deleteToken: mock(async () => undefined) },
+				{ confirmedTokenId: mock(async () => null) },
+			),
 		});
 
 		await expect(
@@ -639,6 +706,7 @@ describe("OctokitGitHubService vaulted user verification", () => {
 		);
 		const outbound = new VaultedGitHubIdentityService(
 			{ fetchUserToken, deleteToken: mock(async () => undefined) },
+			{ confirmedTokenId: mock(async () => "tok-a") },
 			() => ({ request: userRequest }) as unknown as Octokit,
 		);
 		const service = new OctokitGitHubService({
@@ -654,35 +722,42 @@ describe("OctokitGitHubService vaulted user verification", () => {
 		expect(fetchUserToken).toHaveBeenCalledWith("user-a", "tenant-a");
 	});
 
-	test("disconnect deletes this tenant's vaulted token before the tenant binding", async () => {
+	test("disconnect deletes the confirmed token, then confirmation and binding", async () => {
 		const order: string[] = [];
-		const del = mock(() => ({
-			where: mock(async () => {
-				order.push("binding");
-				return [];
-			}),
-		}));
+		const tx = {
+			delete: mock(() => ({
+				where: mock(async () => {
+					order.push("local-state");
+					return [];
+				}),
+			})),
+		} as unknown as Database;
 		const disconnect = mock(async () => {
 			order.push("token");
 		});
 		const service = new OctokitGitHubService({
-			db: { delete: del } as unknown as Database,
+			db: {
+				transaction: mock(async (callback: (database: Database) => Promise<unknown>) =>
+					callback(tx),
+				),
+			} as unknown as Database,
 			config: testConfig,
 			appClient: {} as Octokit,
 			outbound: stubOutbound({ disconnect }),
 		});
 
 		await service.removeInstallation("tenant-a", 101, "user-a");
-		expect(order).toEqual(["token", "binding"]);
+		// Confirmation row and tenant binding both go inside one transaction.
+		expect(order).toEqual(["token", "local-state", "local-state"]);
 		expect(disconnect).toHaveBeenCalledWith("user-a", "tenant-a");
 	});
 
-	test("disconnect keeps the binding when the vaulted token cannot be deleted", async () => {
+	test("disconnect keeps local state when the vaulted token cannot be deleted", async () => {
 		const del = mock(() => {
-			throw new Error("must not delete the binding");
+			throw new Error("must not delete local state");
 		});
 		const service = new OctokitGitHubService({
-			db: { delete: del } as unknown as Database,
+			db: { transaction: del } as unknown as Database,
 			config: testConfig,
 			appClient: {} as Octokit,
 			outbound: stubOutbound({

@@ -4,6 +4,7 @@ import type { Database } from "@procella/db";
 import {
 	type GitHubOutboundIdentityService,
 	OctokitGitHubService,
+	PostgresGitHubOutboundConfirmations,
 	VaultedGitHubIdentityService,
 } from "@procella/github";
 import { getTestDb, truncateTables } from "./setup.js";
@@ -72,8 +73,9 @@ function createService(overrides: { outbound?: GitHubOutboundIdentityService } =
 		},
 	} as unknown as Octokit;
 	// Vault stub keyed by (user, tenant): each tenant admin holds its own token
-	// whose GitHub user is an active organization administrator, so these tests
-	// exercise database-level tenant isolation rather than GitHub's verification.
+	// whose GitHub user is an active organization administrator. Confirmations are
+	// read from the real table, so these tests exercise the durable boundary and
+	// database-level tenant isolation rather than GitHub's verification.
 	const outbound: GitHubOutboundIdentityService =
 		overrides.outbound ??
 		new VaultedGitHubIdentityService(
@@ -84,6 +86,7 @@ function createService(overrides: { outbound?: GitHubOutboundIdentityService } =
 				}),
 				deleteToken: async () => undefined,
 			},
+			new PostgresGitHubOutboundConfirmations(db),
 			(token) =>
 				({
 					request: async (route: string) => {
@@ -129,6 +132,24 @@ async function bind(service: OctokitGitHubService, tenantId: string, installatio
 		installationId,
 		BROWSER_NONCE,
 	);
+}
+
+/** Runs the browser-bound callback so the tenant's vaulted token is confirmed. */
+async function confirm(
+	service: OctokitGitHubService,
+	tenantId: string,
+	userId: string,
+	installationId: number,
+): Promise<void> {
+	const installation = installations.get(installationId as 101 | 102 | 201);
+	if (!installation) throw new Error("Unknown test installation");
+	const connectState = await service.beginConnect(
+		tenantId,
+		installation.account.login,
+		userId,
+		BROWSER_NONCE,
+	);
+	await service.issueInstallationUrl(connectState, BROWSER_NONCE, { tenantId, userId });
 }
 
 describe("GitHub installation binding integration", () => {
@@ -195,7 +216,7 @@ describe("GitHub installation binding integration", () => {
 		expect(await service.listInstallations("tenant-a")).toHaveLength(1);
 	});
 
-	test("keeps one Descope user's tenant connections independent on disconnect", async () => {
+	test("keeps one Descope user's confirmed tenant connections independent", async () => {
 		const tokens = new Map([
 			["tenant-a|user-shared", { id: "tok-a", accessToken: "user-token-tenant-a" }],
 			["tenant-b|user-shared", { id: "tok-b", accessToken: "user-token-tenant-b" }],
@@ -212,6 +233,7 @@ describe("GitHub installation binding integration", () => {
 						}
 					},
 				},
+				new PostgresGitHubOutboundConfirmations(db),
 				(token) =>
 					({
 						request: async (route: string) => {
@@ -226,6 +248,11 @@ describe("GitHub installation binding integration", () => {
 			),
 		});
 
+		// A vaulted token is invisible until its browser-bound callback confirms it.
+		expect(await service.resolveConnectedLogin("tenant-a", "user-shared")).toBeNull();
+		await confirm(service, "tenant-a", "user-shared", 101);
+		await confirm(service, "tenant-b", "user-shared", 201);
+
 		expect(await service.resolveConnectedLogin("tenant-a", "user-shared")).toBe(
 			"user-token-tenant-a-github",
 		);
@@ -235,11 +262,42 @@ describe("GitHub installation binding integration", () => {
 
 		await service.removeInstallation("tenant-a", 101, "user-shared");
 
-		// Only tenant A's token is deleted; tenant B keeps its own connection.
+		// Only tenant A's confirmed token is deleted; tenant B keeps its connection.
 		expect(deleted).toEqual(["tok-a"]);
 		expect(await service.resolveConnectedLogin("tenant-a", "user-shared")).toBeNull();
 		expect(await service.resolveConnectedLogin("tenant-b", "user-shared")).toBe(
 			"user-token-tenant-b-github",
+		);
+	});
+
+	test("a forwarded connect URL leaves the vaulted token unconfirmed and unusable", async () => {
+		const service = createService();
+
+		// Descope has vaulted a token for the initiator (the stub always answers),
+		// but the callback never ran in the initiating browser.
+		expect(await service.resolveConnectedLogin("tenant-a", "tenant-a-admin")).toBeNull();
+
+		const connectState = await service.beginConnect(
+			"tenant-a",
+			"acme",
+			"tenant-a-admin",
+			BROWSER_NONCE,
+		);
+		await expect(
+			service.issueInstallationUrl(connectState, "c".repeat(43), {
+				tenantId: "tenant-a",
+				userId: "tenant-a-admin",
+			}),
+		).rejects.toMatchObject({ code: "invalid_state" });
+		expect(await service.resolveConnectedLogin("tenant-a", "tenant-a-admin")).toBeNull();
+
+		// The initiating browser confirms it, and only then is it usable.
+		await service.issueInstallationUrl(connectState, BROWSER_NONCE, {
+			tenantId: "tenant-a",
+			userId: "tenant-a-admin",
+		});
+		expect(await service.resolveConnectedLogin("tenant-a", "tenant-a-admin")).toBe(
+			"user-token-tenant-a-github",
 		);
 	});
 

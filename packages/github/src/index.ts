@@ -4,11 +4,21 @@ import { createAppAuth } from "@octokit/auth-app";
 import { Octokit } from "@octokit/rest";
 import type { Config } from "@procella/config";
 import type { Database } from "@procella/db";
-import { githubInstallations, githubSetupStates, githubUpdateOutbox, updates } from "@procella/db";
+import {
+	githubInstallations,
+	githubOutboundConnections,
+	githubSetupStates,
+	githubUpdateOutbox,
+	updates,
+} from "@procella/db";
 import { projectError } from "@procella/types";
 import { and, desc, eq, gt, lt, sql } from "drizzle-orm";
 import { errors as joseErrors, jwtVerify, SignJWT } from "jose";
-import { GitHubOutboundError, type GitHubOutboundIdentityService } from "./outbound.js";
+import {
+	GitHubOutboundError,
+	type GitHubOutboundIdentityService,
+	type GitHubPendingConnection,
+} from "./outbound.js";
 
 export * from "./outbound.js";
 
@@ -661,21 +671,23 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 	}
 
 	/**
-	 * Consumes the connect transaction and issues browser-bound installation
-	 * state for the account it names.
+	 * Consumes the connect transaction, confirms the vaulted token, and issues
+	 * browser-bound installation state for the account the transaction names.
 	 *
-	 * The vaulted identity must exist and must not contradict the requested
-	 * account. Organization membership is only advisory here: the vaulted token
-	 * is a GitHub App user-to-server token, so membership stays invisible until
-	 * the App is installed on that organization. `completeInstallation` requires
-	 * proof of administration and installation visibility before any binding is
-	 * saved.
+	 * This is the confirmation boundary. Descope vaults a token as soon as GitHub
+	 * authorizes, so until this browser-bound callback records the token's Descope
+	 * id, no consumer may observe or use it. The account check here is advisory
+	 * about organization membership only: the vaulted token is a GitHub App
+	 * user-to-server token, so membership stays invisible until the App is
+	 * installed. `completeInstallation` requires proof of administration and
+	 * installation visibility before any binding is saved.
 	 */
 	async issueInstallationUrl(
 		connectState: string,
 		browserNonce: string,
 		initiator: { tenantId: string; userId: string },
 	): Promise<string> {
+		if (!this.outbound) throw new GitHubSetupError("authorization_unavailable");
 		const claims = await this.setupStates.verify(connectState);
 		this.verifyBrowserBinding(browserNonce, claims.browserBinding);
 		if (
@@ -686,14 +698,12 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 			throw new GitHubSetupError("invalid_state");
 		}
 
-		await this.verifyVaultedAdministration(
-			claims.tenantId,
-			claims.initiatorUserId,
-			claims.accountLogin,
-			{
-				allowInvisibleMembership: true,
-			},
-		);
+		let pending: GitHubPendingConnection;
+		try {
+			pending = await this.outbound.loadPendingConnection(claims.initiatorUserId, claims.tenantId);
+		} catch (error) {
+			throw setupErrorFromOutbound(error);
+		}
 		const slug = await this.loadAppSlug();
 		const next = await this.setupStates.issue({
 			tenantId: claims.tenantId,
@@ -709,7 +719,27 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 				tenantId: next.claims.tenantId,
 				expiresAt: next.claims.expiresAt,
 			});
+			await tx
+				.insert(githubOutboundConnections)
+				.values({
+					tenantId: claims.tenantId,
+					userId: claims.initiatorUserId,
+					tokenId: pending.tokenId,
+				})
+				.onConflictDoUpdate({
+					target: [githubOutboundConnections.tenantId, githubOutboundConnections.userId],
+					set: { tokenId: pending.tokenId, updatedAt: sql`now()` },
+				});
 		});
+
+		// Only now can the connected identity be verified: confirmation is what
+		// makes the token usable at all.
+		await this.verifyVaultedAdministration(
+			claims.tenantId,
+			claims.initiatorUserId,
+			claims.accountLogin,
+			{ allowInvisibleMembership: true },
+		);
 
 		const url = new URL(`https://github.com/apps/${slug}/installations/new`);
 		url.searchParams.set("state", next.state);
@@ -791,9 +821,11 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 	}
 
 	/**
-	 * Vaulted token first: killing the GitHub credential is the security-relevant
-	 * half, so a management failure leaves the binding in place and surfaces the
-	 * error instead of reporting a disconnect that only removed local state.
+	 * Confirmed vaulted token first: killing the GitHub credential is the
+	 * security-relevant half, so a management failure leaves local state intact
+	 * and surfaces the error instead of reporting a disconnect that only removed
+	 * the binding. The confirmation row and the tenant binding then go in one
+	 * transaction, so no tenant is left trusting a deleted token.
 	 */
 	async removeInstallation(
 		tenantId: string,
@@ -807,14 +839,24 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 				throw new GitHubSetupError("authorization_failed");
 			}
 		}
-		await this.db
-			.delete(githubInstallations)
-			.where(
-				and(
-					eq(githubInstallations.tenantId, tenantId),
-					eq(githubInstallations.installationId, installationId),
-				),
-			);
+		await this.db.transaction(async (tx) => {
+			await tx
+				.delete(githubOutboundConnections)
+				.where(
+					and(
+						eq(githubOutboundConnections.tenantId, tenantId),
+						eq(githubOutboundConnections.userId, userId),
+					),
+				);
+			await tx
+				.delete(githubInstallations)
+				.where(
+					and(
+						eq(githubInstallations.tenantId, tenantId),
+						eq(githubInstallations.installationId, installationId),
+					),
+				);
+		});
 	}
 
 	private browserBinding(browserNonce: string): string {

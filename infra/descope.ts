@@ -4,6 +4,7 @@ import { join } from "node:path";
 import * as descope from "@descope/pulumi-descope";
 import { GITHUB_OUTBOUND_APP_ID } from "@procella/config";
 import { resolveMigrationCommandDirectory } from "../scripts/invoke-migration-lambda";
+import { DESCOPE_OUTBOUND_CALLBACK_URL } from "../scripts/provision-descope-outbound-app";
 import signUpOrInFlowJson from "./flows/sign-up-or-in.json" with { type: "json" };
 import stylesJson from "./flows/styles.json" with { type: "json" };
 import { descopeManagementKey, githubAppOAuthSecrets } from "./secrets";
@@ -195,9 +196,10 @@ const provisionScriptHash = createHash("sha256")
 
 if (githubAppOAuthSecrets) {
 	const provisionCmd = `bun run ${provisionScript}`;
-	// Rotating the GitHub OAuth credentials must reprovision the outbound app.
-	// Only their digest becomes a trigger, so the secret itself never has to be
-	// compared or stored as a plain input value.
+	// Every input the provisioner sends to Descope is a trigger, so rotating a
+	// credential, changing the callback, or renaming the app reprovisions. The
+	// OAuth credentials contribute only as a digest, so no secret value is
+	// compared or retained as a plain trigger input.
 	const credentialDigest = $resolve([
 		githubAppOAuthSecrets.clientId.value,
 		githubAppOAuthSecrets.clientSecret.value,
@@ -217,8 +219,13 @@ if (githubAppOAuthSecrets) {
 				PROCELLA_GITHUB_APP_CLIENT_SECRET: githubAppOAuthSecrets.clientSecret.value,
 				PROCELLA_GITHUB_OUTBOUND_APP_ID: GITHUB_OUTBOUND_APP_ID,
 			},
-			// Reprovision when the script, the project, or the credentials change.
-			triggers: [provisionScriptHash, project.id, credentialDigest],
+			triggers: [
+				provisionScriptHash,
+				project.id,
+				credentialDigest,
+				GITHUB_OUTBOUND_APP_ID,
+				DESCOPE_OUTBOUND_CALLBACK_URL,
+			],
 		},
 		{ dependsOn: [project] },
 	);

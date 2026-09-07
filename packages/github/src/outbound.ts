@@ -12,11 +12,14 @@
 
 import DescopeClient from "@descope/node-sdk";
 import { Octokit } from "@octokit/rest";
+import type { Database } from "@procella/db";
+import { githubOutboundConnections } from "@procella/db";
+import { and, eq } from "drizzle-orm";
 
 export const GITHUB_OUTBOUND_REQUEST_TIMEOUT_MS = 8_000;
 
 export interface GitHubVaultedToken {
-	/** Descope token id, used for tenant-scoped deletion. */
+	/** Descope token id, used for confirmation matching and tenant-scoped deletion. */
 	id: string;
 	accessToken: string;
 }
@@ -29,8 +32,26 @@ export interface GitHubOutboundTokenVault {
 	deleteToken(tokenId: string): Promise<void>;
 }
 
+/**
+ * Durable record that one tenant-scoped Descope token completed Procella's
+ * browser-bound connect callback.
+ *
+ * Descope vaults a token the moment GitHub authorizes, which a forwarded
+ * connect URL can trigger for a different GitHub user. The confirmed id read
+ * from PostgreSQL is therefore the authority for using a token at all: an
+ * unconfirmed or replaced token is neither observable nor usable.
+ */
+export interface GitHubOutboundConfirmations {
+	confirmedTokenId(tenantId: string, userId: string): Promise<string | null>;
+}
+
 export interface GitHubUserIdentity {
 	login: string;
+}
+
+/** Identity plus the Descope token id the callback is about to confirm. */
+export interface GitHubPendingConnection extends GitHubUserIdentity {
+	tokenId: string;
 }
 
 /**
@@ -38,11 +59,18 @@ export interface GitHubUserIdentity {
  * vault plus GitHub's user-scoped API.
  */
 export interface GitHubOutboundIdentityService {
-	/** Connected GitHub login for the user in this tenant, or null when nothing is vaulted. */
+	/** Connected GitHub login for a confirmed tenant connection, or null. */
 	loadIdentity(userId: string, tenantId: string): Promise<GitHubUserIdentity | null>;
 	/**
-	 * Resolves when the connected user owns `accountLogin` or is an active
-	 * organization administrator of it.
+	 * Reads the tenant-scoped token the browser-bound callback is about to
+	 * confirm, returning its Descope id and GitHub identity. This is the only
+	 * ungated entry point, and its result stays unusable until the caller
+	 * durably records that id.
+	 */
+	loadPendingConnection(userId: string, tenantId: string): Promise<GitHubPendingConnection>;
+	/**
+	 * Resolves when the confirmed connected user owns `accountLogin` or is an
+	 * active organization administrator of it.
 	 *
 	 * `allowInvisibleMembership` covers the pre-installation leg: the vaulted
 	 * token is a GitHub App user-to-server token, so organization membership is
@@ -55,9 +83,9 @@ export interface GitHubOutboundIdentityService {
 		accountLogin: string,
 		options?: { allowInvisibleMembership?: boolean },
 	): Promise<void>;
-	/** Resolves when the installation is visible to the connected user. */
+	/** Resolves when the installation is visible to the confirmed connected user. */
 	verifyInstallationAccess(userId: string, tenantId: string, installationId: number): Promise<void>;
-	/** Deletes this tenant's vaulted GitHub token for the user, leaving other tenants intact. */
+	/** Deletes this tenant's confirmed GitHub token, leaving other tenants intact. */
 	disconnect(userId: string, tenantId: string): Promise<void>;
 }
 
@@ -140,6 +168,25 @@ export function createDescopeGitHubOutboundVault(options: {
 	);
 }
 
+/** Confirmed-connection reads. Writes stay with the setup flow's transactions. */
+export class PostgresGitHubOutboundConfirmations implements GitHubOutboundConfirmations {
+	constructor(private readonly db: Database) {}
+
+	async confirmedTokenId(tenantId: string, userId: string): Promise<string | null> {
+		const [row] = await this.db
+			.select({ tokenId: githubOutboundConnections.tokenId })
+			.from(githubOutboundConnections)
+			.where(
+				and(
+					eq(githubOutboundConnections.tenantId, tenantId),
+					eq(githubOutboundConnections.userId, userId),
+				),
+			)
+			.limit(1);
+		return row?.tokenId ?? null;
+	}
+}
+
 function githubErrorStatus(error: unknown): number | undefined {
 	if (typeof error === "object" && error !== null && "status" in error) {
 		return typeof error.status === "number" ? error.status : undefined;
@@ -150,19 +197,24 @@ function githubErrorStatus(error: unknown): number | undefined {
 /**
  * Verifies GitHub account administration through the vaulted user token. The
  * token stays inside this class: callers only ever learn the connected login.
+ *
+ * Every read requires the current tenant-scoped token's Descope id to equal the
+ * confirmed id in PostgreSQL, so a token vaulted by a forwarded connect URL, or
+ * a later token that replaced the confirmed one, is unusable and invisible.
  */
 export class VaultedGitHubIdentityService implements GitHubOutboundIdentityService {
 	private readonly userClientFactory: (token: string) => Octokit;
 
 	constructor(
 		private readonly vault: GitHubOutboundTokenVault,
+		private readonly confirmations: GitHubOutboundConfirmations,
 		userClientFactory?: (token: string) => Octokit,
 	) {
 		this.userClientFactory = userClientFactory ?? ((token) => new Octokit({ auth: token }));
 	}
 
 	async loadIdentity(userId: string, tenantId: string): Promise<GitHubUserIdentity | null> {
-		const token = await this.vault.fetchUserToken(userId, tenantId).catch(() => null);
+		const token = await this.confirmedToken(userId, tenantId).catch(() => null);
 		if (!token) return null;
 		try {
 			return { login: await this.currentLogin(token.accessToken) };
@@ -171,13 +223,18 @@ export class VaultedGitHubIdentityService implements GitHubOutboundIdentityServi
 		}
 	}
 
+	async loadPendingConnection(userId: string, tenantId: string): Promise<GitHubPendingConnection> {
+		const token = await this.requireToken(userId, tenantId);
+		return { tokenId: token.id, login: await this.currentLogin(token.accessToken) };
+	}
+
 	async verifyAccountAdministration(
 		userId: string,
 		tenantId: string,
 		accountLogin: string,
 		options: { allowInvisibleMembership?: boolean } = {},
 	): Promise<void> {
-		const token = await this.requireToken(userId, tenantId);
+		const token = await this.confirmedToken(userId, tenantId);
 		const login = await this.currentLogin(token.accessToken);
 		if (login.toLowerCase() === accountLogin.toLowerCase()) return;
 
@@ -207,7 +264,7 @@ export class VaultedGitHubIdentityService implements GitHubOutboundIdentityServi
 		tenantId: string,
 		installationId: number,
 	): Promise<void> {
-		const token = await this.requireToken(userId, tenantId);
+		const token = await this.confirmedToken(userId, tenantId);
 		const client = this.userClientFactory(token.accessToken);
 		let page = 1;
 		try {
@@ -230,16 +287,36 @@ export class VaultedGitHubIdentityService implements GitHubOutboundIdentityServi
 	}
 
 	/**
-	 * Deletes only this tenant's token. A user with no vaulted token for the
-	 * tenant is already disconnected, so deletion is a no-op rather than an
+	 * Deletes only this tenant's confirmed token. A user with no confirmed
+	 * connection is already disconnected, so deletion is a no-op rather than an
 	 * error, and no app/user-wide deletion is ever issued.
 	 */
 	async disconnect(userId: string, tenantId: string): Promise<void> {
-		const token = await this.vault.fetchUserToken(userId, tenantId).catch(() => {
-			throw new GitHubOutboundError("authorization_failed");
-		});
-		if (!token) return;
-		await this.vault.deleteToken(token.id);
+		const confirmedTokenId = await this.confirmations
+			.confirmedTokenId(tenantId, userId)
+			.catch(() => {
+				throw new GitHubOutboundError("authorization_failed");
+			});
+		if (!confirmedTokenId) return;
+		await this.vault.deleteToken(confirmedTokenId);
+	}
+
+	/** The tenant's token, but only when Descope still reports the confirmed id. */
+	private async confirmedToken(userId: string, tenantId: string): Promise<GitHubVaultedToken> {
+		const confirmedTokenId = await this.confirmations
+			.confirmedTokenId(tenantId, userId)
+			.catch(() => {
+				throw new GitHubOutboundError("authorization_failed");
+			});
+		if (!confirmedTokenId) throw new GitHubOutboundError("authorization_required");
+		const token = await this.requireToken(userId, tenantId);
+		if (token.id !== confirmedTokenId) {
+			// A different token now sits in the vault: either a forwarded connect
+			// URL created one, or the confirmed token was replaced. Neither passed
+			// this browser's callback, so neither may be used.
+			throw new GitHubOutboundError("authorization_required");
+		}
+		return token;
 	}
 
 	private async requireToken(userId: string, tenantId: string): Promise<GitHubVaultedToken> {

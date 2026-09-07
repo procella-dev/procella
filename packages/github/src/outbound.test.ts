@@ -40,6 +40,11 @@ function tokenVault(overrides: Partial<GitHubOutboundTokenVault> = {}): GitHubOu
 	};
 }
 
+/** Confirmation stub: by default the confirmed id matches the vaulted token. */
+function confirmations(tokenId: string | null = "tok-a") {
+	return { confirmedTokenId: mock(async () => tokenId) };
+}
+
 function userClient(request: (route: string, options?: unknown) => Promise<unknown>) {
 	return () => ({ request: mock(request) }) as unknown as Octokit;
 }
@@ -101,6 +106,7 @@ describe("VaultedGitHubIdentityService", () => {
 		const fetchUserToken = mock(async () => ({ id: "tok-a", accessToken: "ghu_vaulted" }));
 		const service = new VaultedGitHubIdentityService(
 			tokenVault({ fetchUserToken }),
+			confirmations(),
 			userClient(async () => ({ data: { login: "Acme" } })),
 		);
 
@@ -114,6 +120,7 @@ describe("VaultedGitHubIdentityService", () => {
 	test("accepts an active organization administrator", async () => {
 		const service = new VaultedGitHubIdentityService(
 			tokenVault(),
+			confirmations(),
 			userClient(async (route) =>
 				route === "GET /user"
 					? { data: { login: "alice" } }
@@ -133,6 +140,7 @@ describe("VaultedGitHubIdentityService", () => {
 		]) {
 			const service = new VaultedGitHubIdentityService(
 				tokenVault(),
+				confirmations(),
 				userClient(async (route) =>
 					route === "GET /user" ? { data: { login: "alice" } } : { data: membership },
 				),
@@ -149,6 +157,7 @@ describe("VaultedGitHubIdentityService", () => {
 		for (const status of [403, 404]) {
 			const service = new VaultedGitHubIdentityService(
 				tokenVault(),
+				confirmations(),
 				userClient(async (route) => {
 					if (route === "GET /user") return { data: { login: "alice" } };
 					throw Object.assign(new Error("App not installed"), { status });
@@ -172,6 +181,7 @@ describe("VaultedGitHubIdentityService", () => {
 	test("separates GitHub outages from denied membership", async () => {
 		const service = new VaultedGitHubIdentityService(
 			tokenVault(),
+			confirmations(),
 			userClient(async (route) => {
 				if (route === "GET /user") return { data: { login: "alice" } };
 				throw Object.assign(new Error("GitHub unavailable"), { status: 503 });
@@ -189,6 +199,7 @@ describe("VaultedGitHubIdentityService", () => {
 		const request = mock(async () => ({ data: {} }));
 		const service = new VaultedGitHubIdentityService(
 			tokenVault({ fetchUserToken: mock(async () => null) }),
+			confirmations(),
 			() => ({ request }) as unknown as Octokit,
 		);
 
@@ -199,36 +210,107 @@ describe("VaultedGitHubIdentityService", () => {
 		expect(request).not.toHaveBeenCalled();
 	});
 
-	test("isolates tenants holding connections for the same Descope user", async () => {
+	test("isolates tenants holding confirmed connections for the same Descope user", async () => {
 		const tokens: Record<string, { id: string; accessToken: string }> = {
 			[TENANT_A]: { id: "tok-a", accessToken: "ghu_tenant_a" },
+			[TENANT_B]: { id: "tok-b", accessToken: "ghu_tenant_b" },
 		};
+		const confirmed: Record<string, string> = { [TENANT_A]: "tok-a", [TENANT_B]: "tok-b" };
 		const deleteToken = mock(async (tokenId: string) => {
-			delete tokens[Object.keys(tokens).find((key) => tokens[key]?.id === tokenId) ?? ""];
+			for (const [key, token] of Object.entries(tokens)) {
+				if (token.id === tokenId) delete tokens[key];
+			}
 		});
 		const service = new VaultedGitHubIdentityService(
 			{
 				fetchUserToken: mock(async (_userId: string, tenantId: string) => tokens[tenantId] ?? null),
 				deleteToken,
 			},
+			{ confirmedTokenId: mock(async (tenantId: string) => confirmed[tenantId] ?? null) },
 			userClient(async () => ({ data: { login: "alice" } })),
 		);
 
-		// Tenant B cannot see or use tenant A's connection.
-		expect(await service.loadIdentity("user-a", TENANT_B)).toBeNull();
-		await expect(
-			service.verifyAccountAdministration("user-a", TENANT_B, "alice"),
-		).rejects.toMatchObject({ code: "authorization_required" });
-
-		// Disconnecting tenant B never touches tenant A's token.
-		await service.disconnect("user-a", TENANT_B);
-		expect(deleteToken).not.toHaveBeenCalled();
 		expect(await service.loadIdentity("user-a", TENANT_A)).toEqual({ login: "alice" });
+		expect(await service.loadIdentity("user-a", TENANT_B)).toEqual({ login: "alice" });
 
-		// Disconnecting tenant A deletes exactly that token.
+		// Disconnecting tenant A deletes exactly that token and leaves B intact.
 		await service.disconnect("user-a", TENANT_A);
 		expect(deleteToken).toHaveBeenCalledWith("tok-a");
+		expect(tokens[TENANT_A]).toBeUndefined();
+		delete confirmed[TENANT_A];
+
+		expect(await service.loadIdentity("user-a", TENANT_B)).toEqual({ login: "alice" });
+		await expect(
+			service.verifyAccountAdministration("user-a", TENANT_A, "alice"),
+		).rejects.toMatchObject({ code: "authorization_required" });
+	});
+
+	test("refuses an unconfirmed token, as a forwarded connect URL would vault", async () => {
+		const request = mock(async () => ({ data: { login: "victim" } }));
+		const service = new VaultedGitHubIdentityService(
+			tokenVault({
+				fetchUserToken: mock(async () => ({ id: "tok-forwarded", accessToken: "ghu_victim" })),
+			}),
+			confirmations(null),
+			() => ({ request }) as unknown as Octokit,
+		);
+
+		// Descope has vaulted a token, but no browser-bound callback confirmed it.
 		expect(await service.loadIdentity("user-a", TENANT_A)).toBeNull();
+		await expect(
+			service.verifyAccountAdministration("user-a", TENANT_A, "acme"),
+		).rejects.toMatchObject({ code: "authorization_required" });
+		await expect(service.verifyInstallationAccess("user-a", TENANT_A, 101)).rejects.toMatchObject({
+			code: "authorization_required",
+		});
+		expect(request).not.toHaveBeenCalled();
+
+		// The pending read is the only ungated path: it exists so the callback can
+		// record the id it just saw.
+		expect(await service.loadPendingConnection("user-a", TENANT_A)).toEqual({
+			tokenId: "tok-forwarded",
+			login: "victim",
+		});
+	});
+
+	test("refuses a token that replaced the confirmed one", async () => {
+		const request = mock(async () => ({ data: { login: "alice" } }));
+		const service = new VaultedGitHubIdentityService(
+			tokenVault({
+				fetchUserToken: mock(async () => ({ id: "tok-replacement", accessToken: "ghu_new" })),
+			}),
+			confirmations("tok-a"),
+			() => ({ request }) as unknown as Octokit,
+		);
+
+		expect(await service.loadIdentity("user-a", TENANT_A)).toBeNull();
+		await expect(
+			service.verifyAccountAdministration("user-a", TENANT_A, "acme"),
+		).rejects.toMatchObject({ code: "authorization_required" });
+		await expect(service.verifyInstallationAccess("user-a", TENANT_A, 101)).rejects.toMatchObject({
+			code: "authorization_required",
+		});
+		expect(request).not.toHaveBeenCalled();
+	});
+
+	test("fails closed when the confirmation store is unreachable", async () => {
+		const service = new VaultedGitHubIdentityService(
+			tokenVault(),
+			{
+				confirmedTokenId: mock(async () => {
+					throw new Error("database unreachable");
+				}),
+			},
+			userClient(async () => ({ data: { login: "alice" } })),
+		);
+
+		expect(await service.loadIdentity("user-a", TENANT_A)).toBeNull();
+		await expect(
+			service.verifyAccountAdministration("user-a", TENANT_A, "acme"),
+		).rejects.toMatchObject({ code: "authorization_failed" });
+		await expect(service.disconnect("user-a", TENANT_A)).rejects.toMatchObject({
+			code: "authorization_failed",
+		});
 	});
 
 	test("paginates installation access and rejects installations the user cannot see", async () => {
@@ -239,6 +321,7 @@ describe("VaultedGitHubIdentityService", () => {
 		let call = 0;
 		const accessible = new VaultedGitHubIdentityService(
 			tokenVault(),
+			confirmations(),
 			userClient(async () => pages[call++] ?? { data: { total_count: 0, installations: [] } }),
 		);
 		await expect(
@@ -248,6 +331,7 @@ describe("VaultedGitHubIdentityService", () => {
 
 		const denied = new VaultedGitHubIdentityService(
 			tokenVault(),
+			confirmations(),
 			userClient(async () => ({ data: { total_count: 1, installations: [{ id: 7 }] } })),
 		);
 		await expect(denied.verifyInstallationAccess("user-a", TENANT_A, 101)).rejects.toMatchObject({
@@ -259,7 +343,7 @@ describe("VaultedGitHubIdentityService", () => {
 		const deleteToken = mock(async () => {
 			throw new GitHubOutboundError("authorization_failed");
 		});
-		const service = new VaultedGitHubIdentityService(tokenVault({ deleteToken }));
+		const service = new VaultedGitHubIdentityService(tokenVault({ deleteToken }), confirmations());
 
 		await expect(service.disconnect("user-a", TENANT_A)).rejects.toMatchObject({
 			code: "authorization_failed",

@@ -27,6 +27,7 @@ export {
 	escRevisionTags,
 	escSessions,
 	githubInstallations,
+	githubOutboundConnections,
 	githubSetupStates,
 	githubUpdateOutbox,
 	journalEntries,

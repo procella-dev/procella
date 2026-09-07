@@ -364,6 +364,28 @@ export const githubSetupStates = pgTable(
 );
 
 // ============================================================================
+// github_outbound_connections — Confirmed Descope outbound tokens
+// ============================================================================
+//
+// Authority that one tenant-scoped Descope token completed Procella's
+// browser-bound connect callback. Descope vaults a token as soon as GitHub
+// authorizes, which a forwarded connect URL can trigger for someone else, so a
+// vaulted token is unusable until its id is recorded here by the initiating
+// browser. One confirmed connection per (tenant, user).
+export const githubOutboundConnections = pgTable(
+	"github_outbound_connections",
+	{
+		id: uuid().primaryKey().defaultRandom(),
+		tenantId: text("tenant_id").notNull(),
+		userId: text("user_id").notNull(),
+		tokenId: text("token_id").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+		updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+	},
+	(table) => [uniqueIndex("idx_github_outbound_connection_owner").on(table.tenantId, table.userId)],
+);
+
+// ============================================================================
 // subscription_ticket_nonces — Single-use SSE ticket replay prevention
 // ============================================================================
 
@@ -567,6 +589,7 @@ export const schema = {
 	webhookDeliveries,
 	githubInstallations,
 	githubSetupStates,
+	githubOutboundConnections,
 	oidcTrustPolicies,
 	subscriptionTicketNonces,
 	escProjects,
