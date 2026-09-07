@@ -1,9 +1,9 @@
-// @procella/server — ordered drain for graceful shutdown.
+// @procella/server — concurrent drain for graceful shutdown.
 //
-// Ordering matters: a dashboard SSE subscription is an in-flight response that
-// stays open until its notification stream ends, and `Bun.serve().stop()` waits
-// for in-flight responses. Closing the notification hub first ends those
-// streams, so the server drains instead of hitting the force-exit timeout.
+// `drainForShutdown()` closes the notification hub and stops `Bun.serve()`
+// together. Sequencing either one first is wrong: server-first can deadlock on
+// in-flight SSE responses until the force-exit timer, and hub-first leaves Bun
+// accepting new requests while teardown runs.
 
 /** Ends live subscriptions so their SSE responses can complete. */
 export interface SubscriptionDrain {
