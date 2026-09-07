@@ -10,6 +10,13 @@ export function resolveMigrationCommandDirectory(
 	return environment.GITHUB_WORKSPACE?.trim() || "../..";
 }
 
+export function resolveRepositoryDirectory(
+	environment: Record<string, string | undefined>,
+	currentWorkingDirectory: string,
+): string {
+	return environment.GITHUB_WORKSPACE?.trim() || currentWorkingDirectory;
+}
+
 export interface MigrationInvocationOptions {
 	awsExecutable?: string;
 	env?: Record<string, string | undefined>;

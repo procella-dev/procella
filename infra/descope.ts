@@ -3,7 +3,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import * as descope from "@descope/pulumi-descope";
 import { DESCOPE_OUTBOUND_CALLBACK_URL, GITHUB_OUTBOUND_APP_ID } from "@procella/config";
-import { resolveMigrationCommandDirectory } from "../scripts/invoke-migration-lambda";
+import {
+	resolveMigrationCommandDirectory,
+	resolveRepositoryDirectory,
+} from "../scripts/invoke-migration-lambda";
 import signUpOrInFlowJson from "./flows/sign-up-or-in.json" with { type: "json" };
 import stylesJson from "./flows/styles.json" with { type: "json" };
 import { descopeManagementKey, githubAppOAuthSecrets } from "./secrets";
@@ -185,12 +188,13 @@ const project = new descope.Project(
 // the checked-in idempotent provisioner. The GitHub OAuth client secret is a
 // deploy-time input here only: after cutover no Lambda receives it, because
 // Descope owns the authorization code exchange and vaults the user token.
-// Pulumi evaluates the program from a nested working directory, so repo-local
-// commands and file reads resolve through the same directory infra/api.ts uses.
+// Pulumi executes local commands from .sst/platform, while config evaluation
+// reads source files from the SST process's repository working directory.
 const commandDir = resolveMigrationCommandDirectory(process.env);
+const repositoryDir = resolveRepositoryDirectory(process.env, process.cwd());
 const provisionScript = "scripts/provision-descope-outbound-app.ts";
 const provisionScriptHash = createHash("sha256")
-	.update(readFileSync(join(commandDir, provisionScript)))
+	.update(readFileSync(join(repositoryDir, provisionScript)))
 	.digest("hex");
 
 if (githubAppOAuthSecrets) {
