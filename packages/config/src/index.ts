@@ -6,6 +6,7 @@
 
 import { z } from "zod";
 import {
+	DESCOPE_OUTBOUND_CALLBACK_URL,
 	GITHUB_APP_ID_ERROR,
 	GITHUB_APP_PRIVATE_KEY_ERROR,
 	GITHUB_APP_WEBHOOK_SECRET_ERROR,
@@ -231,6 +232,7 @@ export type AuthMode = z.infer<typeof authModeSchema>;
 export type BlobBackend = z.infer<typeof blobBackendSchema>;
 
 export {
+	DESCOPE_OUTBOUND_CALLBACK_URL,
 	GITHUB_APP_ID_ERROR,
 	GITHUB_APP_PRIVATE_KEY_ERROR,
 	GITHUB_APP_WEBHOOK_SECRET_ERROR,

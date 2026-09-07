@@ -8,12 +8,16 @@
 // itself idempotent (load → update, or create on 404).
 
 import DescopeClient, { type OutboundApplication, type SdkResponse } from "@descope/node-sdk";
-import { GITHUB_OUTBOUND_APP_ID, isValidGitHubOutboundAppId } from "@procella/config";
+import {
+	DESCOPE_OUTBOUND_CALLBACK_URL,
+	GITHUB_OUTBOUND_APP_ID,
+	isValidGitHubOutboundAppId,
+} from "@procella/config";
+
+export { DESCOPE_OUTBOUND_CALLBACK_URL } from "@procella/config";
 
 export const GITHUB_AUTHORIZATION_URL = "https://github.com/login/oauth/authorize";
 export const GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token";
-/** Registered as the GitHub OAuth callback; Descope owns the code exchange. */
-export const DESCOPE_OUTBOUND_CALLBACK_URL = "https://api.descope.com/v1/outbound/oauth/callback";
 /**
  * Least privilege for the two checks Procella makes: read the connected user
  * (`GET /user`) and its organization membership role (`GET
