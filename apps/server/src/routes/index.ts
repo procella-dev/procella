@@ -9,7 +9,6 @@ import { type AuthConfig, type AuthService, METHOD_ROLE_MAP } from "@procella/au
 import type { Database } from "@procella/db";
 import type { EscService } from "@procella/esc";
 import {
-	GITHUB_AUTHORIZATION_COOKIE_NAME,
 	GITHUB_SETUP_COOKIE_NAME,
 	GitHubOutboxWorker,
 	type GitHubService,
@@ -25,11 +24,11 @@ import type { WebhooksService } from "@procella/webhooks";
 import { WebhookOutboxWorker } from "@procella/webhooks";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { Hono, type MiddlewareHandler } from "hono";
-import { getCookie } from "hono/cookie";
 import { cors } from "hono/cors";
 import {
 	auditHandlers,
 	checkpointHandlers,
+	createGitHubConnectStarter,
 	cryptoHandlers,
 	escHandlers,
 	eventHandlers,
@@ -79,6 +78,9 @@ export function createApp(deps: {
 	esc: EscService;
 	github: GitHubService | null;
 	githubWebhookSecret?: string;
+	/** Dashboard origin the Descope outbound callback returns the browser to. */
+	appOrigin?: string;
+	githubOutboundAppId?: string;
 	issueSubscriptionTicket?: (
 		caller: import("@procella/types").Caller,
 		scope: import("@procella/types").SubscriptionTicketScope,
@@ -155,6 +157,12 @@ export function createApp(deps: {
 		deps.stacks,
 	);
 
+	const startGitHubConnect = createGitHubConnectStarter({
+		auth: deps.auth,
+		appOrigin: deps.appOrigin,
+		outboundAppId: deps.githubOutboundAppId,
+	});
+
 	// ========================================================================
 	// tRPC routes (/trpc/*) — SSE GET requests use short-lived signed tickets
 	// ========================================================================
@@ -190,10 +198,9 @@ export function createApp(deps: {
 				router: appRouter,
 				createContext: ({ resHeaders }) => ({
 					...ctx,
-					githubSetupCookies: {
-						nonce: getCookie(c, GITHUB_SETUP_COOKIE_NAME),
-						authorizationState: getCookie(c, GITHUB_AUTHORIZATION_COOKIE_NAME),
-					},
+					...(startGitHubConnect
+						? { startGitHubConnect: () => startGitHubConnect(c.req.raw) }
+						: {}),
 					setGitHubSetupCookie(nonce: string) {
 						resHeaders.append(
 							"Set-Cookie",
@@ -312,7 +319,6 @@ export function createApp(deps: {
 	app.post("/api/oauth/token", withOauthTokenRateLimit, withApiDecompress, oauth.tokenExchange);
 
 	app.post("/api/webhooks/github", githubH.handleGitHubWebhook);
-	app.get("/github/oauth/callback", githubH.completeAuthorization);
 	app.get("/github/setup", githubH.completeInstallation);
 
 	// ========================================================================

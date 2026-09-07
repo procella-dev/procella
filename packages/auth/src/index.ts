@@ -28,6 +28,15 @@ export interface AuthService {
 		name: string,
 		opts?: { expireTime?: number; customClaims?: Record<string, unknown> },
 	): Promise<string>;
+	/**
+	 * Start a Descope Outbound Application connect flow for the request's own
+	 * authenticated user, returning only the provider authorization URL.
+	 *
+	 * Cookie mode keeps the session JWT HttpOnly, so the browser cannot supply it
+	 * to Descope itself. The server reads the verified session from the request
+	 * and never hands any token back to the caller.
+	 */
+	startOutboundConnect?(request: Request, appId: string, redirectUrl: string): Promise<string>;
 	/** Stop background timers (e.g. cache sweep). Called on server shutdown. */
 	dispose?(): void;
 }
@@ -335,6 +344,48 @@ export class DescopeAuthService implements AuthService {
 			}
 		}
 		throw new UnauthorizedError("Invalid session cookie");
+	}
+
+	/**
+	 * Exchanges the request's own verified session for a provider authorization
+	 * URL. Only interactive user sessions qualify: access keys have no Descope
+	 * user to vault an outbound token against.
+	 */
+	async startOutboundConnect(
+		request: Request,
+		appId: string,
+		redirectUrl: string,
+	): Promise<string> {
+		const token = await this.resolveSessionToken(request);
+		const response = await this.sdk.outbound
+			.connect(appId, { redirectUrl }, token)
+			.catch(() => null);
+		const url = response?.ok ? response.data?.url : undefined;
+		if (typeof url !== "string" || url.length === 0) {
+			throw new UnauthorizedError("Descope declined the outbound connect request");
+		}
+		return url;
+	}
+
+	/** The verified session JWT backing this request, from header or cookie. */
+	private async resolveSessionToken(request: Request): Promise<string> {
+		if (request.headers.get("Authorization")) {
+			const { token } = extractToken(request);
+			if (!token.startsWith("eyJ")) {
+				throw new UnauthorizedError("Outbound connect requires an interactive user session");
+			}
+			await this.verifySessionJwt(token);
+			return token;
+		}
+		for (const candidate of extractSessionCookieTokens(request)) {
+			try {
+				await this.verifySessionJwt(candidate);
+				return candidate;
+			} catch {
+				// Try the next candidate — may belong to a sibling environment.
+			}
+		}
+		throw new UnauthorizedError("Missing Descope session");
 	}
 
 	async authenticateUpdateToken(token: string): Promise<{ updateId: string; stackId: string }> {

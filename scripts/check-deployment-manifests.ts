@@ -255,6 +255,41 @@ export function checkProxyConfig(text: string): string[] {
 	});
 }
 
+/**
+ * GitHub user authorization runs through a Descope Outbound App, so the GitHub
+ * OAuth client credentials must never reach a runtime environment. They are
+ * allowed only as deploy-time inputs to the outbound-app provisioning command.
+ */
+export const RUNTIME_FORBIDDEN_ENV_VARS = [
+	"PROCELLA_GITHUB_APP_CLIENT_ID",
+	"PROCELLA_GITHUB_APP_CLIENT_SECRET",
+] as const;
+
+/** Only the Descope provisioning command may pass the OAuth client credentials. */
+const PROVISIONING_ENV_FILES: Record<string, true> = { "infra/descope.ts": true };
+
+export function checkRuntimeEnvironment(path: string, text: string): string[] {
+	if (PROVISIONING_ENV_FILES[path]) return [];
+	const active = activeText(text);
+	return RUNTIME_FORBIDDEN_ENV_VARS.filter((envVar) => active.includes(envVar)).map(
+		(envVar) => `${path}: ${envVar} must not reach runtime configuration`,
+	);
+}
+
+/** Files whose active text is scanned for credentials that must stay deploy-time. */
+export const RUNTIME_ENV_FILES = [
+	"infra/secrets.ts",
+	"infra/api.ts",
+	"infra/web-api.ts",
+	"infra/gc.ts",
+	"docker-compose.yml",
+	"docker-compose.coolify.yml",
+	"render.yaml",
+	"railway.toml",
+	"fly.toml",
+	".env.example",
+] as const;
+
 export async function checkDeploymentManifests(): Promise<string[]> {
 	const problems: string[] = [];
 	for (const manifest of DEPLOYMENT_MANIFESTS) {
@@ -264,6 +299,14 @@ export async function checkDeploymentManifests(): Promise<string[]> {
 			continue;
 		}
 		problems.push(...checkManifest(manifest, await file.text()));
+	}
+	for (const path of RUNTIME_ENV_FILES) {
+		const file = Bun.file(path);
+		if (!(await file.exists())) {
+			problems.push(`${path}: runtime environment file is missing`);
+			continue;
+		}
+		problems.push(...checkRuntimeEnvironment(path, await file.text()));
 	}
 	problems.push(...checkProxyConfig(await Bun.file("Caddyfile").text()));
 	return problems;

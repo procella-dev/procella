@@ -17,6 +17,8 @@ import {
 import { bucket } from "./storage";
 
 const stage = $app.stage;
+const isProd = stage === "production";
+const appOrigin = isProd ? "https://app.procella.cloud" : `https://app.${stage}.procella.cloud`;
 const descopeOutputs = !$dev ? await import("./descope") : undefined;
 const descopeProjectId = descopeOutputs?.projectId;
 const descopeAuthBaseUrl = descopeOutputs?.authBaseUrl;
@@ -41,6 +43,7 @@ export const webApi = new sst.aws.Function("ProcellaWebApi", {
 		PROCELLA_AUTH_MODE: $dev ? "dev" : "descope",
 		PROCELLA_ENCRYPTION_KEY: encryptionKey.value,
 		PROCELLA_TICKET_SIGNING_KEY: ticketSigningKey.value,
+		PROCELLA_APP_ORIGIN: appOrigin,
 		PROCELLA_OTEL_ENABLED: "true",
 		OTEL_SERVICE_NAME: `procella-web-${stage}`,
 		OTEL_EXPORTER_OTLP_ENDPOINT: otelEndpoint.value,

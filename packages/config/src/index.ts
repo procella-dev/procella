@@ -9,8 +9,11 @@ import {
 	GITHUB_APP_ID_ERROR,
 	GITHUB_APP_PRIVATE_KEY_ERROR,
 	GITHUB_APP_WEBHOOK_SECRET_ERROR,
+	GITHUB_OUTBOUND_APP_ID,
+	GITHUB_OUTBOUND_APP_ID_ERROR,
 	isValidGitHubAppId,
 	isValidGitHubAppWebhookSecret,
+	isValidGitHubOutboundAppId,
 	parseGitHubAppPrivateKey,
 } from "./github-app.js";
 
@@ -135,14 +138,6 @@ const configSchema = z
 		// Optional as one atomic group. Empty values remain invalid; deployment
 		// adapters must omit the group when the integration is not configured.
 		githubAppId: z.string().refine(isValidGitHubAppId, GITHUB_APP_ID_ERROR).optional(),
-		githubAppClientId: z
-			.string()
-			.regex(/^\S+$/, "Must not be empty or contain whitespace")
-			.optional(),
-		githubAppClientSecret: z
-			.string()
-			.regex(/^\S+$/, "Must not be empty or contain whitespace")
-			.optional(),
 		githubAppPrivateKey: z
 			.string()
 			.transform((key, ctx) => {
@@ -160,6 +155,21 @@ const configSchema = z
 		githubAppWebhookSecret: z
 			.string()
 			.refine(isValidGitHubAppWebhookSecret, GITHUB_APP_WEBHOOK_SECRET_ERROR)
+			.optional(),
+		// GitHub user authorization is delegated to a Descope Outbound App, so the
+		// runtime never receives the GitHub OAuth client secret.
+		githubOutboundAppId: z
+			.string()
+			.refine(isValidGitHubOutboundAppId, GITHUB_OUTBOUND_APP_ID_ERROR)
+			.default(GITHUB_OUTBOUND_APP_ID),
+		/** Dashboard origin the Descope outbound callback returns the browser to. */
+		appOrigin: z
+			.string()
+			.url()
+			.refine((value) => {
+				const url = new URL(value);
+				return url.protocol === "https:" && url.pathname === "/" && !url.search && !url.hash;
+			}, "Must be an absolute https origin without a path, query, or fragment")
 			.optional(),
 
 		// ESC
@@ -200,19 +210,13 @@ const configSchema = z
 		}
 		// OIDC enabled by default; dev mode silently disables it in bootstrap
 
-		const githubFields = [
-			data.githubAppId,
-			data.githubAppClientId,
-			data.githubAppClientSecret,
-			data.githubAppPrivateKey,
-			data.githubAppWebhookSecret,
-		];
+		const githubFields = [data.githubAppId, data.githubAppPrivateKey, data.githubAppWebhookSecret];
 		const githubProvided = githubFields.filter((value) => Boolean(value)).length;
 		if (githubProvided > 0 && githubProvided < githubFields.length) {
 			ctx.addIssue({
 				code: z.ZodIssueCode.custom,
 				message:
-					"GitHub App integration requires PROCELLA_GITHUB_APP_ID, PROCELLA_GITHUB_APP_CLIENT_ID, PROCELLA_GITHUB_APP_CLIENT_SECRET, PROCELLA_GITHUB_APP_PRIVATE_KEY, and PROCELLA_GITHUB_APP_WEBHOOK_SECRET together.",
+					"GitHub App integration requires PROCELLA_GITHUB_APP_ID, PROCELLA_GITHUB_APP_PRIVATE_KEY, and PROCELLA_GITHUB_APP_WEBHOOK_SECRET together.",
 				path: ["githubAppId"],
 			});
 		}
@@ -230,8 +234,11 @@ export {
 	GITHUB_APP_ID_ERROR,
 	GITHUB_APP_PRIVATE_KEY_ERROR,
 	GITHUB_APP_WEBHOOK_SECRET_ERROR,
+	GITHUB_OUTBOUND_APP_ID,
+	GITHUB_OUTBOUND_APP_ID_ERROR,
 	isValidGitHubAppId,
 	isValidGitHubAppWebhookSecret,
+	isValidGitHubOutboundAppId,
 	parseGitHubAppPrivateKey,
 };
 
@@ -266,10 +273,10 @@ const envMapping = {
 	oidcEnabled: "PROCELLA_OIDC_ENABLED",
 	deltaCheckpointsEnabled: "PROCELLA_DELTA_CHECKPOINTS_ENABLED",
 	githubAppId: "PROCELLA_GITHUB_APP_ID",
-	githubAppClientId: "PROCELLA_GITHUB_APP_CLIENT_ID",
-	githubAppClientSecret: "PROCELLA_GITHUB_APP_CLIENT_SECRET",
 	githubAppPrivateKey: "PROCELLA_GITHUB_APP_PRIVATE_KEY",
 	githubAppWebhookSecret: "PROCELLA_GITHUB_APP_WEBHOOK_SECRET",
+	githubOutboundAppId: "PROCELLA_GITHUB_OUTBOUND_APP_ID",
+	appOrigin: "PROCELLA_APP_ORIGIN",
 	escEvaluatorFnName: "PROCELLA_ESC_EVALUATOR_FN_NAME",
 	corsOrigins: "PROCELLA_CORS_ORIGINS",
 } as const;

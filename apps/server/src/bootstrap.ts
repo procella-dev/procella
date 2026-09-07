@@ -16,7 +16,12 @@ import {
 	StdioEvaluatorClient,
 	UnimplementedEvaluatorClient,
 } from "@procella/esc";
-import { buildGitHubAppConfig, OctokitGitHubService } from "@procella/github";
+import {
+	buildGitHubAppConfig,
+	createDescopeGitHubOutboundVault,
+	OctokitGitHubService,
+	VaultedGitHubIdentityService,
+} from "@procella/github";
 import {
 	JwksValidatorImpl,
 	OidcExchangeService,
@@ -150,8 +155,21 @@ async function bootstrapServices() {
 			: new NoopAuditService();
 	const webhooksService = new PostgresWebhooksService({ db });
 	const githubConfig = buildGitHubAppConfig(config);
+	// Vaulted GitHub identity verification needs Descope management credentials.
+	// Without them the App still handles webhooks and PR publication; only tenant
+	// setup is unavailable, and it fails closed rather than skipping verification.
+	const githubOutbound =
+		githubConfig && config.descopeProjectId && config.descopeManagementKey
+			? new VaultedGitHubIdentityService(
+					createDescopeGitHubOutboundVault({
+						projectId: config.descopeProjectId,
+						managementKey: config.descopeManagementKey,
+						appId: githubConfig.outboundAppId,
+					}),
+				)
+			: null;
 	const githubService = githubConfig
-		? new OctokitGitHubService({ db, config: githubConfig })
+		? new OctokitGitHubService({ db, config: githubConfig, outbound: githubOutbound })
 		: null;
 	const localEscEvaluatorBinary = process.env.PROCELLA_ESC_EVALUATOR_BINARY;
 	const evaluatorClient = config.escEvaluatorFnName
@@ -186,6 +204,8 @@ async function bootstrapServices() {
 		esc: escService,
 		github: githubService,
 		githubWebhookSecret: githubConfig?.webhookSecret,
+		githubOutboundAppId: githubConfig?.outboundAppId,
+		appOrigin: config.appOrigin,
 		issueSubscriptionTicket: (
 			caller: import("@procella/types").Caller,
 			scope: import("@procella/types").SubscriptionTicketScope,

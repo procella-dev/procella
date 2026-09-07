@@ -1,16 +1,19 @@
 import { afterEach, beforeAll, describe, expect, test } from "bun:test";
 import type { Octokit } from "@octokit/rest";
 import type { Database } from "@procella/db";
-import { OctokitGitHubService } from "@procella/github";
+import {
+	type GitHubOutboundIdentityService,
+	OctokitGitHubService,
+	VaultedGitHubIdentityService,
+} from "@procella/github";
 import { getTestDb, truncateTables } from "./setup.js";
 
 const config = {
 	appId: "123",
-	clientId: "Iv1.test-client-id",
-	clientSecret: "oauth-client-secret",
 	privateKey: "unused-in-tests",
 	webhookSecret: "webhook-secret",
 	stateSigningKey: "state-signing-key-state-signing-key",
+	outboundAppId: "procella-github",
 };
 
 const BROWSER_NONCE = "a".repeat(43);
@@ -58,7 +61,7 @@ afterEach(async () => {
 	await truncateTables();
 });
 
-function createService() {
+function createService(overrides: { outbound?: GitHubOutboundIdentityService } = {}) {
 	const appClient = {
 		request: async (route: string, input?: { installation_id: number }) => {
 			if (route === "GET /app") return { data: { id: 123, slug: "procella-test" } };
@@ -68,47 +71,32 @@ function createService() {
 			return { data };
 		},
 	} as unknown as Octokit;
-	const oauthFetch = async (input: string | URL | Request, init?: RequestInit) => {
-		if (String(input).includes("login/oauth/access_token")) {
-			const code = (init?.body as URLSearchParams).get("code");
-			return new Response(
-				JSON.stringify({ access_token: `user-token-${code}`, token_type: "bearer" }),
-			);
-		}
-		return new Response(null, { status: 204 });
-	};
-	const userClientFactory = (token: string) => {
-		const accountLogin = token.replace("user-token-", "");
-		const installation = [...installations.values()].find(
-			(candidate) => candidate.account.login === accountLogin,
-		);
-		return {
-			request: async (route: string) => {
-				if (route === "GET /user/installations") {
-					return {
-						data: {
-							total_count: installation ? 1 : 0,
-							installations: installation ? [{ id: installation.id }] : [],
-						},
-					};
-				}
-				if (route === "GET /user") {
-					return { data: { login: accountLogin === "octocat" ? "octocat" : "tenant-admin" } };
-				}
-				return { data: { state: "active", role: "admin" } };
+	// Vault stub: each tenant admin holds a token whose GitHub user is an active
+	// organization administrator, so these tests exercise the database-level
+	// tenant isolation rather than GitHub's verification (covered by unit tests).
+	const outbound: GitHubOutboundIdentityService =
+		overrides.outbound ??
+		new VaultedGitHubIdentityService(
+			{
+				fetchUserToken: async (userId) => `user-token-${userId}`,
+				deleteUserTokens: async () => undefined,
 			},
-		} as unknown as Octokit;
-	};
-	return new OctokitGitHubService({
-		db,
-		config,
-		appClient,
-		oauthFetch: oauthFetch as typeof fetch,
-		userClientFactory,
-	});
+			(token) =>
+				({
+					request: async (route: string) => {
+						if (route === "GET /user/installations") {
+							const visible = [...installations.values()];
+							return { data: { total_count: visible.length, installations: visible } };
+						}
+						if (route === "GET /user") return { data: { login: `${token}-github` } };
+						return { data: { state: "active", role: "admin" } };
+					},
+				}) as unknown as Octokit,
+		);
+	return new OctokitGitHubService({ db, config, appClient, outbound });
 }
 
-async function issueAuthorizationState(
+async function issueInstallState(
 	service: OctokitGitHubService,
 	tenantId: string,
 	installationId: number,
@@ -125,20 +113,13 @@ async function issueAuthorizationState(
 	);
 	const installationState = installationUrl.searchParams.get("state");
 	if (!installationState) throw new Error("Installation URL did not include state");
-	const authorization = await service.completeInstallation(
-		installationState,
-		installationId,
-		BROWSER_NONCE,
-	);
-	return authorization.authorizationState;
+	return installationState;
 }
 
 async function bind(service: OctokitGitHubService, tenantId: string, installationId: number) {
-	const installation = installations.get(installationId as 101 | 102 | 201);
-	if (!installation) throw new Error("Unknown test installation");
-	return service.completeAuthorization(
-		await issueAuthorizationState(service, tenantId, installationId),
-		installation.account.login,
+	return service.completeInstallation(
+		await issueInstallState(service, tenantId, installationId),
+		installationId,
 		BROWSER_NONCE,
 	);
 }
@@ -170,10 +151,10 @@ describe("GitHub installation binding integration", () => {
 
 	test("consumes setup state exactly once under concurrent callbacks", async () => {
 		const service = createService();
-		const state = await issueAuthorizationState(service, "tenant-a", 101);
+		const state = await issueInstallState(service, "tenant-a", 101);
 		const results = await Promise.allSettled([
-			service.completeAuthorization(state, "acme", BROWSER_NONCE),
-			service.completeAuthorization(state, "acme", BROWSER_NONCE),
+			service.completeInstallation(state, 101, BROWSER_NONCE),
+			service.completeInstallation(state, 101, BROWSER_NONCE),
 		]);
 
 		expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
@@ -185,10 +166,25 @@ describe("GitHub installation binding integration", () => {
 		expect(await service.listInstallations("tenant-a")).toHaveLength(1);
 	});
 
+	test("rejects a pre-existing installation callback from a foreign browser", async () => {
+		const service = createService();
+		await bind(service, "tenant-a", 101);
+		const state = await issueInstallState(service, "tenant-a", 101);
+
+		await expect(service.completeInstallation(state, 101, "b".repeat(43))).rejects.toMatchObject({
+			code: "invalid_state",
+		});
+		// setup_action=update re-binds the same installation for the same tenant.
+		await expect(service.completeInstallation(state, 101, BROWSER_NONCE)).resolves.toMatchObject({
+			tenantId: "tenant-a",
+			installationId: 101,
+		});
+	});
+
 	test("tenant-scoped removal cannot delete another tenant installation", async () => {
 		const service = createService();
 		await bind(service, "tenant-a", 101);
-		await service.removeInstallation("tenant-b", 101);
+		await service.removeInstallation("tenant-b", 101, "tenant-b-admin");
 		expect(await service.listInstallations("tenant-a")).toHaveLength(1);
 	});
 

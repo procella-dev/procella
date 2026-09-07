@@ -1,5 +1,6 @@
 import { AuditManagement, RoleManagement, TenantProfile, UserManagement } from "@descope/react-sdk";
 import { useEffect, useState } from "react";
+import { clearGitHubConnectAccount, rememberGitHubConnectAccount } from "../github-connect";
 import { useAuthConfig } from "../hooks/useAuthConfig";
 import { trpc } from "../trpc";
 
@@ -134,19 +135,26 @@ export function Settings() {
 
 function GitHubSettingsTab() {
 	const { data: status, isLoading, error: queryError, refetch } = trpc.github.status.useQuery();
-	const createUrlMutation = trpc.github.createInstallationUrl.useMutation();
+	const startConnectMutation = trpc.github.startConnect.useMutation();
 	const removeMutation = trpc.github.removeInstallation.useMutation();
 	const [disconnectId, setDisconnectId] = useState<number | null>(null);
 	const [actionError, setActionError] = useState<string | null>(null);
 	const callback = new URLSearchParams(window.location.search).get("github");
 	const callbackReason = new URLSearchParams(window.location.search).get("reason");
 
+	// Descope owns the GitHub authorization: the browser only follows the
+	// provider URL the server returns. Session and GitHub tokens stay server-side.
 	const handleConnect = async (accountLogin: string) => {
 		setActionError(null);
+		if (!rememberGitHubConnectAccount(accountLogin)) {
+			setActionError("Enter a valid GitHub user or organization login");
+			return;
+		}
 		try {
-			const { url } = await createUrlMutation.mutateAsync({ accountLogin });
+			const { url } = await startConnectMutation.mutateAsync();
 			window.location.assign(url);
 		} catch (error) {
+			clearGitHubConnectAccount();
 			setActionError(error instanceof Error ? error.message : "Unable to start GitHub setup");
 		}
 	};
@@ -199,29 +207,27 @@ function GitHubSettingsTab() {
 				</div>
 			)}
 
-			{status.pendingAuthorization && (
-				<div className="bg-lightning/10 border border-lightning/30 text-cloud p-4 rounded-xl text-sm flex items-center justify-between gap-4">
-					<p>
-						The GitHub App is installed for{" "}
-						<strong>{status.pendingAuthorization.accountLogin}</strong>, but administrator
-						verification is incomplete.
+			{status.connectAvailable ? (
+				status.connectedLogin && (
+					<p className="text-sm text-cloud">
+						Verifying as GitHub user <strong>{status.connectedLogin}</strong>.
 					</p>
-					<button
-						type="button"
-						onClick={() => window.location.assign(status.pendingAuthorization.url)}
-						className="btn-primary shrink-0"
-					>
-						Resume GitHub verification
-					</button>
+				)
+			) : (
+				<div className="bg-lightning/10 border border-lightning/30 text-cloud p-4 rounded-xl text-sm">
+					GitHub user verification is unavailable: this server has no Descope Outbound App
+					connection. Installations cannot be connected until an administrator configures it.
 				</div>
 			)}
 
 			{status.installations.length === 0 ? (
-				<GitHubAccountConnect
-					title="GitHub App is not installed"
-					onConnect={handleConnect}
-					pending={createUrlMutation.isPending}
-				/>
+				status.connectAvailable && (
+					<GitHubAccountConnect
+						title="GitHub App is not installed"
+						onConnect={handleConnect}
+						pending={startConnectMutation.isPending}
+					/>
+				)
 			) : (
 				<>
 					<div className="flex items-center justify-between gap-4">
@@ -261,14 +267,16 @@ function GitHubSettingsTab() {
 									</div>
 								</div>
 								<div className="flex gap-2">
-									<button
-										type="button"
-										onClick={() => handleConnect(installation.accountLogin)}
-										disabled={createUrlMutation.isPending}
-										className="btn-primary"
-									>
-										{createUrlMutation.isPending ? "Opening GitHub…" : "Configure & Verify"}
-									</button>
+									{status.connectAvailable && (
+										<button
+											type="button"
+											onClick={() => handleConnect(installation.accountLogin)}
+											disabled={startConnectMutation.isPending}
+											className="btn-primary"
+										>
+											{startConnectMutation.isPending ? "Opening GitHub…" : "Configure & Verify"}
+										</button>
+									)}
 									<button
 										type="button"
 										onClick={() => setDisconnectId(installation.installationId)}
@@ -280,11 +288,13 @@ function GitHubSettingsTab() {
 							</div>
 						</div>
 					))}
-					<GitHubAccountConnect
-						title="Connect another GitHub account"
-						onConnect={handleConnect}
-						pending={createUrlMutation.isPending}
-					/>
+					{status.connectAvailable && (
+						<GitHubAccountConnect
+							title="Connect another GitHub account"
+							onConnect={handleConnect}
+							pending={startConnectMutation.isPending}
+						/>
+					)}
 				</>
 			)}
 
@@ -293,8 +303,8 @@ function GitHubSettingsTab() {
 					<div className="bg-surface-popup border border-cloud/20 rounded-xl p-6 w-full max-w-sm mx-4">
 						<h3 className="text-lg font-semibold text-mist mb-2">Disconnect GitHub App</h3>
 						<p className="text-sm text-cloud mb-4">
-							This removes the tenant binding from Procella. It does not uninstall the app on
-							GitHub.
+							This removes the tenant binding from Procella and deletes your vaulted GitHub
+							authorization. It does not uninstall the app on GitHub.
 						</p>
 						<div className="flex justify-end gap-3">
 							<button type="button" onClick={() => setDisconnectId(null)} className="btn-ghost">
@@ -328,10 +338,16 @@ function githubCallbackError(reason: string | null): string {
 			return "GitHub did not return a valid installation for this app.";
 		case "authorization_failed":
 			return "GitHub user authorization failed. Start the connection again.";
-		case "unauthorized_account":
+		case "authorization_required":
 			return "Your GitHub user must own the account or be an active organization administrator.";
+		case "authorization_unavailable":
+			return "GitHub user verification is not configured on this server.";
+		case "unauthorized_account":
+			return "GitHub returned an installation for a different account. Start the connection again.";
 		case "unsupported_setup_action":
-			return "GitHub returned an update callback. Start a new installation from Procella Settings.";
+			return "GitHub returned an unsupported setup callback. Start the connection again.";
+		case "missing_account":
+			return "The GitHub account for this connection was lost. Start the connection again.";
 		case "not_configured":
 			return "The GitHub App is not configured on this server.";
 		default:
@@ -344,15 +360,15 @@ function GitHubNotConfigured() {
 		<div className="bg-slate-brand/30 border border-slate-brand/60 rounded-xl p-8">
 			<h3 className="text-sm font-semibold text-cloud mb-1.5">GitHub App is not configured</h3>
 			<p className="text-sm text-cloud/60 leading-relaxed mb-4">
-				A server administrator must configure the GitHub App, including OAuth credentials, before
-				tenants can connect it.
+				A server administrator must configure the GitHub App before tenants can connect it. GitHub
+				user authorization runs through a Descope Outbound App, so no OAuth client secret is needed
+				here.
 			</p>
 			<div className="bg-deep-sky border border-cloud/15 rounded-lg px-3 py-2.5 font-mono text-xs text-cloud overflow-x-auto whitespace-pre leading-relaxed">
 				{`PROCELLA_GITHUB_APP_ID=<your-app-id>
-PROCELLA_GITHUB_APP_CLIENT_ID=<your-client-id>
-PROCELLA_GITHUB_APP_CLIENT_SECRET=<your-client-secret>
 PROCELLA_GITHUB_APP_PRIVATE_KEY=<your-private-key>
-PROCELLA_GITHUB_APP_WEBHOOK_SECRET=<your-webhook-secret>`}
+PROCELLA_GITHUB_APP_WEBHOOK_SECRET=<your-webhook-secret>
+PROCELLA_APP_ORIGIN=https://app.example.com`}
 			</div>
 		</div>
 	);
@@ -371,9 +387,9 @@ function GitHubAccountConnect({
 		<div className="bg-slate-brand/30 border border-slate-brand/60 rounded-xl p-8">
 			<h3 className="text-sm font-semibold text-mist mb-1.5">{title}</h3>
 			<p className="text-sm text-cloud leading-relaxed mb-5">
-				Enter the GitHub user or organization account to connect. Install the App first, then
-				Procella asks GitHub to verify that your user owns the account or is an active organization
-				administrator.
+				Enter the GitHub user or organization account to connect. Procella asks Descope to confirm
+				your GitHub identity, verifies that it owns the account or is an active organization
+				administrator, and only then sends you to GitHub to install the App.
 			</p>
 			<form
 				aria-label="Connect GitHub App"

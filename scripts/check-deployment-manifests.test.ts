@@ -3,8 +3,10 @@ import {
 	checkDeploymentManifests,
 	checkManifest,
 	checkProxyConfig,
+	checkRuntimeEnvironment,
 	DEPLOYMENT_MANIFESTS,
 	type DeploymentManifest,
+	RUNTIME_ENV_FILES,
 } from "./check-deployment-manifests.ts";
 
 const COMPOSE: DeploymentManifest = {
@@ -240,5 +242,39 @@ envVarGroups:
 				),
 			),
 		).toEqual([]);
+	});
+
+	test("rejects GitHub OAuth client credentials in runtime environments", () => {
+		expect(
+			checkRuntimeEnvironment(
+				"infra/web-api.ts",
+				"environment: { PROCELLA_GITHUB_APP_CLIENT_SECRET: secret.value }",
+			),
+		).toEqual([
+			"infra/web-api.ts: PROCELLA_GITHUB_APP_CLIENT_SECRET must not reach runtime configuration",
+		]);
+		expect(
+			checkRuntimeEnvironment(".env.example", "PROCELLA_GITHUB_APP_CLIENT_ID=Iv1.example"),
+		).toHaveLength(1);
+	});
+
+	test("allows the credentials in the Descope provisioning command and in comments", () => {
+		expect(
+			checkRuntimeEnvironment(
+				"infra/descope.ts",
+				"PROCELLA_GITHUB_APP_CLIENT_SECRET: githubAppOAuthSecrets.clientSecret.value",
+			),
+		).toEqual([]);
+		expect(
+			checkRuntimeEnvironment(
+				".env.example",
+				"# PROCELLA_GITHUB_APP_CLIENT_ID is deploy-time only",
+			),
+		).toEqual([]);
+	});
+
+	test("every runtime environment file exists and is clean", async () => {
+		expect(await checkDeploymentManifests()).toEqual([]);
+		expect(RUNTIME_ENV_FILES).toContain("infra/secrets.ts");
 	});
 });

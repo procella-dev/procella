@@ -8,6 +8,19 @@ import { githubInstallations, githubSetupStates, githubUpdateOutbox, updates } f
 import { projectError } from "@procella/types";
 import { and, desc, eq, gt, lt, sql } from "drizzle-orm";
 import { errors as joseErrors, jwtVerify, SignJWT } from "jose";
+import { GitHubOutboundError, type GitHubOutboundIdentityService } from "./outbound.js";
+
+export * from "./outbound.js";
+
+/** Outbound verification failures reach setup callers as setup error codes. */
+function setupErrorFromOutbound(error: unknown): GitHubSetupError {
+	if (error instanceof GitHubOutboundError) {
+		return new GitHubSetupError(
+			error.code === "authorization_required" ? "authorization_required" : "authorization_failed",
+		);
+	}
+	return new GitHubSetupError("authorization_failed");
+}
 
 export interface GitHubInstallationData {
 	installationId: number;
@@ -25,11 +38,11 @@ export interface GitHubInstallationInfo extends GitHubInstallationData {
 
 export interface GitHubAppConfig {
 	appId: string;
-	clientId: string;
-	clientSecret: string;
 	privateKey: string;
 	webhookSecret: string;
 	stateSigningKey: string;
+	/** Descope Outbound Application that vaults each admin's GitHub user token. */
+	outboundAppId: string;
 }
 
 export interface GitHubDeliveryConfig {
@@ -90,6 +103,10 @@ export interface GitHubDeliveryService {
 
 export interface GitHubService extends GitHubDeliveryService {
 	handleWebhookEvent(event: string, payload: unknown): Promise<void>;
+	/** True when vaulted GitHub identity verification is wired up. */
+	readonly connectAvailable: boolean;
+	/** Connected GitHub login for the caller, or null when nothing is vaulted. */
+	resolveConnectedLogin(userId: string): Promise<string | null>;
 	issueInstallationUrl(
 		tenantId: string,
 		accountLogin: string,
@@ -100,24 +117,19 @@ export interface GitHubService extends GitHubDeliveryService {
 		state: string,
 		installationId: number,
 		browserNonce: string,
-	): Promise<{ url: string; authorizationState: string }>;
-	resumeAuthorization(
-		state: string,
-		browserNonce: string,
-		initiator: { tenantId: string; userId: string },
-	): Promise<{ url: string; accountLogin: string }>;
-	completeAuthorization(
-		state: string,
-		code: string,
-		browserNonce: string,
 	): Promise<GitHubInstallationInfo>;
 	listInstallations(tenantId: string): Promise<GitHubInstallationInfo[]>;
-	removeInstallation(tenantId: string, installationId: number): Promise<void>;
+	/** Deletes the vaulted GitHub token, then the tenant binding. Fails closed. */
+	removeInstallation(tenantId: string, installationId: number, userId: string): Promise<void>;
 }
 
 export const GITHUB_SETUP_STATE_TTL_SECONDS = 10 * 60;
 export const GITHUB_SETUP_COOKIE_NAME = "__Host-procella_github_setup";
-export const GITHUB_AUTHORIZATION_COOKIE_NAME = "__Host-procella_github_authorization";
+/**
+ * Same-origin route the Descope outbound callback returns the browser to. The
+ * page resumes the installation handoff from there.
+ */
+export const GITHUB_CONNECT_RETURN_PATH = "/settings/github/connected";
 const GITHUB_SETUP_STATE_ISSUER = "procella";
 const GITHUB_SETUP_STATE_AUDIENCE = "procella:github-app-installation";
 const GITHUB_REQUEST_TIMEOUT_MS = 8_000;
@@ -127,6 +139,8 @@ export type GitHubSetupErrorCode =
 	| "expired_state"
 	| "replayed_state"
 	| "authorization_failed"
+	| "authorization_required"
+	| "authorization_unavailable"
 	| "unauthorized_account"
 	| "installation_conflict"
 	| "invalid_installation";
@@ -143,7 +157,7 @@ export type GitHubSetupStateInput = {
 	accountLogin: string;
 	initiatorUserId: string;
 	browserBinding: string;
-} & ({ phase: "install"; installationId?: never } | { phase: "authorize"; installationId: number });
+};
 
 export type GitHubSetupStateClaims = GitHubSetupStateInput & {
 	jti: string;
@@ -197,8 +211,6 @@ export function createGitHubSetupStateService(
 					issuer: GITHUB_SETUP_STATE_ISSUER,
 					currentDate: now(),
 				});
-				const phase = payload.phase;
-				const installationId = payload.installationId;
 				if (
 					typeof payload.tenantId !== "string" ||
 					payload.tenantId.length === 0 ||
@@ -208,16 +220,12 @@ export function createGitHubSetupStateService(
 					payload.initiatorUserId.length === 0 ||
 					typeof payload.browserBinding !== "string" ||
 					!/^[0-9a-f]{64}$/.test(payload.browserBinding) ||
-					(phase !== "authorize" && phase !== "install") ||
-					(phase === "authorize" &&
-						(!Number.isSafeInteger(installationId) || (installationId as number) <= 0)) ||
-					(phase === "install" && installationId !== undefined) ||
 					typeof payload.jti !== "string" ||
 					!payload.exp
 				) {
 					throw new GitHubSetupError("invalid_state");
 				}
-				const common = {
+				return {
 					tenantId: payload.tenantId,
 					accountLogin: payload.accountLogin,
 					initiatorUserId: payload.initiatorUserId,
@@ -225,9 +233,6 @@ export function createGitHubSetupStateService(
 					jti: payload.jti,
 					expiresAt: new Date(payload.exp * 1000),
 				};
-				return phase === "authorize"
-					? { ...common, phase, installationId: installationId as number }
-					: { ...common, phase };
 			} catch (error) {
 				if (error instanceof GitHubSetupError) throw error;
 				if (error instanceof joseErrors.JWTExpired) {
@@ -242,8 +247,6 @@ export function createGitHubSetupStateService(
 export function buildGitHubAppConfig(config: Config): GitHubAppConfig | null {
 	if (
 		!config.githubAppId ||
-		!config.githubAppClientId ||
-		!config.githubAppClientSecret ||
 		!config.githubAppPrivateKey ||
 		!config.githubAppWebhookSecret ||
 		!config.ticketSigningKey
@@ -253,11 +256,10 @@ export function buildGitHubAppConfig(config: Config): GitHubAppConfig | null {
 
 	return {
 		appId: config.githubAppId,
-		clientId: config.githubAppClientId,
-		clientSecret: config.githubAppClientSecret,
 		privateKey: config.githubAppPrivateKey,
 		webhookSecret: config.githubAppWebhookSecret,
 		stateSigningKey: config.ticketSigningKey,
+		outboundAppId: config.githubOutboundAppId,
 	};
 }
 
@@ -565,8 +567,7 @@ export class OctokitGitHubDeliveryService implements GitHubDeliveryService {
 export class OctokitGitHubService extends OctokitGitHubDeliveryService implements GitHubService {
 	private readonly config: GitHubAppConfig;
 	private readonly setupStates: GitHubSetupStateService;
-	private readonly userClientFactory: (token: string) => Octokit;
-	private readonly oauthFetch: typeof fetch;
+	private readonly outbound: GitHubOutboundIdentityService | null;
 
 	constructor({
 		db,
@@ -574,24 +575,40 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 		appClient,
 		installationClientFactory,
 		setupStates,
-		userClientFactory,
-		oauthFetch,
+		outbound,
 	}: {
 		db: Database;
 		config: GitHubAppConfig;
 		appClient?: Octokit;
 		installationClientFactory?: (installationId: number) => Octokit;
 		setupStates?: GitHubSetupStateService;
-		userClientFactory?: (token: string) => Octokit;
-		oauthFetch?: typeof fetch;
+		/**
+		 * Vaulted GitHub identity verification. Null disables tenant setup while
+		 * leaving webhook handling and PR publication working.
+		 */
+		outbound?: GitHubOutboundIdentityService | null;
 	}) {
 		super({ db, config, appClient, installationClientFactory });
 		this.config = config;
 		this.setupStates = setupStates ?? createGitHubSetupStateService(config.stateSigningKey);
-		this.userClientFactory = userClientFactory ?? ((token) => new Octokit({ auth: token }));
-		this.oauthFetch = oauthFetch ?? fetch;
+		this.outbound = outbound ?? null;
 	}
 
+	get connectAvailable(): boolean {
+		return this.outbound !== null;
+	}
+
+	async resolveConnectedLogin(userId: string): Promise<string | null> {
+		const identity = await this.outbound?.loadIdentity(userId);
+		return identity?.login ?? null;
+	}
+
+	/**
+	 * Issues browser-bound installation state only after the caller's vaulted
+	 * GitHub identity proves active administration of `accountLogin`, so an
+	 * unauthorized admin never reaches GitHub's installation screen with signed
+	 * Procella state.
+	 */
 	async issueInstallationUrl(
 		tenantId: string,
 		accountLogin: string,
@@ -599,13 +616,13 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 		browserNonce: string,
 	): Promise<string> {
 		const browserBinding = this.browserBinding(browserNonce);
+		await this.verifyVaultedAdministration(initiatorUserId, accountLogin);
 		const slug = await this.loadAppSlug();
 		const { state, claims } = await this.setupStates.issue({
 			tenantId,
 			accountLogin,
 			initiatorUserId,
 			browserBinding,
-			phase: "install",
 		});
 		await this.db.delete(githubSetupStates).where(lt(githubSetupStates.expiresAt, sql`now()`));
 		await this.db.insert(githubSetupStates).values({
@@ -619,87 +636,26 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 		return url.toString();
 	}
 
-	private authorizationUrl(state: string): string {
-		const url = new URL("https://github.com/login/oauth/authorize");
-		url.searchParams.set("client_id", this.config.clientId);
-		url.searchParams.set("state", state);
-		return url.toString();
-	}
-
+	/**
+	 * Binds the installation to the tenant. Reached for both `setup_action=install`
+	 * and `setup_action=update` (GitHub sends the latter when the App is already
+	 * installed on the account), so the state, browser binding, App-authenticated
+	 * installation data, and vaulted identity are all re-verified here.
+	 */
 	async completeInstallation(
 		state: string,
 		installationId: number,
 		browserNonce: string,
-	): Promise<{ url: string; authorizationState: string }> {
+	): Promise<GitHubInstallationInfo> {
 		const claims = await this.setupStates.verify(state);
 		this.verifyBrowserBinding(browserNonce, claims.browserBinding);
-		if (claims.phase !== "install") throw new GitHubSetupError("invalid_state");
-
-		const next = await this.setupStates.issue({
-			tenantId: claims.tenantId,
-			accountLogin: claims.accountLogin,
-			initiatorUserId: claims.initiatorUserId,
-			browserBinding: claims.browserBinding,
-			phase: "authorize",
-			installationId,
-		});
-		await this.db.transaction(async (tx) => {
-			await this.consumeSetupState(tx as Database, claims);
-			await tx.insert(githubSetupStates).values({
-				jti: next.claims.jti,
-				tenantId: next.claims.tenantId,
-				expiresAt: next.claims.expiresAt,
-			});
-		});
 
 		const installation = await this.loadInstallation(installationId);
 		if (installation.accountLogin.toLowerCase() !== claims.accountLogin.toLowerCase()) {
 			throw new GitHubSetupError("unauthorized_account");
 		}
-		return {
-			url: this.authorizationUrl(next.state),
-			authorizationState: next.state,
-		};
-	}
-
-	async resumeAuthorization(
-		state: string,
-		browserNonce: string,
-		initiator: { tenantId: string; userId: string },
-	): Promise<{ url: string; accountLogin: string }> {
-		const claims = await this.setupStates.verify(state);
-		this.verifyBrowserBinding(browserNonce, claims.browserBinding);
-		if (
-			claims.phase !== "authorize" ||
-			claims.tenantId !== initiator.tenantId ||
-			claims.initiatorUserId !== initiator.userId
-		) {
-			throw new GitHubSetupError("invalid_state");
-		}
-		return { url: this.authorizationUrl(state), accountLogin: claims.accountLogin };
-	}
-
-	async completeAuthorization(
-		state: string,
-		code: string,
-		browserNonce: string,
-	): Promise<GitHubInstallationInfo> {
-		const claims = await this.setupStates.verify(state);
-		this.verifyBrowserBinding(browserNonce, claims.browserBinding);
-		if (claims.phase !== "authorize") throw new GitHubSetupError("invalid_state");
-		const installation = await this.loadInstallation(claims.installationId);
-		if (installation.accountLogin.toLowerCase() !== claims.accountLogin.toLowerCase()) {
-			throw new GitHubSetupError("unauthorized_account");
-		}
-
-		const token = await this.exchangeUserToken(code);
-		try {
-			await this.verifyAccountAdministrator(token, claims.accountLogin, claims.installationId);
-		} catch (error) {
-			await this.revokeUserToken(token).catch(() => undefined);
-			throw error;
-		}
-		await this.revokeUserToken(token);
+		await this.verifyVaultedAdministration(claims.initiatorUserId, claims.accountLogin);
+		await this.verifyVaultedInstallationAccess(claims.initiatorUserId, installationId);
 
 		return this.db.transaction(async (tx) => {
 			await this.consumeSetupState(tx as Database, claims);
@@ -745,7 +701,23 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 			.where(eq(githubInstallations.installationId, existing.installationId));
 	}
 
-	async removeInstallation(tenantId: string, installationId: number): Promise<void> {
+	/**
+	 * Vaulted token first: killing the GitHub credential is the security-relevant
+	 * half, so a management failure leaves the binding in place and surfaces the
+	 * error instead of reporting a disconnect that only removed local state.
+	 */
+	async removeInstallation(
+		tenantId: string,
+		installationId: number,
+		userId: string,
+	): Promise<void> {
+		if (this.outbound) {
+			try {
+				await this.outbound.disconnect(userId);
+			} catch {
+				throw new GitHubSetupError("authorization_failed");
+			}
+		}
 		await this.db
 			.delete(githubInstallations)
 			.where(
@@ -791,113 +763,26 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 		if (!consumed) throw new GitHubSetupError("replayed_state");
 	}
 
-	private async exchangeUserToken(code: string): Promise<string> {
-		let response: Response;
+	/** Maps outbound verification failures onto the setup error surface. */
+	private async verifyVaultedAdministration(userId: string, accountLogin: string): Promise<void> {
+		if (!this.outbound) throw new GitHubSetupError("authorization_unavailable");
 		try {
-			response = await this.oauthFetch("https://github.com/login/oauth/access_token", {
-				method: "POST",
-				headers: {
-					Accept: "application/json",
-					"Content-Type": "application/x-www-form-urlencoded",
-				},
-				body: new URLSearchParams({
-					client_id: this.config.clientId,
-					client_secret: this.config.clientSecret,
-					code,
-				}),
-				signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
-			});
-		} catch {
-			throw new GitHubSetupError("authorization_failed");
+			await this.outbound.verifyAccountAdministration(userId, accountLogin);
+		} catch (error) {
+			throw setupErrorFromOutbound(error);
 		}
-		if (!response.ok) throw new GitHubSetupError("authorization_failed");
-
-		const body = (await response.json().catch(() => null)) as {
-			access_token?: unknown;
-			token_type?: unknown;
-		} | null;
-		if (
-			typeof body?.access_token !== "string" ||
-			body.access_token.length === 0 ||
-			body.token_type !== "bearer"
-		) {
-			throw new GitHubSetupError("authorization_failed");
-		}
-		return body.access_token;
 	}
 
-	private async verifyAccountAdministrator(
-		token: string,
-		accountLogin: string,
+	private async verifyVaultedInstallationAccess(
+		userId: string,
 		installationId: number,
 	): Promise<void> {
-		const client = this.userClientFactory(token);
-		const request = { request: { signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS) } };
-		let installationAccessible = false;
-		let page = 1;
+		if (!this.outbound) throw new GitHubSetupError("authorization_unavailable");
 		try {
-			while (true) {
-				const { data } = await client.request("GET /user/installations", {
-					per_page: 100,
-					page,
-					...request,
-				});
-				if (data.installations.some((installation) => installation.id === installationId)) {
-					installationAccessible = true;
-					break;
-				}
-				if (page * 100 >= data.total_count) break;
-				page += 1;
-			}
-		} catch {
-			throw new GitHubSetupError("authorization_failed");
-		}
-		if (!installationAccessible) throw new GitHubSetupError("unauthorized_account");
-
-		let userLogin: string;
-		try {
-			const { data: user } = await client.request("GET /user", request);
-			userLogin = user.login;
-		} catch {
-			throw new GitHubSetupError("authorization_failed");
-		}
-		if (userLogin.toLowerCase() === accountLogin.toLowerCase()) return;
-
-		try {
-			const { data: membership } = await client.request("GET /user/memberships/orgs/{org}", {
-				org: accountLogin,
-				...request,
-			});
-			if (membership.state === "active" && membership.role === "admin") return;
+			await this.outbound.verifyInstallationAccess(userId, installationId);
 		} catch (error) {
-			if (githubErrorStatus(error) !== 404) {
-				throw new GitHubSetupError("authorization_failed");
-			}
+			throw setupErrorFromOutbound(error);
 		}
-		throw new GitHubSetupError("unauthorized_account");
-	}
-
-	private async revokeUserToken(token: string): Promise<void> {
-		let response: Response;
-		try {
-			response = await this.oauthFetch(
-				`https://api.github.com/applications/${encodeURIComponent(this.config.clientId)}/token`,
-				{
-					method: "DELETE",
-					headers: {
-						Accept: "application/vnd.github+json",
-						Authorization: `Basic ${Buffer.from(`${this.config.clientId}:${this.config.clientSecret}`).toString("base64")}`,
-						"Content-Type": "application/json",
-						"X-GitHub-Api-Version": "2022-11-28",
-					},
-					body: JSON.stringify({ access_token: token }),
-					signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
-				},
-			);
-		} catch {
-			throw new GitHubSetupError("authorization_failed");
-		}
-		if (!response.ok) throw new GitHubSetupError("authorization_failed");
 	}
 
 	private async saveInstallation(

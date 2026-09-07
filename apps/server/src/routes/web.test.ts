@@ -58,16 +58,10 @@ function mockAuthService(): AuthService {
 function mockGitHubService(): GitHubService {
 	return {
 		handleWebhookEvent: mock(async () => {}),
+		connectAvailable: true,
+		resolveConnectedLogin: mock(async () => "alice"),
 		issueInstallationUrl: mock(async () => "https://github.com/apps/procella/installations/new"),
 		completeInstallation: mock(async () => ({
-			url: "https://github.com/login/oauth/authorize",
-			authorizationState: "authorization-state",
-		})),
-		resumeAuthorization: mock(async () => ({
-			url: "https://github.com/login/oauth/authorize",
-			accountLogin: "acme",
-		})),
-		completeAuthorization: mock(async () => ({
 			id: "row-1",
 			tenantId: validCaller.tenantId,
 			installationId: 101,
@@ -93,6 +87,8 @@ function makeApp(overrides?: {
 	auth?: AuthService;
 	authConfig?: AuthConfig;
 	github?: GitHubService | null;
+	appOrigin?: string;
+	githubOutboundAppId?: string;
 }) {
 	const authConfig: AuthConfig = overrides?.authConfig ?? {
 		mode: "dev",
@@ -114,6 +110,8 @@ function makeApp(overrides?: {
 		webhooks: {} as WebhooksService,
 		esc: {} as EscService,
 		github: overrides?.github ?? null,
+		appOrigin: overrides?.appOrigin ?? "https://app.procella.test",
+		githubOutboundAppId: overrides?.githubOutboundAppId ?? "procella-github",
 		issueSubscriptionTicket:
 			overrides?.issueSubscriptionTicket ??
 			((caller: Caller, scope: SubscriptionTicketScope) =>
@@ -260,14 +258,64 @@ describe("createWebApp GitHub setup callback", () => {
 		expect(callback.status).toBe(303);
 		expect(callback.headers.get("location")).toContain("reason=not_configured");
 
-		const oauthCallback = await app.request("/github/oauth/callback?code=code&state=signed");
-		expect(oauthCallback.status).toBe(303);
-		expect(oauthCallback.headers.get("location")).toContain("reason=not_configured");
-
 		const sacredApiPath = await app.request(
 			"/api/github/setup?installation_id=123&setup_action=install&state=signed",
 		);
 		expect(sacredApiPath.status).toBe(404);
+	});
+
+	test("no longer exposes a direct GitHub OAuth code-exchange callback", async () => {
+		const app = makeApp({ github: mockGitHubService() });
+		const oauthCallback = await app.request("/github/oauth/callback?code=code&state=signed");
+		expect(oauthCallback.status).toBe(404);
+	});
+});
+
+describe("createWebApp GitHub outbound connect", () => {
+	test("starts the connect from the request's own session and returns only the URL", async () => {
+		const startOutboundConnect = mock(
+			async () => "https://github.com/login/oauth/authorize?state=descope",
+		);
+		const auth = mockAuthService();
+		const app = makeApp({
+			github: mockGitHubService(),
+			auth: { ...auth, startOutboundConnect },
+		});
+
+		const res = await app.request("https://app.procella.test/trpc/github.startConnect", {
+			method: "POST",
+			headers: { Cookie: "DS=session-cookie", "Content-Type": "application/json" },
+			body: JSON.stringify({}),
+		});
+
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as { result: { data: { json: { url: string } } } };
+		expect(body.result.data.json).toEqual({
+			url: "https://github.com/login/oauth/authorize?state=descope",
+		});
+		const [request, appId, redirectUrl] = startOutboundConnect.mock.calls[0] as unknown as [
+			Request,
+			string,
+			string,
+		];
+		expect(request.headers.get("Cookie")).toBe("DS=session-cookie");
+		expect(appId).toBe("procella-github");
+		expect(redirectUrl).toBe("https://app.procella.test/settings/github/connected");
+	});
+
+	test("fails closed without a dashboard origin or outbound-capable auth service", async () => {
+		for (const overrides of [
+			{ github: mockGitHubService(), appOrigin: "" },
+			{ github: mockGitHubService() },
+		]) {
+			const app = makeApp(overrides);
+			const res = await app.request("https://app.procella.test/trpc/github.startConnect", {
+				method: "POST",
+				headers: { Cookie: "DS=session-cookie", "Content-Type": "application/json" },
+				body: JSON.stringify({}),
+			});
+			expect(res.status).toBe(412);
+		}
 	});
 });
 
