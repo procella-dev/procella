@@ -5,7 +5,7 @@ import {
 	UserManagement,
 	useDescope,
 } from "@descope/react-sdk";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuthConfig } from "../hooks/useAuthConfig";
 import { trpc } from "../trpc";
 
@@ -148,6 +148,8 @@ function GitHubSettingsTab() {
 	const sdk = useDescope();
 	const [disconnectId, setDisconnectId] = useState<number | null>(null);
 	const [actionError, setActionError] = useState<string | null>(null);
+	const connectInFlight = useRef(false);
+	const [connectPending, setConnectPending] = useState(false);
 	const callback = new URLSearchParams(window.location.search).get("github");
 	const callbackReason = new URLSearchParams(window.location.search).get("reason");
 
@@ -158,6 +160,9 @@ function GitHubSettingsTab() {
 	// ever read or handed to the caller, and the returned provider URL is
 	// allowlisted to GitHub's authorization endpoint before navigation.
 	const handleConnect = async (accountLogin: string) => {
+		if (connectInFlight.current) return;
+		connectInFlight.current = true;
+		setConnectPending(true);
 		setActionError(null);
 		try {
 			const { appId, tenantId, redirectUrl } = await startConnectMutation.mutateAsync({
@@ -174,6 +179,8 @@ function GitHubSettingsTab() {
 			}
 			window.location.assign(parsed.toString());
 		} catch (error) {
+			connectInFlight.current = false;
+			setConnectPending(false);
 			setActionError(error instanceof Error ? error.message : "Unable to start GitHub setup");
 		}
 	};
@@ -244,7 +251,7 @@ function GitHubSettingsTab() {
 					<GitHubAccountConnect
 						title="GitHub App is not installed"
 						onConnect={handleConnect}
-						pending={startConnectMutation.isPending}
+						pending={connectPending}
 					/>
 				)
 			) : (
@@ -290,10 +297,10 @@ function GitHubSettingsTab() {
 										<button
 											type="button"
 											onClick={() => handleConnect(installation.accountLogin)}
-											disabled={startConnectMutation.isPending}
+											disabled={connectPending}
 											className="btn-primary"
 										>
-											{startConnectMutation.isPending ? "Opening GitHub…" : "Configure & Verify"}
+											{connectPending ? "Opening GitHub…" : "Configure & Verify"}
 										</button>
 									)}
 									<button
@@ -311,7 +318,7 @@ function GitHubSettingsTab() {
 						<GitHubAccountConnect
 							title="Connect another GitHub account"
 							onConnect={handleConnect}
-							pending={startConnectMutation.isPending}
+							pending={connectPending}
 						/>
 					)}
 				</>

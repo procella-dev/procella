@@ -287,6 +287,42 @@ describe("Settings authorization", () => {
 		expect(createInstallationUrl).not.toHaveBeenCalled();
 	});
 
+	test("keeps connection controls disabled until outbound connect settles", async () => {
+		currentCallerQuery = {
+			data: { tenantId: "tenant-from-server", roles: ["admin"] },
+			isLoading: false,
+			error: null,
+		};
+		githubStatusQuery = {
+			data: { configured: true, connectAvailable: true, connectedLogin: null, installations: [] },
+			isLoading: false,
+			error: null,
+		};
+		dom.location.hash = "github";
+		const connect = Promise.withResolvers<{ ok: boolean }>();
+		outboundConnect.mockImplementationOnce(() => connect.promise);
+
+		const page = render(createElement(Settings));
+		const form = page.getByRole("form", { name: "Connect GitHub App" });
+		const account = page.getByLabelText("GitHub account") as HTMLInputElement;
+		account.value = "acme";
+		fireEvent.submit(form);
+
+		await waitFor(() => expect(outboundConnect).toHaveBeenCalledTimes(1));
+		const button = page.getByRole("button", { name: "Opening GitHub…" }) as HTMLButtonElement;
+		expect(button.disabled).toBe(true);
+		fireEvent.submit(form);
+		expect(startConnect).toHaveBeenCalledTimes(1);
+		expect(outboundConnect).toHaveBeenCalledTimes(1);
+
+		connect.resolve({ ok: false });
+		await waitFor(() => expect(page.getByText("Unable to start GitHub setup")).toBeTruthy());
+		expect(
+			(page.getByRole("button", { name: "Install & Verify GitHub App" }) as HTMLButtonElement)
+				.disabled,
+		).toBe(false);
+	});
+
 	test("rejects an authorization URL outside GitHub's authorize endpoint and never navigates", async () => {
 		currentCallerQuery = {
 			data: { tenantId: "tenant-from-server", roles: ["admin"] },
