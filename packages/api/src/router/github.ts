@@ -55,6 +55,14 @@ function trpcSetupError(error: unknown): TRPCError {
 		message: "Unable to start GitHub setup",
 	});
 }
+function requireInteractiveUser(principalType: string): void {
+	if (principalType !== "user") {
+		throw new TRPCError({
+			code: "FORBIDDEN",
+			message: "GitHub setup requires an interactive user session",
+		});
+	}
+}
 
 const accountLoginSchema = z
 	.string()
@@ -101,6 +109,7 @@ export const githubRouter = router({
 	startConnect: adminProcedure
 		.input(z.object({ accountLogin: accountLoginSchema }))
 		.mutation(async ({ ctx, input }) => {
+			requireInteractiveUser(ctx.caller.principalType);
 			if (!ctx.github) {
 				throw new TRPCError({
 					code: "PRECONDITION_FAILED",
@@ -151,6 +160,7 @@ export const githubRouter = router({
 	createInstallationUrl: adminProcedure
 		.input(z.object({ state: z.string().min(1).max(4096) }))
 		.mutation(async ({ ctx, input }) => {
+			requireInteractiveUser(ctx.caller.principalType);
 			if (!ctx.github) {
 				throw new TRPCError({
 					code: "PRECONDITION_FAILED",

@@ -33,16 +33,18 @@ function mockGitHubService(overrides?: Partial<GitHubService>): GitHubService {
 	};
 }
 
+const adminCaller = {
+	tenantId: "t-1",
+	orgSlug: "my-org",
+	userId: "u-1",
+	login: "admin",
+	roles: ["admin"],
+	principalType: "user",
+} satisfies NonNullable<TRPCContext["caller"]>;
+
 function mockContext(overrides?: Partial<TRPCContext>): TRPCContext {
 	return {
-		caller: {
-			tenantId: "t-1",
-			orgSlug: "my-org",
-			userId: "u-1",
-			login: "admin",
-			roles: ["admin"],
-			principalType: "user",
-		},
+		caller: adminCaller,
 		setGitHubSetupCookie: mock(() => {}),
 		githubSetupNonce: "n".repeat(43),
 		appOrigin: "https://app.procella.test",
@@ -117,6 +119,21 @@ describe("githubRouter", () => {
 		await expect(
 			githubRouter.createCaller(nonAdmin).startConnect({ accountLogin: "acme" }),
 		).rejects.toThrow("Admin role required");
+	});
+
+	test("startConnect rejects machine principals before creating setup state", async () => {
+		for (const principalType of ["token", "workload"] as const) {
+			const beginConnect = mock(async () => "signed-connect-state");
+			const ctx = mockContext({
+				caller: { ...adminCaller, principalType },
+				github: mockGitHubService({ beginConnect }),
+			});
+
+			await expect(
+				githubRouter.createCaller(ctx).startConnect({ accountLogin: "acme" }),
+			).rejects.toThrow("interactive user session");
+			expect(beginConnect).not.toHaveBeenCalled();
+		}
 	});
 
 	test("startConnect fails closed when the outbound app is unavailable", async () => {
@@ -255,6 +272,23 @@ describe("githubRouter", () => {
 		await expect(
 			githubRouter.createCaller(ctx).createInstallationUrl({ state: "signed-connect-state" }),
 		).rejects.toThrow("Admin role required");
+	});
+
+	test("createInstallationUrl rejects machine principals before consuming setup state", async () => {
+		for (const principalType of ["token", "workload"] as const) {
+			const issueInstallationUrl = mock(
+				async () => "https://github.com/apps/procella/installations/new",
+			);
+			const ctx = mockContext({
+				caller: { ...adminCaller, principalType },
+				github: mockGitHubService({ issueInstallationUrl }),
+			});
+
+			await expect(
+				githubRouter.createCaller(ctx).createInstallationUrl({ state: "signed-connect-state" }),
+			).rejects.toThrow("interactive user session");
+			expect(issueInstallationUrl).not.toHaveBeenCalled();
+		}
 	});
 
 	test("createInstallationUrl reports disabled server configuration", async () => {
