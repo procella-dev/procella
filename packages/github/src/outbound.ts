@@ -325,7 +325,7 @@ export class VaultedGitHubIdentityService implements GitHubOutboundIdentityServi
 		const token = await this.confirmedToken(userId, tenantId);
 		const client = this.userClientFactory(token.accessToken);
 		const [ownLogin, organizations, installations] = await Promise.all([
-			this.currentLogin(token.accessToken),
+			this.currentLogin(token.accessToken, client),
 			this.administeredOrganizations(client),
 			this.visibleInstallations(client),
 		]);
@@ -580,9 +580,10 @@ export class VaultedGitHubIdentityService implements GitHubOutboundIdentityServi
 		return lookup.token;
 	}
 
-	private async currentLogin(token: string): Promise<string> {
+	/** Reuses `client` when the caller already built one for this token. */
+	private async currentLogin(token: string, client?: Octokit): Promise<string> {
 		try {
-			const { data } = await this.userClientFactory(token).request(
+			const { data } = await (client ?? this.userClientFactory(token)).request(
 				"GET /user",
 				this.requestOptions(),
 			);

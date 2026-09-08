@@ -625,19 +625,33 @@ function candidatesClient(routes: {
 	installations?: (page: number) => { total_count: number; installations: unknown[] };
 	onRequest?: (route: string, options?: unknown) => void;
 }): (token: string) => Octokit {
-	let membershipPage = 0;
-	let installationPage = 0;
+	function requestedPage(options: unknown): number {
+		// Reading the page the caller actually asked for, rather than counting
+		// calls, is what makes these fixtures fail a loop that never advances.
+		if (
+			typeof options !== "object" ||
+			options === null ||
+			!("page" in options) ||
+			typeof options.page !== "number" ||
+			!Number.isSafeInteger(options.page) ||
+			options.page < 1
+		) {
+			throw new Error("request did not carry a page number");
+		}
+		return options.page;
+	}
 	return userClient(async (route, options) => {
 		routes.onRequest?.(route, options);
 		if (route === "GET /user") return { data: { login: routes.login ?? "alice" } };
 		if (route === "GET /user/memberships/orgs") {
-			membershipPage += 1;
-			return { data: routes.memberships?.(membershipPage) ?? [] };
+			return { data: routes.memberships?.(requestedPage(options)) ?? [] };
 		}
 		if (route === "GET /user/installations") {
-			installationPage += 1;
 			return {
-				data: routes.installations?.(installationPage) ?? { total_count: 0, installations: [] },
+				data: routes.installations?.(requestedPage(options)) ?? {
+					total_count: 0,
+					installations: [],
+				},
 			};
 		}
 		throw new Error(`unexpected route ${route}`);
