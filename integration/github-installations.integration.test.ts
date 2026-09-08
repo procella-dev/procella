@@ -5,6 +5,7 @@ import { eq, sql } from "drizzle-orm";
 import {
 	GitHubOutboundError,
 	type GitHubOutboundIdentityService,
+	type GitHubUserIdentity,
 	OctokitGitHubService,
 	PostgresGitHubOutboundConfirmations,
 	VaultedGitHubIdentityService,
@@ -105,7 +106,10 @@ function createService(
  * confirmation reader and the service's transactions contend for the same
  * one connection if anything tries to check out a second.
  */
-function vaultBackedOutbound(confirmationsDb: Database = db): GitHubOutboundIdentityService {
+function vaultBackedOutbound(
+	confirmationsDb: Database = db,
+	userClientFactory?: (token: string) => Octokit,
+): GitHubOutboundIdentityService {
 	return new VaultedGitHubIdentityService(
 		{
 			// Deleting a token empties that tenant's slot, so disconnect's drain
@@ -130,17 +134,18 @@ function vaultBackedOutbound(confirmationsDb: Database = db): GitHubOutboundIden
 			},
 		},
 		new PostgresGitHubOutboundConfirmations(confirmationsDb),
-		(token) =>
-			({
-				request: async (route: string) => {
-					if (route === "GET /user/installations") {
-						const visible = [...installations.values()];
-						return { data: { total_count: visible.length, installations: visible } };
-					}
-					if (route === "GET /user") return { data: { login: `${token}-github` } };
-					return { data: { state: "active", role: "admin" } };
-				},
-			}) as unknown as Octokit,
+		userClientFactory ??
+			((token) =>
+				({
+					request: async (route: string) => {
+						if (route === "GET /user/installations") {
+							const visible = [...installations.values()];
+							return { data: { total_count: visible.length, installations: visible } };
+						}
+						if (route === "GET /user") return { data: { login: `${token}-github` } };
+						return { data: { state: "active", role: "admin" } };
+					},
+				}) as unknown as Octokit),
 	);
 }
 
@@ -151,18 +156,12 @@ async function issueInstallState(
 ): Promise<string> {
 	const installation = installations.get(installationId as 101 | 102 | 201);
 	if (!installation) throw new Error("Unknown test installation");
-	vaultTokens.add(vaultSlot(tenantId, `${tenantId}-admin`));
-	const connectState = await service.beginConnect(
-		tenantId,
-		installation.account.login,
-		`${tenantId}-admin`,
-		BROWSER_NONCE,
-	);
+	const userId = `${tenantId}-admin`;
+	vaultTokens.add(vaultSlot(tenantId, userId));
+	const connectState = await service.beginConnect(tenantId, userId, BROWSER_NONCE);
+	await service.confirmConnect(connectState, BROWSER_NONCE, { tenantId, userId });
 	const installationUrl = new URL(
-		await service.issueInstallationUrl(connectState, BROWSER_NONCE, {
-			tenantId,
-			userId: `${tenantId}-admin`,
-		}),
+		await service.issueInstallationUrl(tenantId, userId, installation.account.login, BROWSER_NONCE),
 	);
 	const installationState = installationUrl.searchParams.get("state");
 	if (!installationState) throw new Error("Installation URL did not include state");
@@ -190,18 +189,10 @@ async function confirm(
 	service: OctokitGitHubService,
 	tenantId: string,
 	userId: string,
-	installationId: number,
 ): Promise<void> {
-	const installation = installations.get(installationId as 101 | 102 | 201);
-	if (!installation) throw new Error("Unknown test installation");
 	vaultTokens.add(vaultSlot(tenantId, userId));
-	const connectState = await service.beginConnect(
-		tenantId,
-		installation.account.login,
-		userId,
-		BROWSER_NONCE,
-	);
-	await service.issueInstallationUrl(connectState, BROWSER_NONCE, { tenantId, userId });
+	const connectState = await service.beginConnect(tenantId, userId, BROWSER_NONCE);
+	await service.confirmConnect(connectState, BROWSER_NONCE, { tenantId, userId });
 }
 
 describe("GitHub installation binding integration", () => {
@@ -305,8 +296,8 @@ describe("GitHub installation binding integration", () => {
 
 		// A vaulted token is invisible until its browser-bound callback confirms it.
 		expect(await service.resolveConnectedLogin("tenant-a", "user-shared")).toBeNull();
-		await confirm(service, "tenant-a", "user-shared", 101);
-		await confirm(service, "tenant-b", "user-shared", 201);
+		await confirm(service, "tenant-a", "user-shared");
+		await confirm(service, "tenant-b", "user-shared");
 
 		expect(await service.resolveConnectedLogin("tenant-a", "user-shared")).toBe(
 			"user-token-tenant-a-github",
@@ -333,14 +324,9 @@ describe("GitHub installation binding integration", () => {
 		vaultTokens.add(vaultSlot("tenant-a", "tenant-a-admin"));
 		expect(await service.resolveConnectedLogin("tenant-a", "tenant-a-admin")).toBeNull();
 
-		const connectState = await service.beginConnect(
-			"tenant-a",
-			"acme",
-			"tenant-a-admin",
-			BROWSER_NONCE,
-		);
+		const connectState = await service.beginConnect("tenant-a", "tenant-a-admin", BROWSER_NONCE);
 		await expect(
-			service.issueInstallationUrl(connectState, "c".repeat(43), {
+			service.confirmConnect(connectState, "c".repeat(43), {
 				tenantId: "tenant-a",
 				userId: "tenant-a-admin",
 			}),
@@ -348,7 +334,7 @@ describe("GitHub installation binding integration", () => {
 		expect(await service.resolveConnectedLogin("tenant-a", "tenant-a-admin")).toBeNull();
 
 		// The initiating browser confirms it, and only then is it usable.
-		await service.issueInstallationUrl(connectState, BROWSER_NONCE, {
+		await service.confirmConnect(connectState, BROWSER_NONCE, {
 			tenantId: "tenant-a",
 			userId: "tenant-a-admin",
 		});
@@ -373,6 +359,8 @@ describe("GitHub installation binding integration", () => {
 				},
 				verifyAccountAdministration: async () => undefined,
 				verifyInstallationAccess: async () => undefined,
+				listAdministeredAccounts: async () => [],
+				listVisibleInstallations: async () => [],
 				drainTenantTokens: async (userId, tenantId) => {
 					const slot = vaultSlot(tenantId, userId);
 					const drained = vault.get(slot);
@@ -389,14 +377,9 @@ describe("GitHub installation binding integration", () => {
 		// disconnect cannot confirm the drained token.
 		expect(await confirmedRows("tenant-a")).toEqual([]);
 		expect(await service.listInstallations("tenant-a")).toHaveLength(0);
-		const connectState = await service.beginConnect(
-			"tenant-a",
-			"acme",
-			"tenant-a-admin",
-			BROWSER_NONCE,
-		);
+		const connectState = await service.beginConnect("tenant-a", "tenant-a-admin", BROWSER_NONCE);
 		await expect(
-			service.issueInstallationUrl(connectState, BROWSER_NONCE, {
+			service.confirmConnect(connectState, BROWSER_NONCE, {
 				tenantId: "tenant-a",
 				userId: "tenant-a-admin",
 			}),
@@ -420,6 +403,8 @@ describe("GitHub installation binding integration", () => {
 				},
 				verifyAccountAdministration: async () => undefined,
 				verifyInstallationAccess: async () => undefined,
+				listAdministeredAccounts: async () => [],
+				listVisibleInstallations: async () => [],
 				drainTenantTokens: async (userId, tenantId, expectedTokenId) => {
 					drained.push(expectedTokenId);
 					const slot = vaultSlot(tenantId, userId);
@@ -444,8 +429,8 @@ describe("GitHub installation binding integration", () => {
 
 	test("disconnecting one tenant leaves another tenant's confirmation intact", async () => {
 		const service = createService();
-		await confirm(service, "tenant-a", "user-shared", 101);
-		await confirm(service, "tenant-b", "user-shared", 201);
+		await confirm(service, "tenant-a", "user-shared");
+		await confirm(service, "tenant-b", "user-shared");
 
 		await service.removeInstallation("tenant-a", 101, "user-shared");
 
@@ -510,6 +495,193 @@ describe("GitHub installation binding integration", () => {
 			installation: { id: 101 },
 		});
 		expect(await service.listInstallations("tenant-a")).toHaveLength(0);
+	});
+});
+
+describe("GitHub connectInstallation and listConnectTargets integration", () => {
+	test("connectInstallation binds an installation the vaulted admin administers and can see", async () => {
+		const service = createService({
+			outbound: vaultBackedOutbound(db, () => ({
+				request: async (route: string) => {
+					if (route === "GET /user") return { data: { login: "someone" } };
+					if (route === "GET /user/memberships/orgs/{org}") {
+						return { data: { state: "active", role: "admin" } };
+					}
+					if (route === "GET /user/installations") {
+						return { data: { total_count: 1, installations: [{ id: 101 }] } };
+					}
+					throw Object.assign(new Error("Not Found"), { status: 404 });
+				},
+			}) as unknown as Octokit),
+		});
+		await confirm(service, "tenant-a", "tenant-a-admin");
+
+		const installation = await service.connectInstallation("tenant-a", "tenant-a-admin", 101);
+		expect(installation).toMatchObject({
+			tenantId: "tenant-a",
+			installationId: 101,
+			accountLogin: "acme",
+		});
+		expect((await service.listInstallations("tenant-a")).map((row) => row.installationId)).toEqual([
+			101,
+		]);
+	});
+
+	test("connectInstallation refuses an installation already bound to another tenant", async () => {
+		const service = createService({
+			outbound: vaultBackedOutbound(db, () => ({
+				request: async (route: string) => {
+					if (route === "GET /user") return { data: { login: "someone" } };
+					if (route === "GET /user/memberships/orgs/{org}") {
+						return { data: { state: "active", role: "admin" } };
+					}
+					if (route === "GET /user/installations") {
+						return { data: { total_count: 1, installations: [{ id: 101 }] } };
+					}
+					throw Object.assign(new Error("Not Found"), { status: 404 });
+				},
+			}) as unknown as Octokit),
+		});
+		await confirm(service, "tenant-b", "tenant-b-admin");
+		await service.connectInstallation("tenant-b", "tenant-b-admin", 101);
+
+		await confirm(service, "tenant-a", "tenant-a-admin");
+		await expect(
+			service.connectInstallation("tenant-a", "tenant-a-admin", 101),
+		).rejects.toMatchObject({ code: "installation_conflict" });
+		expect(await service.listInstallations("tenant-a")).toHaveLength(0);
+		expect((await service.listInstallations("tenant-b")).map((row) => row.installationId)).toEqual([
+			101,
+		]);
+	});
+
+	test("connectInstallation refuses a vaulted identity that is not an active admin", async () => {
+		const service = createService({
+			outbound: vaultBackedOutbound(db, () => ({
+				request: async (route: string) => {
+					if (route === "GET /user") return { data: { login: "someone" } };
+					if (route === "GET /user/memberships/orgs/{org}") {
+						return { data: { state: "active", role: "member" } };
+					}
+					if (route === "GET /user/installations") {
+						return { data: { total_count: 1, installations: [{ id: 101 }] } };
+					}
+					throw Object.assign(new Error("Not Found"), { status: 404 });
+				},
+			}) as unknown as Octokit),
+		});
+		await confirm(service, "tenant-a", "tenant-a-admin");
+
+		await expect(
+			service.connectInstallation("tenant-a", "tenant-a-admin", 101),
+		).rejects.toMatchObject({ code: "authorization_required" });
+		expect(await service.listInstallations("tenant-a")).toHaveLength(0);
+	});
+
+	test("connectInstallation refuses a hidden organization with no invisible-membership escape", async () => {
+		// Unlike the pre-install leg, which tolerates a 403/404 org-membership
+		// lookup because the App cannot see the organization until installed,
+		// connectInstallation runs after installation: membership must resolve.
+		const service = createService({
+			outbound: vaultBackedOutbound(db, () => ({
+				request: async (route: string) => {
+					if (route === "GET /user") return { data: { login: "someone" } };
+					if (route === "GET /user/memberships/orgs/{org}") {
+						throw Object.assign(new Error("Not Found"), { status: 404 });
+					}
+					if (route === "GET /user/installations") {
+						return { data: { total_count: 1, installations: [{ id: 101 }] } };
+					}
+					throw Object.assign(new Error("Not Found"), { status: 404 });
+				},
+			}) as unknown as Octokit),
+		});
+		await confirm(service, "tenant-a", "tenant-a-admin");
+
+		await expect(
+			service.connectInstallation("tenant-a", "tenant-a-admin", 101),
+		).rejects.toMatchObject({ code: "authorization_required" });
+		expect(await service.listInstallations("tenant-a")).toHaveLength(0);
+	});
+
+	test("listConnectTargets reports connected, claimedByOtherTenant, and a null installationId", async () => {
+		const service = createService({
+			outbound: vaultBackedOutbound(db, () => ({
+				request: async (route: string) => {
+					if (route === "GET /user") return { data: { login: "octocat" } };
+					if (route === "GET /user/memberships/orgs") {
+						return {
+							data: [
+								{ state: "active", role: "admin", organization: { login: "acme" } },
+								{ state: "active", role: "admin", organization: { login: "widgetco" } },
+							],
+						};
+					}
+					if (route === "GET /user/memberships/orgs/{org}") {
+						return { data: { state: "active", role: "admin" } };
+					}
+					if (route === "GET /user/installations") {
+						return {
+							data: {
+								total_count: 2,
+								installations: [
+									{
+										id: 102,
+										account: { login: "octocat", type: "User" },
+										target_type: "User",
+										repository_selection: "selected",
+									},
+									{
+										id: 101,
+										account: { login: "acme", type: "Organization" },
+										target_type: "Organization",
+										repository_selection: "all",
+									},
+								],
+							},
+						};
+					}
+					throw Object.assign(new Error("Not Found"), { status: 404 });
+				},
+			}) as unknown as Octokit),
+		});
+
+		// Installation 102 (octocat, the admin's own account) is already bound to
+		// tenant-a.
+		await confirm(service, "tenant-a", "tenant-a-admin");
+		await service.connectInstallation("tenant-a", "tenant-a-admin", 102);
+
+		// Installation 101 (acme) is bound to a different tenant.
+		await confirm(service, "tenant-b", "tenant-b-admin");
+		await service.connectInstallation("tenant-b", "tenant-b-admin", 101);
+
+		const targets = await service.listConnectTargets("tenant-a", "tenant-a-admin");
+		expect(targets).toHaveLength(3);
+		expect(targets).toEqual(
+			expect.arrayContaining([
+				{
+					accountLogin: "octocat",
+					accountType: "User",
+					installationId: 102,
+					connected: true,
+					claimedByOtherTenant: false,
+				},
+				{
+					accountLogin: "acme",
+					accountType: "Organization",
+					installationId: 101,
+					connected: false,
+					claimedByOtherTenant: true,
+				},
+				{
+					accountLogin: "widgetco",
+					accountType: "Organization",
+					installationId: null,
+					connected: false,
+					claimedByOtherTenant: false,
+				},
+			]),
+		);
 	});
 });
 
@@ -631,6 +803,8 @@ function lockHarness(options: {
 			},
 			verifyAccountAdministration: async () => undefined,
 			verifyInstallationAccess: async () => undefined,
+			listAdministeredAccounts: async () => [],
+			listVisibleInstallations: async () => [],
 			drainTenantTokens: async (userId, tenantId, expectedTokenId) => {
 				harness.drains += 1;
 				events.push(`drain:enter:${expectedTokenId ?? "none"}`);
@@ -652,14 +826,11 @@ function lockHarness(options: {
  * when the locked callback runs. A helper that returned the call itself would
  * be awaited by its caller and could never interleave.
  */
-async function reconnectStarter(service: OctokitGitHubService): Promise<() => Promise<string>> {
-	const connectState = await service.beginConnect(
-		"tenant-a",
-		"acme",
-		"tenant-a-admin",
-		BROWSER_NONCE,
-	);
-	return () => service.issueInstallationUrl(connectState, BROWSER_NONCE, RECONNECT_INITIATOR);
+async function reconnectStarter(
+	service: OctokitGitHubService,
+): Promise<() => Promise<GitHubUserIdentity>> {
+	const connectState = await service.beginConnect("tenant-a", "tenant-a-admin", BROWSER_NONCE);
+	return () => service.confirmConnect(connectState, BROWSER_NONCE, RECONNECT_INITIATOR);
 }
 
 describe("GitHub outbound connection locking", () => {
@@ -726,10 +897,10 @@ describe("GitHub outbound connection locking", () => {
 		// transaction would have nothing to release it or settle it.
 		const startReconnect = await reconnectStarter(harness.service);
 		const disconnect = harness.service.removeInstallation("tenant-a", 101, "tenant-a-admin");
-		let reconnect: Promise<string> | undefined;
+		let reconnect: Promise<GitHubUserIdentity> | undefined;
 		let draining = false;
 		let readsWhileDraining = readsBeforeDrain;
-		let settled: [PromiseSettledResult<string>, PromiseSettledResult<void>];
+		let settled: [PromiseSettledResult<GitHubUserIdentity>, PromiseSettledResult<void>];
 		try {
 			draining = await waitFor(() => harness.drains === 1);
 			reconnect = startReconnect();
@@ -782,10 +953,10 @@ describe("GitHub outbound connection locking", () => {
 		// the same reason as the previous test.
 		const startReconnect = await reconnectStarter(harness.service);
 		const disconnect = harness.service.removeInstallation("tenant-a", 101, "tenant-a-admin");
-		let reconnect: Promise<string> | undefined;
+		let reconnect: Promise<GitHubUserIdentity> | undefined;
 		let draining = false;
 		let readsWhileDraining = readsBeforeDrain;
-		let settled: [PromiseSettledResult<string>, PromiseSettledResult<void>];
+		let settled: [PromiseSettledResult<GitHubUserIdentity>, PromiseSettledResult<void>];
 		try {
 			draining = await waitFor(() => harness.drains === 1);
 			reconnect = startReconnect();
@@ -854,6 +1025,10 @@ function callbackRaceHarness(): CallbackRaceHarness {
 			loadIdentity: (userId, tenantId) => delegate.loadIdentity(userId, tenantId),
 			loadPendingConnection: (userId, tenantId) =>
 				delegate.loadPendingConnection(userId, tenantId),
+			listAdministeredAccounts: (userId, tenantId) =>
+				delegate.listAdministeredAccounts(userId, tenantId),
+			listVisibleInstallations: (userId, tenantId) =>
+				delegate.listVisibleInstallations(userId, tenantId),
 			verifyAccountAdministration: async (
 				userId,
 				tenantId,

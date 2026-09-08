@@ -34,6 +34,18 @@ const SETUP_ERROR_MESSAGES: Record<string, { code: TRPCError["code"]; message: s
 		code: "BAD_REQUEST",
 		message: "This GitHub connection was already used. Start the connection again",
 	},
+	unauthorized_account: {
+		code: "BAD_REQUEST",
+		message: "That GitHub installation belongs to a different account than the one you selected",
+	},
+	invalid_installation: {
+		code: "BAD_REQUEST",
+		message: "GitHub could not find that installation",
+	},
+	installation_conflict: {
+		code: "CONFLICT",
+		message: "That GitHub installation is already connected to another tenant",
+	},
 };
 
 function trpcSetupError(error: unknown): TRPCError {
@@ -97,67 +109,69 @@ export const githubRouter = router({
 
 	/**
 	 * Cookie-mode safe outbound handoff. A one-time server transaction bound to
-	 * the tenant, the admin, the requested account, and a fresh `__Host-` browser
-	 * nonce is minted before the browser is told anything, and its signed
-	 * reference travels in the redirect URL the browser hands back to Descope.
-	 * The browser's own cookie-authenticated Descope SDK performs the outbound
-	 * connect call, so no session or refresh token is ever read here or handed
-	 * to the caller. The redirect URL is always built from this server's own
-	 * configured dashboard origin, never from client input, so a caller cannot
-	 * redirect the flow to another origin.
+	 * the tenant, the admin, and a fresh `__Host-` browser nonce is minted
+	 * before the browser is told anything, and its signed reference travels in
+	 * the redirect URL the browser hands back to Descope. The browser's own
+	 * cookie-authenticated Descope SDK performs the outbound connect call, so
+	 * no session or refresh token is ever read here or handed to the caller.
+	 * The redirect URL is always built from this server's own configured
+	 * dashboard origin, never from client input, so a caller cannot redirect
+	 * the flow to another origin. No GitHub account is selected yet: that
+	 * happens against the App's own installation listing once the identity is
+	 * confirmed, not against free-text input.
 	 */
-	startConnect: adminProcedure
-		.input(z.object({ accountLogin: accountLoginSchema }))
-		.mutation(async ({ ctx, input }) => {
-			requireInteractiveUser(ctx.caller.principalType);
-			if (!ctx.github) {
-				throw new TRPCError({
-					code: "PRECONDITION_FAILED",
-					message: "GitHub App is not configured on this server",
-				});
-			}
-			if (!ctx.github.connectAvailable || !ctx.appOrigin || !ctx.githubOutboundAppId) {
-				throw new TRPCError({
-					code: "PRECONDITION_FAILED",
-					message: "GitHub user verification is not configured on this server",
-				});
-			}
-			if (!ctx.setGitHubSetupCookie) {
-				throw new TRPCError({
-					code: "INTERNAL_SERVER_ERROR",
-					message: "GitHub setup cookie support is unavailable",
-				});
-			}
+	startConnect: adminProcedure.input(z.object({})).mutation(async ({ ctx }) => {
+		requireInteractiveUser(ctx.caller.principalType);
+		if (!ctx.github) {
+			throw new TRPCError({
+				code: "PRECONDITION_FAILED",
+				message: "GitHub App is not configured on this server",
+			});
+		}
+		if (!ctx.github.connectAvailable || !ctx.appOrigin || !ctx.githubOutboundAppId) {
+			throw new TRPCError({
+				code: "PRECONDITION_FAILED",
+				message: "GitHub user verification is not configured on this server",
+			});
+		}
+		if (!ctx.setGitHubSetupCookie) {
+			throw new TRPCError({
+				code: "INTERNAL_SERVER_ERROR",
+				message: "GitHub setup cookie support is unavailable",
+			});
+		}
 
-			const browserNonce = createGitHubSetupNonce();
-			try {
-				const state = await ctx.github.beginConnect(
-					ctx.caller.tenantId,
-					input.accountLogin,
-					ctx.caller.userId,
-					browserNonce,
-				);
-				const redirectUrl = new URL(GITHUB_CONNECT_RETURN_PATH, ctx.appOrigin);
-				redirectUrl.searchParams.set("state", state);
-				// The cookie must exist before the browser can complete the outbound
-				// connect it is about to start, so it is set here rather than after.
-				ctx.setGitHubSetupCookie(browserNonce);
-				return {
-					appId: ctx.githubOutboundAppId,
-					tenantId: ctx.caller.tenantId,
-					redirectUrl: redirectUrl.toString(),
-				};
-			} catch (error) {
-				throw trpcSetupError(error);
-			}
-		}),
+		const browserNonce = createGitHubSetupNonce();
+		try {
+			const state = await ctx.github.beginConnect(
+				ctx.caller.tenantId,
+				ctx.caller.userId,
+				browserNonce,
+			);
+			const redirectUrl = new URL(GITHUB_CONNECT_RETURN_PATH, ctx.appOrigin);
+			redirectUrl.searchParams.set("state", state);
+			// The cookie must exist before the browser can complete the outbound
+			// connect it is about to start, so it is set here rather than after.
+			ctx.setGitHubSetupCookie(browserNonce);
+			return {
+				appId: ctx.githubOutboundAppId,
+				tenantId: ctx.caller.tenantId,
+				redirectUrl: redirectUrl.toString(),
+			};
+		} catch (error) {
+			throw trpcSetupError(error);
+		}
+	}),
 
 	/**
 	 * Continues the flow after the Descope callback. Authority comes from the
 	 * signed connect transaction plus the browser nonce cookie, never from the
-	 * browser: the requested account is read out of the verified transaction.
+	 * browser. Vaults the confirmed GitHub token for this tenant and admin;
+	 * nothing is selected yet, so no account-administration check happens
+	 * here. This is the token-confirmation half of what used to be a single
+	 * `createInstallationUrl` call.
 	 */
-	createInstallationUrl: adminProcedure
+	confirmConnect: adminProcedure
 		.input(z.object({ state: z.string().min(1).max(4096) }))
 		.mutation(async ({ ctx, input }) => {
 			requireInteractiveUser(ctx.caller.principalType);
@@ -173,6 +187,91 @@ export const githubRouter = router({
 					message: "This GitHub connection could not be verified. Start the connection again",
 				});
 			}
+
+			try {
+				const identity = await ctx.github.confirmConnect(input.state, ctx.githubSetupNonce, {
+					tenantId: ctx.caller.tenantId,
+					userId: ctx.caller.userId,
+				});
+				return { login: identity.login };
+			} catch (error) {
+				throw trpcSetupError(error);
+			}
+		}),
+
+	/**
+	 * Lists the GitHub accounts the connected identity administers, joined
+	 * with any App installation already visible for that account and whether
+	 * this tenant, or another one, already claims it. Requires a confirmed
+	 * connection, and exposes the caller's GitHub organization membership, so
+	 * it is restricted to interactive admins.
+	 */
+	connectTargets: adminProcedure.query(async ({ ctx }) => {
+		requireInteractiveUser(ctx.caller.principalType);
+		if (!ctx.github) {
+			throw new TRPCError({
+				code: "PRECONDITION_FAILED",
+				message: "GitHub App is not configured on this server",
+			});
+		}
+
+		try {
+			const targets = await ctx.github.listConnectTargets(ctx.caller.tenantId, ctx.caller.userId);
+			return { targets };
+		} catch (error) {
+			throw trpcSetupError(error);
+		}
+	}),
+
+	/**
+	 * Binds an already-installed App installation to this tenant. The
+	 * installation id comes from our own authenticated `connectTargets`
+	 * response, not from a GitHub-driven redirect, so there is no signed
+	 * state or browser nonce to verify here: the server re-derives the
+	 * account from GitHub by installation id and re-checks administration
+	 * before saving the binding.
+	 */
+	connectInstallation: adminProcedure
+		.input(z.object({ installationId: z.number().int().positive() }))
+		.mutation(async ({ ctx, input }) => {
+			requireInteractiveUser(ctx.caller.principalType);
+			if (!ctx.github) {
+				throw new TRPCError({
+					code: "PRECONDITION_FAILED",
+					message: "GitHub App is not configured on this server",
+				});
+			}
+
+			try {
+				const installation = await ctx.github.connectInstallation(
+					ctx.caller.tenantId,
+					ctx.caller.userId,
+					input.installationId,
+				);
+				return { installation };
+			} catch (error) {
+				throw trpcSetupError(error);
+			}
+		}),
+
+	/**
+	 * Issues a fresh GitHub App installation URL for `accountLogin`. Requires
+	 * a confirmed connection and verifies the caller administers that
+	 * account, allowing invisible membership: the App is not installed there
+	 * yet, so GitHub hides the org from a plain membership check. Mints a
+	 * fresh browser nonce and sets its cookie only after the state is issued,
+	 * so a failed attempt never extends the browser binding's window.
+	 */
+	createInstallationUrl: adminProcedure
+		.input(z.object({ accountLogin: accountLoginSchema }))
+		.mutation(async ({ ctx, input }) => {
+			requireInteractiveUser(ctx.caller.principalType);
+			if (!ctx.github) {
+				throw new TRPCError({
+					code: "PRECONDITION_FAILED",
+					message: "GitHub App is not configured on this server",
+				});
+			}
 			if (!ctx.setGitHubSetupCookie) {
 				throw new TRPCError({
 					code: "INTERNAL_SERVER_ERROR",
@@ -180,20 +279,21 @@ export const githubRouter = router({
 				});
 			}
 
-			const browserNonce = ctx.githubSetupNonce;
+			const browserNonce = createGitHubSetupNonce();
 			let url: string;
 			try {
-				url = await ctx.github.issueInstallationUrl(input.state, browserNonce, {
-					tenantId: ctx.caller.tenantId,
-					userId: ctx.caller.userId,
-				});
+				url = await ctx.github.issueInstallationUrl(
+					ctx.caller.tenantId,
+					ctx.caller.userId,
+					input.accountLogin,
+					browserNonce,
+				);
 			} catch (error) {
 				throw trpcSetupError(error);
 			}
-			// The installation state gets a fresh TTL, so the browser binding it is
-			// tied to has to get one too: otherwise the cookie minted at connect
-			// time expires mid-installation. Only on success, so a failed attempt
-			// never extends the window.
+			// The installation state carries a fresh TTL, so the browser binding
+			// it is tied to needs a matching fresh cookie. Only on success, so a
+			// failed attempt never extends the window.
 			ctx.setGitHubSetupCookie(browserNonce);
 			return { url };
 		}),

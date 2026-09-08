@@ -12,12 +12,15 @@ import {
 	updates,
 } from "@procella/db";
 import { projectError } from "@procella/types";
-import { and, desc, eq, gt, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, lt, sql } from "drizzle-orm";
 import { errors as joseErrors, jwtVerify, SignJWT } from "jose";
 import {
+	type GitHubAccountCandidate,
 	GitHubOutboundError,
 	type GitHubOutboundIdentityService,
 	type GitHubPendingConnection,
+	type GitHubUserIdentity,
+	type GitHubVisibleInstallation,
 } from "./outbound.js";
 
 export * from "./outbound.js";
@@ -111,6 +114,17 @@ export interface GitHubDeliveryService {
 	): Promise<void>;
 }
 
+export interface GitHubConnectTarget {
+	accountLogin: string;
+	accountType: "Organization" | "User";
+	/** Installation of this App on the account, when GitHub reports one. */
+	installationId: number | null;
+	/** Already bound to the calling tenant. */
+	connected: boolean;
+	/** Installed and bound to a different tenant, so this tenant cannot claim it. */
+	claimedByOtherTenant: boolean;
+}
+
 export interface GitHubService extends GitHubDeliveryService {
 	handleWebhookEvent(event: string, payload: unknown): Promise<void>;
 	/** True when vaulted GitHub identity verification is wired up. */
@@ -119,24 +133,47 @@ export interface GitHubService extends GitHubDeliveryService {
 	resolveConnectedLogin(tenantId: string, userId: string): Promise<string | null>;
 	/**
 	 * Opens a one-time connect transaction bound to the tenant, the initiating
-	 * admin, the requested account, and the initiating browser. The returned
-	 * signed state must travel in the Descope redirect URL so a forwarded
-	 * authorization link cannot vault a stranger's token against this caller.
+	 * admin, and the initiating browser. The returned signed state must travel
+	 * in the Descope redirect URL so a forwarded authorization link cannot
+	 * vault a stranger's token against this caller. No account is named yet:
+	 * which accounts the caller administers is only knowable after GitHub
+	 * authorizes and {@link confirmConnect} has run.
 	 */
-	beginConnect(
-		tenantId: string,
-		accountLogin: string,
-		initiatorUserId: string,
-		browserNonce: string,
-	): Promise<string>;
+	beginConnect(tenantId: string, initiatorUserId: string, browserNonce: string): Promise<string>;
 	/**
-	 * Consumes the connect transaction and issues browser-bound installation
-	 * state. The account comes from the verified transaction, never the browser.
+	 * Consumes the connect transaction and durably confirms the vaulted token,
+	 * so it becomes usable at all, then returns the connected GitHub login.
 	 */
-	issueInstallationUrl(
+	confirmConnect(
 		connectState: string,
 		browserNonce: string,
 		initiator: { tenantId: string; userId: string },
+	): Promise<GitHubUserIdentity>;
+	/**
+	 * Accounts the confirmed connection administers, joined against the App
+	 * installations it can see, so the caller can offer Connect (already
+	 * installed) or Install (fresh install) per account. Requires a confirmed
+	 * connection.
+	 */
+	listConnectTargets(tenantId: string, userId: string): Promise<GitHubConnectTarget[]>;
+	/**
+	 * Binds an installation the confirmed connection already administers and
+	 * can see, for the case where the App is already installed on the account.
+	 */
+	connectInstallation(
+		tenantId: string,
+		userId: string,
+		installationId: number,
+	): Promise<GitHubInstallationInfo>;
+	/**
+	 * Verifies the confirmed connection administers `accountLogin`, then
+	 * issues browser-bound installation state for a fresh install of the App.
+	 */
+	issueInstallationUrl(
+		tenantId: string,
+		userId: string,
+		accountLogin: string,
+		browserNonce: string,
 	): Promise<string>;
 	completeInstallation(
 		state: string,
@@ -181,7 +218,8 @@ export type GitHubSetupPhase = "connect" | "install";
 
 export type GitHubSetupStateInput = {
 	tenantId: string;
-	accountLogin: string;
+	/** Present only on install-phase state; a connect-phase state names no account yet. */
+	accountLogin?: string;
 	initiatorUserId: string;
 	browserBinding: string;
 	/** Separates the outbound-connect transaction from the installation state. */
@@ -265,8 +303,6 @@ export function createGitHubSetupStateService(
 				if (
 					typeof payload.tenantId !== "string" ||
 					payload.tenantId.length === 0 ||
-					typeof payload.accountLogin !== "string" ||
-					payload.accountLogin.length === 0 ||
 					typeof payload.initiatorUserId !== "string" ||
 					payload.initiatorUserId.length === 0 ||
 					typeof payload.browserBinding !== "string" ||
@@ -277,9 +313,21 @@ export function createGitHubSetupStateService(
 				) {
 					throw new GitHubSetupError("invalid_state");
 				}
+				// An install-phase state names the account it was issued for; a
+				// connect-phase state selects none yet, so the two must never mix.
+				const rawAccountLogin = payload.accountLogin;
+				let accountLogin: string | undefined;
+				if (phase === "install") {
+					if (typeof rawAccountLogin !== "string" || rawAccountLogin.length === 0) {
+						throw new GitHubSetupError("invalid_state");
+					}
+					accountLogin = rawAccountLogin;
+				} else if (rawAccountLogin !== undefined) {
+					throw new GitHubSetupError("invalid_state");
+				}
 				return {
 					tenantId: payload.tenantId,
-					accountLogin: payload.accountLogin,
+					accountLogin,
 					initiatorUserId: payload.initiatorUserId,
 					browserBinding: payload.browserBinding,
 					phase,
@@ -659,17 +707,17 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 	/**
 	 * Opens the connect transaction that authorizes the first outbound leg.
 	 *
-	 * The signed state is one-time (its `jti` row is consumed later), carries the
-	 * tenant, the initiating admin, and the requested account, and is bound to
-	 * the initiating browser's `__Host-` nonce. It travels inside the Descope
-	 * redirect URL, so an attacker who forwards their authorization link to a
-	 * victim cannot make the victim's callback continue: the callback consumes
-	 * this state in the victim's browser, where the nonce cookie and session do
-	 * not match.
+	 * The signed state is one-time (its `jti` row is consumed later), carries
+	 * the tenant and the initiating admin, and is bound to the initiating
+	 * browser's `__Host-` nonce. It travels inside the Descope redirect URL,
+	 * so an attacker who forwards their authorization link to a victim cannot
+	 * make the victim's callback continue: the callback consumes this state in
+	 * the victim's browser, where the nonce cookie and session do not match.
+	 * No account is named yet: which accounts the caller administers is only
+	 * knowable after GitHub authorizes and {@link confirmConnect} runs.
 	 */
 	async beginConnect(
 		tenantId: string,
-		accountLogin: string,
 		initiatorUserId: string,
 		browserNonce: string,
 	): Promise<string> {
@@ -677,7 +725,6 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 		const browserBinding = this.browserBinding(browserNonce);
 		const { state, claims } = await this.setupStates.issue({
 			tenantId,
-			accountLogin,
 			initiatorUserId,
 			browserBinding,
 			phase: "connect",
@@ -692,26 +739,27 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 	}
 
 	/**
-	 * Consumes the connect transaction, confirms the vaulted token, and issues
-	 * browser-bound installation state for the account the transaction names.
+	 * Consumes the connect transaction and durably confirms the vaulted token,
+	 * so it becomes usable at all.
 	 *
-	 * This is the confirmation boundary. Descope vaults a token as soon as GitHub
-	 * authorizes, so until this browser-bound callback records the token's Descope
-	 * id, no consumer may observe or use it. The account check here is advisory
-	 * about organization membership only: the vaulted token is a GitHub App
-	 * user-to-server token, so membership stays invisible until the App is
-	 * installed. `completeInstallation` requires proof of administration and
-	 * installation visibility before any binding is saved.
+	 * This is the confirmation boundary. Descope vaults a token as soon as
+	 * GitHub authorizes, so until this browser-bound callback records the
+	 * token's Descope id, no consumer may observe or use it. No account
+	 * administration check runs here: nothing is selected yet, and until the
+	 * App is installed the vaulted token cannot read organization membership
+	 * anyway. {@link listConnectTargets} and {@link connectInstallation} check
+	 * administration once there is an account to check.
 	 *
-	 * The token read and the confirmation write happen under the per-connection
-	 * advisory lock, so a disconnect draining the same slot cannot interleave and
-	 * leave this confirmation pointing at a token it deleted.
+	 * The token read and the confirmation write happen under the
+	 * per-connection advisory lock, so a disconnect draining the same slot
+	 * cannot interleave and leave this confirmation pointing at a token it
+	 * deleted.
 	 */
-	async issueInstallationUrl(
+	async confirmConnect(
 		connectState: string,
 		browserNonce: string,
 		initiator: { tenantId: string; userId: string },
-	): Promise<string> {
+	): Promise<GitHubUserIdentity> {
 		if (!this.outbound) throw new GitHubSetupError("authorization_unavailable");
 		const outbound = this.outbound;
 		const claims = await this.setupStates.verify(connectState);
@@ -724,14 +772,6 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 			throw new GitHubSetupError("invalid_state");
 		}
 
-		const slug = await this.loadAppSlug();
-		const next = await this.setupStates.issue({
-			tenantId: claims.tenantId,
-			accountLogin: claims.accountLogin,
-			initiatorUserId: claims.initiatorUserId,
-			browserBinding: claims.browserBinding,
-			phase: "install",
-		});
 		const pending = await this.db.transaction(async (tx): Promise<GitHubPendingConnection> => {
 			await lockOutboundConnection(tx as Database, claims.tenantId, claims.initiatorUserId);
 			// Read the vaulted token only after the lock: a token observed earlier
@@ -743,11 +783,6 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 				throw setupErrorFromOutbound(error);
 			}
 			await this.consumeSetupState(tx as Database, claims);
-			await tx.insert(githubSetupStates).values({
-				jti: next.claims.jti,
-				tenantId: next.claims.tenantId,
-				expiresAt: next.claims.expiresAt,
-			});
 			await tx
 				.insert(githubOutboundConnections)
 				.values({
@@ -762,17 +797,169 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 			return pending;
 		});
 
-		// Only now can the connected identity be verified: confirmation is what
-		// makes the token usable at all. The transaction already committed, so
-		// this is not a second checkout while the lock's transaction is open; the
-		// id just confirmed is passed directly rather than re-reading it.
-		await this.verifyVaultedAdministration(
-			claims.tenantId,
-			claims.initiatorUserId,
-			claims.accountLogin,
-			pending.tokenId,
-			{ allowInvisibleMembership: true },
+		return { login: pending.login };
+	}
+
+	/**
+	 * Accounts the confirmed connection administers, joined against the App
+	 * installations it can see, so the caller can offer Connect (already
+	 * installed) or Install (fresh install) per account.
+	 *
+	 * Both listings come from the same confirmed token; an account the caller
+	 * does not administer is excluded even when its installation is visible,
+	 * because visibility and administration are different GitHub grants. The
+	 * installation's tenant binding is read in one query so `connected` and
+	 * `claimedByOtherTenant` reflect Procella's own ownership record, not
+	 * GitHub's.
+	 */
+	async listConnectTargets(tenantId: string, userId: string): Promise<GitHubConnectTarget[]> {
+		if (!this.outbound) throw new GitHubSetupError("authorization_unavailable");
+		const outbound = this.outbound;
+		let administered: GitHubAccountCandidate[];
+		let installations: GitHubVisibleInstallation[];
+		try {
+			[administered, installations] = await Promise.all([
+				outbound.listAdministeredAccounts(userId, tenantId),
+				outbound.listVisibleInstallations(userId, tenantId),
+			]);
+		} catch (error) {
+			throw setupErrorFromOutbound(error);
+		}
+
+		const installationByLogin = new Map(
+			installations.map(
+				(installation) => [installation.accountLogin.toLowerCase(), installation] as const,
+			),
 		);
+		const installationIds = administered
+			.map((account) => installationByLogin.get(account.login.toLowerCase())?.installationId)
+			.filter((id): id is number => id !== undefined);
+		const rows = installationIds.length
+			? await this.db
+					.select({
+						installationId: githubInstallations.installationId,
+						tenantId: githubInstallations.tenantId,
+					})
+					.from(githubInstallations)
+					.where(inArray(githubInstallations.installationId, installationIds))
+			: [];
+		const tenantByInstallationId = new Map(rows.map((row) => [row.installationId, row.tenantId]));
+
+		return administered.map((account): GitHubConnectTarget => {
+			const installation = installationByLogin.get(account.login.toLowerCase());
+			const installationId = installation?.installationId ?? null;
+			const rowTenantId =
+				installationId !== null ? tenantByInstallationId.get(installationId) : undefined;
+			return {
+				accountLogin: account.login,
+				accountType: account.accountType,
+				installationId,
+				connected: rowTenantId === tenantId,
+				claimedByOtherTenant: rowTenantId !== undefined && rowTenantId !== tenantId,
+			};
+		});
+	}
+
+	/**
+	 * Binds an installation the confirmed connection already administers and
+	 * can see, for the case where the App is already installed on the account.
+	 *
+	 * Every read of the connection happens under the per-connection advisory
+	 * lock, so a concurrent disconnect either drains the credential before
+	 * these checks see it, or waits until this binding is committed. Neither
+	 * check tolerates invisible membership: the App is already installed, so a
+	 * hidden organization is a denial rather than a pre-installation gap. The
+	 * unique `installation_id` index is what refuses an installation another
+	 * tenant already claimed.
+	 */
+	async connectInstallation(
+		tenantId: string,
+		userId: string,
+		installationId: number,
+	): Promise<GitHubInstallationInfo> {
+		const installation = await this.loadInstallation(installationId);
+
+		return this.db.transaction(async (tx) => {
+			await lockOutboundConnection(tx as Database, tenantId, userId);
+			const [confirmation] = await tx
+				.select({ tokenId: githubOutboundConnections.tokenId })
+				.from(githubOutboundConnections)
+				.where(
+					and(
+						eq(githubOutboundConnections.tenantId, tenantId),
+						eq(githubOutboundConnections.userId, userId),
+					),
+				)
+				.limit(1);
+			const confirmedTokenId = confirmation?.tokenId ?? null;
+			await this.verifyVaultedAdministration(
+				tenantId,
+				userId,
+				installation.accountLogin,
+				confirmedTokenId,
+			);
+			await this.verifyVaultedInstallationAccess(
+				tenantId,
+				userId,
+				installationId,
+				confirmedTokenId,
+			);
+			return this.saveInstallation(tenantId, installation, tx as Database);
+		});
+	}
+
+	/**
+	 * Verifies the confirmed connection administers `accountLogin`, then issues
+	 * browser-bound installation state for a fresh install of the App.
+	 *
+	 * The read of the confirmed token and the administration check happen
+	 * under the per-connection advisory lock, so a concurrent disconnect
+	 * cannot leave this check passing against a token it already drained.
+	 * Membership is advisory here: a GitHub App user token cannot read
+	 * organization membership until the App is installed on it, so an
+	 * invisible organization is tolerated pre-installation.
+	 * {@link completeInstallation} requires proof once the App can see it.
+	 */
+	async issueInstallationUrl(
+		tenantId: string,
+		userId: string,
+		accountLogin: string,
+		browserNonce: string,
+	): Promise<string> {
+		if (!this.outbound) throw new GitHubSetupError("authorization_unavailable");
+		const browserBinding = this.browserBinding(browserNonce);
+		const slug = await this.loadAppSlug();
+		const next = await this.setupStates.issue({
+			tenantId,
+			accountLogin,
+			initiatorUserId: userId,
+			browserBinding,
+			phase: "install",
+		});
+
+		await this.db.transaction(async (tx) => {
+			await lockOutboundConnection(tx as Database, tenantId, userId);
+			const [confirmation] = await tx
+				.select({ tokenId: githubOutboundConnections.tokenId })
+				.from(githubOutboundConnections)
+				.where(
+					and(
+						eq(githubOutboundConnections.tenantId, tenantId),
+						eq(githubOutboundConnections.userId, userId),
+					),
+				)
+				.limit(1);
+			const confirmedTokenId = confirmation?.tokenId ?? null;
+			await this.verifyVaultedAdministration(tenantId, userId, accountLogin, confirmedTokenId, {
+				allowInvisibleMembership: true,
+			});
+			await tx.delete(githubSetupStates).where(lt(githubSetupStates.expiresAt, sql`now()`));
+			await tx.insert(githubSetupStates).values({
+				jti: next.claims.jti,
+				tenantId: next.claims.tenantId,
+				expiresAt: next.claims.expiresAt,
+			});
+		});
 
 		const url = new URL(`https://github.com/apps/${slug}/installations/new`);
 		url.searchParams.set("state", next.state);
@@ -804,10 +991,15 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 	): Promise<GitHubInstallationInfo> {
 		const claims = await this.setupStates.verify(state);
 		this.verifyBrowserBinding(browserNonce, claims.browserBinding);
-		if (claims.phase !== "install") throw new GitHubSetupError("invalid_state");
+		if (claims.phase !== "install" || claims.accountLogin === undefined) {
+			throw new GitHubSetupError("invalid_state");
+		}
+		// Bound to a local because the narrowing above does not reach the
+		// transaction closure below, where the same account is verified again.
+		const accountLogin = claims.accountLogin;
 
 		const installation = await this.loadInstallation(installationId);
-		if (installation.accountLogin.toLowerCase() !== claims.accountLogin.toLowerCase()) {
+		if (installation.accountLogin.toLowerCase() !== accountLogin.toLowerCase()) {
 			throw new GitHubSetupError("unauthorized_account");
 		}
 
@@ -827,7 +1019,7 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 			await this.verifyVaultedAdministration(
 				claims.tenantId,
 				claims.initiatorUserId,
-				claims.accountLogin,
+				accountLogin,
 				confirmedTokenId,
 			);
 			await this.verifyVaultedInstallationAccess(

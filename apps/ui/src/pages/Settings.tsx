@@ -141,10 +141,26 @@ export function Settings() {
 /** The only authorization URL a GitHub outbound connect may hand the browser. */
 const GITHUB_AUTHORIZATION_URL = "https://github.com/login/oauth/authorize";
 
+/** The only URL prefix a GitHub App installation link may hand the browser. */
+const GITHUB_APP_INSTALL_URL_PREFIX = "https://github.com/apps/";
+
+interface GitHubConnectTarget {
+	accountLogin: string;
+	accountType: "Organization" | "User";
+	/** Installation of this App on the account, when GitHub reports one. */
+	installationId: number | null;
+	/** Already bound to the calling tenant. */
+	connected: boolean;
+	/** Installed and bound to a different tenant, so this tenant cannot claim it. */
+	claimedByOtherTenant: boolean;
+}
+
 function GitHubSettingsTab() {
 	const { data: status, isLoading, error: queryError, refetch } = trpc.github.status.useQuery();
 	const startConnectMutation = trpc.github.startConnect.useMutation();
 	const removeMutation = trpc.github.removeInstallation.useMutation();
+	const connectInstallationMutation = trpc.github.connectInstallation.useMutation();
+	const createInstallationUrlMutation = trpc.github.createInstallationUrl.useMutation();
 	const sdk = useDescope();
 	const [disconnectId, setDisconnectId] = useState<number | null>(null);
 	const [actionError, setActionError] = useState<string | null>(null);
@@ -152,6 +168,15 @@ function GitHubSettingsTab() {
 	const [connectPending, setConnectPending] = useState(false);
 	const callback = new URLSearchParams(window.location.search).get("github");
 	const callbackReason = new URLSearchParams(window.location.search).get("reason");
+
+	const targetsEnabled = Boolean(
+		status?.configured && status.connectAvailable && status.connectedLogin,
+	);
+	const {
+		data: targetsData,
+		error: targetsError,
+		refetch: refetchTargets,
+	} = trpc.github.connectTargets.useQuery(undefined, { enabled: targetsEnabled });
 
 	useEffect(() => {
 		const resetAfterHistoryRestore = (event: PageTransitionEvent) => {
@@ -168,16 +193,16 @@ function GitHubSettingsTab() {
 	// URL — never a token. The browser's own cookie-authenticated Descope SDK
 	// performs the outbound connect call, so no session or refresh token is
 	// ever read or handed to the caller, and the returned provider URL is
-	// allowlisted to GitHub's authorization endpoint before navigation.
-	const handleConnect = async (accountLogin: string) => {
+	// allowlisted to GitHub's authorization endpoint before navigation. No
+	// account is chosen yet: this step only confirms who the caller is on
+	// GitHub, before the accounts they administer are listed below.
+	const handleContinueWithGitHub = async () => {
 		if (connectInFlight.current) return;
 		connectInFlight.current = true;
 		setConnectPending(true);
 		setActionError(null);
 		try {
-			const { appId, tenantId, redirectUrl } = await startConnectMutation.mutateAsync({
-				accountLogin,
-			});
+			const { appId, tenantId, redirectUrl } = await startConnectMutation.mutateAsync({});
 			const response = await sdk.outbound.connect(appId, { redirectUrl, tenantId });
 			const url = response.ok ? response.data?.url : undefined;
 			if (typeof url !== "string" || url.length === 0) {
@@ -195,13 +220,40 @@ function GitHubSettingsTab() {
 		}
 	};
 
+	const handleConnectInstallation = async (installationId: number) => {
+		setActionError(null);
+		try {
+			await connectInstallationMutation.mutateAsync({ installationId });
+			await Promise.all([refetch(), refetchTargets()]);
+		} catch (error) {
+			setActionError(
+				error instanceof Error ? error.message : "Unable to connect the GitHub installation",
+			);
+		}
+	};
+
+	const handleInstall = async (accountLogin: string) => {
+		setActionError(null);
+		try {
+			const { url } = await createInstallationUrlMutation.mutateAsync({ accountLogin });
+			if (!url.startsWith(GITHUB_APP_INSTALL_URL_PREFIX)) {
+				throw new Error("Unable to start GitHub App installation");
+			}
+			window.location.assign(url);
+		} catch (error) {
+			setActionError(
+				error instanceof Error ? error.message : "Unable to start GitHub App installation",
+			);
+		}
+	};
+
 	const handleDisconnect = async () => {
 		if (disconnectId === null) return;
 		setActionError(null);
 		try {
 			await removeMutation.mutateAsync({ installationId: disconnectId });
 			setDisconnectId(null);
-			await refetch();
+			await Promise.all([refetch(), refetchTargets()]);
 		} catch (error) {
 			setActionError(error instanceof Error ? error.message : "Unable to disconnect GitHub");
 		}
@@ -229,7 +281,7 @@ function GitHubSettingsTab() {
 		<div className="space-y-4">
 			{callback === "connected" && (
 				<div className="bg-success/10 border border-success/30 text-success p-4 rounded-xl text-sm">
-					GitHub App installation connected successfully.
+					GitHub connected successfully.
 				</div>
 			)}
 			{callback === "error" && (
@@ -237,34 +289,73 @@ function GitHubSettingsTab() {
 					{githubCallbackError(callbackReason)}
 				</div>
 			)}
-			{actionError && (
+			{(actionError || targetsError) && (
 				<div className="bg-danger/10 border border-danger/30 text-danger/80 p-4 rounded-xl text-sm">
-					{actionError}
+					{actionError ?? targetsError?.message}
 				</div>
 			)}
 
-			{status.connectAvailable ? (
-				status.connectedLogin && (
-					<p className="text-sm text-cloud">
-						Verifying as GitHub user <strong>{status.connectedLogin}</strong>.
-					</p>
-				)
-			) : (
+			{!status.connectAvailable && (
 				<div className="bg-lightning/10 border border-lightning/30 text-cloud p-4 rounded-xl text-sm">
 					GitHub user verification is unavailable: this server has no Descope Outbound App
 					connection. Installations cannot be connected until an administrator configures it.
 				</div>
 			)}
 
-			{status.installations.length === 0 ? (
-				status.connectAvailable && (
-					<GitHubAccountConnect
-						title="GitHub App is not installed"
-						onConnect={handleConnect}
-						pending={connectPending}
-					/>
-				)
-			) : (
+			{status.connectAvailable && !status.connectedLogin && (
+				<div className="bg-slate-brand/30 border border-slate-brand/60 rounded-xl p-8">
+					<h3 className="text-sm font-semibold text-mist mb-1.5">Connect a GitHub account</h3>
+					<p className="text-sm text-cloud leading-relaxed mb-5">
+						Authorize with GitHub first. Procella asks Descope to confirm your GitHub identity, then
+						lists the accounts you administer so you can connect an existing installation or install
+						the App fresh.
+					</p>
+					<button
+						type="button"
+						onClick={handleContinueWithGitHub}
+						disabled={connectPending}
+						className="btn-primary"
+					>
+						{connectPending ? "Opening GitHub…" : "Continue with GitHub"}
+					</button>
+				</div>
+			)}
+
+			{status.connectAvailable && status.connectedLogin && (
+				<>
+					<p className="text-sm text-cloud">
+						Connected as GitHub user <strong>{status.connectedLogin}</strong>.
+					</p>
+					{targetsData && targetsData.targets.length === 0 && (
+						<div className="bg-slate-brand/30 border border-slate-brand/60 rounded-xl p-8">
+							<h3 className="text-sm font-semibold text-mist mb-1.5">
+								No GitHub accounts to connect
+							</h3>
+							<p className="text-sm text-cloud leading-relaxed">
+								This GitHub user does not own an account or administer an organization Procella can
+								connect.
+							</p>
+						</div>
+					)}
+					{targetsData && targetsData.targets.length > 0 && (
+						<div className="space-y-3">
+							<h2 className="text-base font-semibold text-mist">Connect a GitHub account</h2>
+							{targetsData.targets.map((target) => (
+								<GitHubConnectTargetRow
+									key={`${target.accountType}:${target.accountLogin}`}
+									target={target}
+									onConnect={handleConnectInstallation}
+									onInstall={handleInstall}
+									connectPending={connectInstallationMutation.isPending}
+									installPending={createInstallationUrlMutation.isPending}
+								/>
+							))}
+						</div>
+					)}
+				</>
+			)}
+
+			{status.installations.length > 0 && (
 				<>
 					<div className="flex items-center justify-between gap-4">
 						<div>
@@ -303,16 +394,6 @@ function GitHubSettingsTab() {
 									</div>
 								</div>
 								<div className="flex gap-2">
-									{status.connectAvailable && (
-										<button
-											type="button"
-											onClick={() => handleConnect(installation.accountLogin)}
-											disabled={connectPending}
-											className="btn-primary"
-										>
-											{connectPending ? "Opening GitHub…" : "Configure & Verify"}
-										</button>
-									)}
 									<button
 										type="button"
 										onClick={() => setDisconnectId(installation.installationId)}
@@ -324,13 +405,6 @@ function GitHubSettingsTab() {
 							</div>
 						</div>
 					))}
-					{status.connectAvailable && (
-						<GitHubAccountConnect
-							title="Connect another GitHub account"
-							onConnect={handleConnect}
-							pending={connectPending}
-						/>
-					)}
 				</>
 			)}
 
@@ -410,49 +484,54 @@ PROCELLA_APP_ORIGIN=https://app.example.com`}
 	);
 }
 
-function GitHubAccountConnect({
-	title,
+function GitHubConnectTargetRow({
+	target,
 	onConnect,
-	pending,
+	onInstall,
+	connectPending,
+	installPending,
 }: {
-	title: string;
-	onConnect: (accountLogin: string) => void;
-	pending: boolean;
+	target: GitHubConnectTarget;
+	onConnect: (installationId: number) => void;
+	onInstall: (accountLogin: string) => void;
+	connectPending: boolean;
+	installPending: boolean;
 }) {
+	const { accountLogin, accountType, installationId, connected, claimedByOtherTenant } = target;
 	return (
-		<div className="bg-slate-brand/30 border border-slate-brand/60 rounded-xl p-8">
-			<h3 className="text-sm font-semibold text-mist mb-1.5">{title}</h3>
-			<p className="text-sm text-cloud leading-relaxed mb-5">
-				Enter the GitHub user or organization account to connect. Procella asks Descope to confirm
-				your GitHub identity, verifies that it owns the account or is an active organization
-				administrator, and only then sends you to GitHub to install the App.
-			</p>
-			<form
-				aria-label="Connect GitHub App"
-				onSubmit={(event) => {
-					event.preventDefault();
-					const accountLogin = new FormData(event.currentTarget).get("accountLogin");
-					if (typeof accountLogin === "string" && accountLogin.trim()) {
-						onConnect(accountLogin.trim());
-					}
-				}}
-			>
-				<label className="block text-sm text-cloud mb-4 max-w-sm">
-					GitHub account
-					<input
-						type="text"
-						name="accountLogin"
-						required
-						maxLength={100}
-						placeholder="acme"
-						autoComplete="off"
-						className="mt-1 w-full bg-deep-sky border border-cloud/20 rounded-lg px-3 py-2 text-mist"
-					/>
-				</label>
-				<button type="submit" disabled={pending} className="btn-primary">
-					{pending ? "Opening GitHub…" : "Install & Verify GitHub App"}
+		<div className="bg-slate-brand/50 border border-cloud/15 rounded-xl p-6 flex items-center justify-between gap-4">
+			<div>
+				<h3 className="text-sm font-semibold text-mist">{accountLogin}</h3>
+				<p className="text-sm text-cloud/60">{accountType}</p>
+			</div>
+			{claimedByOtherTenant ? (
+				<div className="text-right max-w-xs">
+					<button type="button" disabled className="btn-primary opacity-50 cursor-not-allowed">
+						Connect
+					</button>
+					<p className="text-xs text-cloud/60 mt-1">Already connected to a different tenant.</p>
+				</div>
+			) : connected ? (
+				<span className="text-sm text-success">Connected</span>
+			) : installationId !== null ? (
+				<button
+					type="button"
+					onClick={() => onConnect(installationId)}
+					disabled={connectPending}
+					className="btn-primary"
+				>
+					{connectPending ? "Connecting…" : "Connect"}
 				</button>
-			</form>
+			) : (
+				<button
+					type="button"
+					onClick={() => onInstall(accountLogin)}
+					disabled={installPending}
+					className="btn-primary"
+				>
+					{installPending ? "Opening GitHub…" : "Install"}
+				</button>
+			)}
 		</div>
 	);
 }
