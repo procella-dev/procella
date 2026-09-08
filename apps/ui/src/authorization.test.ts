@@ -557,6 +557,39 @@ describe("Settings authorization", () => {
 		);
 	});
 
+	test("offers a GitHub-side account picker for organizations the list cannot enumerate", async () => {
+		currentCallerQuery = {
+			data: { tenantId: "tenant-from-server", roles: ["admin"] },
+			isLoading: false,
+			error: null,
+		};
+		githubStatusQuery = {
+			data: {
+				configured: true,
+				connectAvailable: true,
+				connectedLogin: "octocat",
+				installations: [],
+			},
+			isLoading: false,
+			error: null,
+		};
+		connectTargetsQuery = { data: { targets: [] }, isLoading: false, error: null };
+		dom.location.hash = "github";
+
+		const page = render(createElement(Settings));
+		fireEvent.click(page.getByRole("button", { name: "Choose an account on GitHub" }));
+
+		// No account is sent: an organization without the App installed is
+		// invisible to the vaulted token, so GitHub picks and the callback
+		// derives it.
+		await waitFor(() => expect(createInstallationUrl).toHaveBeenCalledWith({}));
+		await waitFor(() =>
+			expect(dom.location.href).toBe(
+				"https://github.com/apps/procella-bot/installations/new?state=install-state",
+			),
+		);
+	});
+
 	test("refuses a non-GitHub App install URL without navigating", async () => {
 		currentCallerQuery = {
 			data: { tenantId: "tenant-from-server", roles: ["admin"] },

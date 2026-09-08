@@ -590,7 +590,7 @@ describe("GitHub setup state", () => {
 		await expect(setupStates.verify(state)).rejects.toMatchObject({ code: "invalid_state" });
 	});
 
-	test("verify rejects an install-phase state missing an account", async () => {
+	test("verify accepts an install-phase state that names no account", async () => {
 		const setupStates = createGitHubSetupStateService(testConfig.stateSigningKey);
 		const { state } = await setupStates.issue({
 			tenantId: "tenant-a",
@@ -598,7 +598,12 @@ describe("GitHub setup state", () => {
 			browserBinding: BROWSER_BINDING,
 			phase: "install",
 		});
-		await expect(setupStates.verify(state)).rejects.toMatchObject({ code: "invalid_state" });
+		// GitHub's installation picker chooses the account for this state, so
+		// the callback derives it instead of comparing against a claim.
+		await expect(setupStates.verify(state)).resolves.toMatchObject({
+			phase: "install",
+			accountLogin: undefined,
+		});
 	});
 });
 
@@ -1452,6 +1457,100 @@ describe("OctokitGitHubService connect targets and installation", () => {
 		await expect(
 			service.completeInstallation(state, 101, OTHER_BROWSER_NONCE),
 		).rejects.toMatchObject({ code: "invalid_state" });
+	});
+
+	test("issueInstallationUrl without an account skips the pre-check but still needs a connection", async () => {
+		const verifyAccountAdministration = mock(async () => undefined);
+		const service = new OctokitGitHubService({
+			db: setupStateDb().db,
+			config: testConfig,
+			appClient: {
+				request: mock(async () => ({ data: { id: 123, slug: "procella" } })),
+			} as unknown as Octokit,
+			outbound: stubOutbound({ verifyAccountAdministration }),
+		});
+		const setupStates = createGitHubSetupStateService(testConfig.stateSigningKey);
+
+		const url = new URL(
+			await service.issueInstallationUrl("tenant-a", "user-a", undefined, BROWSER_NONCE),
+		);
+		// GitHub's own picker chooses the account, so none is named in the state
+		// and there is nothing to verify before the redirect.
+		const claims = await setupStates.verify(url.searchParams.get("state") ?? "");
+		expect(claims.accountLogin).toBeUndefined();
+		expect(claims.phase).toBe("install");
+		expect(verifyAccountAdministration).not.toHaveBeenCalled();
+
+		const unconfirmed = new OctokitGitHubService({
+			db: setupStateDb({ confirmedTokenId: null }).db,
+			config: testConfig,
+			appClient: {
+				request: mock(async () => ({ data: { id: 123, slug: "procella" } })),
+			} as unknown as Octokit,
+			outbound: stubOutbound(),
+		});
+		await expect(
+			unconfirmed.issueInstallationUrl("tenant-a", "user-a", undefined, BROWSER_NONCE),
+		).rejects.toMatchObject({ code: "authorization_required" });
+	});
+
+	test("completeInstallation binds the account GitHub installed on when the state named none", async () => {
+		const setupStates = createGitHubSetupStateService(testConfig.stateSigningKey);
+		const db = setupStateDb();
+		const verifyAccountAdministration = mock(async () => undefined);
+		const service = new OctokitGitHubService({
+			db: db.db,
+			config: testConfig,
+			appClient: { request: mockInstallationRequest() } as unknown as Octokit,
+			setupStates,
+			outbound: stubOutbound({ verifyAccountAdministration }),
+		});
+		const { state } = await setupStates.issue({
+			...INSTALL_STATE_INPUT,
+			accountLogin: undefined,
+		});
+
+		await expect(service.completeInstallation(state, 101, BROWSER_NONCE)).resolves.toMatchObject({
+			installationId: 101,
+			accountLogin: "acme",
+		});
+		// The account comes from the App-authenticated installation, and it is
+		// checked with no invisible-membership allowance.
+		expect(verifyAccountAdministration).toHaveBeenCalledWith(
+			"user-a",
+			"tenant-a",
+			"acme",
+			"tok-a",
+			{},
+		);
+	});
+
+	test("completeInstallation refuses an account-less install the caller does not administer", async () => {
+		const setupStates = createGitHubSetupStateService(testConfig.stateSigningKey);
+		const db = setupStateDb();
+		const service = new OctokitGitHubService({
+			db: db.db,
+			config: testConfig,
+			appClient: { request: mockInstallationRequest() } as unknown as Octokit,
+			setupStates,
+			outbound: stubOutbound({
+				verifyAccountAdministration: mock(async () => {
+					throw new GitHubOutboundError("authorization_required");
+				}),
+			}),
+		});
+		const { state } = await setupStates.issue({
+			...INSTALL_STATE_INPUT,
+			accountLogin: undefined,
+		});
+
+		await expect(service.completeInstallation(state, 101, BROWSER_NONCE)).rejects.toMatchObject({
+			code: "authorization_required",
+		});
+		// The transaction aborts before any installation row is written.
+		expect(db.values).not.toHaveBeenCalledWith(
+			expect.objectContaining({ installationId: expect.anything() }),
+		);
 	});
 });
 

@@ -129,9 +129,10 @@ the accounts that authorization actually administers.
 3. Procella consumes the transaction exactly once, requiring the browser nonce cookie and the same
    tenant and administrator that opened it, and records the vaulted token's Descope token id in
    `github_outbound_connections` in the same transaction. No account is chosen or verified yet.
-4. **Settings** > **GitHub** now lists every account the confirmed identity administers — its own
-   login and every organization where it is an active admin — together with any App installation
-   Procella can already see for that account. Each row offers **Connect** or **Install**:
+4. **Settings** > **GitHub** now lists the accounts the confirmed identity administers — its own
+   login and every organization GitHub reports it as an active admin of — together with any App
+   installation Procella can already see for that account. Each row offers **Connect** or
+   **Install**:
    - **Connect** appears when GitHub already reports an installation for the account. Procella
      derives the account entirely from that App-authenticated installation, never from anything the
      browser sends, and binds it through an authenticated first-party mutation with no browser
@@ -147,6 +148,14 @@ the accounts that authorization actually administers.
      App-level Setup URL from step 1. GitHub's setup callback there re-verifies the signed state,
      the browser binding, the App-authenticated installation identity, and the confirmed GitHub
      identity before saving the tenant binding.
+
+   **The list cannot show an organization the App has never been installed on.** A GitHub App user
+   access token reaches only resources that both the user and the App can reach, so organization
+   memberships are filtered to accounts the App is already installed on. For everything else, use
+   **Choose an account on GitHub**: Procella issues installation state that names no account,
+   GitHub's own installation picker chooses the target, and the setup callback derives the installed
+   account and requires active administration of it with no invisible-membership allowance before
+   binding. That is the route for a first-time organization install.
 
 No tenant binding is ever saved without both an active-administration proof and an
 installation-visibility proof, freshly checked for whichever path bound it: **Connect** proves them

@@ -492,6 +492,26 @@ describe("githubRouter", () => {
 		expect(ctx.setGitHubSetupCookie).toHaveBeenCalledWith(nonce);
 	});
 
+	test("createInstallationUrl forwards no account when GitHub picks the target", async () => {
+		const issueInstallationUrl = mock(
+			async () => "https://github.com/apps/procella/installations/new",
+		);
+		const ctx = mockContext({ github: mockGitHubService({ issueInstallationUrl }) });
+
+		await githubRouter.createCaller(ctx).createInstallationUrl({});
+
+		// Organizations without the App installed cannot be listed, so the
+		// account has to be chosen on GitHub and derived from the callback.
+		const [tenantId, userId, accountLogin] = issueInstallationUrl.mock.calls[0] as unknown as [
+			string,
+			string,
+			string | undefined,
+			string,
+		];
+		expect([tenantId, userId]).toEqual(["t-1", "u-1"]);
+		expect(accountLogin).toBeUndefined();
+	});
+
 	test("createInstallationUrl never renews the browser cookie on failure", async () => {
 		const ctx = mockContext({
 			github: mockGitHubService({

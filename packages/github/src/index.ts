@@ -165,13 +165,16 @@ export interface GitHubService extends GitHubDeliveryService {
 		installationId: number,
 	): Promise<GitHubInstallationInfo>;
 	/**
-	 * Verifies the confirmed connection administers `accountLogin`, then
-	 * issues browser-bound installation state for a fresh install of the App.
+	 * Issues browser-bound installation state for a fresh install of the App.
+	 * With an account, administration of it is verified up front. Without one,
+	 * GitHub's installation picker chooses the account, which is the only way
+	 * to reach an organization the connect list cannot enumerate, and
+	 * {@link completeInstallation} authorizes whatever comes back.
 	 */
 	issueInstallationUrl(
 		tenantId: string,
 		userId: string,
-		accountLogin: string,
+		accountLogin: string | undefined,
 		browserNonce: string,
 	): Promise<string>;
 	completeInstallation(
@@ -312,17 +315,18 @@ export function createGitHubSetupStateService(
 				) {
 					throw new GitHubSetupError("invalid_state");
 				}
-				// An install-phase state names the account it was issued for; a
-				// connect-phase state selects none yet, so the two must never mix.
+				// A connect-phase state selects no account, so it must never carry
+				// one. An install-phase state may: it names the account when the
+				// admin picked from the connect list, and omits it when GitHub's
+				// own installation picker chooses, which is the only route to an
+				// organization the App cannot see yet.
 				const rawAccountLogin = payload.accountLogin;
 				let accountLogin: string | undefined;
-				if (phase === "install") {
-					if (typeof rawAccountLogin !== "string" || rawAccountLogin.length === 0) {
+				if (rawAccountLogin !== undefined) {
+					if (phase !== "install" || typeof rawAccountLogin !== "string" || !rawAccountLogin) {
 						throw new GitHubSetupError("invalid_state");
 					}
 					accountLogin = rawAccountLogin;
-				} else if (rawAccountLogin !== undefined) {
-					throw new GitHubSetupError("invalid_state");
 				}
 				return {
 					tenantId: payload.tenantId,
@@ -905,21 +909,24 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 	}
 
 	/**
-	 * Verifies the confirmed connection administers `accountLogin`, then issues
-	 * browser-bound installation state for a fresh install of the App.
+	 * Issues a browser-bound GitHub App installation URL.
 	 *
-	 * The read of the confirmed token and the administration check happen
-	 * under the per-connection advisory lock, so a concurrent disconnect
-	 * cannot leave this check passing against a token it already drained.
-	 * Membership is advisory here: a GitHub App user token cannot read
-	 * organization membership until the App is installed on it, so an
-	 * invisible organization is tolerated pre-installation.
-	 * {@link completeInstallation} requires proof once the App can see it.
+	 * With `accountLogin`, the admin picked a listed account and administration
+	 * is verified up front, tolerating an invisible organization: a user access
+	 * token reaches only what the App can also reach, so an organization
+	 * without an installation is hidden from it.
+	 *
+	 * Without `accountLogin`, GitHub's own installation picker chooses the
+	 * account. That is the only route to an organization the connect list
+	 * cannot enumerate for the same reason, so there is nothing to verify yet;
+	 * {@link completeInstallation} derives the installed account and requires
+	 * active administration of it, with no invisible-membership allowance,
+	 * before binding anything.
 	 */
 	async issueInstallationUrl(
 		tenantId: string,
 		userId: string,
-		accountLogin: string,
+		accountLogin: string | undefined,
 		browserNonce: string,
 	): Promise<string> {
 		if (!this.outbound) throw new GitHubSetupError("authorization_unavailable");
@@ -946,9 +953,15 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 				)
 				.limit(1);
 			const confirmedTokenId = confirmation?.tokenId ?? null;
-			await this.verifyVaultedAdministration(tenantId, userId, accountLogin, confirmedTokenId, {
-				allowInvisibleMembership: true,
-			});
+			if (accountLogin === undefined) {
+				// No account to check yet, but the connection still has to exist:
+				// the callback verifies administration against this same slot.
+				await this.requireConfirmedConnection(confirmedTokenId);
+			} else {
+				await this.verifyVaultedAdministration(tenantId, userId, accountLogin, confirmedTokenId, {
+					allowInvisibleMembership: true,
+				});
+			}
 			await tx.delete(githubSetupStates).where(lt(githubSetupStates.expiresAt, sql`now()`));
 			await tx.insert(githubSetupStates).values({
 				jti: next.claims.jti,
@@ -987,17 +1000,23 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 	): Promise<GitHubInstallationInfo> {
 		const claims = await this.setupStates.verify(state);
 		this.verifyBrowserBinding(browserNonce, claims.browserBinding);
-		if (claims.phase !== "install" || claims.accountLogin === undefined) {
+		if (claims.phase !== "install") {
 			throw new GitHubSetupError("invalid_state");
 		}
-		// Bound to a local because the narrowing above does not reach the
-		// transaction closure below, where the same account is verified again.
-		const accountLogin = claims.accountLogin;
 
 		const installation = await this.loadInstallation(installationId);
-		if (installation.accountLogin.toLowerCase() !== accountLogin.toLowerCase()) {
+		// A state that named an account must match the installation GitHub
+		// reports. A state issued for GitHub's own picker named none, so the
+		// installed account is the answer rather than something to compare
+		// against; the administration check below is what authorizes it, and it
+		// runs without the pre-install invisible-membership allowance.
+		if (
+			claims.accountLogin !== undefined &&
+			installation.accountLogin.toLowerCase() !== claims.accountLogin.toLowerCase()
+		) {
 			throw new GitHubSetupError("unauthorized_account");
 		}
+		const accountLogin = installation.accountLogin;
 
 		return this.db.transaction(async (tx) => {
 			await lockOutboundConnection(tx as Database, claims.tenantId, claims.initiatorUserId);
@@ -1169,6 +1188,16 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 			)
 			.returning({ jti: githubSetupStates.jti });
 		if (!consumed) throw new GitHubSetupError("replayed_state");
+	}
+
+	/**
+	 * Fails closed when the tenant's admin has no confirmed vaulted identity.
+	 * Used where there is no account to verify yet, so that the only remaining
+	 * precondition is still checked before a signed state is handed out.
+	 */
+	private async requireConfirmedConnection(confirmedTokenId: string | null): Promise<void> {
+		if (!this.outbound) throw new GitHubSetupError("authorization_unavailable");
+		if (!confirmedTokenId) throw new GitHubSetupError("authorization_required");
 	}
 
 	/** Maps outbound verification failures onto the setup error surface. */
