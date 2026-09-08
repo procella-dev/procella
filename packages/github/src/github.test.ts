@@ -9,12 +9,11 @@ import {
 	buildGitHubAppConfig,
 	buildPRCommentBody,
 	createGitHubSetupStateService,
-	type GitHubAccountCandidate,
+	type GitHubConnectCandidates,
 	type GitHubInstallationInfo,
 	GitHubOutboundError,
 	type GitHubOutboundIdentityService,
 	GitHubSetupError,
-	type GitHubVisibleInstallation,
 	githubRetryDelaySeconds,
 	mapUpdateStatusToCommitState,
 	OctokitGitHubDeliveryService,
@@ -200,8 +199,9 @@ function stubOutbound(
 	return {
 		loadIdentity: mock(async () => ({ login: "alice" })),
 		loadPendingConnection: mock(async () => ({ tokenId: "tok-a", login: "alice" })),
-		listAdministeredAccounts: mock(async () => [] as GitHubAccountCandidate[]),
-		listVisibleInstallations: mock(async () => [] as GitHubVisibleInstallation[]),
+		listConnectCandidates: mock(
+			async (): Promise<GitHubConnectCandidates> => ({ administered: [], installations: [] }),
+		),
 		verifyAccountAdministration: mock(async () => undefined),
 		verifyInstallationAccess: mock(async () => undefined),
 		drainTenantTokens: mock(async () => ["tok-a"] as readonly string[]),
@@ -1200,26 +1200,24 @@ describe("OctokitGitHubService connect targets and installation", () => {
 			config: testConfig,
 			appClient: {} as Octokit,
 			outbound: stubOutbound({
-				listAdministeredAccounts: mock(
-					async (): Promise<GitHubAccountCandidate[]> => [
-						{ login: "acme", accountType: "Organization" },
-					],
-				),
-				listVisibleInstallations: mock(
-					async (): Promise<GitHubVisibleInstallation[]> => [
-						{
-							installationId: 101,
-							accountLogin: "acme",
-							accountType: "Organization",
-							repositorySelection: "all",
-						},
-						{
-							installationId: 202,
-							accountLogin: "other-org",
-							accountType: "Organization",
-							repositorySelection: "all",
-						},
-					],
+				listConnectCandidates: mock(
+					async (): Promise<GitHubConnectCandidates> => ({
+						administered: [{ login: "acme", accountType: "Organization" }],
+						installations: [
+							{
+								installationId: 101,
+								accountLogin: "acme",
+								accountType: "Organization",
+								repositorySelection: "all",
+							},
+							{
+								installationId: 202,
+								accountLogin: "other-org",
+								accountType: "Organization",
+								repositorySelection: "all",
+							},
+						],
+					}),
 				),
 			}),
 		});
@@ -1244,27 +1242,27 @@ describe("OctokitGitHubService connect targets and installation", () => {
 			config: testConfig,
 			appClient: {} as Octokit,
 			outbound: stubOutbound({
-				listAdministeredAccounts: mock(
-					async (): Promise<GitHubAccountCandidate[]> => [
-						{ login: "acme", accountType: "Organization" },
-						{ login: "beta", accountType: "Organization" },
-					],
-				),
-				listVisibleInstallations: mock(
-					async (): Promise<GitHubVisibleInstallation[]> => [
-						{
-							installationId: 101,
-							accountLogin: "acme",
-							accountType: "Organization",
-							repositorySelection: "all",
-						},
-						{
-							installationId: 202,
-							accountLogin: "beta",
-							accountType: "Organization",
-							repositorySelection: "all",
-						},
-					],
+				listConnectCandidates: mock(
+					async (): Promise<GitHubConnectCandidates> => ({
+						administered: [
+							{ login: "acme", accountType: "Organization" },
+							{ login: "beta", accountType: "Organization" },
+						],
+						installations: [
+							{
+								installationId: 101,
+								accountLogin: "acme",
+								accountType: "Organization",
+								repositorySelection: "all",
+							},
+							{
+								installationId: 202,
+								accountLogin: "beta",
+								accountType: "Organization",
+								repositorySelection: "all",
+							},
+						],
+					}),
 				),
 			}),
 		});
@@ -1293,10 +1291,12 @@ describe("OctokitGitHubService connect targets and installation", () => {
 			config: testConfig,
 			appClient: {} as Octokit,
 			outbound: stubOutbound({
-				listAdministeredAccounts: mock(
-					async (): Promise<GitHubAccountCandidate[]> => [{ login: "alice", accountType: "User" }],
+				listConnectCandidates: mock(
+					async (): Promise<GitHubConnectCandidates> => ({
+						administered: [{ login: "alice", accountType: "User" }],
+						installations: [],
+					}),
 				),
-				listVisibleInstallations: mock(async (): Promise<GitHubVisibleInstallation[]> => []),
 			}),
 		});
 
@@ -1317,7 +1317,7 @@ describe("OctokitGitHubService connect targets and installation", () => {
 			config: testConfig,
 			appClient: {} as Octokit,
 			outbound: stubOutbound({
-				listAdministeredAccounts: mock(async () => {
+				listConnectCandidates: mock(async () => {
 					throw new GitHubOutboundError("authorization_required");
 				}),
 			}),

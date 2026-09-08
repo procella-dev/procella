@@ -15,12 +15,11 @@ import { projectError } from "@procella/types";
 import { and, desc, eq, gt, inArray, lt, sql } from "drizzle-orm";
 import { errors as joseErrors, jwtVerify, SignJWT } from "jose";
 import {
-	type GitHubAccountCandidate,
+	type GitHubConnectCandidates,
 	GitHubOutboundError,
 	type GitHubOutboundIdentityService,
 	type GitHubPendingConnection,
 	type GitHubUserIdentity,
-	type GitHubVisibleInstallation,
 } from "./outbound.js";
 
 export * from "./outbound.js";
@@ -815,16 +814,13 @@ export class OctokitGitHubService extends OctokitGitHubDeliveryService implement
 	async listConnectTargets(tenantId: string, userId: string): Promise<GitHubConnectTarget[]> {
 		if (!this.outbound) throw new GitHubSetupError("authorization_unavailable");
 		const outbound = this.outbound;
-		let administered: GitHubAccountCandidate[];
-		let installations: GitHubVisibleInstallation[];
+		let candidates: GitHubConnectCandidates;
 		try {
-			[administered, installations] = await Promise.all([
-				outbound.listAdministeredAccounts(userId, tenantId),
-				outbound.listVisibleInstallations(userId, tenantId),
-			]);
+			candidates = await outbound.listConnectCandidates(userId, tenantId);
 		} catch (error) {
 			throw setupErrorFromOutbound(error);
 		}
+		const { administered, installations } = candidates;
 
 		const installationByLogin = new Map(
 			installations.map(
