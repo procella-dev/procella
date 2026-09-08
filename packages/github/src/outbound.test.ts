@@ -614,3 +614,199 @@ describe("VaultedGitHubIdentityService", () => {
 		});
 	});
 });
+
+describe("VaultedGitHubIdentityService listing", () => {
+	test("lists the connected login first, then active admins sorted case-insensitively", async () => {
+		const service = new VaultedGitHubIdentityService(
+			tokenVault(),
+			confirmations(),
+			userClient(async (route, options) => {
+				if (route === "GET /user") return { data: { login: "alice" } };
+				expect(route).toBe("GET /user/memberships/orgs");
+				expect(options).toMatchObject({ state: "active", per_page: 100, page: 1 });
+				return {
+					data: [
+						{ state: "active", role: "admin", organization: { login: "Zeta" } },
+						{ state: "active", role: "member", organization: { login: "acme" } },
+						{ state: "active", role: "admin", organization: { login: "beta" } },
+						{ state: "pending", role: "admin", organization: { login: "gamma" } },
+					],
+				};
+			}),
+		);
+
+		await expect(service.listAdministeredAccounts("user-a", TENANT_A)).resolves.toEqual([
+			{ login: "alice", accountType: "User" },
+			{ login: "beta", accountType: "Organization" },
+			{ login: "Zeta", accountType: "Organization" },
+		]);
+	});
+
+	test("paginates organization memberships until a short page ends it", async () => {
+		const fullPage = Array.from({ length: 100 }, (_value, index) => ({
+			state: "active",
+			role: "admin",
+			organization: { login: `org-${index}` },
+		}));
+		let call = 0;
+		const service = new VaultedGitHubIdentityService(
+			tokenVault(),
+			confirmations(),
+			userClient(async (route) => {
+				if (route === "GET /user") return { data: { login: "alice" } };
+				call += 1;
+				return {
+					data:
+						call === 1
+							? fullPage
+							: [{ state: "active", role: "admin", organization: { login: "org-100" } }],
+				};
+			}),
+		);
+
+		const accounts = await service.listAdministeredAccounts("user-a", TENANT_A);
+		expect(accounts).toHaveLength(102);
+		expect(call).toBe(2);
+	});
+
+	test("listAdministeredAccounts fails closed with authorization_required when nothing is confirmed", async () => {
+		const request = mock(async () => ({ data: {} }));
+		const service = new VaultedGitHubIdentityService(
+			tokenVault(),
+			confirmations(null),
+			() => ({ request }) as unknown as Octokit,
+		);
+
+		await expect(service.listAdministeredAccounts("user-a", TENANT_A)).rejects.toMatchObject({
+			code: "authorization_required",
+		});
+		expect(request).not.toHaveBeenCalled();
+	});
+
+	test("maps an organization membership lookup failure to authorization_failed", async () => {
+		const service = new VaultedGitHubIdentityService(
+			tokenVault(),
+			confirmations(),
+			userClient(async (route) => {
+				if (route === "GET /user") return { data: { login: "alice" } };
+				throw new Error("GitHub unavailable");
+			}),
+		);
+
+		await expect(service.listAdministeredAccounts("user-a", TENANT_A)).rejects.toMatchObject({
+			code: "authorization_failed",
+		});
+	});
+
+	test("lists visible installations and skips entries with an unrecognized shape", async () => {
+		const service = new VaultedGitHubIdentityService(
+			tokenVault(),
+			confirmations(),
+			userClient(async () => ({
+				data: {
+					total_count: 3,
+					installations: [
+						{
+							id: 101,
+							account: { login: "acme" },
+							target_type: "Organization",
+							repository_selection: "all",
+						},
+						{
+							id: 102,
+							account: { login: "alice" },
+							target_type: "User",
+							repository_selection: "selected",
+						},
+						{
+							id: 103,
+							account: null,
+							target_type: "Organization",
+							repository_selection: "all",
+						},
+					],
+				},
+			})),
+		);
+
+		await expect(service.listVisibleInstallations("user-a", TENANT_A)).resolves.toEqual([
+			{
+				installationId: 101,
+				accountLogin: "acme",
+				accountType: "Organization",
+				repositorySelection: "all",
+			},
+			{
+				installationId: 102,
+				accountLogin: "alice",
+				accountType: "User",
+				repositorySelection: "selected",
+			},
+		]);
+	});
+
+	test("paginates visible installations using the reported total count", async () => {
+		const page1 = Array.from({ length: 100 }, (_value, index) => ({
+			id: index + 1,
+			account: { login: `org-${index}` },
+			target_type: "Organization",
+			repository_selection: "all",
+		}));
+		let call = 0;
+		const service = new VaultedGitHubIdentityService(
+			tokenVault(),
+			confirmations(),
+			userClient(async () => {
+				call += 1;
+				return {
+					data: {
+						total_count: 101,
+						installations:
+							call === 1
+								? page1
+								: [
+										{
+											id: 101,
+											account: { login: "org-100" },
+											target_type: "Organization",
+											repository_selection: "all",
+										},
+									],
+					},
+				};
+			}),
+		);
+
+		const installations = await service.listVisibleInstallations("user-a", TENANT_A);
+		expect(installations).toHaveLength(101);
+		expect(call).toBe(2);
+	});
+
+	test("listVisibleInstallations fails closed with authorization_required when nothing is confirmed", async () => {
+		const request = mock(async () => ({ data: {} }));
+		const service = new VaultedGitHubIdentityService(
+			tokenVault(),
+			confirmations(null),
+			() => ({ request }) as unknown as Octokit,
+		);
+
+		await expect(service.listVisibleInstallations("user-a", TENANT_A)).rejects.toMatchObject({
+			code: "authorization_required",
+		});
+		expect(request).not.toHaveBeenCalled();
+	});
+
+	test("maps an installation lookup failure to authorization_failed", async () => {
+		const service = new VaultedGitHubIdentityService(
+			tokenVault(),
+			confirmations(),
+			userClient(async () => {
+				throw new Error("GitHub unavailable");
+			}),
+		);
+
+		await expect(service.listVisibleInstallations("user-a", TENANT_A)).rejects.toMatchObject({
+			code: "authorization_failed",
+		});
+	});
+});

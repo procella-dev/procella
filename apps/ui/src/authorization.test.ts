@@ -40,17 +40,43 @@ let githubStatusQuery: {
 	isLoading: boolean;
 	error: Error | null;
 };
-const createInstallationUrl = mock(async () => ({ url: "http://localhost/github-install" }));
+let connectTargetsQuery: {
+	data?: {
+		targets: Array<{
+			accountLogin: string;
+			accountType: "Organization" | "User";
+			installationId: number | null;
+			connected: boolean;
+			claimedByOtherTenant: boolean;
+		}>;
+	};
+	isLoading: boolean;
+	error: Error | null;
+};
 const startConnect = mock(async () => ({
 	appId: "procella-github",
 	tenantId: "tenant-from-server",
 	redirectUrl: "https://app.example.test/settings/github/connected?state=signed-connect-state",
 }));
+const confirmConnect = mock(async () => ({ login: "octocat" }));
 const outboundConnect = mock(async () => ({
 	ok: true,
 	data: { url: "https://github.com/login/oauth/authorize?state=descope" },
 }));
+const connectInstallation = mock(async () => ({
+	installation: {
+		installationId: 202,
+		accountLogin: "acme",
+		accountType: "Organization" as const,
+		repositorySelection: "all" as const,
+	},
+}));
+const createInstallationUrl = mock(async () => ({
+	url: "https://github.com/apps/procella-bot/installations/new?state=install-state",
+}));
 const removeInstallation = mock(async () => ({ success: true }));
+const statusRefetch = mock(async () => undefined);
+const connectTargetsRefetch = mock(async () => undefined);
 const getSessionToken = mock(() => "must-not-be-read");
 const getRefreshToken = mock(() => "must-not-be-read");
 
@@ -69,9 +95,23 @@ mock.module(trpcPath, () => ({
 			},
 		},
 		github: {
-			status: { useQuery: () => ({ ...githubStatusQuery, refetch: mock(async () => {}) }) },
+			status: { useQuery: () => ({ ...githubStatusQuery, refetch: statusRefetch }) },
 			startConnect: {
 				useMutation: () => ({ mutateAsync: startConnect, isPending: false }),
+			},
+			confirmConnect: {
+				useMutation: () => ({ mutateAsync: confirmConnect, isPending: false }),
+			},
+			connectTargets: {
+				useQuery: (_input: undefined, options: { enabled: boolean }) => ({
+					...(options.enabled
+						? connectTargetsQuery
+						: { data: undefined, isLoading: false, error: null }),
+					refetch: connectTargetsRefetch,
+				}),
+			},
+			connectInstallation: {
+				useMutation: () => ({ mutateAsync: connectInstallation, isPending: false }),
 			},
 			createInstallationUrl: {
 				useMutation: () => ({ mutateAsync: createInstallationUrl, isPending: false }),
@@ -133,19 +173,36 @@ beforeEach(() => {
 		isLoading: false,
 		error: null,
 	};
-	createInstallationUrl.mockClear();
+	connectTargetsQuery = { data: undefined, isLoading: false, error: null };
 	startConnect.mockClear();
 	startConnect.mockImplementation(async () => ({
 		appId: "procella-github",
 		tenantId: "tenant-from-server",
 		redirectUrl: "https://app.example.test/settings/github/connected?state=signed-connect-state",
 	}));
+	confirmConnect.mockClear();
+	confirmConnect.mockImplementation(async () => ({ login: "octocat" }));
 	outboundConnect.mockClear();
 	outboundConnect.mockImplementation(async () => ({
 		ok: true,
 		data: { url: "https://github.com/login/oauth/authorize?state=descope" },
 	}));
+	connectInstallation.mockClear();
+	connectInstallation.mockImplementation(async () => ({
+		installation: {
+			installationId: 202,
+			accountLogin: "acme",
+			accountType: "Organization" as const,
+			repositorySelection: "all" as const,
+		},
+	}));
+	createInstallationUrl.mockClear();
+	createInstallationUrl.mockImplementation(async () => ({
+		url: "https://github.com/apps/procella-bot/installations/new?state=install-state",
+	}));
 	removeInstallation.mockClear();
+	statusRefetch.mockClear();
+	connectTargetsRefetch.mockClear();
 	getSessionToken.mockClear();
 	getRefreshToken.mockClear();
 });
@@ -237,7 +294,7 @@ describe("Settings authorization", () => {
 		expect(page.getByText("Admin access required")).toBeTruthy();
 	});
 
-	test("sends the account to the server-minted connect, then completes via the browser's own outbound.connect without reading or storing anything", async () => {
+	test("authorizes with GitHub via a single Continue action, then completes via the browser's own outbound.connect without reading or storing anything", async () => {
 		currentCallerQuery = {
 			data: { tenantId: "tenant-from-server", roles: ["admin"] },
 			isLoading: false,
@@ -255,11 +312,10 @@ describe("Settings authorization", () => {
 			error: null,
 		};
 		page = render(createElement(Settings));
-		const account = page.getByLabelText("GitHub account") as HTMLInputElement;
-		expect(account.required).toBe(true);
-		account.value = "acme";
-		fireEvent.submit(page.getByRole("form", { name: "Connect GitHub App" }));
-		await waitFor(() => expect(startConnect).toHaveBeenCalledWith({ accountLogin: "acme" }));
+		// No free-text account field remains anywhere in the disconnected state.
+		expect(page.queryByLabelText("GitHub account")).toBeNull();
+		fireEvent.click(page.getByRole("button", { name: "Continue with GitHub" }));
+		await waitFor(() => expect(startConnect).toHaveBeenCalledWith({}));
 
 		// The server response carries no token — only the outbound app id, the
 		// tenant, and a server-built redirect URL — and the browser's own
@@ -284,10 +340,10 @@ describe("Settings authorization", () => {
 		expect(getRefreshToken).not.toHaveBeenCalled();
 		expect(sessionStorage.length).toBe(0);
 		expect(localStorage.length).toBe(0);
-		expect(createInstallationUrl).not.toHaveBeenCalled();
+		expect(confirmConnect).not.toHaveBeenCalled();
 	});
 
-	test("keeps connection controls disabled until outbound connect settles", async () => {
+	test("keeps the Continue with GitHub control disabled until outbound connect settles, and drops a reentrant click", async () => {
 		currentCallerQuery = {
 			data: { tenantId: "tenant-from-server", roles: ["admin"] },
 			isLoading: false,
@@ -303,30 +359,32 @@ describe("Settings authorization", () => {
 		outboundConnect.mockImplementationOnce(() => connect.promise);
 
 		const page = render(createElement(Settings));
-		const form = page.getByRole("form", { name: "Connect GitHub App" });
-		const account = page.getByLabelText("GitHub account") as HTMLInputElement;
-		account.value = "acme";
-		fireEvent.submit(form);
+		// Two clicks dispatched inside one `act` land before React commits the
+		// disabled state, so this exercises the in-handler reentrancy guard
+		// itself rather than the disabled attribute that guards real users.
+		act(() => {
+			fireEvent.click(page.getByRole("button", { name: "Continue with GitHub" }));
+			fireEvent.click(page.getByRole("button", { name: "Continue with GitHub" }));
+		});
 
 		await waitFor(() => expect(outboundConnect).toHaveBeenCalledTimes(1));
-		const button = page.getByRole("button", { name: "Opening GitHub…" }) as HTMLButtonElement;
-		expect(button.disabled).toBe(true);
-		fireEvent.submit(form);
 		expect(startConnect).toHaveBeenCalledTimes(1);
-		expect(outboundConnect).toHaveBeenCalledTimes(1);
+		const pendingButton = page.getByRole("button", {
+			name: "Opening GitHub…",
+		}) as HTMLButtonElement;
+		expect(pendingButton.disabled).toBe(true);
 
 		const ordinaryPageShow = new dom.Event("pageshow");
 		Object.defineProperty(ordinaryPageShow, "persisted", { value: false });
 		act(() => dom.dispatchEvent(ordinaryPageShow));
-		expect(button.disabled).toBe(true);
+		expect(pendingButton.disabled).toBe(true);
 
 		const restoredPageShow = new dom.Event("pageshow");
 		Object.defineProperty(restoredPageShow, "persisted", { value: true });
 		act(() => dom.dispatchEvent(restoredPageShow));
 		await waitFor(() =>
 			expect(
-				(page.getByRole("button", { name: "Install & Verify GitHub App" }) as HTMLButtonElement)
-					.disabled,
+				(page.getByRole("button", { name: "Continue with GitHub" }) as HTMLButtonElement).disabled,
 			).toBe(false),
 		);
 		expect(startConnect).toHaveBeenCalledTimes(1);
@@ -335,8 +393,7 @@ describe("Settings authorization", () => {
 		act(() => connect.resolve({ ok: false }));
 		await waitFor(() => expect(page.getByText("Unable to start GitHub setup")).toBeTruthy());
 		expect(
-			(page.getByRole("button", { name: "Install & Verify GitHub App" }) as HTMLButtonElement)
-				.disabled,
+			(page.getByRole("button", { name: "Continue with GitHub" }) as HTMLButtonElement).disabled,
 		).toBe(false);
 	});
 
@@ -358,9 +415,7 @@ describe("Settings authorization", () => {
 		}));
 
 		const page = render(createElement(Settings));
-		const account = page.getByLabelText("GitHub account") as HTMLInputElement;
-		account.value = "acme";
-		fireEvent.submit(page.getByRole("form", { name: "Connect GitHub App" }));
+		fireEvent.click(page.getByRole("button", { name: "Continue with GitHub" }));
 
 		await waitFor(() => expect(outboundConnect).toHaveBeenCalled());
 		await waitFor(() => expect(page.getByText("Unable to start GitHub setup")).toBeTruthy());
@@ -382,21 +437,22 @@ describe("Settings authorization", () => {
 		outboundConnect.mockImplementationOnce(async () => ({ ok: false }));
 
 		const page = render(createElement(Settings));
-		const account = page.getByLabelText("GitHub account") as HTMLInputElement;
-		account.value = "acme";
-		fireEvent.submit(page.getByRole("form", { name: "Connect GitHub App" }));
+		fireEvent.click(page.getByRole("button", { name: "Continue with GitHub" }));
 
 		await waitFor(() => expect(outboundConnect).toHaveBeenCalled());
 		await waitFor(() => expect(page.getByText("Unable to start GitHub setup")).toBeTruthy());
 	});
 
-	test("resumes the installation handoff from the signed callback state", async () => {
+	test("resumes the authorization handoff from the signed callback state and lands back on settings", async () => {
 		dom.location.href = "http://localhost/settings/github/connected?state=signed-connect-state";
 
 		render(createElement(GitHubConnected));
 
 		await waitFor(() =>
-			expect(createInstallationUrl).toHaveBeenCalledWith({ state: "signed-connect-state" }),
+			expect(confirmConnect).toHaveBeenCalledWith({ state: "signed-connect-state" }),
+		);
+		await waitFor(() =>
+			expect(dom.location.href).toBe("http://localhost/settings?github=connected#github"),
 		);
 		expect(getSessionToken).not.toHaveBeenCalled();
 		expect(getRefreshToken).not.toHaveBeenCalled();
@@ -409,10 +465,10 @@ describe("Settings authorization", () => {
 		render(createElement(GitHubConnected));
 
 		await waitFor(() => expect(dom.location.href).toContain("reason=invalid_state"));
-		expect(createInstallationUrl).not.toHaveBeenCalled();
+		expect(confirmConnect).not.toHaveBeenCalled();
 	});
 
-	test("shows callback success and configured installation actions", async () => {
+	test("lists connect targets once a GitHub identity is confirmed: Connect binds an unclaimed installation and refetches", async () => {
 		currentCallerQuery = {
 			data: { tenantId: "tenant-from-server", roles: ["admin"] },
 			isLoading: false,
@@ -422,7 +478,234 @@ describe("Settings authorization", () => {
 			data: {
 				configured: true,
 				connectAvailable: true,
-				connectedLogin: "alice",
+				connectedLogin: "octocat",
+				installations: [],
+			},
+			isLoading: false,
+			error: null,
+		};
+		connectTargetsQuery = {
+			data: {
+				targets: [
+					{
+						accountLogin: "acme",
+						accountType: "Organization",
+						installationId: 202,
+						connected: false,
+						claimedByOtherTenant: false,
+					},
+				],
+			},
+			isLoading: false,
+			error: null,
+		};
+		dom.location.hash = "github";
+
+		const page = render(createElement(Settings));
+		expect(page.getByText(/Connected as GitHub user/)).toBeTruthy();
+		expect(page.getByText("acme")).toBeTruthy();
+		fireEvent.click(page.getByRole("button", { name: "Connect" }));
+
+		await waitFor(() => expect(connectInstallation).toHaveBeenCalledWith({ installationId: 202 }));
+		await waitFor(() => expect(statusRefetch).toHaveBeenCalled());
+		await waitFor(() => expect(connectTargetsRefetch).toHaveBeenCalled());
+	});
+
+	test("Install issues a fresh App installation link and navigates only when it points at GitHub's app install endpoint", async () => {
+		currentCallerQuery = {
+			data: { tenantId: "tenant-from-server", roles: ["admin"] },
+			isLoading: false,
+			error: null,
+		};
+		githubStatusQuery = {
+			data: {
+				configured: true,
+				connectAvailable: true,
+				connectedLogin: "octocat",
+				installations: [],
+			},
+			isLoading: false,
+			error: null,
+		};
+		connectTargetsQuery = {
+			data: {
+				targets: [
+					{
+						accountLogin: "acme",
+						accountType: "Organization",
+						installationId: null,
+						connected: false,
+						claimedByOtherTenant: false,
+					},
+				],
+			},
+			isLoading: false,
+			error: null,
+		};
+		dom.location.hash = "github";
+
+		const page = render(createElement(Settings));
+		fireEvent.click(page.getByRole("button", { name: "Install" }));
+
+		await waitFor(() =>
+			expect(createInstallationUrl).toHaveBeenCalledWith({ accountLogin: "acme" }),
+		);
+		await waitFor(() =>
+			expect(dom.location.href).toBe(
+				"https://github.com/apps/procella-bot/installations/new?state=install-state",
+			),
+		);
+	});
+
+	test("refuses a non-GitHub App install URL without navigating", async () => {
+		currentCallerQuery = {
+			data: { tenantId: "tenant-from-server", roles: ["admin"] },
+			isLoading: false,
+			error: null,
+		};
+		githubStatusQuery = {
+			data: {
+				configured: true,
+				connectAvailable: true,
+				connectedLogin: "octocat",
+				installations: [],
+			},
+			isLoading: false,
+			error: null,
+		};
+		connectTargetsQuery = {
+			data: {
+				targets: [
+					{
+						accountLogin: "acme",
+						accountType: "Organization",
+						installationId: null,
+						connected: false,
+						claimedByOtherTenant: false,
+					},
+				],
+			},
+			isLoading: false,
+			error: null,
+		};
+		dom.location.hash = "github";
+		createInstallationUrl.mockImplementationOnce(async () => ({
+			url: "https://evil.example/apps/x",
+		}));
+
+		const page = render(createElement(Settings));
+		fireEvent.click(page.getByRole("button", { name: "Install" }));
+
+		await waitFor(() => expect(createInstallationUrl).toHaveBeenCalled());
+		await waitFor(() =>
+			expect(page.getByText("Unable to start GitHub App installation")).toBeTruthy(),
+		);
+		expect(dom.location.href).not.toContain("evil.example");
+	});
+
+	test("disables Connect and explains a target already claimed by another tenant", () => {
+		currentCallerQuery = {
+			data: { tenantId: "tenant-from-server", roles: ["admin"] },
+			isLoading: false,
+			error: null,
+		};
+		githubStatusQuery = {
+			data: {
+				configured: true,
+				connectAvailable: true,
+				connectedLogin: "octocat",
+				installations: [],
+			},
+			isLoading: false,
+			error: null,
+		};
+		connectTargetsQuery = {
+			data: {
+				targets: [
+					{
+						accountLogin: "other-org",
+						accountType: "Organization",
+						installationId: 303,
+						connected: false,
+						claimedByOtherTenant: true,
+					},
+				],
+			},
+			isLoading: false,
+			error: null,
+		};
+		dom.location.hash = "github";
+
+		const page = render(createElement(Settings));
+		const button = page.getByRole("button", { name: "Connect" }) as HTMLButtonElement;
+		expect(button.disabled).toBe(true);
+		expect(page.getByText(/already connected to a different tenant/i)).toBeTruthy();
+
+		fireEvent.click(button);
+		expect(connectInstallation).not.toHaveBeenCalled();
+	});
+
+	test("explains an empty connect target list instead of rendering nothing", () => {
+		currentCallerQuery = {
+			data: { tenantId: "tenant-from-server", roles: ["admin"] },
+			isLoading: false,
+			error: null,
+		};
+		githubStatusQuery = {
+			data: {
+				configured: true,
+				connectAvailable: true,
+				connectedLogin: "octocat",
+				installations: [],
+			},
+			isLoading: false,
+			error: null,
+		};
+		connectTargetsQuery = { data: { targets: [] }, isLoading: false, error: null };
+		dom.location.hash = "github";
+
+		const page = render(createElement(Settings));
+		expect(page.getByText("No GitHub accounts to connect")).toBeTruthy();
+	});
+
+	test("surfaces a connect target query failure through the action error banner", () => {
+		currentCallerQuery = {
+			data: { tenantId: "tenant-from-server", roles: ["admin"] },
+			isLoading: false,
+			error: null,
+		};
+		githubStatusQuery = {
+			data: {
+				configured: true,
+				connectAvailable: true,
+				connectedLogin: "octocat",
+				installations: [],
+			},
+			isLoading: false,
+			error: null,
+		};
+		connectTargetsQuery = {
+			data: undefined,
+			isLoading: false,
+			error: new Error("Unable to load GitHub accounts"),
+		};
+		dom.location.hash = "github";
+
+		const page = render(createElement(Settings));
+		expect(page.getByText("Unable to load GitHub accounts")).toBeTruthy();
+	});
+
+	test("shows callback success and existing installations, with no per-installation reverify action", () => {
+		currentCallerQuery = {
+			data: { tenantId: "tenant-from-server", roles: ["admin"] },
+			isLoading: false,
+			error: null,
+		};
+		githubStatusQuery = {
+			data: {
+				configured: true,
+				connectAvailable: true,
+				connectedLogin: "octocat",
 				installations: [
 					{
 						id: "row-1",
@@ -439,18 +722,30 @@ describe("Settings authorization", () => {
 			isLoading: false,
 			error: null,
 		};
+		connectTargetsQuery = {
+			data: {
+				targets: [
+					{
+						accountLogin: "acme",
+						accountType: "Organization",
+						installationId: 101,
+						connected: true,
+						claimedByOtherTenant: false,
+					},
+				],
+			},
+			isLoading: false,
+			error: null,
+		};
 		dom.location.href = "http://localhost/settings?github=connected#github";
 
 		const page = render(createElement(Settings));
-		expect(page.getByText("GitHub App installation connected successfully.")).toBeTruthy();
+		expect(page.getByText("GitHub connected successfully.")).toBeTruthy();
 		expect(page.getByText("Selected repositories")).toBeTruthy();
-		expect(page.getByText("alice")).toBeTruthy();
-		expect(page.getByText("Connect another GitHub account")).toBeTruthy();
-		fireEvent.click(page.getByRole("button", { name: "Configure & Verify" }));
-		await waitFor(() => expect(startConnect).toHaveBeenCalledWith({ accountLogin: "acme" }));
+		expect(page.queryByRole("button", { name: "Configure & Verify" })).toBeNull();
 	});
 
-	test("explains an unavailable outbound connection and hides the connect form", () => {
+	test("explains an unavailable outbound connection and hides every connect action", () => {
 		currentCallerQuery = {
 			data: { tenantId: "tenant-from-server", roles: ["admin"] },
 			isLoading: false,
@@ -470,6 +765,7 @@ describe("Settings authorization", () => {
 
 		const page = render(createElement(Settings));
 		expect(page.getByText(/no Descope Outbound App connection/)).toBeTruthy();
+		expect(page.queryByRole("button", { name: "Continue with GitHub" })).toBeNull();
 		expect(page.queryByLabelText("GitHub account")).toBeNull();
 	});
 

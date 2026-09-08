@@ -70,6 +70,19 @@ export interface GitHubPendingConnection extends GitHubUserIdentity {
 	tokenId: string;
 }
 
+export interface GitHubAccountCandidate {
+	login: string;
+	accountType: "Organization" | "User";
+}
+
+/** One App installation visible to the confirmed connection's GitHub user. */
+export interface GitHubVisibleInstallation {
+	installationId: number;
+	accountLogin: string;
+	accountType: "Organization" | "User";
+	repositorySelection: "all" | "selected";
+}
+
 /**
  * Verification surface the installation flow depends on. Implemented over the
  * vault plus GitHub's user-scoped API.
@@ -84,6 +97,21 @@ export interface GitHubOutboundIdentityService {
 	 * durably records that id.
 	 */
 	loadPendingConnection(userId: string, tenantId: string): Promise<GitHubPendingConnection>;
+	/**
+	 * Accounts the confirmed connection administers: its own login, plus every
+	 * organization where it is an active admin. Used before an App
+	 * installation exists, so this reads organization membership directly
+	 * through GitHub's user-scoped API rather than through installation
+	 * visibility.
+	 */
+	listAdministeredAccounts(userId: string, tenantId: string): Promise<GitHubAccountCandidate[]>;
+	/**
+	 * Every App installation visible to the confirmed connection's GitHub
+	 * user, regardless of which account administers it. Callers join this
+	 * against {@link listAdministeredAccounts} to offer Connect only for
+	 * accounts the caller both administers and can see installed.
+	 */
+	listVisibleInstallations(userId: string, tenantId: string): Promise<GitHubVisibleInstallation[]>;
 	/**
 	 * Resolves when the confirmed connected user owns `accountLogin` or is an
 	 * active organization administrator of it.
@@ -288,6 +316,97 @@ export class VaultedGitHubIdentityService implements GitHubOutboundIdentityServi
 		return { tokenId: token.id, login: await this.currentLogin(token.accessToken) };
 	}
 
+	async listAdministeredAccounts(
+		userId: string,
+		tenantId: string,
+	): Promise<GitHubAccountCandidate[]> {
+		const token = await this.confirmedToken(userId, tenantId);
+		const ownLogin = await this.currentLogin(token.accessToken);
+		const client = this.userClientFactory(token.accessToken);
+		const organizations: GitHubAccountCandidate[] = [];
+		let page = 1;
+		try {
+			while (true) {
+				const { data } = await client.request("GET /user/memberships/orgs", {
+					state: "active",
+					per_page: 100,
+					page,
+					...this.requestOptions(),
+				});
+				for (const membership of data) {
+					// `state` is requested as active, but a pending invitation is not
+					// administration: it is re-checked here so a dropped or ignored
+					// query parameter cannot list an organization the user has not
+					// joined. Matches the per-account check below.
+					if (membership.state === "active" && membership.role === "admin") {
+						organizations.push({
+							login: membership.organization.login,
+							accountType: "Organization",
+						});
+					}
+				}
+				// This endpoint reports no total count, so a short page is the only
+				// signal that pagination is done.
+				if (data.length < 100) break;
+				page += 1;
+			}
+		} catch (error) {
+			if (error instanceof GitHubOutboundError) throw error;
+			throw new GitHubOutboundError("authorization_failed");
+		}
+		organizations.sort((left, right) =>
+			left.login.localeCompare(right.login, undefined, { sensitivity: "base" }),
+		);
+		return [{ login: ownLogin, accountType: "User" }, ...organizations];
+	}
+
+	async listVisibleInstallations(
+		userId: string,
+		tenantId: string,
+	): Promise<GitHubVisibleInstallation[]> {
+		const token = await this.confirmedToken(userId, tenantId);
+		const client = this.userClientFactory(token.accessToken);
+		const visible: GitHubVisibleInstallation[] = [];
+		let page = 1;
+		try {
+			while (true) {
+				const { data } = await client.request("GET /user/installations", {
+					per_page: 100,
+					page,
+					...this.requestOptions(),
+				});
+				for (const installation of data.installations) {
+					const account = installation.account;
+					const accountLogin =
+						typeof account === "object" && account && "login" in account
+							? account.login
+							: undefined;
+					const accountType = installation.target_type;
+					const repositorySelection = installation.repository_selection;
+					if (
+						typeof accountLogin !== "string" ||
+						(accountType !== "Organization" && accountType !== "User") ||
+						(repositorySelection !== "all" && repositorySelection !== "selected")
+					) {
+						continue;
+					}
+					visible.push({
+						installationId: installation.id,
+						accountLogin,
+						accountType,
+						repositorySelection,
+					});
+				}
+				if (page * 100 >= data.total_count) break;
+				page += 1;
+			}
+		} catch (error) {
+			if (error instanceof GitHubOutboundError) throw error;
+			throw new GitHubOutboundError("authorization_failed");
+		}
+		return visible;
+	}
+
 	async verifyAccountAdministration(
 		userId: string,
 		tenantId: string,
@@ -402,11 +521,12 @@ export class VaultedGitHubIdentityService implements GitHubOutboundIdentityServi
 
 	/**
 	 * The tenant's token, but only when Descope still reports the confirmed id
-	 * read from PostgreSQL. Used only by {@link loadIdentity}, which runs
-	 * outside any locked transaction — every other caller already knows the
-	 * confirmed id from the transaction that is verifying it and must use
-	 * {@link tokenForConfirmedId} instead, so it never opens a second pooled
-	 * connection while that transaction holds the only one available.
+	 * read from PostgreSQL. Used by {@link loadIdentity} and the listing
+	 * methods, none of which run inside a caller's locked transaction — every
+	 * verification method already knows the confirmed id from the transaction
+	 * that is verifying it and must use {@link tokenForConfirmedId} instead, so
+	 * it never opens a second pooled connection while that transaction holds
+	 * the only one available.
 	 */
 	private async confirmedToken(userId: string, tenantId: string): Promise<GitHubVaultedToken> {
 		const confirmedTokenId = await this.confirmations

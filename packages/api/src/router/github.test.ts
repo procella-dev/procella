@@ -14,12 +14,23 @@ const mockInstallation = {
 	updatedAt: new Date("2025-01-01"),
 };
 
+const mockConnectTarget = {
+	accountLogin: "my-org",
+	accountType: "Organization" as const,
+	installationId: 12345,
+	connected: true,
+	claimedByOtherTenant: false,
+};
+
 function mockGitHubService(overrides?: Partial<GitHubService>): GitHubService {
 	return {
 		handleWebhookEvent: mock(async () => {}),
 		connectAvailable: true,
 		resolveConnectedLogin: mock(async () => "alice"),
 		beginConnect: mock(async () => "signed-connect-state"),
+		confirmConnect: mock(async () => ({ login: "alice" })),
+		listConnectTargets: mock(async () => [mockConnectTarget]),
+		connectInstallation: mock(async () => mockInstallation),
 		issueInstallationUrl: mock(async () => "https://github.com/apps/procella/installations/new"),
 		completeInstallation: mock(async () => mockInstallation),
 		listInstallations: mock(async () => [mockInstallation]),
@@ -109,16 +120,33 @@ describe("githubRouter", () => {
 
 	test("startConnect returns only appId, tenantId, and a server-built redirect URL for admins", async () => {
 		const ctx = mockContext();
-		expect(await githubRouter.createCaller(ctx).startConnect({ accountLogin: "acme" })).toEqual({
+		expect(await githubRouter.createCaller(ctx).startConnect({})).toEqual({
 			appId: "procella-github",
 			tenantId: "t-1",
 			redirectUrl: "https://app.procella.test/settings/github/connected?state=signed-connect-state",
 		});
 
 		const nonAdmin = mockContext({ caller: { ...viewerCaller, roles: ["viewer"] } });
-		await expect(
-			githubRouter.createCaller(nonAdmin).startConnect({ accountLogin: "acme" }),
-		).rejects.toThrow("Admin role required");
+		await expect(githubRouter.createCaller(nonAdmin).startConnect({})).rejects.toThrow(
+			"Admin role required",
+		);
+	});
+
+	test("startConnect no longer accepts or forwards an account", async () => {
+		const beginConnect = mock(async () => "signed-connect-state");
+		const ctx = mockContext({ github: mockGitHubService({ beginConnect }) });
+
+		// zod strips unrecognized input keys, so a legacy client still sending
+		// accountLogin never reaches the service, and beginConnect is called
+		// with exactly the tenant, the initiator, and a fresh browser nonce.
+		await githubRouter
+			.createCaller(ctx)
+			.startConnect({ accountLogin: "acme" } as unknown as Record<string, never>);
+
+		expect(beginConnect).toHaveBeenCalledTimes(1);
+		const call = beginConnect.mock.calls[0] as unknown as unknown[];
+		expect(call).toHaveLength(3);
+		expect(call.slice(0, 2)).toEqual(["t-1", "u-1"]);
 	});
 
 	test("startConnect rejects machine principals before creating setup state", async () => {
@@ -129,33 +157,27 @@ describe("githubRouter", () => {
 				github: mockGitHubService({ beginConnect }),
 			});
 
-			await expect(
-				githubRouter.createCaller(ctx).startConnect({ accountLogin: "acme" }),
-			).rejects.toThrow("interactive user session");
+			await expect(githubRouter.createCaller(ctx).startConnect({})).rejects.toThrow(
+				"interactive user session",
+			);
 			expect(beginConnect).not.toHaveBeenCalled();
 		}
 	});
 
 	test("startConnect fails closed when the outbound app is unavailable", async () => {
 		await expect(
-			githubRouter
-				.createCaller(mockContext({ appOrigin: undefined }))
-				.startConnect({ accountLogin: "acme" }),
+			githubRouter.createCaller(mockContext({ appOrigin: undefined })).startConnect({}),
 		).rejects.toThrow("GitHub user verification is not configured");
 		await expect(
-			githubRouter
-				.createCaller(mockContext({ githubOutboundAppId: undefined }))
-				.startConnect({ accountLogin: "acme" }),
+			githubRouter.createCaller(mockContext({ githubOutboundAppId: undefined })).startConnect({}),
 		).rejects.toThrow("GitHub user verification is not configured");
 		await expect(
 			githubRouter
 				.createCaller(mockContext({ github: mockGitHubService({ connectAvailable: false }) }))
-				.startConnect({ accountLogin: "acme" }),
+				.startConnect({}),
 		).rejects.toThrow("GitHub user verification is not configured");
 		await expect(
-			githubRouter.createCaller(mockContext({ github: null })).startConnect({
-				accountLogin: "acme",
-			}),
+			githubRouter.createCaller(mockContext({ github: null })).startConnect({}),
 		).rejects.toThrow("GitHub App is not configured");
 	});
 
@@ -165,18 +187,17 @@ describe("githubRouter", () => {
 			github: mockGitHubService({ beginConnect }),
 		});
 
-		expect(await githubRouter.createCaller(ctx).startConnect({ accountLogin: "acme" })).toEqual({
+		expect(await githubRouter.createCaller(ctx).startConnect({})).toEqual({
 			appId: "procella-github",
 			tenantId: "t-1",
 			redirectUrl: "https://app.procella.test/settings/github/connected?state=signed-connect-state",
 		});
-		const [tenantId, accountLogin, userId, nonce] = beginConnect.mock.calls[0] as unknown as [
-			string,
+		const [tenantId, userId, nonce] = beginConnect.mock.calls[0] as unknown as [
 			string,
 			string,
 			string,
 		];
-		expect([tenantId, accountLogin, userId]).toEqual(["t-1", "acme", "u-1"]);
+		expect([tenantId, userId]).toEqual(["t-1", "u-1"]);
 		expect(nonce).toMatch(/^[a-zA-Z0-9_-]{43}$/);
 		// The setup cookie is set before the mutation returns, so it always exists
 		// before the browser's own SDK can start the outbound OAuth handoff.
@@ -194,23 +215,15 @@ describe("githubRouter", () => {
 		// redirect URL never reaches the server logic in the first place; the
 		// redirect always comes from the server's own configured appOrigin.
 		const result = await githubRouter.createCaller(ctx).startConnect({
-			accountLogin: "acme",
 			redirectUrl: "https://evil.example/steal",
 			appOrigin: "https://evil.example",
-		} as unknown as { accountLogin: string });
+		} as unknown as Record<string, never>);
 
 		expect(result.redirectUrl.startsWith("https://trusted.procella.test/")).toBe(true);
 		expect(result.redirectUrl).not.toContain("evil.example");
 	});
 
-	test("startConnect rejects malformed accounts and never sets a cookie on failure", async () => {
-		const malformed = mockContext();
-		await expect(
-			githubRouter.createCaller(malformed).startConnect({ accountLogin: "../attacker" }),
-		).rejects.toThrow();
-		expect(malformed.github?.beginConnect).not.toHaveBeenCalled();
-		expect(malformed.setGitHubSetupCookie).not.toHaveBeenCalled();
-
+	test("startConnect never sets a cookie when beginConnect fails", async () => {
 		const failing = mockContext({
 			github: mockGitHubService({
 				beginConnect: mock(async () => {
@@ -218,13 +231,226 @@ describe("githubRouter", () => {
 				}),
 			}),
 		});
-		await expect(
-			githubRouter.createCaller(failing).startConnect({ accountLogin: "acme" }),
-		).rejects.toThrow("not configured on this server");
+		await expect(githubRouter.createCaller(failing).startConnect({})).rejects.toThrow(
+			"not configured on this server",
+		);
 		expect(failing.setGitHubSetupCookie).not.toHaveBeenCalled();
 	});
 
-	test("createInstallationUrl passes the signed transaction, browser nonce, and caller", async () => {
+	test("confirmConnect returns the confirmed login", async () => {
+		const confirmConnect = mock(async () => ({ login: "alice" }));
+		const ctx = mockContext({ github: mockGitHubService({ confirmConnect }) });
+
+		const result = await githubRouter
+			.createCaller(ctx)
+			.confirmConnect({ state: "signed-connect-state" });
+
+		expect(result).toEqual({ login: "alice" });
+		expect(confirmConnect).toHaveBeenCalledWith("signed-connect-state", "n".repeat(43), {
+			tenantId: "t-1",
+			userId: "u-1",
+		});
+	});
+
+	test("confirmConnect rejects non-admin callers", async () => {
+		const ctx = mockContext({ caller: { ...viewerCaller, roles: ["viewer"] } });
+		await expect(
+			githubRouter.createCaller(ctx).confirmConnect({ state: "signed-connect-state" }),
+		).rejects.toThrow("Admin role required");
+	});
+
+	test("confirmConnect rejects machine principals before calling the service", async () => {
+		for (const principalType of ["token", "workload"] as const) {
+			const confirmConnect = mock(async () => ({ login: "alice" }));
+			const ctx = mockContext({
+				caller: { ...adminCaller, principalType },
+				github: mockGitHubService({ confirmConnect }),
+			});
+
+			await expect(
+				githubRouter.createCaller(ctx).confirmConnect({ state: "signed-connect-state" }),
+			).rejects.toThrow("interactive user session");
+			expect(confirmConnect).not.toHaveBeenCalled();
+		}
+	});
+
+	test("confirmConnect fails closed without the initiating browser nonce", async () => {
+		const ctx = mockContext({ githubSetupNonce: undefined });
+		await expect(
+			githubRouter.createCaller(ctx).confirmConnect({ state: "signed-connect-state" }),
+		).rejects.toThrow("could not be verified");
+		expect(ctx.github?.confirmConnect).not.toHaveBeenCalled();
+	});
+
+	test("confirmConnect reports disabled server configuration", async () => {
+		await expect(
+			githubRouter
+				.createCaller(mockContext({ github: null }))
+				.confirmConnect({ state: "signed-connect-state" }),
+		).rejects.toThrow("GitHub App is not configured");
+	});
+
+	test("confirmConnect maps transaction and verification failures", async () => {
+		const cases = [
+			{ code: "authorization_unavailable", message: "not configured on this server" },
+			{ code: "invalid_state", message: "could not be verified" },
+			{ code: "expired_state", message: "expired" },
+			{ code: "replayed_state", message: "already used" },
+		] as const;
+
+		for (const { code, message } of cases) {
+			const ctx = mockContext({
+				github: mockGitHubService({
+					confirmConnect: mock(async () => {
+						throw new GitHubSetupError(code);
+					}),
+				}),
+			});
+			await expect(
+				githubRouter.createCaller(ctx).confirmConnect({ state: "signed-connect-state" }),
+			).rejects.toThrow(message);
+		}
+	});
+
+	test("connectTargets returns the accounts the connected identity administers", async () => {
+		const listConnectTargets = mock(async () => [mockConnectTarget]);
+		const ctx = mockContext({ github: mockGitHubService({ listConnectTargets }) });
+
+		const result = await githubRouter.createCaller(ctx).connectTargets();
+
+		expect(result).toEqual({ targets: [mockConnectTarget] });
+		expect(listConnectTargets).toHaveBeenCalledWith("t-1", "u-1");
+	});
+
+	test("connectTargets rejects non-admin callers", async () => {
+		const ctx = mockContext({ caller: { ...viewerCaller, roles: ["viewer"] } });
+		await expect(githubRouter.createCaller(ctx).connectTargets()).rejects.toThrow(
+			"Admin role required",
+		);
+	});
+
+	test("connectTargets rejects machine principals before calling the service", async () => {
+		for (const principalType of ["token", "workload"] as const) {
+			const listConnectTargets = mock(async () => [mockConnectTarget]);
+			const ctx = mockContext({
+				caller: { ...adminCaller, principalType },
+				github: mockGitHubService({ listConnectTargets }),
+			});
+
+			await expect(githubRouter.createCaller(ctx).connectTargets()).rejects.toThrow(
+				"interactive user session",
+			);
+			expect(listConnectTargets).not.toHaveBeenCalled();
+		}
+	});
+
+	test("connectTargets reports disabled server configuration", async () => {
+		await expect(
+			githubRouter.createCaller(mockContext({ github: null })).connectTargets(),
+		).rejects.toThrow("GitHub App is not configured");
+	});
+
+	test("connectTargets fails closed without a confirmed connection", async () => {
+		const ctx = mockContext({
+			github: mockGitHubService({
+				listConnectTargets: mock(async () => {
+					throw new GitHubSetupError("authorization_required");
+				}),
+			}),
+		});
+		await expect(githubRouter.createCaller(ctx).connectTargets()).rejects.toThrow(
+			"Connect a GitHub account",
+		);
+	});
+
+	test("connectInstallation forwards tenant, user, and installation id", async () => {
+		const connectInstallation = mock(async () => mockInstallation);
+		const ctx = mockContext({ github: mockGitHubService({ connectInstallation }) });
+
+		const result = await githubRouter
+			.createCaller(ctx)
+			.connectInstallation({ installationId: 12345 });
+
+		expect(result).toEqual({ installation: mockInstallation });
+		expect(connectInstallation).toHaveBeenCalledWith("t-1", "u-1", 12345);
+	});
+
+	test("connectInstallation rejects non-admin callers", async () => {
+		const ctx = mockContext({ caller: { ...viewerCaller, roles: ["viewer"] } });
+		await expect(
+			githubRouter.createCaller(ctx).connectInstallation({ installationId: 12345 }),
+		).rejects.toThrow("Admin role required");
+	});
+
+	test("connectInstallation rejects machine principals before calling the service", async () => {
+		for (const principalType of ["token", "workload"] as const) {
+			const connectInstallation = mock(async () => mockInstallation);
+			const ctx = mockContext({
+				caller: { ...adminCaller, principalType },
+				github: mockGitHubService({ connectInstallation }),
+			});
+
+			await expect(
+				githubRouter.createCaller(ctx).connectInstallation({ installationId: 12345 }),
+			).rejects.toThrow("interactive user session");
+			expect(connectInstallation).not.toHaveBeenCalled();
+		}
+	});
+
+	test("connectInstallation reports disabled server configuration", async () => {
+		await expect(
+			githubRouter
+				.createCaller(mockContext({ github: null }))
+				.connectInstallation({ installationId: 12345 }),
+		).rejects.toThrow("GitHub App is not configured");
+	});
+
+	test("connectInstallation surfaces installation_conflict as CONFLICT", async () => {
+		const ctx = mockContext({
+			github: mockGitHubService({
+				connectInstallation: mock(async () => {
+					throw new GitHubSetupError("installation_conflict");
+				}),
+			}),
+		});
+		const error = await githubRouter
+			.createCaller(ctx)
+			.connectInstallation({ installationId: 12345 })
+			.catch((caught: unknown) => caught);
+		expect(error).toMatchObject({ code: "CONFLICT" });
+	});
+
+	test("connectInstallation surfaces invalid_installation as BAD_REQUEST", async () => {
+		const ctx = mockContext({
+			github: mockGitHubService({
+				connectInstallation: mock(async () => {
+					throw new GitHubSetupError("invalid_installation");
+				}),
+			}),
+		});
+		const error = await githubRouter
+			.createCaller(ctx)
+			.connectInstallation({ installationId: 12345 })
+			.catch((caught: unknown) => caught);
+		expect(error).toMatchObject({ code: "BAD_REQUEST" });
+	});
+
+	test("connectInstallation surfaces unauthorized_account as BAD_REQUEST", async () => {
+		const ctx = mockContext({
+			github: mockGitHubService({
+				connectInstallation: mock(async () => {
+					throw new GitHubSetupError("unauthorized_account");
+				}),
+			}),
+		});
+		const error = await githubRouter
+			.createCaller(ctx)
+			.connectInstallation({ installationId: 12345 })
+			.catch((caught: unknown) => caught);
+		expect(error).toMatchObject({ code: "BAD_REQUEST" });
+	});
+
+	test("createInstallationUrl mints a fresh nonce, forwards it, and sets the cookie only on success", async () => {
 		const issueInstallationUrl = mock(
 			async () => "https://github.com/apps/procella/installations/new",
 		);
@@ -232,16 +458,17 @@ describe("githubRouter", () => {
 
 		const result = await githubRouter
 			.createCaller(ctx)
-			.createInstallationUrl({ state: "signed-connect-state" });
+			.createInstallationUrl({ accountLogin: "acme" });
 
 		expect(result.url).toContain("github.com/apps/procella/installations/new");
-		expect(issueInstallationUrl).toHaveBeenCalledWith("signed-connect-state", "n".repeat(43), {
-			tenantId: "t-1",
-			userId: "u-1",
-		});
-		// The installation state carries a fresh TTL, so the cookie the binding
-		// depends on is renewed with the same nonce.
-		expect(ctx.setGitHubSetupCookie).toHaveBeenCalledWith("n".repeat(43));
+		const [tenantId, userId, accountLogin, nonce] = issueInstallationUrl.mock
+			.calls[0] as unknown as [string, string, string, string];
+		expect([tenantId, userId, accountLogin]).toEqual(["t-1", "u-1", "acme"]);
+		// The procedure mints its own nonce rather than reusing whatever setup
+		// cookie happened to already be on the request.
+		expect(nonce).toMatch(/^[a-zA-Z0-9_-]{43}$/);
+		expect(nonce).not.toBe("n".repeat(43));
+		expect(ctx.setGitHubSetupCookie).toHaveBeenCalledWith(nonce);
 	});
 
 	test("createInstallationUrl never renews the browser cookie on failure", async () => {
@@ -254,7 +481,7 @@ describe("githubRouter", () => {
 		});
 
 		await expect(
-			githubRouter.createCaller(ctx).createInstallationUrl({ state: "signed-connect-state" }),
+			githubRouter.createCaller(ctx).createInstallationUrl({ accountLogin: "acme" }),
 		).rejects.toThrow("already used");
 		expect(ctx.setGitHubSetupCookie).not.toHaveBeenCalled();
 
@@ -262,7 +489,7 @@ describe("githubRouter", () => {
 		await expect(
 			githubRouter
 				.createCaller(withoutCookieSupport)
-				.createInstallationUrl({ state: "signed-connect-state" }),
+				.createInstallationUrl({ accountLogin: "acme" }),
 		).rejects.toThrow("GitHub setup cookie support is unavailable");
 		expect(withoutCookieSupport.github?.issueInstallationUrl).not.toHaveBeenCalled();
 	});
@@ -270,11 +497,11 @@ describe("githubRouter", () => {
 	test("createInstallationUrl rejects non-admin callers", async () => {
 		const ctx = mockContext({ caller: { ...viewerCaller, roles: ["viewer"] } });
 		await expect(
-			githubRouter.createCaller(ctx).createInstallationUrl({ state: "signed-connect-state" }),
+			githubRouter.createCaller(ctx).createInstallationUrl({ accountLogin: "acme" }),
 		).rejects.toThrow("Admin role required");
 	});
 
-	test("createInstallationUrl rejects machine principals before consuming setup state", async () => {
+	test("createInstallationUrl rejects machine principals before calling the service", async () => {
 		for (const principalType of ["token", "workload"] as const) {
 			const issueInstallationUrl = mock(
 				async () => "https://github.com/apps/procella/installations/new",
@@ -285,7 +512,7 @@ describe("githubRouter", () => {
 			});
 
 			await expect(
-				githubRouter.createCaller(ctx).createInstallationUrl({ state: "signed-connect-state" }),
+				githubRouter.createCaller(ctx).createInstallationUrl({ accountLogin: "acme" }),
 			).rejects.toThrow("interactive user session");
 			expect(issueInstallationUrl).not.toHaveBeenCalled();
 		}
@@ -295,16 +522,17 @@ describe("githubRouter", () => {
 		await expect(
 			githubRouter
 				.createCaller(mockContext({ github: null }))
-				.createInstallationUrl({ state: "signed-connect-state" }),
+				.createInstallationUrl({ accountLogin: "acme" }),
 		).rejects.toThrow("GitHub App is not configured");
 	});
 
-	test("createInstallationUrl fails closed without the initiating browser nonce", async () => {
-		const ctx = mockContext({ githubSetupNonce: undefined });
+	test("createInstallationUrl rejects malformed accounts before calling the service", async () => {
+		const ctx = mockContext();
 		await expect(
-			githubRouter.createCaller(ctx).createInstallationUrl({ state: "signed-connect-state" }),
-		).rejects.toThrow("could not be verified");
+			githubRouter.createCaller(ctx).createInstallationUrl({ accountLogin: "../attacker" }),
+		).rejects.toThrow();
 		expect(ctx.github?.issueInstallationUrl).not.toHaveBeenCalled();
+		expect(ctx.setGitHubSetupCookie).not.toHaveBeenCalled();
 	});
 
 	test("createInstallationUrl maps transaction and verification failures", async () => {
@@ -315,6 +543,7 @@ describe("githubRouter", () => {
 			{ code: "invalid_state", message: "could not be verified" },
 			{ code: "expired_state", message: "expired" },
 			{ code: "replayed_state", message: "already used" },
+			{ code: "unauthorized_account", message: "different account" },
 		] as const;
 
 		for (const { code, message } of cases) {
@@ -326,7 +555,7 @@ describe("githubRouter", () => {
 				}),
 			});
 			await expect(
-				githubRouter.createCaller(ctx).createInstallationUrl({ state: "signed-connect-state" }),
+				githubRouter.createCaller(ctx).createInstallationUrl({ accountLogin: "acme" }),
 			).rejects.toThrow(message);
 		}
 	});
