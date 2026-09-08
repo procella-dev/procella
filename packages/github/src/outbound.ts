@@ -470,7 +470,10 @@ export class VaultedGitHubIdentityService implements GitHubOutboundIdentityServi
 				if (data.installations.some((installation) => installation.id === installationId)) {
 					return;
 				}
-				if (page * 100 >= data.total_count) break;
+				// Same guard as the connect-candidate listing: a short page, or a
+				// total that disagrees with the items returned, would otherwise
+				// re-request the same page forever instead of denying.
+				if (data.installations.length < 100 || page * 100 >= data.total_count) break;
 				page += 1;
 			}
 		} catch {

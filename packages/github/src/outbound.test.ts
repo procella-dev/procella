@@ -345,9 +345,10 @@ describe("VaultedGitHubIdentityService", () => {
 	});
 
 	test("paginates installation access and rejects installations the user cannot see", async () => {
+		const firstPage = Array.from({ length: 100 }, (_value, index) => ({ id: index + 1 }));
 		const pages = [
-			{ data: { total_count: 150, installations: [{ id: 1 }] } },
-			{ data: { total_count: 150, installations: [{ id: 101 }] } },
+			{ data: { total_count: 101, installations: firstPage } },
+			{ data: { total_count: 101, installations: [{ id: 101 }] } },
 		];
 		let call = 0;
 		const accessible = new VaultedGitHubIdentityService(
@@ -370,6 +371,25 @@ describe("VaultedGitHubIdentityService", () => {
 		).rejects.toMatchObject({
 			code: "authorization_required",
 		});
+	});
+
+	test("denies installation access when the reported total overstates the pages returned", async () => {
+		let call = 0;
+		const service = new VaultedGitHubIdentityService(
+			tokenVault(),
+			confirmations(),
+			// A total that never matches the items returned would loop forever on
+			// `total_count` alone instead of denying.
+			userClient(async () => {
+				call += 1;
+				return { data: { total_count: 5000, installations: [{ id: 7 }] } };
+			}),
+		);
+
+		await expect(
+			service.verifyInstallationAccess("user-a", TENANT_A, 101, "tok-a"),
+		).rejects.toMatchObject({ code: "authorization_required" });
+		expect(call).toBe(1);
 	});
 
 	test("propagates vault failures on disconnect", async () => {

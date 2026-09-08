@@ -141,7 +141,10 @@ export const githubRouter = router({
 			});
 		}
 
-		const browserNonce = createGitHubSetupNonce();
+		// One nonce per browser, not per attempt: re-authorizing while an
+		// install issued in another tab is still in flight must not replace the
+		// binding that tab's GitHub callback will be checked against.
+		const browserNonce = ctx.githubSetupNonce ?? createGitHubSetupNonce();
 		try {
 			const state = await ctx.github.beginConnect(
 				ctx.caller.tenantId,

@@ -204,6 +204,19 @@ describe("githubRouter", () => {
 		expect(ctx.setGitHubSetupCookie).toHaveBeenCalledWith(nonce);
 	});
 
+	test("startConnect keeps an existing browser nonce so a parallel install survives", async () => {
+		const beginConnect = mock(async () => "signed-connect-state");
+		const ctx = mockContext({ github: mockGitHubService({ beginConnect }) });
+
+		await githubRouter.createCaller(ctx).startConnect({});
+
+		// Re-authorizing must not replace the binding an install issued in
+		// another tab will be checked against.
+		const [, , nonce] = beginConnect.mock.calls[0] as unknown as [string, string, string];
+		expect(nonce).toBe("n".repeat(43));
+		expect(ctx.setGitHubSetupCookie).toHaveBeenCalledWith(nonce);
+	});
+
 	test("startConnect never lets client input influence the redirect origin", async () => {
 		const beginConnect = mock(async () => "signed-connect-state");
 		const ctx = mockContext({
