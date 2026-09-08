@@ -279,7 +279,12 @@ export const githubRouter = router({
 				});
 			}
 
-			const browserNonce = createGitHubSetupNonce();
+			// The nonce identifies the browser, not one attempt, so an existing
+			// cookie is reused: minting a new one per call would invalidate the
+			// binding of an install already in flight in another tab, and its
+			// GitHub callback would then fail verification even though the App
+			// was installed.
+			const browserNonce = ctx.githubSetupNonce ?? createGitHubSetupNonce();
 			let url: string;
 			try {
 				url = await ctx.github.issueInstallationUrl(

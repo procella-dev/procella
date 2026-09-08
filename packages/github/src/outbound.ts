@@ -83,6 +83,12 @@ export interface GitHubVisibleInstallation {
 	repositorySelection: "all" | "selected";
 }
 
+/** Both listings the connect flow needs, read from one confirmed token. */
+export interface GitHubConnectCandidates {
+	administered: GitHubAccountCandidate[];
+	installations: GitHubVisibleInstallation[];
+}
+
 /**
  * Verification surface the installation flow depends on. Implemented over the
  * vault plus GitHub's user-scoped API.
@@ -98,20 +104,19 @@ export interface GitHubOutboundIdentityService {
 	 */
 	loadPendingConnection(userId: string, tenantId: string): Promise<GitHubPendingConnection>;
 	/**
-	 * Accounts the confirmed connection administers: its own login, plus every
-	 * organization where it is an active admin. Used before an App
-	 * installation exists, so this reads organization membership directly
-	 * through GitHub's user-scoped API rather than through installation
-	 * visibility.
+	 * Everything the connect list needs, resolved from a single confirmed
+	 * token: the accounts this connection administers (its own login plus
+	 * every organization where it is an active admin) and every App
+	 * installation it can see.
+	 *
+	 * The two listings answer different questions and are both required:
+	 * administration comes from GitHub's user-scoped membership API, which
+	 * needs no App permission and therefore also reports organizations the
+	 * App is not installed on yet, while visibility comes from the App's own
+	 * installation list. They are resolved together so one settings render
+	 * costs one vault lookup instead of two.
 	 */
-	listAdministeredAccounts(userId: string, tenantId: string): Promise<GitHubAccountCandidate[]>;
-	/**
-	 * Every App installation visible to the confirmed connection's GitHub
-	 * user, regardless of which account administers it. Callers join this
-	 * against {@link listAdministeredAccounts} to offer Connect only for
-	 * accounts the caller both administers and can see installed.
-	 */
-	listVisibleInstallations(userId: string, tenantId: string): Promise<GitHubVisibleInstallation[]>;
+	listConnectCandidates(userId: string, tenantId: string): Promise<GitHubConnectCandidates>;
 	/**
 	 * Resolves when the confirmed connected user owns `accountLogin` or is an
 	 * active organization administrator of it.
@@ -316,13 +321,21 @@ export class VaultedGitHubIdentityService implements GitHubOutboundIdentityServi
 		return { tokenId: token.id, login: await this.currentLogin(token.accessToken) };
 	}
 
-	async listAdministeredAccounts(
-		userId: string,
-		tenantId: string,
-	): Promise<GitHubAccountCandidate[]> {
+	async listConnectCandidates(userId: string, tenantId: string): Promise<GitHubConnectCandidates> {
 		const token = await this.confirmedToken(userId, tenantId);
-		const ownLogin = await this.currentLogin(token.accessToken);
 		const client = this.userClientFactory(token.accessToken);
+		const [ownLogin, organizations, installations] = await Promise.all([
+			this.currentLogin(token.accessToken),
+			this.administeredOrganizations(client),
+			this.visibleInstallations(client),
+		]);
+		return {
+			administered: [{ login: ownLogin, accountType: "User" }, ...organizations],
+			installations,
+		};
+	}
+
+	private async administeredOrganizations(client: Octokit): Promise<GitHubAccountCandidate[]> {
 		const organizations: GitHubAccountCandidate[] = [];
 		let page = 1;
 		try {
@@ -357,15 +370,10 @@ export class VaultedGitHubIdentityService implements GitHubOutboundIdentityServi
 		organizations.sort((left, right) =>
 			left.login.localeCompare(right.login, undefined, { sensitivity: "base" }),
 		);
-		return [{ login: ownLogin, accountType: "User" }, ...organizations];
+		return organizations;
 	}
 
-	async listVisibleInstallations(
-		userId: string,
-		tenantId: string,
-	): Promise<GitHubVisibleInstallation[]> {
-		const token = await this.confirmedToken(userId, tenantId);
-		const client = this.userClientFactory(token.accessToken);
+	private async visibleInstallations(client: Octokit): Promise<GitHubVisibleInstallation[]> {
 		const visible: GitHubVisibleInstallation[] = [];
 		let page = 1;
 		try {
@@ -397,7 +405,11 @@ export class VaultedGitHubIdentityService implements GitHubOutboundIdentityServi
 						repositorySelection,
 					});
 				}
-				if (page * 100 >= data.total_count) break;
+				// Termination depends on data actually received as well as the
+				// reported count: a short page, or a total that disagrees with the
+				// items returned, would otherwise re-request the same page forever
+				// and re-append its installations.
+				if (data.installations.length < 100 || page * 100 >= data.total_count) break;
 				page += 1;
 			}
 		} catch (error) {
