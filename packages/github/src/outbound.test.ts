@@ -345,9 +345,10 @@ describe("VaultedGitHubIdentityService", () => {
 	});
 
 	test("paginates installation access and rejects installations the user cannot see", async () => {
+		const firstPage = Array.from({ length: 100 }, (_value, index) => ({ id: index + 1 }));
 		const pages = [
-			{ data: { total_count: 150, installations: [{ id: 1 }] } },
-			{ data: { total_count: 150, installations: [{ id: 101 }] } },
+			{ data: { total_count: 101, installations: firstPage } },
+			{ data: { total_count: 101, installations: [{ id: 101 }] } },
 		];
 		let call = 0;
 		const accessible = new VaultedGitHubIdentityService(
@@ -370,6 +371,25 @@ describe("VaultedGitHubIdentityService", () => {
 		).rejects.toMatchObject({
 			code: "authorization_required",
 		});
+	});
+
+	test("denies installation access when the reported total overstates the pages returned", async () => {
+		let call = 0;
+		const service = new VaultedGitHubIdentityService(
+			tokenVault(),
+			confirmations(),
+			// A total that never matches the items returned would loop forever on
+			// `total_count` alone instead of denying.
+			userClient(async () => {
+				call += 1;
+				return { data: { total_count: 5000, installations: [{ id: 7 }] } };
+			}),
+		);
+
+		await expect(
+			service.verifyInstallationAccess("user-a", TENANT_A, 101, "tok-a"),
+		).rejects.toMatchObject({ code: "authorization_required" });
+		expect(call).toBe(1);
 	});
 
 	test("propagates vault failures on disconnect", async () => {
@@ -615,31 +635,74 @@ describe("VaultedGitHubIdentityService", () => {
 	});
 });
 
+/**
+ * One confirmed token now answers all three listing routes, so each double
+ * serves the whole call and every test asserts one half of its result.
+ */
+function candidatesClient(routes: {
+	login?: string;
+	memberships?: (page: number) => unknown[];
+	installations?: (page: number) => { total_count: number; installations: unknown[] };
+	onRequest?: (route: string, options?: unknown) => void;
+}): (token: string) => Octokit {
+	function requestedPage(options: unknown): number {
+		// Reading the page the caller actually asked for, rather than counting
+		// calls, is what makes these fixtures fail a loop that never advances.
+		if (
+			typeof options !== "object" ||
+			options === null ||
+			!("page" in options) ||
+			typeof options.page !== "number" ||
+			!Number.isSafeInteger(options.page) ||
+			options.page < 1
+		) {
+			throw new Error("request did not carry a page number");
+		}
+		return options.page;
+	}
+	return userClient(async (route, options) => {
+		routes.onRequest?.(route, options);
+		if (route === "GET /user") return { data: { login: routes.login ?? "alice" } };
+		if (route === "GET /user/memberships/orgs") {
+			return { data: routes.memberships?.(requestedPage(options)) ?? [] };
+		}
+		if (route === "GET /user/installations") {
+			return {
+				data: routes.installations?.(requestedPage(options)) ?? {
+					total_count: 0,
+					installations: [],
+				},
+			};
+		}
+		throw new Error(`unexpected route ${route}`);
+	});
+}
+
 describe("VaultedGitHubIdentityService listing", () => {
 	test("lists the connected login first, then active admins sorted case-insensitively", async () => {
+		const requests: Array<{ route: string; options?: unknown }> = [];
 		const service = new VaultedGitHubIdentityService(
 			tokenVault(),
 			confirmations(),
-			userClient(async (route, options) => {
-				if (route === "GET /user") return { data: { login: "alice" } };
-				expect(route).toBe("GET /user/memberships/orgs");
-				expect(options).toMatchObject({ state: "active", per_page: 100, page: 1 });
-				return {
-					data: [
-						{ state: "active", role: "admin", organization: { login: "Zeta" } },
-						{ state: "active", role: "member", organization: { login: "acme" } },
-						{ state: "active", role: "admin", organization: { login: "beta" } },
-						{ state: "pending", role: "admin", organization: { login: "gamma" } },
-					],
-				};
+			candidatesClient({
+				onRequest: (route, options) => requests.push({ route, options }),
+				memberships: () => [
+					{ state: "active", role: "admin", organization: { login: "Zeta" } },
+					{ state: "active", role: "member", organization: { login: "acme" } },
+					{ state: "active", role: "admin", organization: { login: "beta" } },
+					{ state: "pending", role: "admin", organization: { login: "gamma" } },
+				],
 			}),
 		);
 
-		await expect(service.listAdministeredAccounts("user-a", TENANT_A)).resolves.toEqual([
+		await expect((await service.listConnectCandidates("user-a", TENANT_A)).administered).toEqual([
 			{ login: "alice", accountType: "User" },
 			{ login: "beta", accountType: "Organization" },
 			{ login: "Zeta", accountType: "Organization" },
 		]);
+		expect(
+			requests.find((request) => request.route === "GET /user/memberships/orgs")?.options,
+		).toMatchObject({ state: "active", per_page: 100, page: 1 });
 	});
 
 	test("paginates organization memberships until a short page ends it", async () => {
@@ -648,28 +711,26 @@ describe("VaultedGitHubIdentityService listing", () => {
 			role: "admin",
 			organization: { login: `org-${index}` },
 		}));
-		let call = 0;
+		let pages = 0;
 		const service = new VaultedGitHubIdentityService(
 			tokenVault(),
 			confirmations(),
-			userClient(async (route) => {
-				if (route === "GET /user") return { data: { login: "alice" } };
-				call += 1;
-				return {
-					data:
-						call === 1
-							? fullPage
-							: [{ state: "active", role: "admin", organization: { login: "org-100" } }],
-				};
+			candidatesClient({
+				memberships: (page) => {
+					pages = page;
+					return page === 1
+						? fullPage
+						: [{ state: "active", role: "admin", organization: { login: "org-100" } }];
+				},
 			}),
 		);
 
-		const accounts = await service.listAdministeredAccounts("user-a", TENANT_A);
+		const accounts = (await service.listConnectCandidates("user-a", TENANT_A)).administered;
 		expect(accounts).toHaveLength(102);
-		expect(call).toBe(2);
+		expect(pages).toBe(2);
 	});
 
-	test("listAdministeredAccounts fails closed with authorization_required when nothing is confirmed", async () => {
+	test("fails closed with authorization_required when nothing is confirmed", async () => {
 		const request = mock(async () => ({ data: {} }));
 		const service = new VaultedGitHubIdentityService(
 			tokenVault(),
@@ -677,7 +738,7 @@ describe("VaultedGitHubIdentityService listing", () => {
 			() => ({ request }) as unknown as Octokit,
 		);
 
-		await expect(service.listAdministeredAccounts("user-a", TENANT_A)).rejects.toMatchObject({
+		await expect(service.listConnectCandidates("user-a", TENANT_A)).rejects.toMatchObject({
 			code: "authorization_required",
 		});
 		expect(request).not.toHaveBeenCalled();
@@ -687,13 +748,14 @@ describe("VaultedGitHubIdentityService listing", () => {
 		const service = new VaultedGitHubIdentityService(
 			tokenVault(),
 			confirmations(),
-			userClient(async (route) => {
-				if (route === "GET /user") return { data: { login: "alice" } };
-				throw new Error("GitHub unavailable");
+			candidatesClient({
+				memberships: () => {
+					throw new Error("GitHub unavailable");
+				},
 			}),
 		);
 
-		await expect(service.listAdministeredAccounts("user-a", TENANT_A)).rejects.toMatchObject({
+		await expect(service.listConnectCandidates("user-a", TENANT_A)).rejects.toMatchObject({
 			code: "authorization_failed",
 		});
 	});
@@ -702,8 +764,8 @@ describe("VaultedGitHubIdentityService listing", () => {
 		const service = new VaultedGitHubIdentityService(
 			tokenVault(),
 			confirmations(),
-			userClient(async () => ({
-				data: {
+			candidatesClient({
+				installations: () => ({
 					total_count: 3,
 					installations: [
 						{
@@ -725,11 +787,11 @@ describe("VaultedGitHubIdentityService listing", () => {
 							repository_selection: "all",
 						},
 					],
-				},
-			})),
+				}),
+			}),
 		);
 
-		await expect(service.listVisibleInstallations("user-a", TENANT_A)).resolves.toEqual([
+		await expect((await service.listConnectCandidates("user-a", TENANT_A)).installations).toEqual([
 			{
 				installationId: 101,
 				accountLogin: "acme",
@@ -752,17 +814,17 @@ describe("VaultedGitHubIdentityService listing", () => {
 			target_type: "Organization",
 			repository_selection: "all",
 		}));
-		let call = 0;
+		let pages = 0;
 		const service = new VaultedGitHubIdentityService(
 			tokenVault(),
 			confirmations(),
-			userClient(async () => {
-				call += 1;
-				return {
-					data: {
+			candidatesClient({
+				installations: (page) => {
+					pages = page;
+					return {
 						total_count: 101,
 						installations:
-							call === 1
+							page === 1
 								? page1
 								: [
 										{
@@ -772,40 +834,58 @@ describe("VaultedGitHubIdentityService listing", () => {
 											repository_selection: "all",
 										},
 									],
-					},
-				};
+					};
+				},
 			}),
 		);
 
-		const installations = await service.listVisibleInstallations("user-a", TENANT_A);
+		const installations = (await service.listConnectCandidates("user-a", TENANT_A)).installations;
 		expect(installations).toHaveLength(101);
-		expect(call).toBe(2);
+		expect(pages).toBe(2);
 	});
 
-	test("listVisibleInstallations fails closed with authorization_required when nothing is confirmed", async () => {
-		const request = mock(async () => ({ data: {} }));
+	test("stops paginating installations when a total count overstates the items returned", async () => {
+		let pages = 0;
 		const service = new VaultedGitHubIdentityService(
 			tokenVault(),
-			confirmations(null),
-			() => ({ request }) as unknown as Octokit,
+			confirmations(),
+			candidatesClient({
+				installations: (page) => {
+					pages = page;
+					// A total that never matches the items returned would loop
+					// forever on `total_count` alone, re-appending the same page.
+					return {
+						total_count: 5000,
+						installations: [
+							{
+								id: 101,
+								account: { login: "acme" },
+								target_type: "Organization",
+								repository_selection: "all",
+							},
+						],
+					};
+				},
+			}),
 		);
 
-		await expect(service.listVisibleInstallations("user-a", TENANT_A)).rejects.toMatchObject({
-			code: "authorization_required",
-		});
-		expect(request).not.toHaveBeenCalled();
+		const installations = (await service.listConnectCandidates("user-a", TENANT_A)).installations;
+		expect(installations).toHaveLength(1);
+		expect(pages).toBe(1);
 	});
 
 	test("maps an installation lookup failure to authorization_failed", async () => {
 		const service = new VaultedGitHubIdentityService(
 			tokenVault(),
 			confirmations(),
-			userClient(async () => {
-				throw new Error("GitHub unavailable");
+			candidatesClient({
+				installations: () => {
+					throw new Error("GitHub unavailable");
+				},
 			}),
 		);
 
-		await expect(service.listVisibleInstallations("user-a", TENANT_A)).rejects.toMatchObject({
+		await expect(service.listConnectCandidates("user-a", TENANT_A)).rejects.toMatchObject({
 			code: "authorization_failed",
 		});
 	});

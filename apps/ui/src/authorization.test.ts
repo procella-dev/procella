@@ -557,6 +557,39 @@ describe("Settings authorization", () => {
 		);
 	});
 
+	test("offers a GitHub-side account picker for organizations the list cannot enumerate", async () => {
+		currentCallerQuery = {
+			data: { tenantId: "tenant-from-server", roles: ["admin"] },
+			isLoading: false,
+			error: null,
+		};
+		githubStatusQuery = {
+			data: {
+				configured: true,
+				connectAvailable: true,
+				connectedLogin: "octocat",
+				installations: [],
+			},
+			isLoading: false,
+			error: null,
+		};
+		connectTargetsQuery = { data: { targets: [] }, isLoading: false, error: null };
+		dom.location.hash = "github";
+
+		const page = render(createElement(Settings));
+		fireEvent.click(page.getByRole("button", { name: "Choose an account on GitHub" }));
+
+		// No account is sent: an organization without the App installed is
+		// invisible to the vaulted token, so GitHub picks and the callback
+		// derives it.
+		await waitFor(() => expect(createInstallationUrl).toHaveBeenCalledWith({}));
+		await waitFor(() =>
+			expect(dom.location.href).toBe(
+				"https://github.com/apps/procella-bot/installations/new?state=install-state",
+			),
+		);
+	});
+
 	test("refuses a non-GitHub App install URL without navigating", async () => {
 		currentCallerQuery = {
 			data: { tenantId: "tenant-from-server", roles: ["admin"] },
@@ -666,6 +699,35 @@ describe("Settings authorization", () => {
 
 		const page = render(createElement(Settings));
 		expect(page.getByText("No GitHub accounts to connect")).toBeTruthy();
+	});
+
+	test("lets a confirmed identity reauthorize as a different GitHub account with nothing installed", async () => {
+		currentCallerQuery = {
+			data: { tenantId: "tenant-from-server", roles: ["admin"] },
+			isLoading: false,
+			error: null,
+		};
+		githubStatusQuery = {
+			data: {
+				configured: true,
+				connectAvailable: true,
+				connectedLogin: "octocat",
+				installations: [],
+			},
+			isLoading: false,
+			error: null,
+		};
+		connectTargetsQuery = { data: { targets: [] }, isLoading: false, error: null };
+		dom.location.hash = "github";
+
+		const page = render(createElement(Settings));
+
+		// Authorizing the wrong login must not be a dead end: no installation
+		// exists, so no Disconnect is rendered to clear the connection.
+		fireEvent.click(page.getByRole("button", { name: "Change GitHub account" }));
+		await waitFor(() => expect(startConnect).toHaveBeenCalledWith({}));
+		await waitFor(() => expect(outboundConnect).toHaveBeenCalledTimes(1));
+		expect(dom.location.href).toContain("github.com/login/oauth/authorize");
 	});
 
 	test("surfaces a connect target query failure through the action error banner", () => {

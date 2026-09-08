@@ -141,7 +141,10 @@ export const githubRouter = router({
 			});
 		}
 
-		const browserNonce = createGitHubSetupNonce();
+		// One nonce per browser, not per attempt: re-authorizing while an
+		// install issued in another tab is still in flight must not replace the
+		// binding that tab's GitHub callback will be checked against.
+		const browserNonce = ctx.githubSetupNonce ?? createGitHubSetupNonce();
 		try {
 			const state = await ctx.github.beginConnect(
 				ctx.caller.tenantId,
@@ -255,15 +258,23 @@ export const githubRouter = router({
 		}),
 
 	/**
-	 * Issues a fresh GitHub App installation URL for `accountLogin`. Requires
-	 * a confirmed connection and verifies the caller administers that
-	 * account, allowing invisible membership: the App is not installed there
-	 * yet, so GitHub hides the org from a plain membership check. Mints a
-	 * fresh browser nonce and sets its cookie only after the state is issued,
-	 * so a failed attempt never extends the browser binding's window.
+	 * Issues a fresh GitHub App installation URL. Requires a confirmed
+	 * connection either way.
+	 *
+	 * With `accountLogin` the caller picked a listed account, and
+	 * administration of it is verified while allowing invisible membership,
+	 * because a user access token reaches only what the App reaches and an
+	 * organization without an installation is hidden from it. Omitting the
+	 * account hands the choice to GitHub's own installation picker, which is
+	 * the only way to install on such an organization; the callback then
+	 * derives the installed account and requires active administration of it.
+	 *
+	 * Reuses the browser's setup nonce, minting one only when absent, and
+	 * refreshes the cookie only after the state is issued, so a failed
+	 * attempt never extends the browser binding's window.
 	 */
 	createInstallationUrl: adminProcedure
-		.input(z.object({ accountLogin: accountLoginSchema }))
+		.input(z.object({ accountLogin: accountLoginSchema.optional() }))
 		.mutation(async ({ ctx, input }) => {
 			requireInteractiveUser(ctx.caller.principalType);
 			if (!ctx.github) {
@@ -279,7 +290,12 @@ export const githubRouter = router({
 				});
 			}
 
-			const browserNonce = createGitHubSetupNonce();
+			// The nonce identifies the browser, not one attempt, so an existing
+			// cookie is reused: minting a new one per call would invalidate the
+			// binding of an install already in flight in another tab, and its
+			// GitHub callback would then fail verification even though the App
+			// was installed.
+			const browserNonce = ctx.githubSetupNonce ?? createGitHubSetupNonce();
 			let url: string;
 			try {
 				url = await ctx.github.issueInstallationUrl(

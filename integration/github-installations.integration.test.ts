@@ -359,8 +359,7 @@ describe("GitHub installation binding integration", () => {
 				},
 				verifyAccountAdministration: async () => undefined,
 				verifyInstallationAccess: async () => undefined,
-				listAdministeredAccounts: async () => [],
-				listVisibleInstallations: async () => [],
+				listConnectCandidates: async () => ({ administered: [], installations: [] }),
 				drainTenantTokens: async (userId, tenantId) => {
 					const slot = vaultSlot(tenantId, userId);
 					const drained = vault.get(slot);
@@ -403,8 +402,7 @@ describe("GitHub installation binding integration", () => {
 				},
 				verifyAccountAdministration: async () => undefined,
 				verifyInstallationAccess: async () => undefined,
-				listAdministeredAccounts: async () => [],
-				listVisibleInstallations: async () => [],
+				listConnectCandidates: async () => ({ administered: [], installations: [] }),
 				drainTenantTokens: async (userId, tenantId, expectedTokenId) => {
 					drained.push(expectedTokenId);
 					const slot = vaultSlot(tenantId, userId);
@@ -803,8 +801,7 @@ function lockHarness(options: {
 			},
 			verifyAccountAdministration: async () => undefined,
 			verifyInstallationAccess: async () => undefined,
-			listAdministeredAccounts: async () => [],
-			listVisibleInstallations: async () => [],
+			listConnectCandidates: async () => ({ administered: [], installations: [] }),
 			drainTenantTokens: async (userId, tenantId, expectedTokenId) => {
 				harness.drains += 1;
 				events.push(`drain:enter:${expectedTokenId ?? "none"}`);
@@ -1025,10 +1022,7 @@ function callbackRaceHarness(): CallbackRaceHarness {
 			loadIdentity: (userId, tenantId) => delegate.loadIdentity(userId, tenantId),
 			loadPendingConnection: (userId, tenantId) =>
 				delegate.loadPendingConnection(userId, tenantId),
-			listAdministeredAccounts: (userId, tenantId) =>
-				delegate.listAdministeredAccounts(userId, tenantId),
-			listVisibleInstallations: (userId, tenantId) =>
-				delegate.listVisibleInstallations(userId, tenantId),
+			listConnectCandidates: (userId, tenantId) => delegate.listConnectCandidates(userId, tenantId),
 			verifyAccountAdministration: async (
 				userId,
 				tenantId,

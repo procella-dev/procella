@@ -204,6 +204,19 @@ describe("githubRouter", () => {
 		expect(ctx.setGitHubSetupCookie).toHaveBeenCalledWith(nonce);
 	});
 
+	test("startConnect keeps an existing browser nonce so a parallel install survives", async () => {
+		const beginConnect = mock(async () => "signed-connect-state");
+		const ctx = mockContext({ github: mockGitHubService({ beginConnect }) });
+
+		await githubRouter.createCaller(ctx).startConnect({});
+
+		// Re-authorizing must not replace the binding an install issued in
+		// another tab will be checked against.
+		const [, , nonce] = beginConnect.mock.calls[0] as unknown as [string, string, string];
+		expect(nonce).toBe("n".repeat(43));
+		expect(ctx.setGitHubSetupCookie).toHaveBeenCalledWith(nonce);
+	});
+
 	test("startConnect never lets client input influence the redirect origin", async () => {
 		const beginConnect = mock(async () => "signed-connect-state");
 		const ctx = mockContext({
@@ -450,7 +463,7 @@ describe("githubRouter", () => {
 		expect(error).toMatchObject({ code: "BAD_REQUEST" });
 	});
 
-	test("createInstallationUrl mints a fresh nonce, forwards it, and sets the cookie only on success", async () => {
+	test("createInstallationUrl keeps the browser's nonce so a parallel install stays completable", async () => {
 		const issueInstallationUrl = mock(
 			async () => "https://github.com/apps/procella/installations/new",
 		);
@@ -464,11 +477,52 @@ describe("githubRouter", () => {
 		const [tenantId, userId, accountLogin, nonce] = issueInstallationUrl.mock
 			.calls[0] as unknown as [string, string, string, string];
 		expect([tenantId, userId, accountLogin]).toEqual(["t-1", "u-1", "acme"]);
-		// The procedure mints its own nonce rather than reusing whatever setup
-		// cookie happened to already be on the request.
-		expect(nonce).toMatch(/^[a-zA-Z0-9_-]{43}$/);
-		expect(nonce).not.toBe("n".repeat(43));
+		// Reusing the cookie's nonce is what lets an install started in another
+		// tab still verify its callback; the cookie is refreshed so the binding
+		// outlives the new state's TTL.
+		expect(nonce).toBe("n".repeat(43));
 		expect(ctx.setGitHubSetupCookie).toHaveBeenCalledWith(nonce);
+	});
+
+	test("createInstallationUrl mints a browser nonce when none exists yet", async () => {
+		const issueInstallationUrl = mock(
+			async () => "https://github.com/apps/procella/installations/new",
+		);
+		const ctx = mockContext({
+			github: mockGitHubService({ issueInstallationUrl }),
+			githubSetupNonce: undefined,
+		});
+
+		await githubRouter.createCaller(ctx).createInstallationUrl({ accountLogin: "acme" });
+
+		const [, , , nonce] = issueInstallationUrl.mock.calls[0] as unknown as [
+			string,
+			string,
+			string,
+			string,
+		];
+		expect(nonce).toMatch(/^[a-zA-Z0-9_-]{43}$/);
+		expect(ctx.setGitHubSetupCookie).toHaveBeenCalledWith(nonce);
+	});
+
+	test("createInstallationUrl forwards no account when GitHub picks the target", async () => {
+		const issueInstallationUrl = mock(
+			async () => "https://github.com/apps/procella/installations/new",
+		);
+		const ctx = mockContext({ github: mockGitHubService({ issueInstallationUrl }) });
+
+		await githubRouter.createCaller(ctx).createInstallationUrl({});
+
+		// Organizations without the App installed cannot be listed, so the
+		// account has to be chosen on GitHub and derived from the callback.
+		const [tenantId, userId, accountLogin] = issueInstallationUrl.mock.calls[0] as unknown as [
+			string,
+			string,
+			string | undefined,
+			string,
+		];
+		expect([tenantId, userId]).toEqual(["t-1", "u-1"]);
+		expect(accountLogin).toBeUndefined();
 	});
 
 	test("createInstallationUrl never renews the browser cookie on failure", async () => {

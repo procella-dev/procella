@@ -232,7 +232,7 @@ function GitHubSettingsTab() {
 		}
 	};
 
-	const handleInstall = async (accountLogin: string) => {
+	const handleInstall = async (accountLogin?: string) => {
 		setActionError(null);
 		try {
 			const { url } = await createInstallationUrlMutation.mutateAsync({ accountLogin });
@@ -323,17 +323,31 @@ function GitHubSettingsTab() {
 
 			{status.connectAvailable && status.connectedLogin && (
 				<>
-					<p className="text-sm text-cloud">
-						Connected as GitHub user <strong>{status.connectedLogin}</strong>.
-					</p>
+					<div className="flex items-center justify-between gap-4">
+						<p className="text-sm text-cloud">
+							Connected as GitHub user <strong>{status.connectedLogin}</strong>.
+						</p>
+						{/* Authorizing the wrong GitHub login would otherwise be a dead
+						    end: the list below only ever shows what THIS identity
+						    administers, and Disconnect exists per installation. */}
+						<button
+							type="button"
+							onClick={handleContinueWithGitHub}
+							disabled={connectPending}
+							className="btn-secondary shrink-0"
+						>
+							{connectPending ? "Opening GitHub…" : "Change GitHub account"}
+						</button>
+					</div>
 					{targetsData && targetsData.targets.length === 0 && (
 						<div className="bg-slate-brand/30 border border-slate-brand/60 rounded-xl p-8">
 							<h3 className="text-sm font-semibold text-mist mb-1.5">
 								No GitHub accounts to connect
 							</h3>
 							<p className="text-sm text-cloud leading-relaxed">
-								This GitHub user does not own an account or administer an organization Procella can
-								connect.
+								This GitHub user owns no account and administers no organization that Procella can
+								list. Organizations without the App installed are invisible to it, so install on one
+								through GitHub instead.
 							</p>
 						</div>
 					)}
@@ -352,6 +366,25 @@ function GitHubSettingsTab() {
 							))}
 						</div>
 					)}
+					<div className="bg-slate-brand/30 border border-slate-brand/60 rounded-xl p-8">
+						<h3 className="text-sm font-semibold text-mist mb-1.5">Install on another account</h3>
+						<p className="text-sm text-cloud leading-relaxed mb-5">
+							Organizations without the App installed cannot be listed above: GitHub limits this
+							authorization to accounts the App can already reach. Pick the account on GitHub
+							instead, and Procella verifies you administer whatever it installs on before binding
+							it.
+						</p>
+						<button
+							type="button"
+							onClick={() => handleInstall()}
+							disabled={createInstallationUrlMutation.isPending}
+							className="btn-secondary"
+						>
+							{createInstallationUrlMutation.isPending
+								? "Opening GitHub…"
+								: "Choose an account on GitHub"}
+						</button>
+					</div>
 				</>
 			)}
 
