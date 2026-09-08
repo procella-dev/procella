@@ -323,9 +323,22 @@ function GitHubSettingsTab() {
 
 			{status.connectAvailable && status.connectedLogin && (
 				<>
-					<p className="text-sm text-cloud">
-						Connected as GitHub user <strong>{status.connectedLogin}</strong>.
-					</p>
+					<div className="flex items-center justify-between gap-4">
+						<p className="text-sm text-cloud">
+							Connected as GitHub user <strong>{status.connectedLogin}</strong>.
+						</p>
+						{/* Authorizing the wrong GitHub login would otherwise be a dead
+						    end: the list below only ever shows what THIS identity
+						    administers, and Disconnect exists per installation. */}
+						<button
+							type="button"
+							onClick={handleContinueWithGitHub}
+							disabled={connectPending}
+							className="btn-secondary shrink-0"
+						>
+							{connectPending ? "Opening GitHub…" : "Change GitHub account"}
+						</button>
+					</div>
 					{targetsData && targetsData.targets.length === 0 && (
 						<div className="bg-slate-brand/30 border border-slate-brand/60 rounded-xl p-8">
 							<h3 className="text-sm font-semibold text-mist mb-1.5">
