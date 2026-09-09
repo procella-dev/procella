@@ -1,5 +1,65 @@
 # Changelog
 
+## [0.6.0](https://github.com/tektum/procella/compare/procella-v0.5.0...procella-v0.6.0) (2026-09-08)
+
+
+### Features
+
+* **github:** bind installations to authenticated tenants ([#258](https://github.com/tektum/procella/issues/258)) ([76b9df1](https://github.com/tektum/procella/commit/76b9df1c6f4a049c0fcd2e39718692f016afbeb4))
+* **github:** connect installations from a listed account ([#313](https://github.com/tektum/procella/issues/313)) ([d5d4e8b](https://github.com/tektum/procella/commit/d5d4e8b08140046d1fbcdbc3b6386380f5e3e0e4))
+* **github:** publish updates through durable outbox ([#262](https://github.com/tektum/procella/issues/262)) ([e8d7792](https://github.com/tektum/procella/commit/e8d7792992bb8558d66f7e30072aa88b9e597431))
+* **github:** verify installs through a Descope Outbound App ([#308](https://github.com/tektum/procella/issues/308)) ([f78c8d8](https://github.com/tektum/procella/commit/f78c8d88a12ec4bac275d0f2ed6d4a4f3c97a61e))
+
+
+### Bug Fixes
+
+* **api:** bind subscription tickets to their procedure and resource ([#271](https://github.com/tektum/procella/issues/271)) ([65188d9](https://github.com/tektum/procella/commit/65188d9efae026cefb54f848dfccb2ab8f633e96))
+* **api:** consume subscription tickets atomically ([#295](https://github.com/tektum/procella/issues/295)) ([fdc5ccd](https://github.com/tektum/procella/commit/fdc5ccd2c9f2a28a5c98e6af0ab80141af57bd3c))
+* **api:** guard repair against a stale source checkpoint ([#283](https://github.com/tektum/procella/issues/283)) ([9581b2e](https://github.com/tektum/procella/commit/9581b2e74c0bd03bdad1367a55bf047bd7f00ff0))
+* **api:** map domain errors and stop leaking error internals over tRPC ([#272](https://github.com/tektum/procella/issues/272)) ([5c6d28f](https://github.com/tektum/procella/commit/5c6d28f95156d6c2f1d0916efd762c7ed901bcec))
+* **api:** multiplex dashboard subscriptions over shared listeners ([#304](https://github.com/tektum/procella/issues/304)) ([a4418d4](https://github.com/tektum/procella/commit/a4418d4ebf11966386d9a3ece84f85fe19214ce1))
+* **auth:** enforce role checks on stack, update, state, crypto, and ESC routes ([#282](https://github.com/tektum/procella/issues/282)) ([33eefa9](https://github.com/tektum/procella/commit/33eefa9e78b67bc04367db1e242fbf81fc9825f2))
+* **auth:** reject replayed access-key bearer tokens ([#299](https://github.com/tektum/procella/issues/299)) ([8223325](https://github.com/tektum/procella/commit/82233252ac7119a0d7cfd6bfba4a109e7b4b28e1))
+* **auth:** restrict CLI token minting to interactive session principals ([#273](https://github.com/tektum/procella/issues/273)) ([e2113ca](https://github.com/tektum/procella/commit/e2113ca3140d7d1817b4d681d5aa4483467edf39))
+* **ci:** execute the silently skipped ESC and OIDC suites ([#287](https://github.com/tektum/procella/issues/287)) ([544f4d9](https://github.com/tektum/procella/commit/544f4d937d053bb60e6e05b6a86301aa1b4c86ec))
+* **ci:** make preview cleanup idempotent ([#267](https://github.com/tektum/procella/issues/267)) ([8ee627e](https://github.com/tektum/procella/commit/8ee627e9805980ea8d54e513e85d3deca24980c8))
+* **ci:** remove privileged token exposure from Renovate config validation ([#280](https://github.com/tektum/procella/issues/280)) ([bb9d860](https://github.com/tektum/procella/commit/bb9d860f78b47ba9c3ef69a7294639fb17516d41))
+* **ci:** retry stalled dependency audits ([#268](https://github.com/tektum/procella/issues/268)) ([af04c3c](https://github.com/tektum/procella/commit/af04c3cc85ecbfdf1bab472df9c4c273bced4663))
+* **crypto:** derive legacy key identity from the resolved stack row ([#292](https://github.com/tektum/procella/issues/292)) ([314c9b4](https://github.com/tektum/procella/commit/314c9b4a7f26b4fc3cbc6fcc3edb0b8d577a0d3d))
+* **db:** serialize schema migrations with an advisory lock ([#269](https://github.com/tektum/procella/issues/269)) ([c488a50](https://github.com/tektum/procella/commit/c488a507b61698095ca115a9da488c13287370b7))
+* **deploy:** correct container and blueprint startup contracts ([#290](https://github.com/tektum/procella/issues/290)) ([5d7e0d8](https://github.com/tektum/procella/commit/5d7e0d8a2e2d500df7b3168999783fae489114bc))
+* **deps:** update aws-sdk-go-v2 monorepo ([#265](https://github.com/tektum/procella/issues/265)) ([f740528](https://github.com/tektum/procella/commit/f740528d79c62032c33044163ef98413bdd848c3))
+* **esc:** reject ambient credential ESC provider definitions ([#275](https://github.com/tektum/procella/issues/275)) ([3969d7e](https://github.com/tektum/procella/commit/3969d7e685ba09e42b2af94f5069a7fc8bc79b60))
+* **esc:** serialize revision writes and draft transitions ([#288](https://github.com/tektum/procella/issues/288)) ([ac4bfbf](https://github.com/tektum/procella/commit/ac4bfbf726ccdd38ee780b57a534004f6d921f85))
+* **github:** address connect-list review findings ([#314](https://github.com/tektum/procella/issues/314)) ([d0d3351](https://github.com/tektum/procella/commit/d0d3351af2d7c661334055879542081ea8ab2c2e))
+* **github:** derive app slug from credentials ([#263](https://github.com/tektum/procella/issues/263)) ([17dc3e4](https://github.com/tektum/procella/commit/17dc3e44e69398b4057deb89fd526d50981decd6))
+* **github:** harden installation binding against cross-tenant claims ([#293](https://github.com/tektum/procella/issues/293)) ([6e54afc](https://github.com/tektum/procella/commit/6e54afc3037f8434a0b59e70753ed7b1e8532007))
+* **github:** make SST App secrets optional ([#264](https://github.com/tektum/procella/issues/264)) ([027ee41](https://github.com/tektum/procella/commit/027ee41cbc3ac4e6bed53a28eba4385cd9591ed6))
+* **github:** use cookie-mode outbound connect ([#310](https://github.com/tektum/procella/issues/310)) ([441ca32](https://github.com/tektum/procella/commit/441ca3240524c269d772723e8d9ada6adcd89dbe))
+* **infra:** keep executable provisioner out of SST bundle ([#309](https://github.com/tektum/procella/issues/309)) ([5fae3c6](https://github.com/tektum/procella/commit/5fae3c6e0cbc647d4b2d22e5b7ae284596ff523f))
+* **infra:** resolve outbound provisioner source path ([#311](https://github.com/tektum/procella/issues/311)) ([4593c01](https://github.com/tektum/procella/commit/4593c01340449b1fa7d269e02fb1648e66c9bf54))
+* **migrate:** reject cross-org target identity collisions ([#300](https://github.com/tektum/procella/issues/300)) ([7dafb2f](https://github.com/tektum/procella/commit/7dafb2f55d2afc03ed72f206af3be3e9b451eb03))
+* **migrate:** reserialize secrets through the target secret provider ([#284](https://github.com/tektum/procella/issues/284)) ([a9be027](https://github.com/tektum/procella/commit/a9be02787ea990afc3611d3b0d2031414031c314))
+* **migrate:** verify complete logical deployment state ([#303](https://github.com/tektum/procella/issues/303)) ([106d34f](https://github.com/tektum/procella/commit/106d34f593c65afef0fb8e728cab7d64fe681a36))
+* **oidc:** enforce global trust policy ownership ([#266](https://github.com/tektum/procella/issues/266)) ([3796c4f](https://github.com/tektum/procella/commit/3796c4f3160fab78a460be419247f27a6da1ff0c))
+* **oidc:** stage tenant-safe trust policy ownership ([#260](https://github.com/tektum/procella/issues/260)) ([c5c3665](https://github.com/tektum/procella/commit/c5c3665774792d172651fd076770b2de3da53b49))
+* **server:** authenticate before decompressing request bodies ([#291](https://github.com/tektum/procella/issues/291)) ([98e8787](https://github.com/tektum/procella/commit/98e87875dd84e164dfec0eabb65a3f4c49172e8b))
+* **server:** let cookie-authenticated requests reach the authenticator ([#277](https://github.com/tektum/procella/issues/277)) ([af9ad81](https://github.com/tektum/procella/commit/af9ad811d1a79293bf98ec62f41884f65c8232e9))
+* **server:** restore pre-auth CLI token rate limiting ([#301](https://github.com/tektum/procella/issues/301)) ([3923132](https://github.com/tektum/procella/commit/392313287db7b3227d31b85f66295433d84f09c7))
+* **server:** validate imported deployment payloads structurally ([#276](https://github.com/tektum/procella/issues/276)) ([7753b73](https://github.com/tektum/procella/commit/7753b73ab1a068bda4c693de0390bf333d58528e))
+* **stacks:** durably clean deleted stack state ([#294](https://github.com/tektum/procella/issues/294)) ([216240e](https://github.com/tektum/procella/commit/216240e1bc539355c72b74a0de171e26db7c46f1))
+* **stacks:** lock and guard stack deletion ([#278](https://github.com/tektum/procella/issues/278)) ([0170d49](https://github.com/tektum/procella/commit/0170d492a33e37e88df3d426213353f16bb0b859))
+* **storage:** forward AWS session tokens to the S3 client ([#270](https://github.com/tektum/procella/issues/270)) ([c19e30e](https://github.com/tektum/procella/commit/c19e30ecf80222f72e293c02808672ca29229aae))
+* **telemetry:** harden database error projection ([#298](https://github.com/tektum/procella/issues/298)) ([717040f](https://github.com/tektum/procella/commit/717040f3f3bf9de6683f5607669e9e65a13c0164))
+* **telemetry:** redact database parameters from logs, spans, and errors ([#285](https://github.com/tektum/procella/issues/285)) ([9afcf97](https://github.com/tektum/procella/commit/9afcf9799ff783e68a91703a4202ef5963654233))
+* **updates:** emit terminal webhooks for update-token completions ([#279](https://github.com/tektum/procella/issues/279)) ([a412597](https://github.com/tektum/procella/commit/a412597642fe6795cfcd6e35432880c525b49980))
+* **updates:** propagate one-shot GC failures ([#289](https://github.com/tektum/procella/issues/289)) ([cb56473](https://github.com/tektum/procella/commit/cb5647357268e0a4d214fb47063e6b752028ec50))
+* **updates:** reject non-terminal update completion status ([#286](https://github.com/tektum/procella/issues/286)) ([ef8486d](https://github.com/tektum/procella/commit/ef8486dc9e972b100723a92f49b7d6b923d43d28))
+* **updates:** resolve historical export by stack update version ([#274](https://github.com/tektum/procella/issues/274)) ([796bf1d](https://github.com/tektum/procella/commit/796bf1d861e40f385e1d1d744a9f8bdeab7e2873))
+* **updates:** validate all deployment import paths ([#296](https://github.com/tektum/procella/issues/296)) ([15b10cf](https://github.com/tektum/procella/commit/15b10cff0421f50a09cc9a43027d6d36f70c774c))
+* **webhooks:** persist delivery intents transactionally ([#297](https://github.com/tektum/procella/issues/297)) ([e30a25d](https://github.com/tektum/procella/commit/e30a25d96c3a1f52d7bfb0406a45b95685ac45d9))
+* **webhooks:** restrict outbound destinations to global unicast addresses ([#281](https://github.com/tektum/procella/issues/281)) ([4d33798](https://github.com/tektum/procella/commit/4d3379823a46b4054c5853a8809b073a758e93db))
+
 ## [0.5.0](https://github.com/tektum/procella/compare/procella-v0.4.0...procella-v0.5.0) (2026-09-03)
 
 
