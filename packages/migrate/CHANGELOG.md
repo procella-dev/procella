@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.2](https://github.com/tektum/procella/compare/migrate-v0.1.1...migrate-v0.1.2) (2026-09-09)
+
+
+### Bug Fixes
+
+* **migrate:** reject cross-org target identity collisions ([#300](https://github.com/tektum/procella/issues/300)) ([7dafb2f](https://github.com/tektum/procella/commit/7dafb2f55d2afc03ed72f206af3be3e9b451eb03))
+* **migrate:** reserialize secrets through the target secret provider ([#284](https://github.com/tektum/procella/issues/284)) ([a9be027](https://github.com/tektum/procella/commit/a9be02787ea990afc3611d3b0d2031414031c314))
+* **migrate:** verify complete logical deployment state ([#303](https://github.com/tektum/procella/issues/303)) ([106d34f](https://github.com/tektum/procella/commit/106d34f593c65afef0fb8e728cab7d64fe681a36))
+
 ## [0.1.1](https://github.com/procella-dev/procella/compare/migrate-v0.1.0...migrate-v0.1.1) (2026-06-29)
 
 
