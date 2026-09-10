@@ -465,11 +465,13 @@ describe("[security] HIGH regressions (vulns.txt H1-H9)", () => {
 		).toEqual([]);
 	});
 
-	test("[H6] OIDC trust policy create with conflicting (org_slug, issuer) fails with policy_conflict", async () => {
-		// H6 exploit attempt: tenant-2 tries to create the same (org_slug, issuer) tuple and must get a policy_conflict instead of deleting another tenant's policy.
+	test("[H6] duplicate OIDC policy insert reports a scope conflict without mutation", async () => {
+		// H6 regression: a database uniqueness conflict must fail closed and never replace an
+		// existing trust policy. Repository ownership conflicts are detected before insertion;
+		// this fixture exercises the remaining duplicate claim-scope constraint.
 		const repo = new PostgresTrustPolicyRepository(createConflictDb());
 
-		expect(
+		await expect(
 			repo.create({
 				tenantId: "tenant-2",
 				orgSlug: "acme",
@@ -485,8 +487,8 @@ describe("[security] HIGH regressions (vulns.txt H1-H9)", () => {
 				active: true,
 			}),
 		).rejects.toMatchObject({
-			code: "policy_conflict",
-			message: "OIDC trust policy with this org/issuer pair already exists",
+			code: "policy_claim_conditions_conflict",
+			message: "OIDC trust policy with these claim conditions already exists",
 		});
 	});
 
