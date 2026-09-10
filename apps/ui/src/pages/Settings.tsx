@@ -164,6 +164,7 @@ function GitHubSettingsTab() {
 	const createInstallationUrlMutation = trpc.github.createInstallationUrl.useMutation();
 	const { data: oidcStatus, error: oidcStatusError } = trpc.oidc.status.useQuery();
 	const enableGitHubActionsMutation = trpc.oidc.enableGitHubActions.useMutation();
+	const githubActionsPolicies = oidcStatus?.githubActionsPolicies ?? [];
 	const sdk = useDescope();
 	const [disconnectId, setDisconnectId] = useState<number | null>(null);
 	const [actionError, setActionError] = useState<string | null>(null);
@@ -461,7 +462,7 @@ function GitHubSettingsTab() {
 									</div>
 								</div>
 								<div className="flex flex-wrap gap-2 sm:justify-end">
-									{oidcStatus?.configured && !oidcStatus.githubActionsPolicy && (
+									{oidcStatus?.configured && (
 										<button
 											type="button"
 											onClick={() => {
@@ -470,7 +471,9 @@ function GitHubSettingsTab() {
 											}}
 											className="btn-primary"
 										>
-											Enable Actions OIDC
+											{githubActionsPolicies.length
+												? "Add Actions OIDC repository"
+												: "Enable Actions OIDC"}
 										</button>
 									)}
 									<button
@@ -554,11 +557,17 @@ function GitHubSettingsTab() {
 						<div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
 							<div>
 								<h2 className="text-base font-semibold text-mist">GitHub Actions authentication</h2>
-								{oidcStatus?.githubActionsPolicy ? (
+								{githubActionsPolicies.length ? (
 									<>
-										<p className="text-sm text-cloud mt-1">
-											{oidcStatus.githubActionsPolicy.active ? "Enabled" : "Disabled"}:{" "}
-											{oidcStatus.githubActionsPolicy.displayName}
+										<ul className="mt-1 space-y-1 text-sm text-cloud">
+											{githubActionsPolicies.map((policy) => (
+												<li key={policy.id}>
+													{policy.active ? "Enabled" : "Disabled"}: {policy.displayName}
+												</li>
+											))}
+										</ul>
+										<p className="text-xs text-cloud/70 mt-2">
+											Add another repository from its GitHub App installation above.
 										</p>
 										<p className="text-xs text-cloud/70 mt-2">
 											Grant workflows <code>id-token: write</code> and set the Procella action's{" "}

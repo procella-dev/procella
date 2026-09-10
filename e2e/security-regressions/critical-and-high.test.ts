@@ -465,11 +465,12 @@ describe("[security] HIGH regressions (vulns.txt H1-H9)", () => {
 		).toEqual([]);
 	});
 
-	test("[H6] OIDC trust policy create with conflicting (org_slug, issuer) fails with policy_conflict", async () => {
-		// H6 exploit attempt: tenant-2 tries to create the same (org_slug, issuer) tuple and must get a policy_conflict instead of deleting another tenant's policy.
+	test("[H6] conflicting OIDC policy insert fails closed", async () => {
+		// H6 regression: a database ownership conflict must fail closed and never replace an
+		// existing trust policy.
 		const repo = new PostgresTrustPolicyRepository(createConflictDb());
 
-		expect(
+		await expect(
 			repo.create({
 				tenantId: "tenant-2",
 				orgSlug: "acme",

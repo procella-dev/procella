@@ -169,6 +169,13 @@
       "when": 1788790000000,
       "tag": "0023_confirmed_github_outbound_connections",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1788998400000,
+      "tag": "0024_multi_repository_github_actions",
+      "breakpoints": true
     }
   ]
 }

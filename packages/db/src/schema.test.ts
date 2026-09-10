@@ -257,12 +257,12 @@ describe("@procella/db schema", () => {
 			expect(columns.issuer.name).toBe("issuer");
 		});
 
-		test("enforces global issuer ownership after the phase B rollout", () => {
+		test("indexes ownership lookups without placing claim JSON in a B-tree key", () => {
 			const index = getTableConfig(oidcTrustPolicies).indexes.find(
 				(candidate) => candidate.config.name === "idx_oidc_trust_org_issuer",
 			);
 
-			expect(index?.config.unique).toBe(true);
+			expect(index?.config.unique).toBe(false);
 			expect(
 				index?.config.columns.map((column) => ("name" in column ? column.name : undefined)),
 			).toEqual(["org_slug", "issuer"]);
@@ -303,7 +303,7 @@ describe("@procella/db schema", () => {
 	});
 
 	describe("migration journal", () => {
-		test("keeps portfolio migrations 0020 through 0023 in order", async () => {
+		test("keeps portfolio migrations 0020 through 0024 in order", async () => {
 			const journal = (await Bun.file(
 				new URL("../drizzle/meta/_journal.json", import.meta.url),
 			).json()) as { entries: Array<{ idx: number; tag: string }> };
@@ -312,9 +312,10 @@ describe("@procella/db schema", () => {
 				{ idx: 21, tag: "0021_webhook_delivery_outbox" },
 				{ idx: 22, tag: "0022_single_use_subscription_tickets" },
 				{ idx: 23, tag: "0023_confirmed_github_outbound_connections" },
+				{ idx: 24, tag: "0024_multi_repository_github_actions" },
 			];
 
-			expect(journal.entries.slice(-4)).toEqual(
+			expect(journal.entries.slice(-5)).toEqual(
 				expected.map(({ idx, tag }) => expect.objectContaining({ idx, tag })),
 			);
 			for (const { tag } of expected) {

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import type { Database } from "@procella/db";
 import { Role } from "@procella/types";
-import { PostgresTrustPolicyRepository } from "./policy.js";
+import { OidcPolicyClaimConditionsConflictError, PostgresTrustPolicyRepository } from "./policy.js";
 
 type PolicyRow = {
 	id: string;
@@ -191,13 +191,8 @@ describe("PostgresTrustPolicyRepository", () => {
 		);
 	});
 
-	test("same-tenant issuer conflict does not mutate existing policies", async () => {
-		const { db, calls } = createMockDb({
-			insertError: Object.assign(new Error("duplicate key value violates unique constraint"), {
-				code: "23505",
-				constraint: "idx_oidc_trust_org_issuer",
-			}),
-		});
+	test("duplicate repository scope does not mutate existing policies", async () => {
+		const { db, calls } = createMockDb({ selectRows: [mockRow] });
 		const repo = new PostgresTrustPolicyRepository(db);
 
 		await expect(
@@ -208,15 +203,46 @@ describe("PostgresTrustPolicyRepository", () => {
 				displayName: "Second Policy",
 				issuer: "https://token.actions.githubusercontent.com",
 				maxExpiration: 3600,
+				claimConditions: mockRow.claimConditions,
+				grantedRole: Role.Member,
+				active: true,
+			}),
+		).rejects.toBeInstanceOf(OidcPolicyClaimConditionsConflictError);
+		expect(calls.some((call) => call.method.startsWith("insert"))).toBe(false);
+	});
+
+	test("allows a second repository scope for the owning tenant", async () => {
+		const secondPolicy = makeRow({
+			id: "policy-2",
+			displayName: "GitHub Actions · acme/service",
+			claimConditions: {
+				repository_owner_id: "12345",
+				repository_id: "43210",
+			},
+		});
+		const { db, calls } = createMockDb({
+			selectRows: [mockRow],
+			insertRows: [secondPolicy],
+		});
+		const repo = new PostgresTrustPolicyRepository(db);
+
+		await expect(
+			repo.create({
+				tenantId: "tenant-1",
+				orgSlug: "acme",
+				provider: "github-actions",
+				displayName: "GitHub Actions · acme/service",
+				issuer: "https://token.actions.githubusercontent.com",
+				maxExpiration: 3600,
 				claimConditions: {
 					repository_owner_id: "12345",
-					repository_id: "67890",
+					repository_id: "43210",
 				},
 				grantedRole: Role.Member,
 				active: true,
 			}),
-		).rejects.toMatchObject({ code: "policy_conflict" });
-		expect(calls.some((call) => call.method.startsWith("update"))).toBe(false);
+		).resolves.toMatchObject({ id: "policy-2" });
+		expect(calls.some((call) => call.method === "insert.returning")).toBe(true);
 	});
 
 	test("cross-tenant issuer conflict is generic and does not mutate existing policies", async () => {
