@@ -156,16 +156,13 @@ interface GitHubConnectTarget {
 }
 
 function GitHubSettingsTab() {
+	const utils = trpc.useUtils();
 	const { data: status, isLoading, error: queryError, refetch } = trpc.github.status.useQuery();
 	const startConnectMutation = trpc.github.startConnect.useMutation();
 	const removeMutation = trpc.github.removeInstallation.useMutation();
 	const connectInstallationMutation = trpc.github.connectInstallation.useMutation();
 	const createInstallationUrlMutation = trpc.github.createInstallationUrl.useMutation();
-	const {
-		data: oidcStatus,
-		error: oidcStatusError,
-		refetch: refetchOidcStatus,
-	} = trpc.oidc.status.useQuery();
+	const { data: oidcStatus, error: oidcStatusError } = trpc.oidc.status.useQuery();
 	const enableGitHubActionsMutation = trpc.oidc.enableGitHubActions.useMutation();
 	const sdk = useDescope();
 	const [disconnectId, setDisconnectId] = useState<number | null>(null);
@@ -189,6 +186,7 @@ function GitHubSettingsTab() {
 		data: repositoriesData,
 		isLoading: repositoriesLoading,
 		error: repositoriesError,
+		refetch: refetchRepositories,
 	} = trpc.github.repositories.useQuery(
 		{ installationId: oidcInstallationId ?? 1 },
 		{ enabled: oidcInstallationId !== null },
@@ -275,7 +273,7 @@ function GitHubSettingsTab() {
 			});
 			setOidcInstallationId(null);
 			setOidcRepositoryId(null);
-			await refetchOidcStatus();
+			await Promise.all([utils.oidc.status.invalidate(), utils.oidc.listPolicies.invalidate()]);
 		} catch (error) {
 			setActionError(
 				error instanceof Error ? error.message : "Unable to enable GitHub Actions authentication",
@@ -498,47 +496,55 @@ function GitHubSettingsTab() {
 									) : repositoriesError ? (
 										<p className="text-sm text-danger/80">{repositoriesError.message}</p>
 									) : repositoriesData?.repositories.length ? (
-										<div className="flex flex-col sm:flex-row gap-3">
-											<select
-												aria-label="GitHub Actions repository"
-												value={oidcRepositoryId ?? repositoriesData.repositories[0]?.id ?? ""}
-												onChange={(event) => setOidcRepositoryId(Number(event.target.value))}
-												className="input-field flex-1"
-											>
-												{repositoriesData.repositories.map((repository) => (
-													<option key={repository.id} value={repository.id}>
-														{repository.fullName}
-														{repository.private ? " · private" : ""}
-													</option>
-												))}
-											</select>
-											<div className="flex gap-2">
-												<button
-													type="button"
-													onClick={() => {
-														setOidcInstallationId(null);
-														setOidcRepositoryId(null);
-													}}
-													className="btn-ghost"
-												>
-													Cancel
-												</button>
-												<button
-													type="button"
-													onClick={handleEnableGitHubActions}
-													disabled={enableGitHubActionsMutation.isPending}
-													className="btn-primary"
-												>
-													{enableGitHubActionsMutation.isPending ? "Enabling…" : "Enable OIDC"}
-												</button>
-											</div>
-										</div>
+										<select
+											aria-label="GitHub Actions repository"
+											value={oidcRepositoryId ?? repositoriesData.repositories[0]?.id ?? ""}
+											onChange={(event) => setOidcRepositoryId(Number(event.target.value))}
+											className="input-field w-full"
+										>
+											{repositoriesData.repositories.map((repository) => (
+												<option key={repository.id} value={repository.id}>
+													{repository.fullName}
+													{repository.private ? " · private" : ""}
+												</option>
+											))}
+										</select>
 									) : (
 										<p className="text-sm text-cloud">
 											This installation has no repositories available to Procella. Add one in
-											GitHub, then try again.
+											GitHub, then retry.
 										</p>
 									)}
+									<div className="flex justify-end gap-2 mt-3">
+										<button
+											type="button"
+											onClick={() => {
+												setOidcInstallationId(null);
+												setOidcRepositoryId(null);
+											}}
+											className="btn-ghost"
+										>
+											Cancel
+										</button>
+										{repositoriesData?.repositories.length ? (
+											<button
+												type="button"
+												onClick={handleEnableGitHubActions}
+												disabled={enableGitHubActionsMutation.isPending}
+												className="btn-primary"
+											>
+												{enableGitHubActionsMutation.isPending ? "Enabling…" : "Enable OIDC"}
+											</button>
+										) : !repositoriesLoading ? (
+											<button
+												type="button"
+												onClick={() => void refetchRepositories()}
+												className="btn-secondary"
+											>
+												Retry
+											</button>
+										) : null}
+									</div>
 								</div>
 							)}
 						</div>
@@ -711,6 +717,7 @@ function GitHubConnectTargetRow({
 // ============================================================================
 
 function OidcSettingsTab() {
+	const utils = trpc.useUtils();
 	const [showCreate, setShowCreate] = useState(false);
 	const [formError, setFormError] = useState<string | null>(null);
 	const [displayName, setDisplayName] = useState("");
@@ -721,16 +728,14 @@ function OidcSettingsTab() {
 	const [conditionValue, setConditionValue] = useState("");
 	const [conditions, setConditions] = useState<Record<string, string>>({});
 
-	const {
-		data: policies,
-		isLoading,
-		error: queryError,
-		refetch,
-	} = trpc.oidc.listPolicies.useQuery();
+	const { data: policies, isLoading, error: queryError } = trpc.oidc.listPolicies.useQuery();
 
 	const createMutation = trpc.oidc.createPolicy.useMutation();
 	const deleteMutation = trpc.oidc.deletePolicy.useMutation();
 	const toggleMutation = trpc.oidc.updatePolicy.useMutation();
+
+	const invalidateOidcQueries = () =>
+		Promise.all([utils.oidc.status.invalidate(), utils.oidc.listPolicies.invalidate()]);
 
 	const resetForm = () => {
 		setDisplayName("");
@@ -772,7 +777,7 @@ function OidcSettingsTab() {
 			});
 			resetForm();
 			setShowCreate(false);
-			refetch();
+			await invalidateOidcQueries();
 		} catch (err: unknown) {
 			setFormError(err instanceof Error ? err.message : "Failed to create policy");
 		}
@@ -1020,7 +1025,7 @@ function OidcSettingsTab() {
 										onClick={() => {
 											toggleMutation
 												.mutateAsync({ id: policy.id, active: !policy.active })
-												.then(() => refetch())
+												.then(invalidateOidcQueries)
 												.catch((e: unknown) =>
 													setFormError(e instanceof Error ? e.message : "Update failed"),
 												);
@@ -1034,7 +1039,7 @@ function OidcSettingsTab() {
 										onClick={() => {
 											deleteMutation
 												.mutateAsync({ id: policy.id })
-												.then(() => refetch())
+												.then(invalidateOidcQueries)
 												.catch((e: unknown) =>
 													setFormError(e instanceof Error ? e.message : "Delete failed"),
 												);

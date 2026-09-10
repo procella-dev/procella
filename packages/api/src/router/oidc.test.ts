@@ -167,6 +167,59 @@ describe("oidcRouter", () => {
 			});
 		});
 
+		test("rejects machine principals before policy or repository lookup", async () => {
+			const findByOrgSlugAndIssuer = mock(async () => []);
+			const listInstallationRepositories = mock(async () => []);
+			const ctx = mockContext({
+				oidcPolicies: mockPolicies({ findByOrgSlugAndIssuer }),
+				github: { listInstallationRepositories } as unknown as GitHubService,
+			});
+			if (!ctx.caller) throw new Error("caller fixture missing");
+			ctx.caller = { ...ctx.caller, principalType: "token" };
+
+			await expect(
+				oidcRouter.createCaller(ctx).enableGitHubActions({
+					installationId: 101,
+					repositoryId: 67890,
+				}),
+			).rejects.toThrow("interactive user session");
+			expect(findByOrgSlugAndIssuer).not.toHaveBeenCalled();
+			expect(listInstallationRepositories).not.toHaveBeenCalled();
+		});
+
+		test("returns a concurrently created tenant policy on retry", async () => {
+			let lookupCount = 0;
+			const findByOrgSlugAndIssuer = mock(async () => {
+				lookupCount += 1;
+				return lookupCount === 1 ? [] : [mockPolicy];
+			});
+			const create = mock(async () => {
+				throw new OidcPolicyConflictError();
+			});
+			const listInstallationRepositories = mock(async () => [
+				{
+					id: 67890,
+					name: "infra",
+					fullName: "acme/infra",
+					ownerId: 12345,
+					ownerLogin: "acme",
+					private: true,
+				},
+			]);
+			const ctx = mockContext({
+				oidcPolicies: mockPolicies({ findByOrgSlugAndIssuer, create }),
+				github: { listInstallationRepositories } as unknown as GitHubService,
+			});
+
+			await expect(
+				oidcRouter.createCaller(ctx).enableGitHubActions({
+					installationId: 101,
+					repositoryId: 67890,
+				}),
+			).resolves.toEqual({ policy: mockPolicy, created: false });
+			expect(findByOrgSlugAndIssuer).toHaveBeenCalledTimes(2);
+		});
+
 		test("rejects a repository outside the bound installation", async () => {
 			const create = mock(async () => mockPolicy);
 			const ctx = mockContext({

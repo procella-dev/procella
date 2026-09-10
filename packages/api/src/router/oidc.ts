@@ -40,6 +40,15 @@ function assertOidc(ctx: {
 	}
 }
 
+function requireInteractiveUser(principalType: string): void {
+	if (principalType !== "user") {
+		throw new TRPCError({
+			code: "FORBIDDEN",
+			message: "OIDC setup requires an interactive user session",
+		});
+	}
+}
+
 function addClaimConditionValidationIssue(
 	input: {
 		provider: string;
@@ -153,6 +162,7 @@ export const oidcRouter = router({
 					message: "GitHub App is not configured on this server",
 				});
 			}
+			requireInteractiveUser(ctx.caller.principalType);
 
 			// The global org/issuer key permits only one GitHub Actions policy.
 			// Returning the tenant's existing policy makes retries idempotent without
@@ -198,6 +208,18 @@ export const oidcRouter = router({
 				});
 				return { policy, created: true as const };
 			} catch (error) {
+				if (error instanceof OidcPolicyConflictError) {
+					const concurrent = await ctx.oidcPolicies.findByOrgSlugAndIssuer(
+						ctx.caller.orgSlug,
+						GITHUB_ACTIONS_ISSUER,
+					);
+					const concurrentOwned = concurrent.find(
+						(policy) => policy.tenantId === ctx.caller.tenantId,
+					);
+					if (concurrentOwned) {
+						return { policy: concurrentOwned, created: false as const };
+					}
+				}
 				rethrowOidcPolicyError(error);
 			}
 		}),
