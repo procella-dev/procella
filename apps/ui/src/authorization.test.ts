@@ -70,11 +70,11 @@ let githubRepositoriesQuery: {
 let oidcStatusQuery: {
 	data?: {
 		configured: boolean;
-		githubActionsPolicy: {
+		githubActionsPolicies: Array<{
 			id: string;
 			displayName: string;
 			active: boolean;
-		} | null;
+		}>;
 	};
 	isLoading: boolean;
 	error: Error | null;
@@ -264,7 +264,7 @@ beforeEach(() => {
 	connectTargetsQuery = { data: undefined, isLoading: false, error: null };
 	githubRepositoriesQuery = { data: undefined, isLoading: false, error: null };
 	oidcStatusQuery = {
-		data: { configured: false, githubActionsPolicy: null },
+		data: { configured: false, githubActionsPolicies: [] },
 		isLoading: false,
 		error: null,
 	};
@@ -905,11 +905,13 @@ describe("Settings authorization", () => {
 		oidcStatusQuery = {
 			data: {
 				configured: true,
-				githubActionsPolicy: {
-					id: "policy-1",
-					displayName: "GitHub Actions · acme/infra",
-					active: true,
-				},
+				githubActionsPolicies: [
+					{
+						id: "policy-1",
+						displayName: "GitHub Actions · acme/infra",
+						active: true,
+					},
+				],
 			},
 			isLoading: false,
 			error: null,
@@ -921,12 +923,12 @@ describe("Settings authorization", () => {
 		expect(page.getByText("Selected repositories")).toBeTruthy();
 		expect(page.queryByRole("button", { name: "Configure & Verify" })).toBeNull();
 		expect(
-			page.getByText(/Enabled:.*GitHub Actions · acme\/infra/, { selector: "p" }),
+			page.getByText(/Enabled:.*GitHub Actions · acme\/infra/, { selector: "li" }),
 		).toBeTruthy();
-		expect(page.queryByRole("button", { name: "Enable Actions OIDC" })).toBeNull();
+		expect(page.getByRole("button", { name: "Add Actions OIDC repository" })).toBeTruthy();
 	});
 
-	test("enables GitHub Actions OIDC from an installed App repository", async () => {
+	test("adds GitHub Actions OIDC for another repository on an installed App", async () => {
 		currentCallerQuery = {
 			data: { tenantId: "tenant-from-server", roles: ["admin"] },
 			isLoading: false,
@@ -955,7 +957,12 @@ describe("Settings authorization", () => {
 		};
 		connectTargetsQuery = { data: { targets: [] }, isLoading: false, error: null };
 		oidcStatusQuery = {
-			data: { configured: true, githubActionsPolicy: null },
+			data: {
+				configured: true,
+				githubActionsPolicies: [
+					{ id: "policy-1", displayName: "GitHub Actions · acme/infra", active: true },
+				],
+			},
 			isLoading: false,
 			error: null,
 		};
@@ -963,9 +970,9 @@ describe("Settings authorization", () => {
 			data: {
 				repositories: [
 					{
-						id: 67890,
-						name: "infra",
-						fullName: "acme/infra",
+						id: 13579,
+						name: "service",
+						fullName: "acme/service",
 						ownerId: 12345,
 						ownerLogin: "acme",
 						private: true,
@@ -978,14 +985,14 @@ describe("Settings authorization", () => {
 		dom.location.hash = "github";
 
 		const page = render(createElement(Settings));
-		fireEvent.click(page.getByRole("button", { name: "Enable Actions OIDC" }));
-		expect(page.getByRole("option", { name: "acme/infra · private" })).toBeTruthy();
+		fireEvent.click(page.getByRole("button", { name: "Add Actions OIDC repository" }));
+		expect(page.getByRole("option", { name: "acme/service · private" })).toBeTruthy();
 		fireEvent.click(page.getByRole("button", { name: "Enable OIDC" }));
 
 		await waitFor(() =>
 			expect(enableGitHubActions).toHaveBeenCalledWith({
 				installationId: 101,
-				repositoryId: 67890,
+				repositoryId: 13579,
 			}),
 		);
 		await waitFor(() => expect(oidcStatusInvalidate).toHaveBeenCalled());
@@ -1021,7 +1028,7 @@ describe("Settings authorization", () => {
 		};
 		connectTargetsQuery = { data: { targets: [] }, isLoading: false, error: null };
 		oidcStatusQuery = {
-			data: { configured: true, githubActionsPolicy: null },
+			data: { configured: true, githubActionsPolicies: [] },
 			isLoading: false,
 			error: null,
 		};

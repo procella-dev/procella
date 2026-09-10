@@ -113,14 +113,14 @@ describe("oidcRouter", () => {
 	});
 
 	describe("GitHub Actions setup", () => {
-		test("reports whether guided setup is available and already configured", async () => {
+		test("reports guided setup availability and every configured GitHub Actions policy", async () => {
 			await expect(oidcRouter.createCaller(noOidcCtx()).status()).resolves.toEqual({
 				configured: false,
-				githubActionsPolicy: null,
+				githubActionsPolicies: [],
 			});
 			await expect(oidcRouter.createCaller(mockContext()).status()).resolves.toEqual({
 				configured: true,
-				githubActionsPolicy: mockPolicy,
+				githubActionsPolicies: [mockPolicy],
 			});
 		});
 
@@ -165,6 +165,42 @@ describe("oidcRouter", () => {
 				grantedRole: "member",
 				active: true,
 			});
+		});
+
+		test("creates another repository policy for the same tenant", async () => {
+			const create = mock(async () => mockPolicy);
+			const listInstallationRepositories = mock(async () => [
+				{
+					id: 13579,
+					name: "service",
+					fullName: "acme/service",
+					ownerId: 12345,
+					ownerLogin: "acme",
+					private: true,
+				},
+			]);
+			const ctx = mockContext({
+				oidcPolicies: mockPolicies({
+					findByOrgSlugAndIssuer: mock(async () => [mockPolicy]),
+					create,
+				}),
+				github: { listInstallationRepositories } as unknown as GitHubService,
+			});
+
+			await expect(
+				oidcRouter.createCaller(ctx).enableGitHubActions({
+					installationId: 101,
+					repositoryId: 13579,
+				}),
+			).resolves.toMatchObject({ created: true });
+			expect(create).toHaveBeenCalledWith(
+				expect.objectContaining({
+					claimConditions: {
+						repository_owner_id: "12345",
+						repository_id: "13579",
+					},
+				}),
+			);
 		});
 
 		test("rejects machine principals before policy or repository lookup", async () => {

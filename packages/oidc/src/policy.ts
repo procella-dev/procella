@@ -61,8 +61,8 @@ export class PostgresTrustPolicyRepository implements TrustPolicyRepository {
 				const ownershipKey = JSON.stringify([policy.orgSlug, policy.issuer]);
 				await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${ownershipKey}, 0))`);
 
-				const [existing] = await tx
-					.select({ id: oidcTrustPolicies.id })
+				const existing = await tx
+					.select({ tenantId: oidcTrustPolicies.tenantId })
 					.from(oidcTrustPolicies)
 					.where(
 						and(
@@ -70,7 +70,9 @@ export class PostgresTrustPolicyRepository implements TrustPolicyRepository {
 							eq(oidcTrustPolicies.issuer, policy.issuer),
 						),
 					);
-				if (existing) throw new OidcPolicyConflictError();
+				if (existing.some((existingPolicy) => existingPolicy.tenantId !== policy.tenantId)) {
+					throw new OidcPolicyConflictError();
+				}
 
 				const [inserted] = await tx
 					.insert(oidcTrustPolicies)

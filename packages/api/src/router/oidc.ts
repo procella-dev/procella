@@ -49,6 +49,18 @@ function requireInteractiveUser(principalType: string): void {
 	}
 }
 
+function matchesGitHubActionsRepository(
+	policy: { tenantId: string; claimConditions: Record<string, string> },
+	tenantId: string,
+	repository: GitHubInstallationRepository,
+): boolean {
+	return (
+		policy.tenantId === tenantId &&
+		policy.claimConditions.repository_owner_id === String(repository.ownerId) &&
+		policy.claimConditions.repository_id === String(repository.id)
+	);
+}
+
 function addClaimConditionValidationIssue(
 	input: {
 		provider: string;
@@ -134,16 +146,14 @@ export const oidcRouter = router({
 
 	status: adminProcedure.query(async ({ ctx }) => {
 		if (!ctx.oidcPolicies) {
-			return { configured: false as const, githubActionsPolicy: null };
+			return { configured: false as const, githubActionsPolicies: [] };
 		}
 		const policies = await ctx.oidcPolicies.listByOrgSlug(ctx.caller.orgSlug, ctx.caller.tenantId);
 		return {
 			configured: true as const,
-			githubActionsPolicy:
-				policies.find(
-					(policy) =>
-						policy.provider === "github-actions" && policy.issuer === GITHUB_ACTIONS_ISSUER,
-				) ?? null,
+			githubActionsPolicies: policies.filter(
+				(policy) => policy.provider === "github-actions" && policy.issuer === GITHUB_ACTIONS_ISSUER,
+			),
 		};
 	}),
 
@@ -164,15 +174,12 @@ export const oidcRouter = router({
 			}
 			requireInteractiveUser(ctx.caller.principalType);
 
-			// The global org/issuer key permits only one GitHub Actions policy.
-			// Returning the tenant's existing policy makes retries idempotent without
-			// silently replacing its repository scope.
+			// An organization/issuer pair remains globally owned by one tenant, while
+			// that tenant can authorize separate repositories under the issuer.
 			const existing = await ctx.oidcPolicies.findByOrgSlugAndIssuer(
 				ctx.caller.orgSlug,
 				GITHUB_ACTIONS_ISSUER,
 			);
-			const owned = existing.find((policy) => policy.tenantId === ctx.caller.tenantId);
-			if (owned) return { policy: owned, created: false as const };
 
 			let repositories: GitHubInstallationRepository[];
 			try {
@@ -190,6 +197,10 @@ export const oidcRouter = router({
 					message: "That repository is not available to this GitHub App installation",
 				});
 			}
+			const existingPolicy = existing.find((policy) =>
+				matchesGitHubActionsRepository(policy, ctx.caller.tenantId, repository),
+			);
+			if (existingPolicy) return { policy: existingPolicy, created: false as const };
 
 			try {
 				const policy = await ctx.oidcPolicies.create({
@@ -213,11 +224,11 @@ export const oidcRouter = router({
 						ctx.caller.orgSlug,
 						GITHUB_ACTIONS_ISSUER,
 					);
-					const concurrentOwned = concurrent.find(
-						(policy) => policy.tenantId === ctx.caller.tenantId,
+					const concurrentPolicy = concurrent.find((policy) =>
+						matchesGitHubActionsRepository(policy, ctx.caller.tenantId, repository),
 					);
-					if (concurrentOwned) {
-						return { policy: concurrentOwned, created: false as const };
+					if (concurrentPolicy) {
+						return { policy: concurrentPolicy, created: false as const };
 					}
 				}
 				rethrowOidcPolicyError(error);

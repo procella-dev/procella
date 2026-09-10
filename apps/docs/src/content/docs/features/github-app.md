@@ -189,9 +189,10 @@ Existing installations created before tenant-bound setup are removed during migr
 ### 5. Enable GitHub Actions OIDC
 
 After the installation is connected, select **Enable Actions OIDC** on its card, choose the
-repository that runs Pulumi, and select **Enable OIDC**. Procella asks GitHub for the repositories
-visible to that exact installation and creates a repository-scoped trust policy from GitHub's
-stable numeric owner and repository IDs. The browser never supplies those trust claims.
+repository that runs Pulumi, and select **Enable OIDC**. Repeat this for every repository that
+needs GitHub Actions access. Procella asks GitHub for the repositories visible to that exact
+installation and creates a repository-scoped trust policy from GitHub's stable numeric owner and
+repository IDs. The browser never supplies those trust claims.
 
 This grants matching workflows Procella's `member` role for up to two hours. The GitHub workflow
 still needs `permissions: id-token: write` and the Procella action's `oidc-organization` input. See
@@ -268,7 +269,7 @@ Go to **Settings** in the dashboard and open the **GitHub** tab. From here you c
 
 - Connect the configured GitHub App to the current tenant
 - See every GitHub account installation bound to the tenant
-- Reopen GitHub to configure repository access
+- Add each installation repository that needs GitHub Actions OIDC
 - Disconnect a tenant binding, which also deletes your vaulted GitHub authorization, without uninstalling the GitHub App
 
 ## Roadmap
