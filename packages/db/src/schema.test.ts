@@ -276,15 +276,15 @@ describe("@procella/db schema", () => {
 			expect(columns.issuer.name).toBe("issuer");
 		});
 
-		test("allows repository-scoped policies while preserving global tenant ownership", () => {
+		test("indexes ownership lookups without placing claim JSON in a B-tree key", () => {
 			const index = getTableConfig(oidcTrustPolicies).indexes.find(
 				(candidate) => candidate.config.name === "idx_oidc_trust_org_issuer",
 			);
 
-			expect(index?.config.unique).toBe(true);
+			expect(index?.config.unique).toBe(false);
 			expect(
 				index?.config.columns.map((column) => ("name" in column ? column.name : undefined)),
-			).toEqual(["org_slug", "issuer", "claim_conditions"]);
+			).toEqual(["org_slug", "issuer"]);
 		});
 
 		test("post-0018 snapshot preserves durable publication and global ownership", async () => {

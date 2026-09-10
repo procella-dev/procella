@@ -192,12 +192,7 @@ describe("PostgresTrustPolicyRepository", () => {
 	});
 
 	test("duplicate repository scope does not mutate existing policies", async () => {
-		const { db, calls } = createMockDb({
-			insertError: Object.assign(new Error("duplicate key value violates unique constraint"), {
-				code: "23505",
-				constraint: "idx_oidc_trust_org_issuer",
-			}),
-		});
+		const { db, calls } = createMockDb({ selectRows: [mockRow] });
 		const repo = new PostgresTrustPolicyRepository(db);
 
 		await expect(
@@ -208,15 +203,12 @@ describe("PostgresTrustPolicyRepository", () => {
 				displayName: "Second Policy",
 				issuer: "https://token.actions.githubusercontent.com",
 				maxExpiration: 3600,
-				claimConditions: {
-					repository_owner_id: "12345",
-					repository_id: "67890",
-				},
+				claimConditions: mockRow.claimConditions,
 				grantedRole: Role.Member,
 				active: true,
 			}),
 		).rejects.toBeInstanceOf(OidcPolicyClaimConditionsConflictError);
-		expect(calls.some((call) => call.method.startsWith("update"))).toBe(false);
+		expect(calls.some((call) => call.method.startsWith("insert"))).toBe(false);
 	});
 
 	test("allows a second repository scope for the owning tenant", async () => {

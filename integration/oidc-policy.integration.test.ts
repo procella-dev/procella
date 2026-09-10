@@ -77,7 +77,7 @@ afterEach(async () => {
 });
 
 describe("PostgresTrustPolicyRepository — integration", () => {
-	test("database allows repository scopes while preserving global tenant ownership", async () => {
+	test("database indexes ownership lookups without claim JSON", async () => {
 		const [row] = await db.execute(
 			sql`SELECT indexdef FROM pg_indexes
 				WHERE schemaname = current_schema()
@@ -88,7 +88,9 @@ describe("PostgresTrustPolicyRepository — integration", () => {
 		if (!row || typeof row.indexdef !== "string") {
 			throw new Error("OIDC trust policy index is missing");
 		}
-		expect(row.indexdef).toContain("USING btree (org_slug, issuer, claim_conditions)");
+		expect(row.indexdef).toContain("USING btree (org_slug, issuer)");
+		expect(row.indexdef).not.toContain("UNIQUE");
+		expect(row.indexdef).not.toContain("claim_conditions");
 		expect(row.indexdef).not.toContain("tenant_id");
 	});
 

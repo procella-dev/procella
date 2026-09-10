@@ -3,6 +3,7 @@ import type { GitHubService } from "@procella/github";
 import {
 	OidcPolicyClaimConditionsConflictError,
 	OidcPolicyConflictError,
+	OidcPolicyDisplayNameConflictError,
 	type OidcTrustPolicy,
 	type TrustPolicyRepository,
 } from "@procella/oidc";
@@ -204,6 +205,37 @@ describe("oidcRouter", () => {
 			);
 		});
 
+		test("suffixes truncated repository policy names with the stable repository ID", async () => {
+			const create = mock(async () => mockPolicy);
+			const fullName = `acme/${"repository-name-".repeat(8)}service`;
+			const ctx = mockContext({
+				oidcPolicies: mockPolicies({
+					findByOrgSlugAndIssuer: mock(async () => []),
+					create,
+				}),
+				github: {
+					listInstallationRepositories: mock(async () => [
+						{
+							id: 13579,
+							name: "service",
+							fullName,
+							ownerId: 12345,
+							ownerLogin: "acme",
+							private: true,
+						},
+					]),
+				} as unknown as GitHubService,
+			});
+
+			await oidcRouter.createCaller(ctx).enableGitHubActions({
+				installationId: 101,
+				repositoryId: 13579,
+			});
+			expect(create).toHaveBeenCalledWith(
+				expect.objectContaining({ displayName: expect.stringMatching(/ · #13579$/) }),
+			);
+		});
+
 		test("rejects machine principals before policy or repository lookup", async () => {
 			const findByOrgSlugAndIssuer = mock(async () => []);
 			const listInstallationRepositories = mock(async () => []);
@@ -224,37 +256,43 @@ describe("oidcRouter", () => {
 			expect(listInstallationRepositories).not.toHaveBeenCalled();
 		});
 
-		test("returns a concurrently created tenant policy on retry", async () => {
-			let lookupCount = 0;
-			const findByOrgSlugAndIssuer = mock(async () => {
-				lookupCount += 1;
-				return lookupCount === 1 ? [] : [mockPolicy];
-			});
-			const create = mock(async () => {
-				throw new OidcPolicyClaimConditionsConflictError();
-			});
-			const listInstallationRepositories = mock(async () => [
-				{
-					id: 67890,
-					name: "infra",
-					fullName: "acme/infra",
-					ownerId: 12345,
-					ownerLogin: "acme",
-					private: true,
-				},
-			]);
-			const ctx = mockContext({
-				oidcPolicies: mockPolicies({ findByOrgSlugAndIssuer, create }),
-				github: { listInstallationRepositories } as unknown as GitHubService,
-			});
+		test("returns a concurrently created tenant policy after either unique conflict", async () => {
+			for (const conflict of [
+				new OidcPolicyClaimConditionsConflictError(),
+				new OidcPolicyDisplayNameConflictError(),
+			]) {
+				let lookupCount = 0;
+				const findByOrgSlugAndIssuer = mock(async () => {
+					lookupCount += 1;
+					return lookupCount === 1 ? [] : [mockPolicy];
+				});
+				const create = mock(async () => {
+					throw conflict;
+				});
+				const ctx = mockContext({
+					oidcPolicies: mockPolicies({ findByOrgSlugAndIssuer, create }),
+					github: {
+						listInstallationRepositories: mock(async () => [
+							{
+								id: 67890,
+								name: "infra",
+								fullName: "acme/infra",
+								ownerId: 12345,
+								ownerLogin: "acme",
+								private: true,
+							},
+						]),
+					} as unknown as GitHubService,
+				});
 
-			await expect(
-				oidcRouter.createCaller(ctx).enableGitHubActions({
-					installationId: 101,
-					repositoryId: 67890,
-				}),
-			).resolves.toEqual({ policy: mockPolicy, created: false });
-			expect(findByOrgSlugAndIssuer).toHaveBeenCalledTimes(2);
+				await expect(
+					oidcRouter.createCaller(ctx).enableGitHubActions({
+						installationId: 101,
+						repositoryId: 67890,
+					}),
+				).resolves.toEqual({ policy: mockPolicy, created: false });
+				expect(findByOrgSlugAndIssuer).toHaveBeenCalledTimes(2);
+			}
 		});
 
 		test("rejects a repository outside the bound installation", async () => {

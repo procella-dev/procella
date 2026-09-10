@@ -43,6 +43,24 @@ export class OidcPolicyClaimConditionsError extends ProcellaError {
 	}
 }
 
+function hasSameClaimConditions(
+	left: Record<string, string>,
+	right: Record<string, string>,
+): boolean {
+	const leftEntries = Object.entries(left).sort(([leftKey], [rightKey]) =>
+		leftKey.localeCompare(rightKey),
+	);
+	const rightEntries = Object.entries(right).sort(([leftKey], [rightKey]) =>
+		leftKey.localeCompare(rightKey),
+	);
+	return (
+		leftEntries.length === rightEntries.length &&
+		leftEntries.every(
+			([key, value], index) =>
+				key === rightEntries[index]?.[0] && value === rightEntries[index]?.[1],
+		)
+	);
+}
 export class PostgresTrustPolicyRepository implements TrustPolicyRepository {
 	constructor(private readonly db: Database) {}
 
@@ -73,7 +91,10 @@ export class PostgresTrustPolicyRepository implements TrustPolicyRepository {
 				await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${ownershipKey}, 0))`);
 
 				const existing = await tx
-					.select({ tenantId: oidcTrustPolicies.tenantId })
+					.select({
+						tenantId: oidcTrustPolicies.tenantId,
+						claimConditions: oidcTrustPolicies.claimConditions,
+					})
 					.from(oidcTrustPolicies)
 					.where(
 						and(
@@ -83,6 +104,13 @@ export class PostgresTrustPolicyRepository implements TrustPolicyRepository {
 					);
 				if (existing.some((existingPolicy) => existingPolicy.tenantId !== policy.tenantId)) {
 					throw new OidcPolicyConflictError();
+				}
+				if (
+					existing.some((existingPolicy) =>
+						hasSameClaimConditions(existingPolicy.claimConditions, policy.claimConditions),
+					)
+				) {
+					throw new OidcPolicyClaimConditionsConflictError();
 				}
 
 				const [inserted] = await tx
@@ -106,12 +134,8 @@ export class PostgresTrustPolicyRepository implements TrustPolicyRepository {
 			return mapRow(row);
 		} catch (error) {
 			if (pgErrorCode(error) === "23505") {
-				const constraint = pgConstraintName(error);
-				if (constraint === "idx_oidc_trust_org_name") {
+				if (pgConstraintName(error) === "idx_oidc_trust_org_name") {
 					throw new OidcPolicyDisplayNameConflictError();
-				}
-				if (constraint === "idx_oidc_trust_org_issuer") {
-					throw new OidcPolicyClaimConditionsConflictError();
 				}
 				throw new OidcPolicyConflictError();
 			}

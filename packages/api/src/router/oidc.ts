@@ -5,6 +5,7 @@ import {
 	OidcPolicyClaimConditionsConflictError,
 	OidcPolicyClaimConditionsError,
 	OidcPolicyConflictError,
+	OidcPolicyDisplayNameConflictError,
 	type TrustPolicyRepository,
 	validateTrustPolicyClaimConditions,
 } from "@procella/oidc";
@@ -60,6 +61,13 @@ function matchesGitHubActionsRepository(
 		policy.claimConditions.repository_owner_id === String(repository.ownerId) &&
 		policy.claimConditions.repository_id === String(repository.id)
 	);
+}
+
+function githubActionsPolicyDisplayName(repository: GitHubInstallationRepository): string {
+	const base = `GitHub Actions · ${repository.fullName}`;
+	if (base.length <= 100) return base;
+	const suffix = ` · #${repository.id}`;
+	return `${base.slice(0, 100 - suffix.length)}${suffix}`;
 }
 
 function addClaimConditionValidationIssue(
@@ -211,7 +219,7 @@ export const oidcRouter = router({
 					tenantId: ctx.caller.tenantId,
 					orgSlug: ctx.caller.orgSlug,
 					provider: "github-actions",
-					displayName: `GitHub Actions · ${repository.fullName}`.slice(0, 100),
+					displayName: githubActionsPolicyDisplayName(repository),
 					issuer: GITHUB_ACTIONS_ISSUER,
 					maxExpiration: 7200,
 					claimConditions: {
@@ -223,7 +231,10 @@ export const oidcRouter = router({
 				});
 				return { policy, created: true as const };
 			} catch (error) {
-				if (error instanceof OidcPolicyClaimConditionsConflictError) {
+				if (
+					error instanceof OidcPolicyClaimConditionsConflictError ||
+					error instanceof OidcPolicyDisplayNameConflictError
+				) {
 					const concurrent = await ctx.oidcPolicies.findByOrgSlugAndIssuer(
 						ctx.caller.orgSlug,
 						GITHUB_ACTIONS_ISSUER,
