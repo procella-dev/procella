@@ -10,7 +10,6 @@ test("GC Lambda reports an injected database failure and flushes telemetry", asy
 	});
 	const requests: Array<{ url: string; body: string }> = [];
 	let flushes = 0;
-	let githubRuns = 0;
 	let webhookRuns = 0;
 	let blobCleanupRuns = 0;
 	let escSweeps = 0;
@@ -24,12 +23,6 @@ test("GC Lambda reports an injected database failure and flushes telemetry", asy
 			runOnce: async () => {
 				drainOrder.push("blob-cleanup");
 				blobCleanupRuns += 1;
-			},
-		},
-		githubOutbox: {
-			runOnce: async () => {
-				drainOrder.push("github-outbox");
-				githubRuns += 1;
 			},
 		},
 		webhookOutbox: {
@@ -57,10 +50,9 @@ test("GC Lambda reports an injected database failure and flushes telemetry", asy
 		errorType: "Error",
 	});
 	expect(flushes).toBe(1);
-	expect(githubRuns).toBe(1);
 	expect(webhookRuns).toBe(1);
 	expect(blobCleanupRuns).toBe(1);
-	expect(drainOrder).toEqual(["github-outbox", "webhook-outbox", "blob-cleanup"]);
+	expect(drainOrder).toEqual(["webhook-outbox", "blob-cleanup"]);
 	expect(escSweeps).toBe(1);
 });
 
@@ -75,7 +67,6 @@ test("GC Lambda bounds a stalled telemetry flush", async () => {
 			requestId: "request-2",
 			gcWorker: { runOnce: async () => {} },
 			blobCleanup: { runOnce: async () => {} },
-			githubOutbox: null,
 			webhookOutbox: { runOnce: async () => {} },
 			escGcSweep: async () => {},
 			flushTelemetry: () => {

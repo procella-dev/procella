@@ -22,7 +22,6 @@ interface GcInvocationDependencies {
 	requestId: string;
 	gcWorker: GcWorkerLike;
 	blobCleanup: BlobCleanupLike;
-	githubOutbox: OutboxLike | null;
 	webhookOutbox: OutboxLike;
 	escGcSweep: () => Promise<unknown>;
 	flushTelemetry: () => Promise<void>;
@@ -46,7 +45,6 @@ export async function runGcInvocation({
 	requestId,
 	gcWorker,
 	blobCleanup,
-	githubOutbox,
 	webhookOutbox,
 	escGcSweep,
 	flushTelemetry,
@@ -61,16 +59,6 @@ export async function runGcInvocation({
 	} catch (error) {
 		failed = true;
 		invocationError = error;
-	}
-	if (githubOutbox) {
-		try {
-			await githubOutbox.runOnce({
-				deadlineMs: invocationStartedAt + LAMBDA_WORK_DEADLINE_MS,
-			});
-		} catch (error) {
-			failed = true;
-			invocationError ??= error;
-		}
 	}
 	try {
 		await webhookOutbox.runOnce({
@@ -132,14 +120,12 @@ async function main(): Promise<void> {
 	const [
 		{ createDb },
 		{ escGcSweep },
-		{ GitHubOutboxWorker, OctokitGitHubDeliveryService },
 		{ createBlobStorage },
 		{ WebhookOutboxWorker },
 		{ BlobCleanupWorker, GCWorker },
 	] = await Promise.all([
 		import("@procella/db"),
 		import("@procella/esc"),
-		import("@procella/github"),
 		import("@procella/storage"),
 		import("@procella/webhooks"),
 		import("@procella/updates"),
@@ -159,22 +145,6 @@ async function main(): Promise<void> {
 				},
 	);
 	const blobCleanup = new BlobCleanupWorker({ db, storage, maxPerRun: 100 });
-	const githubAppId = process.env.PROCELLA_GITHUB_DELIVERY_APP_ID;
-	const githubPrivateKey = process.env.PROCELLA_GITHUB_DELIVERY_PRIVATE_KEY?.replace(/\\n/g, "\n");
-	if (Boolean(githubAppId) !== Boolean(githubPrivateKey)) {
-		throw new Error("GitHub delivery requires both App ID and private key");
-	}
-	const githubOutbox =
-		githubAppId && githubPrivateKey
-			? new GitHubOutboxWorker({
-					db,
-					github: new OctokitGitHubDeliveryService({
-						db,
-						config: { appId: githubAppId, privateKey: githubPrivateKey },
-					}),
-					maxPerRun: 5,
-				})
-			: null;
 	const webhookOutbox = new WebhookOutboxWorker({ db, maxPerRun: 5 });
 
 	while (true) {
@@ -187,7 +157,6 @@ async function main(): Promise<void> {
 			requestId,
 			gcWorker,
 			blobCleanup,
-			githubOutbox,
 			webhookOutbox,
 			escGcSweep: () => escGcSweep(db),
 			flushTelemetry,

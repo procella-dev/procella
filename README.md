@@ -19,7 +19,7 @@ A self-hosted [Pulumi](https://www.pulumi.com/) backend for [tested core CLI wor
 - **Stack search** — full-text search with tag filtering and cursor-based pagination
 - **Webhooks** — outbound HTTP event delivery with HMAC-SHA256 signing and retries
 - **Audit logs** — automatic audit trail via Descope management API
-- **GitHub App** — PR preview comments and commit status checks
+- **GitHub App and Actions OIDC** — tenant-bound GitHub App setup and repository-scoped CI authentication
 
 ## Performance
 

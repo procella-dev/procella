@@ -115,8 +115,6 @@ Engine events emitted during an update (resource operations, diagnostics, output
 | `idx_updates_active` | `updates` | **Partial unique**: `(stackId) WHERE status IN ('not started', 'requested', 'running')` — prevents concurrent updates |
 | `idx_checkpoints_update_version` | `checkpoints` | `(updateId, version)` — fast checkpoint lookup |
 | `idx_update_events_update_sequence` | `update_events` | `(updateId, sequence)` — ordered event retrieval |
-| `idx_github_update_outbox_update_phase` | `github_update_outbox` | Unique `(updateId, phase)` publication intent |
-| `idx_github_update_outbox_available` | `github_update_outbox` | Due and expired-lease claim scanning |
 
 ## Auto-Create Pattern
 
@@ -143,24 +141,18 @@ await db.transaction(async (tx) => {
   );
   const rows = "rows" in result ? result.rows : result;
   if (rows[0]?.acquired !== true) return;
-  // ... cancel orphaned updates and enqueue running-update publications ...
+  // ... cancel orphaned updates ...
 });
 ```
 
 This ensures only one replica runs a GC cycle. PostgreSQL releases the lock automatically when the transaction commits, rolls back, or its connection closes.
-
-## Transactional GitHub Outbox
-
-Update start and terminal transitions insert their GitHub publication intent in the same PostgreSQL transaction. The outbox stores a monotonically increasing revision and the worker acknowledges the exact revision it delivered. A late, higher-sequence summary event increments the terminal revision so the existing pull-request comment is edited again.
-
-Workers claim rows with `FOR UPDATE SKIP LOCKED` and a short lease, then release the transaction before calling GitHub. Acknowledgements and failures are fenced by claim owner and revision, so a late summary cannot be overwritten by stale in-flight work. Transient failures use bounded exponential backoff; malformed payloads and exhausted retries record a terminal failed revision. A failed started phase no longer blocks its terminal phase.
 
 ## Cascade Deletes
 
 Foreign keys use `ON DELETE CASCADE` where the schema declares ownership:
 
 - Deleting a **project** cascades to its stack registry rows.
-- Deleting an **update** cascades to its events, checkpoints, and GitHub outbox rows.
+- Deleting an **update** cascades to its events and checkpoints.
 
 `updates.stack_id` is intentionally a soft reference. Deleting a stack registry row does not itself delete retained update history or checkpoint data.
 

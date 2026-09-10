@@ -47,12 +47,8 @@ const baseDeps = {
 	oidcPolicies: null as TrustPolicyRepository | null,
 };
 
-function makeApp(
-	cronSecret?: string,
-	db: Database = baseDeps.db,
-	github: GitHubService | null = baseDeps.github,
-) {
-	return createApp({ ...baseDeps, cronSecret, db, github });
+function makeApp(cronSecret?: string, db: Database = baseDeps.db) {
+	return createApp({ ...baseDeps, cronSecret, db });
 }
 
 describe("/cron/gc integration", () => {
@@ -91,16 +87,12 @@ describe("/cron/gc integration", () => {
 			},
 		} as unknown as Database;
 
-		const res = await makeApp(
-			"correct-secret",
-			failingDb,
-			{} as GitHubService,
-		).request("/cron/gc", {
+		const res = await makeApp("correct-secret", failingDb).request("/cron/gc", {
 			headers: { Authorization: "Bearer correct-secret" },
 		});
 
 		expect(res.status).toBeGreaterThanOrEqual(500);
-		// GC cycle, GitHub outbox claim, webhook outbox claim, blob cleanup claim.
-		expect(transactions).toBe(4);
+		// GC cycle, webhook outbox claim, blob cleanup claim.
+		expect(transactions).toBe(3);
 	});
 });

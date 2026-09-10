@@ -124,7 +124,6 @@ function importDatabase() {
 						version: 5,
 						leaseToken: null,
 						leaseExpiresAt: null,
-						githubTarget: null,
 					},
 				]);
 			}

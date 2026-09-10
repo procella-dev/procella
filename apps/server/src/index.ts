@@ -1,5 +1,4 @@
 import { formatConfigErrors } from "@procella/config";
-import { GitHubOutboxWorker } from "@procella/github";
 import { WebhookOutboxWorker } from "@procella/webhooks";
 import { ZodError } from "zod";
 import { logger } from "./logger.js";
@@ -42,7 +41,7 @@ if (process.argv.includes("--healthz")) {
 		const { BlobCleanupWorker, GCWorker } = await import("@procella/updates");
 		const { bootstrap } = await import("./bootstrap.js");
 		const { drainForShutdown } = await import("./shutdown.js");
-		const { app, auth, config, db, client, github, notifications, storage } = await bootstrap();
+		const { app, auth, config, db, client, notifications, storage } = await bootstrap();
 
 		const uiRoot = process.env.PROCELLA_UI_PATH || "/ui";
 		if (existsSync(`${uiRoot}/index.html`)) {
@@ -71,8 +70,6 @@ if (process.argv.includes("--healthz")) {
 		void gc.start();
 		const blobCleanup = new BlobCleanupWorker({ db, storage });
 		void blobCleanup.start();
-		const githubOutbox = github ? new GitHubOutboxWorker({ db, github }) : null;
-		if (githubOutbox) void githubOutbox.start();
 		const webhookOutbox = new WebhookOutboxWorker({ db });
 		void webhookOutbox.start();
 
@@ -88,7 +85,7 @@ if (process.argv.includes("--healthz")) {
 			await drainForShutdown({
 				notifications,
 				server,
-				workers: [gc, blobCleanup, ...(githubOutbox ? [githubOutbox] : []), webhookOutbox],
+				workers: [gc, blobCleanup, webhookOutbox],
 			});
 			await shutdownTelemetry();
 			auth.dispose?.();

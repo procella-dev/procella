@@ -7,7 +7,6 @@ import {
 	githubInstallations,
 	githubOutboundConnections,
 	githubSetupStates,
-	githubUpdateOutbox,
 	oidcTrustPolicies,
 	projects,
 	stacks,
@@ -96,10 +95,7 @@ describe("@procella/db schema", () => {
 			expect(columnNames).toContain("completed_at");
 			expect(columnNames).toContain("config");
 			expect(columnNames).toContain("program");
-			expect(columnNames).toContain("github_target");
-			expect(columnNames).toContain("github_comment_id");
-			expect(columnNames).toContain("summary_sequence");
-			expect(columnNames).toContain("summary");
+			expect(columnNames).toContain("environment");
 		});
 	});
 
@@ -159,21 +155,6 @@ describe("@procella/db schema", () => {
 			expect(columnNames).toContain("kind");
 			expect(columnNames).toContain("fields");
 			expect(columnNames).toContain("created_at");
-		});
-	});
-
-	describe("github_update_outbox table", () => {
-		test("stores leased revision delivery state", () => {
-			expect(getTableName(githubUpdateOutbox)).toBe("github_update_outbox");
-			const columns = getTableColumns(githubUpdateOutbox);
-			expect(columns.updateId.name).toBe("update_id");
-			expect(columns.phase.name).toBe("phase");
-			expect(columns.revision.name).toBe("revision");
-			expect(columns.deliveredRevision.name).toBe("delivered_revision");
-			expect(columns.failedRevision.name).toBe("failed_revision");
-			expect(columns.failedAt.name).toBe("failed_at");
-			expect(columns.availableAt.name).toBe("available_at");
-			expect(columns.claimedUntil.name).toBe("claimed_until");
 		});
 	});
 
@@ -286,36 +267,6 @@ describe("@procella/db schema", () => {
 				index?.config.columns.map((column) => ("name" in column ? column.name : undefined)),
 			).toEqual(["org_slug", "issuer"]);
 		});
-
-		test("post-0018 snapshot preserves durable publication and global ownership", async () => {
-			const snapshot = (await Bun.file(
-				new URL("../drizzle/meta/0018_snapshot.json", import.meta.url),
-			).json()) as {
-				tables: Record<
-					string,
-					{
-						columns: Record<string, unknown>;
-						indexes: Record<string, { columns: Array<{ expression: string }>; isUnique: boolean }>;
-					}
-				>;
-			};
-
-			expect(snapshot.tables["public.github_setup_states"]).toBeDefined();
-			expect(snapshot.tables["public.github_update_outbox"]).toBeDefined();
-			const snapshotUpdates = snapshot.tables["public.updates"];
-			expect(snapshotUpdates?.indexes.idx_updates_stack_version).toBeDefined();
-			expect(snapshotUpdates?.columns.github_target).toBeDefined();
-			expect(snapshotUpdates?.columns.github_comment_id).toBeDefined();
-			expect(snapshotUpdates?.columns.summary_sequence).toBeDefined();
-			expect(snapshotUpdates?.columns.summary).toBeDefined();
-			const snapshotIndex =
-				snapshot.tables["public.oidc_trust_policies"]?.indexes.idx_oidc_trust_org_issuer;
-			expect(snapshotIndex?.isUnique).toBe(true);
-			expect(snapshotIndex?.columns.map((column) => column.expression)).toEqual([
-				"org_slug",
-				"issuer",
-			]);
-		});
 	});
 
 	describe("github_outbound_connections table", () => {
@@ -382,7 +333,6 @@ describe("@procella/db schema", () => {
 			expect(getTableName(checkpoints)).toBe("checkpoints");
 			expect(getTableName(blobCleanupQueue)).toBe("blob_cleanup_queue");
 			expect(getTableName(updateEvents)).toBe("update_events");
-			expect(getTableName(githubUpdateOutbox)).toBe("github_update_outbox");
 			expect(getTableName(githubInstallations)).toBe("github_installations");
 			expect(getTableName(githubSetupStates)).toBe("github_setup_states");
 			expect(getTableName(githubOutboundConnections)).toBe("github_outbound_connections");

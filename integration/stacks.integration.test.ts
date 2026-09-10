@@ -4,7 +4,6 @@ import {
 	blobCleanupQueue,
 	checkpoints,
 	type Database,
-	githubUpdateOutbox,
 	journalEntries,
 	stacks as stackRows,
 	updateEvents,
@@ -296,10 +295,6 @@ describe("PostgresStacksService — integration", () => {
 				operationId: 1n,
 				kind: 0,
 			});
-			await db.insert(githubUpdateOutbox).values({
-				updateId: targetUpdate.id,
-				phase: "started",
-			});
 
 			await stacks.deleteStack("tenant-1", "org-1", "proj-1", "dev", true);
 
@@ -314,12 +309,6 @@ describe("PostgresStacksService — integration", () => {
 			).toHaveLength(0);
 			expect(
 				await db.select().from(journalEntries).where(eq(journalEntries.updateId, targetUpdate.id)),
-			).toHaveLength(0);
-			expect(
-				await db
-					.select()
-					.from(githubUpdateOutbox)
-					.where(eq(githubUpdateOutbox.updateId, targetUpdate.id)),
 			).toHaveLength(0);
 
 			const queued = await db.select({ blobKey: blobCleanupQueue.blobKey }).from(blobCleanupQueue);

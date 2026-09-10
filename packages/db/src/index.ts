@@ -29,7 +29,6 @@ export {
 	githubInstallations,
 	githubOutboundConnections,
 	githubSetupStates,
-	githubUpdateOutbox,
 	journalEntries,
 	oidcTrustPolicies,
 	projects,

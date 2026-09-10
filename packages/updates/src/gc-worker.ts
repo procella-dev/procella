@@ -1,7 +1,7 @@
 // @procella/updates — GC Worker for cleaning up stale/orphaned updates.
 
 import type { Database } from "@procella/db";
-import { githubUpdateOutbox, stacks, subscriptionTicketNonces, updates } from "@procella/db";
+import { stacks, subscriptionTicketNonces, updates } from "@procella/db";
 import {
 	activeUpdatesGauge,
 	gcCycleCount,
@@ -164,7 +164,6 @@ export class GCWorker {
 					.returning({
 						id: updates.id,
 						stackId: updates.stackId,
-						githubTarget: updates.githubTarget,
 						webhookContext: updates.webhookContext,
 					});
 
@@ -189,19 +188,6 @@ export class GCWorker {
 				const allOrphans = [...expiredLeaseUpdates, ...staleUpdates];
 				if (allOrphans.length > 0) {
 					const orphanIds = allOrphans.map((update) => update.id);
-
-					const publishable = expiredLeaseUpdates.filter((update) => update.githubTarget);
-					if (publishable.length > 0) {
-						await tx
-							.insert(githubUpdateOutbox)
-							.values(
-								publishable.map((update) => ({
-									updateId: update.id,
-									phase: "terminal" as const,
-								})),
-							)
-							.onConflictDoNothing();
-					}
 
 					// Only leases that were actually running had a start event; a never-started
 					// update was never announced, so cancelling it announces nothing either.

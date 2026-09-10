@@ -64,7 +64,6 @@ describe("resetPreviewDatabase", () => {
 		const policyDeleteSql = dialect.sqlToQuery(policyDelete.getSQL()).sql;
 		expect(policyDeleteSql).toBe('DELETE FROM "public"."oidc_trust_policies"');
 		expect(policyDeleteSql).not.toContain('"updates"');
-		expect(policyDeleteSql).not.toContain("github_update_outbox");
 
 		const markerDelete = harness.execute.mock.calls[3]?.[0] as SQLWrapper;
 		const markerDeletion = dialect.sqlToQuery(markerDelete.getSQL());

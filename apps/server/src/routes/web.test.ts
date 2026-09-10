@@ -87,12 +87,7 @@ function mockGitHubService(): GitHubService {
 		})),
 		listInstallations: mock(async () => []),
 		listInstallationRepositories: mock(async () => []),
-		resolveInstallation: mock(async () => null),
 		removeInstallation: mock(async () => {}),
-		createPRComment: mock(async () => 1),
-		findPRComment: mock(async () => null),
-		updatePRComment: mock(async () => {}),
-		setCommitStatus: mock(async () => {}),
 	};
 }
 
