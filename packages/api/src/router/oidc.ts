@@ -96,7 +96,8 @@ function addClaimConditionValidationIssue(
 function rethrowOidcPolicyError(error: unknown): never {
 	if (
 		error instanceof OidcPolicyConflictError ||
-		error instanceof OidcPolicyClaimConditionsConflictError
+		error instanceof OidcPolicyClaimConditionsConflictError ||
+		error instanceof OidcPolicyDisplayNameConflictError
 	) {
 		throw new TRPCError({ code: "CONFLICT", message: error.message, cause: error });
 	}

@@ -396,6 +396,21 @@ describe("oidcRouter", () => {
 			);
 		});
 
+		test("surfaces duplicate display names as conflict errors", () => {
+			const ctx = mockContext({
+				oidcPolicies: mockPolicies({
+					create: mock(async () => {
+						throw new OidcPolicyDisplayNameConflictError();
+					}),
+				}),
+			});
+
+			return expect(oidcRouter.createCaller(ctx).createPolicy(validInput)).rejects.toMatchObject({
+				code: "CONFLICT",
+				message: "OIDC trust policy with this display name already exists in the tenant",
+			});
+		});
+
 		test("surfaces duplicate claim conditions as a conflict error", () => {
 			const ctx = mockContext({
 				oidcPolicies: mockPolicies({
