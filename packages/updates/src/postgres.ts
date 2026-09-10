@@ -2,15 +2,7 @@
 
 import type { CryptoService, StackCryptoInput } from "@procella/crypto";
 import type { Database } from "@procella/db";
-import {
-	checkpoints,
-	githubUpdateOutbox,
-	journalEntries,
-	projects,
-	stacks,
-	updateEvents,
-	updates,
-} from "@procella/db";
+import { checkpoints, journalEntries, projects, stacks, updateEvents, updates } from "@procella/db";
 import type { BlobStorage } from "@procella/storage";
 import {
 	activeUpdatesGauge,
@@ -35,7 +27,6 @@ import type {
 	ResourceV3,
 	StartUpdateRequest,
 	StartUpdateResponse,
-	SummaryEvent,
 	UntypedDeployment,
 	UpdateInfo,
 	UpdateProgramResponse,
@@ -60,7 +51,7 @@ import {
 	UpdateNotFoundError,
 } from "@procella/types";
 import { enqueueWebhookEvent } from "@procella/webhooks";
-import { and, desc, eq, gt, isNull, lt, max, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, max, ne, sql } from "drizzle-orm";
 import {
 	applyDeploymentDelta,
 	assertSupportedDeploymentEnvelope,
@@ -82,7 +73,6 @@ import {
 import { type RepairMutation, repairCheckpoint } from "./repair.js";
 import type {
 	DeltaCheckpointSave,
-	GitHubUpdateTarget,
 	UpdatesService,
 	UpdateWebhookContext,
 	VerbatimCheckpointSave,
@@ -110,7 +100,6 @@ interface LockedUpdateRow {
 	version: number;
 	leaseToken: string | null;
 	leaseExpiresAt: Date | null;
-	githubTarget: GitHubUpdateTarget | null;
 	webhookContext: UpdateWebhookContext | null;
 }
 interface StackLockRow {
@@ -118,11 +107,6 @@ interface StackLockRow {
 	tenantId: string;
 	project: string;
 	stack: string;
-	tags: Record<string, string>;
-}
-
-interface RawStackLockRow extends Omit<StackLockRow, "tags"> {
-	tags: unknown;
 }
 
 interface RawLockedUpdateRow extends Omit<LockedUpdateRow, "webhookContext"> {
@@ -213,11 +197,6 @@ export class PostgresUpdatesService implements UpdatesService {
 							"Another update is already in progress for this stack. Run `pulumi cancel` to cancel it first.",
 						);
 					}
-					const githubTarget = deriveGitHubUpdateTarget({
-						caller,
-						environment,
-						stack: stackLock,
-					});
 
 					const versionWhere =
 						kind === "preview"
@@ -250,7 +229,6 @@ export class PostgresUpdatesService implements UpdatesService {
 							initiatedByMeta: caller?.workload
 								? (caller.workload as unknown as Record<string, unknown>)
 								: null,
-							githubTarget,
 							webhookContext: {
 								tenantId: stackLock.tenantId,
 								org: caller?.orgSlug ?? stackLock.tenantId,
@@ -314,10 +292,6 @@ export class PostgresUpdatesService implements UpdatesService {
 					.update(stacks)
 					.set({ activeUpdateId: updateId, updatedAt: sql`now()` })
 					.where(eq(stacks.id, row.stackId));
-
-				if (row.githubTarget) {
-					await this.enqueueGitHubPublication(tx, updateId, "started");
-				}
 
 				await this.enqueueWebhookLifecycle(tx, row, updateId, "update.started");
 				const journalVersion = (request.journalVersion ?? 0) >= 1 ? 1 : 0;
@@ -411,10 +385,6 @@ export class PostgresUpdatesService implements UpdatesService {
 						.set({ activeUpdateId: null, updatedAt: sql`now()` })
 						.where(eq(stacks.id, row.stackId));
 
-					if (row.githubTarget) {
-						await this.enqueueGitHubPublication(tx, updateId, "terminal");
-					}
-
 					await this.enqueueWebhookLifecycle(
 						tx,
 						row,
@@ -470,10 +440,6 @@ export class PostgresUpdatesService implements UpdatesService {
 					.update(stacks)
 					.set({ activeUpdateId: null, updatedAt: sql`now()` })
 					.where(eq(stacks.id, row.stackId));
-
-				if (previouslyRunning && row.githubTarget) {
-					await this.enqueueGitHubPublication(tx, updateId, "terminal");
-				}
 
 				await this.enqueueWebhookLifecycle(tx, row, updateId, "update.cancelled", "cancelled");
 				return previouslyRunning;
@@ -670,52 +636,7 @@ export class PostgresUpdatesService implements UpdatesService {
 					fields: event as unknown,
 				}));
 
-				await this.db.transaction(async (tx) => {
-					// Event sequences are immutable. Only newly inserted summary events may advance the snapshot.
-					const inserted = await tx
-						.insert(updateEvents)
-						.values(rows)
-						.onConflictDoNothing()
-						.returning({ fields: updateEvents.fields });
-					const latestSummary = inserted.reduce<
-						{ sequence: number; summary: SummaryEvent } | undefined
-					>((latest, row) => {
-						const event = requireEngineEvent(row.fields);
-						if (!event.summaryEvent) return latest;
-						return !latest || event.sequence > latest.sequence
-							? { sequence: event.sequence, summary: event.summaryEvent }
-							: latest;
-					}, undefined);
-
-					if (latestSummary) {
-						const [updated] = await tx
-							.update(updates)
-							.set({
-								summarySequence: latestSummary.sequence,
-								summary: latestSummary.summary as unknown as Record<string, unknown>,
-								updatedAt: sql`now()`,
-							})
-							.where(
-								and(
-									eq(updates.id, updateId),
-									or(
-										isNull(updates.summarySequence),
-										lt(updates.summarySequence, latestSummary.sequence),
-									),
-								),
-							)
-							.returning({ status: updates.status, githubTarget: updates.githubTarget });
-
-						if (
-							updated?.githubTarget &&
-							(updated.status === "succeeded" ||
-								updated.status === "failed" ||
-								updated.status === "cancelled")
-						) {
-							await this.enqueueGitHubPublication(tx, updateId, "terminal", true);
-						}
-					}
-				});
+				await this.db.insert(updateEvents).values(rows).onConflictDoNothing();
 
 				this.db.execute(sql`SELECT pg_notify('update_events', ${updateId})`).catch(() => {});
 			},
@@ -1223,31 +1144,6 @@ export class PostgresUpdatesService implements UpdatesService {
 			});
 	}
 
-	private async enqueueGitHubPublication(
-		tx: DbTransaction,
-		updateId: string,
-		phase: "started" | "terminal",
-		bumpRevision = false,
-	): Promise<void> {
-		const insert = tx.insert(githubUpdateOutbox).values({ updateId, phase });
-		if (!bumpRevision) {
-			await insert.onConflictDoNothing();
-			return;
-		}
-
-		await insert.onConflictDoUpdate({
-			target: [githubUpdateOutbox.updateId, githubUpdateOutbox.phase],
-			set: {
-				revision: sql`${githubUpdateOutbox.revision} + 1`,
-				failedAt: null,
-				attempts: 0,
-				availableAt: sql`now()`,
-				lastError: null,
-				updatedAt: sql`now()`,
-			},
-		});
-	}
-
 	private async lockLifecycleUpdateForWrite(
 		tx: DbTransaction,
 		updateId: string,
@@ -1300,7 +1196,7 @@ export class PostgresUpdatesService implements UpdatesService {
 			await tx.execute(sql`
 				SELECT stack_id AS "stackId", status, version,
 					lease_token AS "leaseToken", lease_expires_at AS "leaseExpiresAt",
-					github_target AS "githubTarget", webhook_context AS "webhookContext"
+					webhook_context AS "webhookContext"
 				FROM updates
 				WHERE id = ${updateId}
 				FOR UPDATE
@@ -1333,10 +1229,10 @@ export class PostgresUpdatesService implements UpdatesService {
 	}
 
 	private async lockStackForOperation(tx: DbTransaction, stackId: string): Promise<StackLockRow> {
-		const [row] = this.readExecuteRows<RawStackLockRow>(
+		const [row] = this.readExecuteRows<StackLockRow>(
 			await tx.execute(sql`
 				SELECT s.active_update_id AS "activeUpdateId", p.tenant_id AS "tenantId",
-					p.name AS project, s.name AS stack, s.tags
+					p.name AS project, s.name AS stack
 				FROM stacks s
 				JOIN projects p ON p.id = s.project_id
 				WHERE s.id = ${stackId}
@@ -1345,8 +1241,7 @@ export class PostgresUpdatesService implements UpdatesService {
 		);
 
 		if (!row) throw new Error(`Stack not found: ${stackId}`);
-		const tags = parseStringRecord(row.tags);
-		return { ...row, tags };
+		return row;
 	}
 
 	private readExecuteRows<T>(result: unknown): T[] {
@@ -1456,16 +1351,6 @@ function requireEngineEvent(value: unknown): EngineEvent {
 	return value as unknown as EngineEvent;
 }
 
-function parseStringRecord(value: unknown): Record<string, string> {
-	const parsed = typeof value === "string" ? JSON.parse(value) : value;
-	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
-	return Object.fromEntries(
-		Object.entries(parsed).filter(
-			(entry): entry is [string, string] => typeof entry[1] === "string",
-		),
-	);
-}
-
 function parseWebhookContext(value: unknown): UpdateWebhookContext | null {
 	const parsed = typeof value === "string" ? (JSON.parse(value) as unknown) : value;
 	if (!isPlainObject(parsed)) return null;
@@ -1498,44 +1383,6 @@ export async function loadUpdateWebhookContext(
 	return row
 		? { tenantId: row.tenantId, org: row.tenantId, project: row.project, stack: row.stack }
 		: null;
-}
-export function deriveGitHubUpdateTarget({
-	caller,
-	environment,
-	stack,
-}: {
-	caller?: Caller;
-	environment?: Record<string, string>;
-	stack: Pick<StackLockRow, "tenantId" | "project" | "stack" | "tags">;
-}): GitHubUpdateTarget | null {
-	if (!caller || caller.tenantId !== stack.tenantId || !environment) return null;
-
-	const owner = environment["vcs.owner"]?.trim();
-	const repo = environment["vcs.repo"]?.trim();
-	const pr = environment["ci.pr.number"]?.trim();
-	const sha = (environment["ci.pr.headSHA"] ?? environment["git.head"])?.trim();
-	if (!owner || !repo || !pr || !sha || !/^[1-9]\d*$/.test(pr)) return null;
-
-	const prNumber = Number(pr);
-	if (!Number.isSafeInteger(prNumber)) return null;
-	if (owner.toLowerCase() !== stack.tags["vcs:owner"]?.trim().toLowerCase()) return null;
-	if (repo.toLowerCase() !== stack.tags["vcs:repo"]?.trim().toLowerCase()) return null;
-
-	if (caller.principalType === "workload") {
-		const workloadRepository = caller.workload?.repository?.trim().toLowerCase();
-		if (workloadRepository !== `${owner}/${repo}`.toLowerCase()) return null;
-	}
-
-	return {
-		tenantId: stack.tenantId,
-		owner,
-		repo,
-		prNumber,
-		sha,
-		org: caller.orgSlug,
-		project: stack.project,
-		stack: stack.stack,
-	};
 }
 
 // ============================================================================

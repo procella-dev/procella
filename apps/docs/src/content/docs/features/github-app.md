@@ -1,14 +1,13 @@
 ---
 title: GitHub App
-description: PR preview comments and commit status checks for Pulumi stacks.
+description: Tenant GitHub App connections and GitHub Actions OIDC for Pulumi stacks.
 ---
 
-The Procella GitHub App integration posts preview results directly to pull requests. When a CI run executes `pulumi preview` against a stack tagged with GitHub metadata, Procella automatically:
-
-- Posts a comment on the PR with the preview diff (resources to add, change, or delete)
-- Sets a commit status check (`pulumi/preview`) that shows pass/fail in the PR checks UI
-
-This gives reviewers infrastructure change context without leaving GitHub.
+The Procella GitHub App integration connects an App installation to a tenant and uses that
+installation to configure repository-scoped GitHub Actions OIDC trust. Procella does not create or
+edit pull-request comments or commit statuses. Optional pull-request comments are posted by the
+official [`pulumi/actions`](https://github.com/pulumi/actions) action in the workflow that runs
+Pulumi.
 
 ## Setup
 
@@ -36,8 +35,6 @@ Under **Repository permissions**, set:
 
 | Permission | Access |
 |---|---|
-| Pull requests | Read & write |
-| Commit statuses | Read & write |
 | Contents | Read-only |
 | Metadata | Read-only |
 
@@ -46,8 +43,8 @@ during setup to verify that the authorizing GitHub user is an active organizatio
 
 Under **Subscribe to events**, check:
 
-- Pull request
-- Push
+- Installation
+- Installation repositories
 
 Click **Create GitHub App**. On the next page, note your **App ID** and **Client ID**, then
 generate and save a **Client secret**. The client ID and secret are used only to provision the
@@ -202,7 +199,7 @@ restrictions.
 
 Use a GitHub App owned by the destination organization when the previous organization-owned App cannot move with the repository. Create the replacement App under the destination organization, connect it from Procella Settings, and replace all three `PROCELLA_GITHUB_APP_*` runtime credential values together, plus the deploy-time OAuth client credentials used by the outbound provisioner. Procella rejects partial GitHub App configuration.
 
-The new App may keep the existing webhook URL. Confirm a signed delivery succeeds after installation before retiring the old App.
+The new App may keep the existing webhook URL. Confirm a signed installation webhook delivery succeeds after installation before retiring the old App.
 
 ### Deployment Credentials
 
@@ -216,28 +213,29 @@ Vaulted GitHub user tokens are scoped to the OAuth client that issued them. Afte
 
 For a direct SST deployment, export `PROCELLA_GITHUB_APP_ENABLED=true` and set `ProcellaGitHubAppId`, `ProcellaGitHubAppClientId`, `ProcellaGitHubAppClientSecret`, `ProcellaGitHubAppPrivateKey`, and `ProcellaGitHubAppWebhookSecret` for that stage (or as SST fallbacks). SST links only the App ID, private key, and webhook secret into the Lambdas; the client ID and secret are passed to the outbound-app provisioning command alone. The GitHub Actions deployment workflows source the opt-in from the non-secret environment variable of the same name and the credentials from the matching `PROCELLA_GITHUB_APP_*` environment secrets. When the variable is unset or `false`, SST does not link the integration, even if a preview stage retains values from an older deployment. This cleanly removes obsolete secret resources on the next deploy. A partial group or invalid credential fails deployment when the integration is enabled.
 
-With the integration disabled, preview and production deployments remain healthy but GitHub setup, webhooks, PR comments, and commit statuses are unavailable. Without Descope management credentials the App still serves webhooks, PR comments, and commit statuses, but tenant setup fails closed. Live PR-comment end-to-end testing requires a dedicated Procella GitHub App installed on the test repository, all five credentials in the preview environment, and `PROCELLA_GITHUB_APP_ENABLED=true`. It cannot use the Renovate App.
+With the integration disabled, preview and production deployments remain healthy, but GitHub App
+setup, installation webhooks, and GitHub Actions OIDC configuration are unavailable. Without
+Descope management credentials, the App can still receive installation webhooks, but tenant setup
+fails closed.
 
-## How PR Comments Work
+## Pulumi Update Metadata and PR Comments
 
-During an update, the Pulumi CLI sends source-control and CI metadata to Procella. For GitHub pull-request runs, Procella snapshots these values when the update is created:
+The official Pulumi CLI automatically collects standard `vcs.*`, `git.*`, and `ci.*` environment
+metadata and sends it to Procella with each update. Procella retains that metadata as update context;
+it does not use it to publish GitHub comments or commit statuses. Metadata is attached to each update
+rather than stored on the stack, so concurrent or subsequent pull-request runs do not reuse another
+run's pull-request number or commit SHA.
 
-| Update metadata | Purpose |
-|---|---|
-| `vcs.owner` | GitHub organization or user |
-| `vcs.repo` | Repository name |
-| `ci.pr.number` | Pull request number |
-| `ci.pr.headSHA` | Pull request head commit |
-
-If `ci.pr.headSHA` is unavailable, Procella falls back to `git.head`. The metadata repository must match the stack's persisted `vcs:owner` and `vcs:repo` identity. Workload callers must also be bound to that repository. `github:*` stack tags are ignored and cannot authorize a publication.
-
-Starting a matching update transactionally enqueues a pending commit status and PR comment. Completion or cancellation enqueues the final edit in the same database transaction as the status change. Procella stores the highest-sequence Pulumi summary event and revises the final comment if a newer summary arrives late. If no summary arrived, the comment says `summary unavailable`.
-
-Delivery uses a PostgreSQL outbox. Workers resolve the repository's current tenant-bound GitHub App installation, recover an existing comment by its hidden update marker after a crash, and edit that same comment. Leased claims, ordered phases, idempotent revisions, and bounded retry backoff make delivery safe across replicas and Lambda invocations.
+To add a preview comment, enable `comment-on-pr` on the official `pulumi/actions` action (or on the
+Procella wrapper, which delegates to it). The action posts with the workflow's `GITHUB_TOKEN`, so the
+workflow must grant `pull-requests: write`. Comment creation and updates are owned entirely by the
+action, not by the Procella server or GitHub App installation.
 
 ## CI/CD Integration
 
-Use the [Procella GitHub Action](/features/github-action/) to run a preview against the hosted Procella backend. The Pulumi CLI supplies the GitHub metadata automatically, so no `pulumi stack tag set` commands are required.
+Use the [Procella GitHub Action](/features/github-action/) to run the official `pulumi/actions`
+implementation against the hosted Procella backend. The Pulumi CLI supplies GitHub and CI metadata
+automatically, so no `pulumi stack tag set` commands are required.
 
 ```yaml
 name: Pulumi Preview
@@ -245,6 +243,10 @@ name: Pulumi Preview
 on:
   pull_request:
     branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
 
 jobs:
   preview:
@@ -256,11 +258,12 @@ jobs:
         with:
           command: preview
           stack-name: my-org/my-project/staging
+          comment-on-pr: true
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 ```
 
-The metadata is attached to each update rather than stored on the stack, so concurrent or subsequent pull-request runs do not reuse another run's PR number or commit SHA.
+Omit `comment-on-pr` and `pull-requests: write` when the workflow does not need a PR comment.
 
 ## Managing the Integration
 

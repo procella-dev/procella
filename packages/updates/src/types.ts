@@ -25,17 +25,6 @@ import type { RepairMutation } from "./repair.js";
 // UpdatesService Interface
 // ============================================================================
 
-export interface GitHubUpdateTarget {
-	tenantId: string;
-	owner: string;
-	repo: string;
-	prNumber: number;
-	sha: string;
-	org: string;
-	project: string;
-	stack: string;
-}
-
 /**
  * Addressing captured when the update is created. Terminal transitions happen under a lease
  * token that carries no org slug, so the webhook payload identity is snapshotted up front.
@@ -239,10 +228,6 @@ export interface UpdateRow {
 	config: unknown;
 	program: unknown;
 	environment: Record<string, string>;
-	githubTarget: GitHubUpdateTarget | null;
-	githubCommentId: string | null;
-	summarySequence: number | null;
-	summary: Record<string, unknown> | null;
 }
 
 export interface CheckpointRow {
