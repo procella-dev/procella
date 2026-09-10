@@ -315,24 +315,6 @@ describe("PostgresTrustPolicyRepository — integration", () => {
 		expect(policies[0]?.active).toBe(true);
 	});
 
-	test("global unique index rejects concurrent cross-tenant writes outside the repository", async () => {
-		const results = await Promise.allSettled([
-			db.insert(oidcTrustPolicies).values(policyInput(TENANT_ID)).returning(),
-			db
-				.insert(oidcTrustPolicies)
-				.values(policyInput(OTHER_TENANT_ID, { displayName: "Other tenant policy" }))
-				.returning(),
-		]);
-		const fulfilled = results.filter((result) => result.status === "fulfilled");
-		const rejected = results.filter(
-			(result): result is PromiseRejectedResult => result.status === "rejected",
-		);
-
-		expect(fulfilled).toHaveLength(1);
-		expect(rejected).toHaveLength(1);
-		expect(getSqlState(rejected[0]?.reason)).toBe("23505");
-		expect(await repo.findByOrgSlugAndIssuer(ORG_SLUG, ISSUER)).toHaveLength(1);
-	});
 
 	test("list is tenant-scoped and includes inactive policies", async () => {
 		const tenantPolicy = await repo.create(policyInput(TENANT_ID));

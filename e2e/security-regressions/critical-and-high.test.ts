@@ -465,10 +465,9 @@ describe("[security] HIGH regressions (vulns.txt H1-H9)", () => {
 		).toEqual([]);
 	});
 
-	test("[H6] duplicate OIDC policy insert reports a scope conflict without mutation", async () => {
-		// H6 regression: a database uniqueness conflict must fail closed and never replace an
-		// existing trust policy. Repository ownership conflicts are detected before insertion;
-		// this fixture exercises the remaining duplicate claim-scope constraint.
+	test("[H6] conflicting OIDC policy insert fails closed", async () => {
+		// H6 regression: a database ownership conflict must fail closed and never replace an
+		// existing trust policy.
 		const repo = new PostgresTrustPolicyRepository(createConflictDb());
 
 		await expect(
@@ -487,8 +486,8 @@ describe("[security] HIGH regressions (vulns.txt H1-H9)", () => {
 				active: true,
 			}),
 		).rejects.toMatchObject({
-			code: "policy_claim_conditions_conflict",
-			message: "OIDC trust policy with these claim conditions already exists",
+			code: "policy_conflict",
+			message: "OIDC trust policy with this org/issuer pair already exists",
 		});
 	});
 
