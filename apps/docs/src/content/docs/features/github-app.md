@@ -186,6 +186,18 @@ administrator connects, it appears in the same account list with **Connect** in 
 
 Existing installations created before tenant-bound setup are removed during migration because their tenant ownership was inferred from a GitHub account name. Reconnect them from **Settings** > **GitHub**.
 
+### 5. Enable GitHub Actions OIDC
+
+After the installation is connected, select **Enable Actions OIDC** on its card, choose the
+repository that runs Pulumi, and select **Enable OIDC**. Procella asks GitHub for the repositories
+visible to that exact installation and creates a repository-scoped trust policy from GitHub's
+stable numeric owner and repository IDs. The browser never supplies those trust claims.
+
+This grants matching workflows Procella's `member` role for up to two hours. The GitHub workflow
+still needs `permissions: id-token: write` and the Procella action's `oidc-organization` input. See
+[OIDC CI Authentication](../operations/oidc-ci/) for the workflow example and advanced claim
+restrictions.
+
 ### Moving a Repository Between Organizations
 
 Use a GitHub App owned by the destination organization when the previous organization-owned App cannot move with the repository. Create the replacement App under the destination organization, connect it from Procella Settings, and replace all three `PROCELLA_GITHUB_APP_*` runtime credential values together, plus the deploy-time OAuth client credentials used by the outbound provisioner. Procella rejects partial GitHub App configuration.

@@ -1,4 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
+import type { GitHubService } from "@procella/github";
 import {
 	OidcPolicyConflictError,
 	type OidcTrustPolicy,
@@ -108,6 +109,83 @@ describe("oidcRouter", () => {
 		test("returns PRECONDITION_FAILED when OIDC disabled", () => {
 			const caller = oidcRouter.createCaller(noOidcCtx());
 			return expect(caller.listPolicies()).rejects.toThrow("OIDC is not enabled");
+		});
+	});
+
+	describe("GitHub Actions setup", () => {
+		test("reports whether guided setup is available and already configured", async () => {
+			await expect(oidcRouter.createCaller(noOidcCtx()).status()).resolves.toEqual({
+				configured: false,
+				githubActionsPolicy: null,
+			});
+			await expect(oidcRouter.createCaller(mockContext()).status()).resolves.toEqual({
+				configured: true,
+				githubActionsPolicy: mockPolicy,
+			});
+		});
+
+		test("creates a member policy from server-resolved stable repository IDs", async () => {
+			const create = mock(async () => mockPolicy);
+			const listInstallationRepositories = mock(async () => [
+				{
+					id: 67890,
+					name: "infra",
+					fullName: "acme/infra",
+					ownerId: 12345,
+					ownerLogin: "acme",
+					private: true,
+				},
+			]);
+			const ctx = mockContext({
+				oidcPolicies: mockPolicies({
+					findByOrgSlugAndIssuer: mock(async () => []),
+					create,
+				}),
+				github: { listInstallationRepositories } as unknown as GitHubService,
+			});
+
+			const result = await oidcRouter.createCaller(ctx).enableGitHubActions({
+				installationId: 101,
+				repositoryId: 67890,
+			});
+
+			expect(result.created).toBe(true);
+			expect(listInstallationRepositories).toHaveBeenCalledWith("t-1", 101);
+			expect(create).toHaveBeenCalledWith({
+				tenantId: "t-1",
+				orgSlug: "my-org",
+				provider: "github-actions",
+				displayName: "GitHub Actions · acme/infra",
+				issuer: "https://token.actions.githubusercontent.com",
+				maxExpiration: 7200,
+				claimConditions: {
+					repository_owner_id: "12345",
+					repository_id: "67890",
+				},
+				grantedRole: "member",
+				active: true,
+			});
+		});
+
+		test("rejects a repository outside the bound installation", async () => {
+			const create = mock(async () => mockPolicy);
+			const ctx = mockContext({
+				oidcPolicies: mockPolicies({
+					findByOrgSlugAndIssuer: mock(async () => []),
+					create,
+				}),
+				github: {
+					listInstallationRepositories: mock(async () => []),
+				} as unknown as GitHubService,
+			});
+
+			await expect(
+				oidcRouter.createCaller(ctx).enableGitHubActions({
+					installationId: 101,
+					repositoryId: 67890,
+				}),
+			).rejects.toThrow("not available to this GitHub App installation");
+			expect(create).not.toHaveBeenCalled();
 		});
 	});
 

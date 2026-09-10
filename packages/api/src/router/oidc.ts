@@ -1,8 +1,10 @@
 // @procella/api — OIDC trust policy management router.
 
+import { type GitHubInstallationRepository, GitHubSetupError } from "@procella/github";
 import {
 	OidcPolicyClaimConditionsError,
 	OidcPolicyConflictError,
+	type TrustPolicyRepository,
 	validateTrustPolicyClaimConditions,
 } from "@procella/oidc";
 import { TRPCError } from "@trpc/server";
@@ -12,7 +14,24 @@ import { adminProcedure, router } from "../trpc.js";
 const UUID_V4_PATTERN =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-function assertOidc(ctx: { oidcPolicies?: unknown }): void {
+const GITHUB_ACTIONS_ISSUER = "https://token.actions.githubusercontent.com";
+
+function githubRepositoryError(error: unknown): TRPCError {
+	if (error instanceof GitHubSetupError) {
+		return new TRPCError({
+			code: error.code === "repository_lookup_failed" ? "BAD_GATEWAY" : "BAD_REQUEST",
+			message:
+				error.code === "repository_lookup_failed"
+					? "GitHub repositories could not be loaded"
+					: "That repository is not available to this GitHub App installation",
+		});
+	}
+	return new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Unable to configure OIDC" });
+}
+
+function assertOidc(ctx: {
+	oidcPolicies?: TrustPolicyRepository | null;
+}): asserts ctx is { oidcPolicies: TrustPolicyRepository } {
 	if (!ctx.oidcPolicies) {
 		throw new TRPCError({
 			code: "PRECONDITION_FAILED",
@@ -101,9 +120,87 @@ const updatePolicyInput = z.object({
 export const oidcRouter = router({
 	listPolicies: adminProcedure.query(async ({ ctx }) => {
 		assertOidc(ctx);
-		// biome-ignore lint/style/noNonNullAssertion: assertOidc guards above
-		return ctx.oidcPolicies!.listByOrgSlug(ctx.caller.orgSlug, ctx.caller.tenantId);
+		return ctx.oidcPolicies.listByOrgSlug(ctx.caller.orgSlug, ctx.caller.tenantId);
 	}),
+
+	status: adminProcedure.query(async ({ ctx }) => {
+		if (!ctx.oidcPolicies) {
+			return { configured: false as const, githubActionsPolicy: null };
+		}
+		const policies = await ctx.oidcPolicies.listByOrgSlug(ctx.caller.orgSlug, ctx.caller.tenantId);
+		return {
+			configured: true as const,
+			githubActionsPolicy:
+				policies.find(
+					(policy) =>
+						policy.provider === "github-actions" && policy.issuer === GITHUB_ACTIONS_ISSUER,
+				) ?? null,
+		};
+	}),
+
+	enableGitHubActions: adminProcedure
+		.input(
+			z.object({
+				installationId: z.number().int().positive(),
+				repositoryId: z.number().int().positive(),
+			}),
+		)
+		.mutation(async ({ ctx, input }) => {
+			assertOidc(ctx);
+			if (!ctx.github) {
+				throw new TRPCError({
+					code: "PRECONDITION_FAILED",
+					message: "GitHub App is not configured on this server",
+				});
+			}
+
+			// The global org/issuer key permits only one GitHub Actions policy.
+			// Returning the tenant's existing policy makes retries idempotent without
+			// silently replacing its repository scope.
+			const existing = await ctx.oidcPolicies.findByOrgSlugAndIssuer(
+				ctx.caller.orgSlug,
+				GITHUB_ACTIONS_ISSUER,
+			);
+			const owned = existing.find((policy) => policy.tenantId === ctx.caller.tenantId);
+			if (owned) return { policy: owned, created: false as const };
+
+			let repositories: GitHubInstallationRepository[];
+			try {
+				repositories = await ctx.github.listInstallationRepositories(
+					ctx.caller.tenantId,
+					input.installationId,
+				);
+			} catch (error) {
+				throw githubRepositoryError(error);
+			}
+			const repository = repositories.find((candidate) => candidate.id === input.repositoryId);
+			if (!repository) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: "That repository is not available to this GitHub App installation",
+				});
+			}
+
+			try {
+				const policy = await ctx.oidcPolicies.create({
+					tenantId: ctx.caller.tenantId,
+					orgSlug: ctx.caller.orgSlug,
+					provider: "github-actions",
+					displayName: `GitHub Actions · ${repository.fullName}`.slice(0, 100),
+					issuer: GITHUB_ACTIONS_ISSUER,
+					maxExpiration: 7200,
+					claimConditions: {
+						repository_owner_id: String(repository.ownerId),
+						repository_id: String(repository.id),
+					},
+					grantedRole: "member",
+					active: true,
+				});
+				return { policy, created: true as const };
+			} catch (error) {
+				rethrowOidcPolicyError(error);
+			}
+		}),
 
 	createPolicy: adminProcedure.input(createPolicyInput).mutation(async ({ ctx, input }) => {
 		assertOidc(ctx);

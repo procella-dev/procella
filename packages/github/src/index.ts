@@ -48,6 +48,15 @@ export interface GitHubInstallationInfo extends GitHubInstallationData {
 	updatedAt: Date;
 }
 
+export interface GitHubInstallationRepository {
+	id: number;
+	name: string;
+	fullName: string;
+	ownerId: number;
+	ownerLogin: string;
+	private: boolean;
+}
+
 export interface GitHubAppConfig {
 	appId: string;
 	privateKey: string;
@@ -183,6 +192,11 @@ export interface GitHubService extends GitHubDeliveryService {
 		browserNonce: string,
 	): Promise<GitHubInstallationInfo>;
 	listInstallations(tenantId: string): Promise<GitHubInstallationInfo[]>;
+	/** Repositories currently visible to an installation bound to this tenant. */
+	listInstallationRepositories(
+		tenantId: string,
+		installationId: number,
+	): Promise<GitHubInstallationRepository[]>;
 	/** Deletes this tenant's vaulted GitHub token, then the tenant binding. Fails closed. */
 	removeInstallation(tenantId: string, installationId: number, userId: string): Promise<void>;
 }
@@ -207,7 +221,8 @@ export type GitHubSetupErrorCode =
 	| "authorization_unavailable"
 	| "unauthorized_account"
 	| "installation_conflict"
-	| "invalid_installation";
+	| "invalid_installation"
+	| "repository_lookup_failed";
 
 export class GitHubSetupError extends Error {
 	constructor(readonly code: GitHubSetupErrorCode) {
@@ -556,6 +571,53 @@ export class OctokitGitHubDeliveryService implements GitHubDeliveryService {
 			.where(eq(githubInstallations.tenantId, tenantId))
 			.orderBy(desc(githubInstallations.updatedAt));
 		return rows.map(mapInstallationRow);
+	}
+
+	async listInstallationRepositories(
+		tenantId: string,
+		installationId: number,
+	): Promise<GitHubInstallationRepository[]> {
+		const installation = (await this.listInstallations(tenantId)).find(
+			(candidate) => candidate.installationId === installationId,
+		);
+		if (!installation || installation.tenantId !== tenantId) {
+			throw new GitHubSetupError("invalid_installation");
+		}
+
+		try {
+			const repositories = await this.installationClientFactory(installationId).paginate(
+				"GET /installation/repositories",
+				{ per_page: 100 },
+			);
+			return repositories
+				.map((repository): GitHubInstallationRepository => {
+					const owner = repository.owner;
+					if (
+						!Number.isSafeInteger(repository.id) ||
+						repository.id <= 0 ||
+						typeof repository.name !== "string" ||
+						typeof repository.full_name !== "string" ||
+						!owner ||
+						!Number.isSafeInteger(owner.id) ||
+						owner.id <= 0 ||
+						typeof owner.login !== "string"
+					) {
+						throw new GitHubSetupError("repository_lookup_failed");
+					}
+					return {
+						id: repository.id,
+						name: repository.name,
+						fullName: repository.full_name,
+						ownerId: owner.id,
+						ownerLogin: owner.login,
+						private: repository.private,
+					};
+				})
+				.sort((a, b) => a.fullName.localeCompare(b.fullName));
+		} catch (error) {
+			if (error instanceof GitHubSetupError) throw error;
+			throw new GitHubSetupError("repository_lookup_failed");
+		}
 	}
 
 	async resolveInstallation(

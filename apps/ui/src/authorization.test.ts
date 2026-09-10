@@ -53,6 +53,32 @@ let connectTargetsQuery: {
 	isLoading: boolean;
 	error: Error | null;
 };
+let githubRepositoriesQuery: {
+	data?: {
+		repositories: Array<{
+			id: number;
+			name: string;
+			fullName: string;
+			ownerId: number;
+			ownerLogin: string;
+			private: boolean;
+		}>;
+	};
+	isLoading: boolean;
+	error: Error | null;
+};
+let oidcStatusQuery: {
+	data?: {
+		configured: boolean;
+		githubActionsPolicy: {
+			id: string;
+			displayName: string;
+			active: boolean;
+		} | null;
+	};
+	isLoading: boolean;
+	error: Error | null;
+};
 const startConnect = mock(async () => ({
 	appId: "procella-github",
 	tenantId: "tenant-from-server",
@@ -77,6 +103,15 @@ const createInstallationUrl = mock(async () => ({
 const removeInstallation = mock(async () => ({ success: true }));
 const statusRefetch = mock(async () => undefined);
 const connectTargetsRefetch = mock(async () => undefined);
+const oidcStatusRefetch = mock(async () => undefined);
+const enableGitHubActions = mock(async () => ({
+	created: true,
+	policy: {
+		id: "policy-1",
+		displayName: "GitHub Actions · acme/infra",
+		active: true,
+	},
+}));
 const getSessionToken = mock(() => "must-not-be-read");
 const getRefreshToken = mock(() => "must-not-be-read");
 
@@ -110,6 +145,12 @@ mock.module(trpcPath, () => ({
 					refetch: connectTargetsRefetch,
 				}),
 			},
+			repositories: {
+				useQuery: (_input: { installationId: number }, options: { enabled: boolean }) =>
+					options.enabled
+						? githubRepositoriesQuery
+						: { data: undefined, isLoading: false, error: null },
+			},
 			connectInstallation: {
 				useMutation: () => ({ mutateAsync: connectInstallation, isPending: false }),
 			},
@@ -118,6 +159,14 @@ mock.module(trpcPath, () => ({
 			},
 			removeInstallation: {
 				useMutation: () => ({ mutateAsync: removeInstallation, isPending: false }),
+			},
+		},
+		oidc: {
+			status: {
+				useQuery: () => ({ ...oidcStatusQuery, refetch: oidcStatusRefetch }),
+			},
+			enableGitHubActions: {
+				useMutation: () => ({ mutateAsync: enableGitHubActions, isPending: false }),
 			},
 		},
 	},
@@ -174,6 +223,12 @@ beforeEach(() => {
 		error: null,
 	};
 	connectTargetsQuery = { data: undefined, isLoading: false, error: null };
+	githubRepositoriesQuery = { data: undefined, isLoading: false, error: null };
+	oidcStatusQuery = {
+		data: { configured: false, githubActionsPolicy: null },
+		isLoading: false,
+		error: null,
+	};
 	startConnect.mockClear();
 	startConnect.mockImplementation(async () => ({
 		appId: "procella-github",
@@ -203,6 +258,8 @@ beforeEach(() => {
 	removeInstallation.mockClear();
 	statusRefetch.mockClear();
 	connectTargetsRefetch.mockClear();
+	oidcStatusRefetch.mockClear();
+	enableGitHubActions.mockClear();
 	getSessionToken.mockClear();
 	getRefreshToken.mockClear();
 });
@@ -799,12 +856,93 @@ describe("Settings authorization", () => {
 			isLoading: false,
 			error: null,
 		};
+		oidcStatusQuery = {
+			data: {
+				configured: true,
+				githubActionsPolicy: {
+					id: "policy-1",
+					displayName: "GitHub Actions · acme/infra",
+					active: true,
+				},
+			},
+			isLoading: false,
+			error: null,
+		};
 		dom.location.href = "http://localhost/settings?github=connected#github";
 
 		const page = render(createElement(Settings));
 		expect(page.getByText("GitHub connected successfully.")).toBeTruthy();
 		expect(page.getByText("Selected repositories")).toBeTruthy();
 		expect(page.queryByRole("button", { name: "Configure & Verify" })).toBeNull();
+		expect(
+			page.getByText(/Enabled:.*GitHub Actions · acme\/infra/, { selector: "p" }),
+		).toBeTruthy();
+		expect(page.queryByRole("button", { name: "Enable Actions OIDC" })).toBeNull();
+	});
+
+	test("enables GitHub Actions OIDC from an installed App repository", async () => {
+		currentCallerQuery = {
+			data: { tenantId: "tenant-from-server", roles: ["admin"] },
+			isLoading: false,
+			error: null,
+		};
+		githubStatusQuery = {
+			data: {
+				configured: true,
+				connectAvailable: true,
+				connectedLogin: "octocat",
+				installations: [
+					{
+						id: "row-1",
+						tenantId: "tenant-from-server",
+						installationId: 101,
+						accountLogin: "acme",
+						accountType: "Organization",
+						repositorySelection: "selected",
+						createdAt: new Date("2026-09-04T00:00:00Z"),
+						updatedAt: new Date("2026-09-04T00:00:00Z"),
+					},
+				],
+			},
+			isLoading: false,
+			error: null,
+		};
+		connectTargetsQuery = { data: { targets: [] }, isLoading: false, error: null };
+		oidcStatusQuery = {
+			data: { configured: true, githubActionsPolicy: null },
+			isLoading: false,
+			error: null,
+		};
+		githubRepositoriesQuery = {
+			data: {
+				repositories: [
+					{
+						id: 67890,
+						name: "infra",
+						fullName: "acme/infra",
+						ownerId: 12345,
+						ownerLogin: "acme",
+						private: true,
+					},
+				],
+			},
+			isLoading: false,
+			error: null,
+		};
+		dom.location.hash = "github";
+
+		const page = render(createElement(Settings));
+		fireEvent.click(page.getByRole("button", { name: "Enable Actions OIDC" }));
+		expect(page.getByRole("option", { name: "acme/infra · private" })).toBeTruthy();
+		fireEvent.click(page.getByRole("button", { name: "Enable OIDC" }));
+
+		await waitFor(() =>
+			expect(enableGitHubActions).toHaveBeenCalledWith({
+				installationId: 101,
+				repositoryId: 67890,
+			}),
+		);
+		await waitFor(() => expect(oidcStatusRefetch).toHaveBeenCalled());
 	});
 
 	test("explains an unavailable outbound connection and hides every connect action", () => {

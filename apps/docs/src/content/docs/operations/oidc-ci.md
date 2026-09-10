@@ -37,11 +37,23 @@ Your CI environment needs:
 
 More providers (GitLab, Buildkite, CircleCI) are planned for a later phase.
 
-## Setup: Create a Trust Policy
+## Setup: GitHub Actions
+
+Install and connect the Procella GitHub App under **Settings** > **GitHub**. On the connected
+installation, select **Enable Actions OIDC**, choose the repository that runs your workflow, then
+select **Enable OIDC**. Procella reads only repositories visible to that installation and creates
+the policy with GitHub's stable numeric `repository_owner_id` and `repository_id` values. You do
+not need to find or copy claims from GitHub.
+
+The guided setup grants the workload the `member` role and limits the exchange token lifetime to
+two hours. Use **Settings** > **OIDC** only when you need a different role, lifetime, or additional
+claim restrictions.
+
+## Advanced Setup: Create a Trust Policy
 
 Trust policies define which OIDC tokens Procella will accept and what role they receive.
 
-Go to **Settings** in the Procella dashboard, open the **OIDC** tab, and click **Add policy**.
+Go to **Settings** in the Procella dashboard, open the **OIDC** tab, and select **Add manually**.
 
 ### Fields
 
