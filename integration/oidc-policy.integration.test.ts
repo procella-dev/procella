@@ -77,7 +77,7 @@ afterEach(async () => {
 });
 
 describe("PostgresTrustPolicyRepository — integration", () => {
-	test("database enforces global issuer ownership after phase B", async () => {
+	test("database allows repository scopes while preserving global tenant ownership", async () => {
 		const [row] = await db.execute(
 			sql`SELECT indexdef FROM pg_indexes
 				WHERE schemaname = current_schema()
@@ -88,7 +88,7 @@ describe("PostgresTrustPolicyRepository — integration", () => {
 		if (!row || typeof row.indexdef !== "string") {
 			throw new Error("OIDC trust policy index is missing");
 		}
-		expect(row.indexdef).toContain("USING btree (org_slug, issuer)");
+		expect(row.indexdef).toContain("USING btree (org_slug, issuer, claim_conditions)");
 		expect(row.indexdef).not.toContain("tenant_id");
 	});
 
@@ -238,20 +238,29 @@ describe("PostgresTrustPolicyRepository — integration", () => {
 		expect(policy.createdAt).toBeInstanceOf(Date);
 	});
 
-	test("same tenant cannot create a second policy for the org and issuer", async () => {
+	test("same tenant can create separate repository scopes but not duplicate scopes", async () => {
 		const established = await repo.create(policyInput(TENANT_ID));
+		const additional = await repo.create(
+			policyInput(TENANT_ID, {
+				displayName: "Additional repository policy",
+				claimConditions: {
+					repository_owner_id: "12345",
+					repository_id: "43210",
+				},
+			}),
+		);
 
 		await expect(
-			repo.create(policyInput(TENANT_ID, { displayName: "Duplicate issuer policy" })),
+			repo.create(policyInput(TENANT_ID, { displayName: "Duplicate repository policy" })),
 		).rejects.toMatchObject({
 			code: "policy_conflict",
 			message: "OIDC trust policy with this org/issuer pair already exists",
 		});
 
 		const policies = await repo.listByOrgSlug(ORG_SLUG, TENANT_ID);
-		expect(policies).toHaveLength(1);
-		expect(policies[0]?.id).toBe(established.id);
-		expect(policies[0]?.active).toBe(true);
+		expect(policies).toHaveLength(2);
+		expect(policies.map((policy) => policy.id)).toContain(established.id);
+		expect(policies.map((policy) => policy.id)).toContain(additional.id);
 	});
 
 	test("cross-tenant collision fails without mutating the established tenant", async () => {
