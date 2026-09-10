@@ -7,6 +7,10 @@ dist/
 *.js
 *.map
 *.tsbuildinfo
+
+# Vendored GitHub Action runtime bundles
+!actions/**/dist/
+!actions/**/dist/**
 apps/docs/.astro/
 
 # Compiled binary

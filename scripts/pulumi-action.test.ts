@@ -12,7 +12,7 @@ import { describe, expect, test } from "bun:test";
 
 const ACTION_PATH = new URL("../actions/pulumi/action.yml", import.meta.url).pathname;
 
-const PROCELLA_CLOUD_URL = "https://api.procella.cloud/api";
+const PROCELLA_CLOUD_URL = "https://api.procella.cloud";
 const PINNED_UPSTREAM_SHA = "8e5e406f4007fca908480587cb9893c07090f58d";
 const PINNED_UPSTREAM_TAG = "v7.0.0";
 const PINNED_AUTH_SHA = "141415910c3beb54e03b48e9057c204c97b956f2";
@@ -194,7 +194,7 @@ describe("actions/pulumi OIDC authentication", () => {
 	});
 
 	test("forwards the configured backend URL to OIDC authentication", () => {
-		const cloudUrl = "https://procella.internal.example.com/api";
+		const cloudUrl = "https://procella.internal.example.com";
 		expect(
 			stepInputs(authStep, { "oidc-organization": "acme", "cloud-url": cloudUrl })["cloud-url"],
 		).toBe(cloudUrl);
@@ -208,7 +208,7 @@ describe("actions/pulumi cloud-url", () => {
 	});
 
 	test("forwards an explicit cloud-url verbatim", () => {
-		const override = "https://pulumi.internal.example.com/api";
+		const override = "https://pulumi.internal.example.com";
 		expect(forwardedInputs({ "cloud-url": override })["cloud-url"]).toBe(override);
 	});
 

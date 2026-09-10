@@ -40,9 +40,9 @@ inputs:
     required: false
     default: '${{ github.token }}'
   cloud-url:
-    description: 'A cloud URL to log in to. Defaults to Procella production (https://api.procella.cloud/api).'
+    description: 'A cloud URL to log in to. Defaults to Procella production (https://api.procella.cloud).'
     required: false
-    default: 'https://api.procella.cloud/api'
+    default: 'https://api.procella.cloud'
   secrets-provider:
     description: 'The type of the provider that should be used to encrypt and decrypt secrets. Possible choices: default, passphrase, awskms, azurekeyvault, gcpkms, hashivault'
     required: false
