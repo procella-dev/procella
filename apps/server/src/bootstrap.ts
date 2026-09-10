@@ -157,7 +157,7 @@ async function bootstrapServices() {
 	const webhooksService = new PostgresWebhooksService({ db });
 	const githubConfig = buildGitHubAppConfig(config);
 	// Vaulted GitHub identity verification needs Descope management credentials.
-	// Without them the App still handles webhooks and PR publication; only tenant
+	// Without them the App still handles installation webhooks; only tenant
 	// setup is unavailable, and it fails closed rather than skipping verification.
 	const githubOutbound =
 		githubConfig && config.descopeProjectId && config.descopeManagementKey
