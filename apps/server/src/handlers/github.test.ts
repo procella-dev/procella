@@ -48,6 +48,7 @@ function mockGitHubService(overrides?: Partial<GitHubService>): GitHubService {
 		issueInstallationUrl: mock(async () => "https://github.com/apps/procella/installations/new"),
 		completeInstallation: mock(async () => mockInstallation),
 		listInstallations: mock(async () => [mockInstallation]),
+		listInstallationRepositories: mock(async () => []),
 		resolveInstallation: mock(async () => mockInstallation),
 		createPRComment: mock(async () => 1),
 		findPRComment: mock(async () => null),

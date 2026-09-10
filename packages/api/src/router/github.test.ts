@@ -34,6 +34,7 @@ function mockGitHubService(overrides?: Partial<GitHubService>): GitHubService {
 		issueInstallationUrl: mock(async () => "https://github.com/apps/procella/installations/new"),
 		completeInstallation: mock(async () => mockInstallation),
 		listInstallations: mock(async () => [mockInstallation]),
+		listInstallationRepositories: mock(async () => []),
 		resolveInstallation: mock(async () => mockInstallation),
 		removeInstallation: mock(async () => {}),
 		createPRComment: mock(async () => 1),
@@ -116,6 +117,28 @@ describe("githubRouter", () => {
 	test("status is available to non-admin members", async () => {
 		const ctx = mockContext({ caller: { ...viewerCaller, roles: ["viewer"] } });
 		expect((await githubRouter.createCaller(ctx).status()).configured).toBe(true);
+	});
+
+	test("repositories are limited to the caller's bound installation", async () => {
+		const repositories = [
+			{
+				id: 44,
+				name: "infra",
+				fullName: "my-org/infra",
+				ownerId: 12,
+				ownerLogin: "my-org",
+				private: true,
+			},
+		];
+		const listInstallationRepositories = mock(async () => repositories);
+		const ctx = mockContext({
+			github: mockGitHubService({ listInstallationRepositories }),
+		});
+
+		await expect(
+			githubRouter.createCaller(ctx).repositories({ installationId: 12345 }),
+		).resolves.toEqual({ repositories });
+		expect(listInstallationRepositories).toHaveBeenCalledWith("t-1", 12345);
 	});
 
 	test("startConnect returns only appId, tenantId, and a server-built redirect URL for admins", async () => {

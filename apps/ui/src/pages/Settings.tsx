@@ -156,14 +156,19 @@ interface GitHubConnectTarget {
 }
 
 function GitHubSettingsTab() {
+	const utils = trpc.useUtils();
 	const { data: status, isLoading, error: queryError, refetch } = trpc.github.status.useQuery();
 	const startConnectMutation = trpc.github.startConnect.useMutation();
 	const removeMutation = trpc.github.removeInstallation.useMutation();
 	const connectInstallationMutation = trpc.github.connectInstallation.useMutation();
 	const createInstallationUrlMutation = trpc.github.createInstallationUrl.useMutation();
+	const { data: oidcStatus, error: oidcStatusError } = trpc.oidc.status.useQuery();
+	const enableGitHubActionsMutation = trpc.oidc.enableGitHubActions.useMutation();
 	const sdk = useDescope();
 	const [disconnectId, setDisconnectId] = useState<number | null>(null);
 	const [actionError, setActionError] = useState<string | null>(null);
+	const [oidcInstallationId, setOidcInstallationId] = useState<number | null>(null);
+	const [oidcRepositoryId, setOidcRepositoryId] = useState<number | null>(null);
 	const connectInFlight = useRef(false);
 	const [connectPending, setConnectPending] = useState(false);
 	const callback = new URLSearchParams(window.location.search).get("github");
@@ -177,6 +182,15 @@ function GitHubSettingsTab() {
 		error: targetsError,
 		refetch: refetchTargets,
 	} = trpc.github.connectTargets.useQuery(undefined, { enabled: targetsEnabled });
+	const {
+		data: repositoriesData,
+		isLoading: repositoriesLoading,
+		error: repositoriesError,
+		refetch: refetchRepositories,
+	} = trpc.github.repositories.useQuery(
+		{ installationId: oidcInstallationId ?? 1 },
+		{ enabled: oidcInstallationId !== null },
+	);
 
 	useEffect(() => {
 		const resetAfterHistoryRestore = (event: PageTransitionEvent) => {
@@ -247,6 +261,26 @@ function GitHubSettingsTab() {
 		}
 	};
 
+	const handleEnableGitHubActions = async () => {
+		if (oidcInstallationId === null) return;
+		const repositoryId = oidcRepositoryId ?? repositoriesData?.repositories[0]?.id ?? null;
+		if (repositoryId === null) return;
+		setActionError(null);
+		try {
+			await enableGitHubActionsMutation.mutateAsync({
+				installationId: oidcInstallationId,
+				repositoryId,
+			});
+			setOidcInstallationId(null);
+			setOidcRepositoryId(null);
+			await Promise.all([utils.oidc.status.invalidate(), utils.oidc.listPolicies.invalidate()]);
+		} catch (error) {
+			setActionError(
+				error instanceof Error ? error.message : "Unable to enable GitHub Actions authentication",
+			);
+		}
+	};
+
 	const handleDisconnect = async () => {
 		if (disconnectId === null) return;
 		setActionError(null);
@@ -289,9 +323,9 @@ function GitHubSettingsTab() {
 					{githubCallbackError(callbackReason)}
 				</div>
 			)}
-			{(actionError || targetsError) && (
+			{(actionError || targetsError || oidcStatusError) && (
 				<div className="bg-danger/10 border border-danger/30 text-danger/80 p-4 rounded-xl text-sm">
-					{actionError ?? targetsError?.message}
+					{actionError ?? targetsError?.message ?? oidcStatusError?.message}
 				</div>
 			)}
 
@@ -404,7 +438,7 @@ function GitHubSettingsTab() {
 							key={installation.installationId}
 							className="bg-slate-brand/50 border border-cloud/15 rounded-xl p-6"
 						>
-							<div className="flex items-start justify-between gap-4">
+							<div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
 								<div>
 									<h3 className="text-sm font-semibold text-mist mb-2">
 										{installation.accountLogin}
@@ -426,7 +460,19 @@ function GitHubSettingsTab() {
 										</p>
 									</div>
 								</div>
-								<div className="flex gap-2">
+								<div className="flex flex-wrap gap-2 sm:justify-end">
+									{oidcStatus?.configured && !oidcStatus.githubActionsPolicy && (
+										<button
+											type="button"
+											onClick={() => {
+												setOidcInstallationId(installation.installationId);
+												setOidcRepositoryId(null);
+											}}
+											className="btn-primary"
+										>
+											Enable Actions OIDC
+										</button>
+									)}
 									<button
 										type="button"
 										onClick={() => setDisconnectId(installation.installationId)}
@@ -436,8 +482,105 @@ function GitHubSettingsTab() {
 									</button>
 								</div>
 							</div>
+							{oidcInstallationId === installation.installationId && (
+								<div className="mt-5 border-t border-cloud/15 pt-5">
+									<h4 className="text-sm font-semibold text-mist">
+										Choose the workflow repository
+									</h4>
+									<p className="text-xs text-cloud/70 mt-1 mb-3">
+										Only the selected repository will receive member access through GitHub Actions.
+										Procella stores its stable GitHub owner and repository IDs.
+									</p>
+									{repositoriesLoading ? (
+										<p className="text-sm text-cloud">Loading repositories…</p>
+									) : repositoriesError ? (
+										<p className="text-sm text-danger/80">{repositoriesError.message}</p>
+									) : repositoriesData?.repositories.length ? (
+										<select
+											aria-label="GitHub Actions repository"
+											value={oidcRepositoryId ?? repositoriesData.repositories[0]?.id ?? ""}
+											onChange={(event) => setOidcRepositoryId(Number(event.target.value))}
+											className="input-field w-full"
+										>
+											{repositoriesData.repositories.map((repository) => (
+												<option key={repository.id} value={repository.id}>
+													{repository.fullName}
+													{repository.private ? " · private" : ""}
+												</option>
+											))}
+										</select>
+									) : (
+										<p className="text-sm text-cloud">
+											This installation has no repositories available to Procella. Add one in
+											GitHub, then retry.
+										</p>
+									)}
+									<div className="flex justify-end gap-2 mt-3">
+										<button
+											type="button"
+											onClick={() => {
+												setOidcInstallationId(null);
+												setOidcRepositoryId(null);
+											}}
+											className="btn-ghost"
+										>
+											Cancel
+										</button>
+										{!repositoriesError && repositoriesData?.repositories.length ? (
+											<button
+												type="button"
+												onClick={handleEnableGitHubActions}
+												disabled={enableGitHubActionsMutation.isPending}
+												className="btn-primary"
+											>
+												{enableGitHubActionsMutation.isPending ? "Enabling…" : "Enable OIDC"}
+											</button>
+										) : !repositoriesLoading ? (
+											<button
+												type="button"
+												onClick={() => void refetchRepositories()}
+												className="btn-secondary"
+											>
+												Retry
+											</button>
+										) : null}
+									</div>
+								</div>
+							)}
 						</div>
 					))}
+
+					<div className="bg-deep-sky border border-cloud/15 rounded-xl p-6">
+						<div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+							<div>
+								<h2 className="text-base font-semibold text-mist">GitHub Actions authentication</h2>
+								{oidcStatus?.githubActionsPolicy ? (
+									<>
+										<p className="text-sm text-cloud mt-1">
+											{oidcStatus.githubActionsPolicy.active ? "Enabled" : "Disabled"}:{" "}
+											{oidcStatus.githubActionsPolicy.displayName}
+										</p>
+										<p className="text-xs text-cloud/70 mt-2">
+											Grant workflows <code>id-token: write</code> and set the Procella action's{" "}
+											<code>oidc-organization</code> input. No access-token secret is required.
+										</p>
+									</>
+								) : oidcStatus?.configured ? (
+									<p className="text-sm text-cloud mt-1">
+										Choose <strong>Enable Actions OIDC</strong> on an installation above. Procella
+										will use GitHub's stable IDs instead of asking you to copy token claims.
+									</p>
+								) : (
+									<p className="text-sm text-cloud mt-1">
+										OIDC authentication is disabled on this Procella server.
+									</p>
+								)}
+							</div>
+							<a href="#oidc" className="btn-secondary shrink-0">
+								Advanced settings
+							</a>
+						</div>
+					</div>
 				</>
 			)}
 
@@ -574,6 +717,7 @@ function GitHubConnectTargetRow({
 // ============================================================================
 
 function OidcSettingsTab() {
+	const utils = trpc.useUtils();
 	const [showCreate, setShowCreate] = useState(false);
 	const [formError, setFormError] = useState<string | null>(null);
 	const [displayName, setDisplayName] = useState("");
@@ -584,16 +728,14 @@ function OidcSettingsTab() {
 	const [conditionValue, setConditionValue] = useState("");
 	const [conditions, setConditions] = useState<Record<string, string>>({});
 
-	const {
-		data: policies,
-		isLoading,
-		error: queryError,
-		refetch,
-	} = trpc.oidc.listPolicies.useQuery();
+	const { data: policies, isLoading, error: queryError } = trpc.oidc.listPolicies.useQuery();
 
 	const createMutation = trpc.oidc.createPolicy.useMutation();
 	const deleteMutation = trpc.oidc.deletePolicy.useMutation();
 	const toggleMutation = trpc.oidc.updatePolicy.useMutation();
+
+	const invalidateOidcQueries = () =>
+		Promise.all([utils.oidc.status.invalidate(), utils.oidc.listPolicies.invalidate()]);
 
 	const resetForm = () => {
 		setDisplayName("");
@@ -635,7 +777,7 @@ function OidcSettingsTab() {
 			});
 			resetForm();
 			setShowCreate(false);
-			refetch();
+			await invalidateOidcQueries();
 		} catch (err: unknown) {
 			setFormError(err instanceof Error ? err.message : "Failed to create policy");
 		}
@@ -685,9 +827,10 @@ function OidcSettingsTab() {
 		<div className="mt-6 space-y-4">
 			<div className="flex items-center justify-between">
 				<div>
-					<h2 className="text-base font-semibold text-mist">OIDC Trust Policies</h2>
+					<h2 className="text-base font-semibold text-mist">Advanced OIDC policies</h2>
 					<p className="text-sm text-cloud mt-0.5">
-						Allow CI pipelines to authenticate using OpenID Connect tokens.
+						GitHub Actions is easiest to configure from the GitHub tab. Use this editor for custom
+						claim restrictions.
 					</p>
 				</div>
 				<button
@@ -698,7 +841,7 @@ function OidcSettingsTab() {
 					}}
 					className="btn-primary"
 				>
-					Add Policy
+					Add manually
 				</button>
 			</div>
 
@@ -882,7 +1025,7 @@ function OidcSettingsTab() {
 										onClick={() => {
 											toggleMutation
 												.mutateAsync({ id: policy.id, active: !policy.active })
-												.then(() => refetch())
+												.then(invalidateOidcQueries)
 												.catch((e: unknown) =>
 													setFormError(e instanceof Error ? e.message : "Update failed"),
 												);
@@ -896,7 +1039,7 @@ function OidcSettingsTab() {
 										onClick={() => {
 											deleteMutation
 												.mutateAsync({ id: policy.id })
-												.then(() => refetch())
+												.then(invalidateOidcQueries)
 												.catch((e: unknown) =>
 													setFormError(e instanceof Error ? e.message : "Delete failed"),
 												);

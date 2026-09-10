@@ -989,6 +989,66 @@ function readOnlyDb(rows: GitHubInstallationInfo[]): Database {
 	return { select: mock(() => ({ from: mock(() => chain) })) } as unknown as Database;
 }
 
+describe("OctokitGitHubService installation repositories", () => {
+	test("returns stable identities for repositories visible to the tenant installation", async () => {
+		const paginate = mock(async () => [
+			{
+				id: 22,
+				name: "zeta",
+				full_name: "acme/zeta",
+				owner: { id: 7, login: "acme" },
+				private: true,
+			},
+			{
+				id: 11,
+				name: "alpha",
+				full_name: "acme/alpha",
+				owner: { id: 7, login: "acme" },
+				private: false,
+			},
+		]);
+		const service = new OctokitGitHubService({
+			db: readOnlyDb([installationRow]),
+			config: testConfig,
+			installationClientFactory: () => ({ paginate }) as unknown as Octokit,
+		});
+
+		await expect(service.listInstallationRepositories("tenant-a", 101)).resolves.toEqual([
+			{
+				id: 11,
+				name: "alpha",
+				fullName: "acme/alpha",
+				ownerId: 7,
+				ownerLogin: "acme",
+				private: false,
+			},
+			{
+				id: 22,
+				name: "zeta",
+				fullName: "acme/zeta",
+				ownerId: 7,
+				ownerLogin: "acme",
+				private: true,
+			},
+		]);
+		expect(paginate).toHaveBeenCalledWith("GET /installation/repositories", { per_page: 100 });
+	});
+
+	test("rejects an installation bound to another tenant before calling GitHub", async () => {
+		const paginate = mock(async () => []);
+		const service = new OctokitGitHubService({
+			db: readOnlyDb([installationRow]),
+			config: testConfig,
+			installationClientFactory: () => ({ paginate }) as unknown as Octokit,
+		});
+
+		await expect(service.listInstallationRepositories("tenant-b", 101)).rejects.toMatchObject({
+			code: "invalid_installation",
+		});
+		expect(paginate).not.toHaveBeenCalled();
+	});
+});
+
 describe("OctokitGitHubService installation binding", () => {
 	test("binds the App-authenticated installation after consuming install state", async () => {
 		const order: string[] = [];

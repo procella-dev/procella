@@ -86,6 +86,7 @@ function mockGitHubService(): GitHubService {
 			updatedAt: new Date(),
 		})),
 		listInstallations: mock(async () => []),
+		listInstallationRepositories: mock(async () => []),
 		resolveInstallation: mock(async () => null),
 		removeInstallation: mock(async () => {}),
 		createPRComment: mock(async () => 1),

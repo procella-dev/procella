@@ -46,6 +46,10 @@ const SETUP_ERROR_MESSAGES: Record<string, { code: TRPCError["code"]; message: s
 		code: "CONFLICT",
 		message: "That GitHub installation is already connected to another tenant",
 	},
+	repository_lookup_failed: {
+		code: "BAD_GATEWAY",
+		message: "GitHub repositories could not be loaded",
+	},
 };
 
 function trpcSetupError(error: unknown): TRPCError {
@@ -225,6 +229,29 @@ export const githubRouter = router({
 			throw trpcSetupError(error);
 		}
 	}),
+
+	repositories: adminProcedure
+		.input(z.object({ installationId: z.number().int().positive() }))
+		.query(async ({ ctx, input }) => {
+			requireInteractiveUser(ctx.caller.principalType);
+			if (!ctx.github) {
+				throw new TRPCError({
+					code: "PRECONDITION_FAILED",
+					message: "GitHub App is not configured on this server",
+				});
+			}
+
+			try {
+				return {
+					repositories: await ctx.github.listInstallationRepositories(
+						ctx.caller.tenantId,
+						input.installationId,
+					),
+				};
+			} catch (error) {
+				throw trpcSetupError(error);
+			}
+		}),
 
 	/**
 	 * Binds an already-installed App installation to this tenant. The
