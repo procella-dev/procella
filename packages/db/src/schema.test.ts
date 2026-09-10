@@ -303,15 +303,15 @@ describe("@procella/db schema", () => {
 	});
 
 	describe("migration journal", () => {
-		test("keeps portfolio migrations 0021 through 0024 in order", async () => {
+		test("keeps portfolio migrations 0020 through 0023 in order", async () => {
 			const journal = (await Bun.file(
 				new URL("../drizzle/meta/_journal.json", import.meta.url),
 			).json()) as { entries: Array<{ idx: number; tag: string }> };
 			const expected = [
+				{ idx: 20, tag: "0020_durable_blob_cleanup" },
 				{ idx: 21, tag: "0021_webhook_delivery_outbox" },
 				{ idx: 22, tag: "0022_single_use_subscription_tickets" },
 				{ idx: 23, tag: "0023_confirmed_github_outbound_connections" },
-				{ idx: 24, tag: "0024_remove_github_publication" },
 			];
 
 			expect(journal.entries.slice(-4)).toEqual(
