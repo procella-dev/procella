@@ -47,18 +47,10 @@ function hasSameClaimConditions(
 	left: Record<string, string>,
 	right: Record<string, string>,
 ): boolean {
-	const leftEntries = Object.entries(left).sort(([leftKey], [rightKey]) =>
-		leftKey.localeCompare(rightKey),
-	);
-	const rightEntries = Object.entries(right).sort(([leftKey], [rightKey]) =>
-		leftKey.localeCompare(rightKey),
-	);
+	const leftEntries = Object.entries(left);
 	return (
-		leftEntries.length === rightEntries.length &&
-		leftEntries.every(
-			([key, value], index) =>
-				key === rightEntries[index]?.[0] && value === rightEntries[index]?.[1],
-		)
+		leftEntries.length === Object.keys(right).length &&
+		leftEntries.every(([key, value]) => Object.hasOwn(right, key) && value === right[key])
 	);
 }
 export class PostgresTrustPolicyRepository implements TrustPolicyRepository {
@@ -153,19 +145,56 @@ export class PostgresTrustPolicyRepository implements TrustPolicyRepository {
 			>
 		>,
 	): Promise<OidcTrustPolicy> {
-		if (patch.claimConditions) {
-			const [existing] = await this.db
-				.select({ provider: oidcTrustPolicies.provider, issuer: oidcTrustPolicies.issuer })
-				.from(oidcTrustPolicies)
-				.where(and(eq(oidcTrustPolicies.id, id), eq(oidcTrustPolicies.tenantId, tenantId)));
+		const claimConditions = patch.claimConditions;
+		if (claimConditions) {
+			const row = await this.db.transaction(async (tx) => {
+				const [target] = await tx
+					.select({
+						provider: oidcTrustPolicies.provider,
+						issuer: oidcTrustPolicies.issuer,
+						orgSlug: oidcTrustPolicies.orgSlug,
+					})
+					.from(oidcTrustPolicies)
+					.where(and(eq(oidcTrustPolicies.id, id), eq(oidcTrustPolicies.tenantId, tenantId)));
 
-			if (!existing) throw new Error(`Trust policy ${id} not found`);
+				if (!target) throw new Error(`Trust policy ${id} not found`);
 
-			validateTrustPolicyClaimConditions({
-				provider: existing.provider,
-				issuer: existing.issuer,
-				claimConditions: patch.claimConditions,
+				validateTrustPolicyClaimConditions({
+					provider: target.provider,
+					issuer: target.issuer,
+					claimConditions,
+				});
+
+				const ownershipKey = JSON.stringify([target.orgSlug, target.issuer]);
+				await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${ownershipKey}, 0))`);
+				const existing = await tx
+					.select({ id: oidcTrustPolicies.id, claimConditions: oidcTrustPolicies.claimConditions })
+					.from(oidcTrustPolicies)
+					.where(
+						and(
+							eq(oidcTrustPolicies.orgSlug, target.orgSlug),
+							eq(oidcTrustPolicies.issuer, target.issuer),
+						),
+					);
+				if (
+					existing.some(
+						(existingPolicy) =>
+							existingPolicy.id !== id &&
+							hasSameClaimConditions(existingPolicy.claimConditions, claimConditions),
+					)
+				) {
+					throw new OidcPolicyClaimConditionsConflictError();
+				}
+
+				const [updated] = await tx
+					.update(oidcTrustPolicies)
+					.set({ ...patch, updatedAt: new Date() })
+					.where(and(eq(oidcTrustPolicies.id, id), eq(oidcTrustPolicies.tenantId, tenantId)))
+					.returning();
+				if (!updated) throw new Error(`Trust policy ${id} not found`);
+				return updated;
 			});
+			return mapRow(row);
 		}
 
 		const [row] = await this.db

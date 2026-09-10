@@ -265,6 +265,26 @@ describe("PostgresTrustPolicyRepository — integration", () => {
 		expect(policies.map((policy) => policy.id)).toContain(additional.id);
 	});
 
+	test("claim-condition updates reject an existing repository scope", async () => {
+		const established = await repo.create(policyInput(TENANT_ID));
+		const additional = await repo.create(
+			policyInput(TENANT_ID, {
+				displayName: "Additional repository policy",
+				claimConditions: {
+					repository_owner_id: "12345",
+					repository_id: "43210",
+				},
+			}),
+		);
+
+		await expect(
+			repo.update(additional.id, TENANT_ID, { claimConditions: established.claimConditions }),
+		).rejects.toMatchObject({
+			code: "policy_claim_conditions_conflict",
+			message: "OIDC trust policy with these claim conditions already exists",
+		});
+	});
+
 	test("cross-tenant collision fails without mutating the established tenant", async () => {
 		const established = await repo.create(policyInput(TENANT_ID));
 
