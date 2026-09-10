@@ -2,6 +2,7 @@
 
 import { type GitHubInstallationRepository, GitHubSetupError } from "@procella/github";
 import {
+	OidcPolicyClaimConditionsConflictError,
 	OidcPolicyClaimConditionsError,
 	OidcPolicyConflictError,
 	type TrustPolicyRepository,
@@ -85,7 +86,10 @@ function addClaimConditionValidationIssue(
 }
 
 function rethrowOidcPolicyError(error: unknown): never {
-	if (error instanceof OidcPolicyConflictError) {
+	if (
+		error instanceof OidcPolicyConflictError ||
+		error instanceof OidcPolicyClaimConditionsConflictError
+	) {
 		throw new TRPCError({ code: "CONFLICT", message: error.message, cause: error });
 	}
 	if (error instanceof OidcPolicyClaimConditionsError) {
@@ -219,7 +223,7 @@ export const oidcRouter = router({
 				});
 				return { policy, created: true as const };
 			} catch (error) {
-				if (error instanceof OidcPolicyConflictError) {
+				if (error instanceof OidcPolicyClaimConditionsConflictError) {
 					const concurrent = await ctx.oidcPolicies.findByOrgSlugAndIssuer(
 						ctx.caller.orgSlug,
 						GITHUB_ACTIONS_ISSUER,

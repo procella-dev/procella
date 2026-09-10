@@ -1,6 +1,7 @@
 import { describe, expect, mock, test } from "bun:test";
 import type { GitHubService } from "@procella/github";
 import {
+	OidcPolicyClaimConditionsConflictError,
 	OidcPolicyConflictError,
 	type OidcTrustPolicy,
 	type TrustPolicyRepository,
@@ -230,7 +231,7 @@ describe("oidcRouter", () => {
 				return lookupCount === 1 ? [] : [mockPolicy];
 			});
 			const create = mock(async () => {
-				throw new OidcPolicyConflictError();
+				throw new OidcPolicyClaimConditionsConflictError();
 			});
 			const listInstallationRepositories = mock(async () => [
 				{
@@ -354,6 +355,20 @@ describe("oidcRouter", () => {
 
 			return expect(caller.createPolicy(validInput)).rejects.toThrow(
 				"OIDC trust policy with this org/issuer pair already exists",
+			);
+		});
+
+		test("surfaces duplicate claim conditions as a conflict error", () => {
+			const ctx = mockContext({
+				oidcPolicies: mockPolicies({
+					create: mock(async () => {
+						throw new OidcPolicyClaimConditionsConflictError();
+					}),
+				}),
+			});
+
+			return expect(oidcRouter.createCaller(ctx).createPolicy(validInput)).rejects.toThrow(
+				"OIDC trust policy with these claim conditions already exists",
 			);
 		});
 	});

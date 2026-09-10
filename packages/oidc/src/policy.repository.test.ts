@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import type { Database } from "@procella/db";
 import { Role } from "@procella/types";
-import { PostgresTrustPolicyRepository } from "./policy.js";
+import { OidcPolicyClaimConditionsConflictError, PostgresTrustPolicyRepository } from "./policy.js";
 
 type PolicyRow = {
 	id: string;
@@ -215,7 +215,7 @@ describe("PostgresTrustPolicyRepository", () => {
 				grantedRole: Role.Member,
 				active: true,
 			}),
-		).rejects.toMatchObject({ code: "policy_conflict" });
+		).rejects.toBeInstanceOf(OidcPolicyClaimConditionsConflictError);
 		expect(calls.some((call) => call.method.startsWith("update"))).toBe(false);
 	});
 

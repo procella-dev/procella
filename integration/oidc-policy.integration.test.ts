@@ -253,8 +253,8 @@ describe("PostgresTrustPolicyRepository — integration", () => {
 		await expect(
 			repo.create(policyInput(TENANT_ID, { displayName: "Duplicate repository policy" })),
 		).rejects.toMatchObject({
-			code: "policy_conflict",
-			message: "OIDC trust policy with this org/issuer pair already exists",
+			code: "policy_claim_conditions_conflict",
+			message: "OIDC trust policy with these claim conditions already exists",
 		});
 
 		const policies = await repo.listByOrgSlug(ORG_SLUG, TENANT_ID);

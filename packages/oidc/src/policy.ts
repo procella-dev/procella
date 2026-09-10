@@ -14,6 +14,17 @@ export class OidcPolicyConflictError extends ProcellaError {
 	}
 }
 
+export class OidcPolicyClaimConditionsConflictError extends ProcellaError {
+	constructor() {
+		super(
+			"OIDC trust policy with these claim conditions already exists",
+			"policy_claim_conditions_conflict",
+			409,
+		);
+		this.name = "OidcPolicyClaimConditionsConflictError";
+	}
+}
+
 export class OidcPolicyDisplayNameConflictError extends ProcellaError {
 	constructor() {
 		super(
@@ -95,8 +106,12 @@ export class PostgresTrustPolicyRepository implements TrustPolicyRepository {
 			return mapRow(row);
 		} catch (error) {
 			if (pgErrorCode(error) === "23505") {
-				if (pgConstraintName(error) === "idx_oidc_trust_org_name") {
+				const constraint = pgConstraintName(error);
+				if (constraint === "idx_oidc_trust_org_name") {
 					throw new OidcPolicyDisplayNameConflictError();
+				}
+				if (constraint === "idx_oidc_trust_org_issuer") {
+					throw new OidcPolicyClaimConditionsConflictError();
 				}
 				throw new OidcPolicyConflictError();
 			}
