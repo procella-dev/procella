@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.0](https://github.com/tektum/procella/compare/procella-v0.6.0...procella-v0.7.0) (2026-09-10)
+
+
+### Features
+
+* **oidc:** streamline GitHub Actions setup ([#316](https://github.com/tektum/procella/issues/316)) ([5eadbb7](https://github.com/tektum/procella/commit/5eadbb703d3a066e62c41cfcdafd9a13827b1d98))
+* support multiple GitHub Actions OIDC repositories ([#318](https://github.com/tektum/procella/issues/318)) ([a3bfa1d](https://github.com/tektum/procella/commit/a3bfa1d7b0d98f190028a28f18a57e975a14696d))
+
+
+### Bug Fixes
+
+* remove Procella GitHub update publication ([#319](https://github.com/tektum/procella/issues/319)) ([2f1206b](https://github.com/tektum/procella/commit/2f1206b05690336881f7078b5de61f569041922d))
+
 ## [0.6.0](https://github.com/tektum/procella/compare/procella-v0.5.0...procella-v0.6.0) (2026-09-08)
 
 
