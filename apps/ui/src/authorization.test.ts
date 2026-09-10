@@ -1026,7 +1026,18 @@ describe("Settings authorization", () => {
 			error: null,
 		};
 		githubRepositoriesQuery = {
-			data: undefined,
+			data: {
+				repositories: [
+					{
+						id: 67890,
+						name: "infra",
+						fullName: "acme/infra",
+						ownerId: 12345,
+						ownerLogin: "acme",
+						private: true,
+					},
+				],
+			},
 			isLoading: false,
 			error: new Error("GitHub repositories could not be loaded"),
 		};
@@ -1035,6 +1046,7 @@ describe("Settings authorization", () => {
 		const page = render(createElement(Settings));
 		fireEvent.click(page.getByRole("button", { name: "Enable Actions OIDC" }));
 		expect(page.getByRole("button", { name: "Cancel" })).toBeTruthy();
+		expect(page.queryByRole("button", { name: "Enable OIDC" })).toBeNull();
 		fireEvent.click(page.getByRole("button", { name: "Retry" }));
 		await waitFor(() => expect(githubRepositoriesRefetch).toHaveBeenCalled());
 

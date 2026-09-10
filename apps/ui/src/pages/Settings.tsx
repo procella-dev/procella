@@ -526,7 +526,7 @@ function GitHubSettingsTab() {
 										>
 											Cancel
 										</button>
-										{repositoriesData?.repositories.length ? (
+										{!repositoriesError && repositoriesData?.repositories.length ? (
 											<button
 												type="button"
 												onClick={handleEnableGitHubActions}
