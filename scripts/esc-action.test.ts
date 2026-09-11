@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 
 const ACTION_PATH = new URL("../actions/esc/action.yml", import.meta.url).pathname;
 const BUNDLE_PATH = new URL("../actions/esc/dist/index.js", import.meta.url).pathname;
+const GIT_ATTRIBUTES_PATH = new URL("../.gitattributes", import.meta.url).pathname;
 
 const PROCELLA_CLOUD_URL = "https://api.procella.cloud";
 const PINNED_UPSTREAM_SHA = "57e332b6dfb0d7edcf6cb813ee9a98b9665f12c2";
@@ -49,6 +50,11 @@ describe("actions/esc upstream mirror", () => {
 		hasher.update(await Bun.file(BUNDLE_PATH).arrayBuffer());
 		expect(hasher.digest("hex")).toBe(PINNED_BUNDLE_SHA256);
 		expect(action.runs).toEqual({ using: "node24", main: "dist/index.js" });
+	});
+
+	test("marks the vendored bundle as generated for repository analysis", async () => {
+		const attributes = await Bun.file(GIT_ATTRIBUTES_PATH).text();
+		expect(attributes).toContain("actions/esc/dist/index.js -whitespace linguist-generated=true");
 	});
 
 	test("exposes the complete pinned upstream input surface", () => {
