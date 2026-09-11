@@ -93,7 +93,7 @@ To further restrict to the `prod` environment on the `main` branch:
 
 ## GitHub Actions Workflow
 
-The Procella composite Pulumi action performs the OIDC exchange before running Pulumi. Replace `YOUR_ORG` with your Procella organization slug and set `cloud-url` to your Procella backend URL ending in `/api`. The action builds the required `urn:pulumi:org:YOUR_ORG` audience from the explicit organization input.
+The Procella composite Pulumi action performs the OIDC exchange before running Pulumi. Replace `YOUR_ORG` with your Procella organization slug. The action defaults to the Procella production origin and builds the required `urn:pulumi:org:YOUR_ORG` audience from the explicit organization input.
 
 ```yaml
 name: Deploy
@@ -119,10 +119,11 @@ jobs:
           command: up
           stack-name: YOUR_ORG/YOUR_PROJECT/YOUR_STACK
           oidc-organization: YOUR_ORG
-          cloud-url: https://procella.example.com/api
 ```
 
 No `PULUMI_ACCESS_TOKEN` secret is required. `oidc-organization` explicitly enables the pinned `pulumi/auth-actions@v2` step, which requests `urn:pulumi:token-type:access_token:organization` and exports the resulting short-lived token for the subsequent Pulumi step. The job must grant `permissions: id-token: write`; `contents: read` is required by `actions/checkout`.
+
+Procella's action supplies `https://api.procella.cloud` automatically. Only set `cloud-url` for another Procella deployment, using its bare origin (for example, `https://procella.example.com`); the Pulumi CLI adds `/api` to backend requests.
 
 Pin `tektum/procella/actions/pulumi` to a release tag or full commit SHA in production workflows instead of tracking `@main`.
 

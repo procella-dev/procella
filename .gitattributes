@@ -1,0 +1,2 @@
+# Preserve byte-for-byte vendored GitHub Action bundles.
+actions/esc/dist/index.js -whitespace linguist-generated=true
